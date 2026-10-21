@@ -60,42 +60,6 @@ void __cdecl R_SkinXSurfaceSkinnedSse(
                 GfxPackedVertexNormal *skinVertNormalIn,
                 GfxPackedVertexNormal *skinVertNormalOut,
                 GfxPackedVertex *skinVerticesOut);
-void __cdecl R_SkinXSurfaceWeightSse(
-                const GfxPackedVertex *inVerts,
-                const XSurfaceVertexInfo *vertexInfo,
-                const DObjSkelMat *boneMatrix,
-                GfxPackedVertex *outVerts);
-void __cdecl R_SkinXSurfaceWeightSseOut(
-                const GfxPackedVertex *inVerts,
-                const XSurfaceVertexInfo *vertexInfo,
-                const DObjSkelMat *boneMatrix,
-                GfxPackedVertexNormal *outVertNormals,
-                GfxPackedVertex *outVerts);
-void __cdecl R_SkinXSurfaceWeightSseInOut(
-                const GfxPackedVertex *inVerts,
-                const XSurfaceVertexInfo *vertexInfo,
-                const DObjSkelMat *boneMatrix,
-                const GfxPackedVertexNormal *inVertNormals,
-                GfxPackedVertexNormal *outVertNormals,
-                GfxPackedVertex *outVerts);
-void    R_SkinXSurfaceRigidSse(
-                const XSurface *surf,
-                int totalVertCount,
-                const DObjSkelMat *boneMatrix,
-                GfxPackedVertex *dstVerts);
-void    R_SkinXSurfaceRigidSseOut(
-                const XSurface *surf,
-                int totalVertCount,
-                const DObjSkelMat *boneMatrix,
-    GfxPackedVertexNormal *dstVertNormals,
-                GfxPackedVertex *dstVerts);
-void __cdecl R_SkinXSurfaceRigidSseInOut(
-                const XSurface *surf,
-                int totalVertCount,
-                const DObjSkelMat *boneMatrix,
-    GfxPackedVertexNormal *srcVertNormals,
-    GfxPackedVertexNormal *dstVertNormals,
-                GfxPackedVertex *dstVerts);
 
 
 //__m128 * _mm_cvtpu8_ps@<eax>(int a1@<ebp>);

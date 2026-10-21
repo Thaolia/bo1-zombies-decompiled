@@ -9,6 +9,7 @@
 #include "bg_mantle.h"
 #include "bg_perks.h"
 #include <universal/com_math_anglevectors.h>
+#include <platform/minmax.h>
 
 double __cdecl BG_GetBobCycle(const playerState_s *ps)
 {

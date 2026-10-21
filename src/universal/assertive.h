@@ -44,7 +44,9 @@ bool Assert_MyHandler(const char *filename, int line, int type, const char *fmt,
 #define IS_NAN(x) (isnan(x))
 
 #ifdef _DEBUG 
-#define iassert(expression) (void)(                                                                                                             \
+// Some decompiled call sites pass extra arguments (file, line, text) after the expression. MSVC drops them with
+// warning C4002; the variadic form drops them the same way on GCC/clang, which reject the extra arguments.
+#define iassert(expression, ...) (void)(                                                                                                             \
                         (!!(expression)) ||                                                                                                                    \
                         (Assert_MyHandler(__FILE__, (unsigned)(__LINE__), 0, "%s", #expression), 0) \
                 )
@@ -60,7 +62,7 @@ bool Assert_MyHandler(const char *filename, int line, int type, const char *fmt,
 #define nanassertvec3(vec) iassert( !IS_NAN((vec)[0]) && !IS_NAN((vec)[1]) && !IS_NAN((vec)[2]) )
 #define alwaysfails 0
 #else
-#define iassert(expression)
+#define iassert(expression, ...)
 #define vassert(expression, fmt, ...)
 #define bcassert(expression, maxv)
 #define bcassert2(expression, maxv)

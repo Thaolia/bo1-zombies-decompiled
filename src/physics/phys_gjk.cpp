@@ -9,7 +9,9 @@
 // (Honestly it should probably be turned on for the entire project)
 // `mp_array`, I was having endless (endless, and not sometimes!) gjk warnings about max iterations. This seems to have fixed it.
 // Could also be fixed with more iterations, but that's a hack.
-#if !defined(_M_IX86_FP) || _M_IX86_FP != 0
+// Only 32-bit x86 can honour this: x64 and AArch64 builds evaluate in plain float, and only MSVC is checked here. The port
+// tracks the gjk iteration warnings this brings back in docs/PORTING.md.
+#if defined(_MSC_VER) && defined(_M_IX86) && (!defined(_M_IX86_FP) || _M_IX86_FP != 0)
 // to turn on x87: Edit the vcxproj 
 // <ClCompile Include="src\physics\phys_gjk.cpp">
 // <EnableEnhancedInstructionSet Condition = "'$(Platform)'=='Win32'" > NoExtensions< / EnableEnhancedInstructionSet>

@@ -255,7 +255,7 @@ RESTART:
                             g_load.stream.next_in = g_load.compressBufferStart;
                     }
 
-                    _mm_prefetch((const char *)g_load.stream.next_in + 512, 1);
+                    _mm_prefetch((const char *)g_load.stream.next_in + 512, _MM_HINT_T0);
 
                     if ( !g_load.stream.avail_out )
                     {
@@ -544,7 +544,7 @@ char __cdecl DB_LoadXFile(
                 int allocType,
                 int flags)
 {
-    if ( ((unsigned __int8)buf & 3) != 0
+    if ( ((unsigned __int8)(uintptr_t)buf & 3) != 0
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\database\\db_file_load.cpp",
                     1959,

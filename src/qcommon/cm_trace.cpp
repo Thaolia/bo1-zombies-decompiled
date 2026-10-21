@@ -890,7 +890,7 @@ void __cdecl CM_TraceThroughLeaf(const traceWork_t *tw, cLeaf_s *leaf, trace_t *
         for ( k = 0; k < leaf->collAabbCount; ++k )
         {
             aabbTree = &cm.aabbTrees[k + leaf->firstCollAabbIndex];
-            _mm_prefetch((const char *)aabbTree, 1);
+            _mm_prefetch((const char *)aabbTree, _MM_HINT_T0);
             if ( trace->fraction == 0.0 )
                 break;
             CM_TraceThroughAabbTree(tw, aabbTree, trace);
@@ -2892,7 +2892,7 @@ int __cdecl CM_SightTraceThroughLeaf(const traceWork_t *tw, const cLeaf_s *leaf,
         for ( k = 0; k < leaf->collAabbCount; ++k )
         {
             v4 = (const char *)&cm.aabbTrees[k + leaf->firstCollAabbIndex];
-            _mm_prefetch(v4, 1);
+            _mm_prefetch(v4, _MM_HINT_T0);
             CM_SightTraceThroughAabbTree(tw, (const CollisionAabbTree *)v4, trace);
             if ( trace->fraction != 1.0 )
                 return leaf->firstCollAabbIndex + k + cm.numBrushes + 1;
@@ -3551,11 +3551,11 @@ int __cdecl CM_SightTracePoint(int oldHitNum, const float *start, const float *e
         return hitNum;
     }
     prim = context->prims;
-    _mm_prefetch((const char *)prim, 1);
-    _mm_prefetch((const char *)prim->tree, 1);
+    _mm_prefetch((const char *)prim, _MM_HINT_T0);
+    _mm_prefetch((const char *)prim->tree, _MM_HINT_T0);
     for ( j = 0; j < context->nprims; ++j )
     {
-        _mm_prefetch((const char *)context->prims[j + 1].tree, 1);
+        _mm_prefetch((const char *)context->prims[j + 1].tree, _MM_HINT_T0);
         if ( prim->type )
         {
             if ( (brushmask & *(unsigned int *)&prim->tree->materialIndex) != 0 )

@@ -2,6 +2,9 @@
 
 #include <Windows.h>
 
+#include <climits>
+#include <cmath>
+
 int sys_timeBase;
 
 unsigned int __cdecl Sys_Milliseconds()
@@ -33,6 +36,7 @@ unsigned int __cdecl Sys_MillisecondsRaw()
 // https://github.com/id-Software/Quake-III-Arena/blob/master/code/win32/win_shared.c
 void Sys_SnapVector(float *v)
 {
+#if defined(_MSC_VER) && defined(_M_IX86)
     int i;
     float f;
 
@@ -50,4 +54,14 @@ void Sys_SnapVector(float *v)
     __asm	fld		f;
     __asm	fistp	i;
     *v = i;
+#else
+    // FISTP of a float: round to nearest-even, integer indefinite (INT_MIN) when out of range. Precision control does
+    // not matter here because nothing is added before the store.
+    for (int k = 0; k < 3; ++k)
+    {
+        const float rounded = std::nearbyint(v[k]);
+        v[k] = (rounded >= -2147483648.0f && rounded < 2147483648.0f) ? static_cast<float>(static_cast<int>(rounded))
+                                                                       : static_cast<float>(INT_MIN);
+    }
+#endif
 }

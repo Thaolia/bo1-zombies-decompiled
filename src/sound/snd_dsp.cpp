@@ -28,7 +28,7 @@ void __cdecl SND_DspScale(unsigned int count, float a, float *c)
     {
         __debugbreak();
     }
-    if ( ((unsigned __int8)c & 0xF) != 0
+    if ( ((unsigned __int8)(uintptr_t)c & 0xF) != 0
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\sound\\snd_dsp.cpp", 161, 0, "%s", "(((int)c)&15) == 0") )
     {
         __debugbreak();
@@ -86,7 +86,7 @@ void __cdecl SND_DspScaleCache(unsigned int count, float a, float *c)
 
 void __cdecl I_dcbt(int offset, const char *base)
 {
-    _mm_prefetch(&base[offset], 1);
+    _mm_prefetch(&base[offset], _MM_HINT_T0);
 }
 
 void __cdecl SND_DspScale(unsigned int count, float a, const float *b, float *c)
@@ -101,7 +101,7 @@ void __cdecl SND_DspScale(unsigned int count, float a, const float *b, float *c)
     {
         __debugbreak();
     }
-    if ( ((unsigned __int8)c & 0xF) != 0
+    if ( ((unsigned __int8)(uintptr_t)c & 0xF) != 0
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\sound\\snd_dsp.cpp", 201, 0, "%s", "(((int)c)&15) == 0") )
     {
         __debugbreak();

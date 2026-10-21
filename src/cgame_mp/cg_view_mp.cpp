@@ -4983,7 +4983,7 @@ void __cdecl CG_UpdateEntInfo(int localClientNum)
         fakeEnt = &cg_fakeEntitiesArray[512 * localClientNum + num];
         if ( cg_fakeEntitiesInuseArray[512 * localClientNum + fakeEnt - &cg_fakeEntitiesArray[512 * localClientNum]] )
         {
-            _mm_prefetch((const char *)&cg_fakeEntitiesArray[512 * localClientNum + num].cent.nextState.eType, 1);
+            _mm_prefetch((const char *)&cg_fakeEntitiesArray[512 * localClientNum + num].cent.nextState.eType, _MM_HINT_T0);
             cent = &fakeEnt->cent;
             obj = Com_GetClientDObj(fakeEnt->cent.nextState.number, localClientNum);
             if ( obj )

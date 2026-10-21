@@ -3,7 +3,7 @@
 
 
 #include <cstring>
-#include <corecrt_malloc.h>
+#include <malloc.h>
 #include <Windows.h>
 #include <Psapi.h>
 

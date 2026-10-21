@@ -408,7 +408,7 @@ struct CollisionBorder // sizeof=0x1C
         float length;
 };
 
-const struct CollisionPartition // sizeof=0x14
+struct CollisionPartition // sizeof=0x14
 {
         unsigned __int8 triCount;
         unsigned __int8 borderCount;
@@ -492,7 +492,11 @@ struct __declspec(align(16)) gjk_partition_t : gjk_base_t // sizeof=0x70
         virtual bool is_walkable(const phys_vec3 *hit_point, const phys_vec3 *up) override;
         // get_brush() - gjk_base_t
 };
+#if defined(_MSC_VER)
+// The Itanium C++ ABI (GCC, clang) packs ninds into gjk_base_t's tail padding (offset 0x48, sizeof 0x60). The engine
+// only ever allocates it with sizeof, so only the MSVC layout is pinned to the exe.
 static_assert(sizeof(gjk_partition_t) == 112);
+#endif
 
 struct gjk_double_sphere_t : gjk_base_t // sizeof=0x90
 {

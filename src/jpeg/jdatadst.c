@@ -56,7 +56,7 @@ init_destination (j_compress_ptr cinfo)
   my_destination_mgr *dest; // [esp+0h] [ebp-4h]
 
   dest = (my_destination_mgr *)cinfo->dest;
-  dest->pub.next_output_byte = dest->outfile;
+  dest->pub.next_output_byte = (JOCTET *)dest->outfile;
   dest->pub.free_in_buffer = dest->size;
 }
 

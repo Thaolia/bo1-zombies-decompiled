@@ -5,11 +5,6 @@
 #include <DemonWare/bdPlatform/bdPlatformLog/bdPlatformLog.h>
 #include <libs/libtomcrypt-1.17/src/headers/tomcrypt_misc.h>
 
-static void des3_done(symmetric_key *skey)
-{
-    //LTC_UNUSED_PARAM(skey);
-    // 3DES has no dynamic key state to free
-}
 
 //ltc_cipher_descriptor des3_desc =
 //{

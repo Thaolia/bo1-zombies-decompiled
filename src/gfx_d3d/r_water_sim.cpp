@@ -1370,7 +1370,7 @@ void __cdecl R_RenderWaterModel(unsigned int viewIndex)
                 *((unsigned int *)modelSurf + 6) = 289;
                 *((unsigned int *)modelSurf + 7) = data.tileTriCount[lod];
                 surfId = modelSurf - (char *)frontEndDataOut;
-                if ( (((_BYTE)modelSurf - (_BYTE)frontEndDataOut) & 3) != 0
+                if ( (((_BYTE)(uintptr_t)modelSurf - (_BYTE)(uintptr_t)frontEndDataOut) & 3) != 0
                     && !Assert_MyHandler(
                                 "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_water_sim.cpp",
                                 1374,
@@ -1745,15 +1745,15 @@ void    R_WaterSimulationUpdateFrame(const WaterSimulationCmd *cmd)
             v79 = __PAIR64__(heights.u[3], 0);
             heights.v[0] = heightdata[0];
             v77 = p_waterheight + 4352;
-            _mm_prefetch((const char *)p_waterheight + 8704, 1);
+            _mm_prefetch((const char *)p_waterheight + 8704, _MM_HINT_T0);
             v76 = p_old_pos2 + 288;
-            _mm_prefetch((const char *)&p_old_pos2[288], 1);
+            _mm_prefetch((const char *)&p_old_pos2[288], _MM_HINT_T0);
             total.u[3] = u + 1024;
-            _mm_prefetch((const char *)(u + 1024), 1);
+            _mm_prefetch((const char *)(u + 1024), _MM_HINT_T0);
             total.u[2] = uvAdjust + 768;
-            _mm_prefetch((const char *)(uvAdjust + 768), 1);
+            _mm_prefetch((const char *)(uvAdjust + 768), _MM_HINT_T0);
             total.u[1] = realU + 768;
-            _mm_prefetch((const char *)(realU + 768), 1);
+            _mm_prefetch((const char *)(realU + 768), _MM_HINT_T0);
             d0.v[1] = (float)(old1.v[2] + old2.v[2]) + old3.v[2];
             d0.v[2] = (float)(old1.v[3] + old2.v[3]) + old3.v[3];
             d0.v[3] = (float)(v91 + v89) + v87;

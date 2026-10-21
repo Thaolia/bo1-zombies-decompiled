@@ -313,8 +313,8 @@ void __cdecl R_AddAllStaticModelSurfacesCamera(
         {
             inst = &smodelDrawInsts[smodelIndex];
             mins = smodelInsts[smodelIndex].mins;
-            //_mm_prefetch((const char *)&inst[1], 1);
-            //_mm_prefetch((const char *)mins + 40, 1);
+            //_mm_prefetch((const char *)&inst[1], _MM_HINT_T0);
+            //_mm_prefetch((const char *)mins + 40, _MM_HINT_T0);
             v24 = 0;
             v35 = Vec3Distance(inst->placement.origin, origin);
             v64 = v35;

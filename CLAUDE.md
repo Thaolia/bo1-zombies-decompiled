@@ -51,3 +51,7 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
 - Before claiming a phase step done, run its verification listed in `docs/PORTING.md` and report the actual
   output. "It compiles" is not "it works".
 - Tooling runs from WSL2. MSVC/clang-cl builds run on the Windows side. devkitPro lives in `/opt/devkitpro`.
+- After touching a shared header or `src/platform/compat.h`, rerun `tools/syntax_check.py` on both `mingw32-gcc` and
+  `mingw32-clang` (command in `docs/PORTING.md`, phase 1) and the `win32-msvc` build.
+- Never make a GNU build pass by changing what MSVC compiles to. Prefer the spelling both accept with the same
+  meaning (explicit cast, named constant, explicit include); otherwise guard with `#if defined(_MSC_VER)`.

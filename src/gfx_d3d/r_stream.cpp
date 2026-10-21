@@ -1941,8 +1941,8 @@ void __cdecl R_StreamUpdateDynamicModels(
     {
         dynEntIda = rgp.world->sceneDynModel[entIndexc].dynEntId;
         dynEntDefa = DynEnt_GetEntityDef(dynEntIda, DYNENT_DRAW_MODEL);
-        _mm_prefetch((const char *)dynEntDefa->xModel, 1);
-        _mm_prefetch((const char *)dynEntDefa->destroyedxModel, 1);
+        _mm_prefetch((const char *)dynEntDefa->xModel, _MM_HINT_T0);
+        _mm_prefetch((const char *)dynEntDefa->destroyedxModel, _MM_HINT_T0);
         ClientPose = DynEnt_GetClientPose(dynEntIda, DYNENT_DRAW_MODEL);
         R_StreamUpdate_AddDynamicXModelDistance(dynEntDefa->xModel, viewPos, ClientPose->pose.origin, 1.0, 1, distanceScale);
         if (dynEntDefa->destroyedxModel)
@@ -2013,14 +2013,14 @@ void __cdecl R_StreamUpdateForBModel(
         material = modelSurf->surf->material;
         if (material && material->textureCount)
         {
-            _mm_prefetch((const char *)&modelSurf[1], 1);
+            _mm_prefetch((const char *)&modelSurf[1], _MM_HINT_T0);
             if (rg.renderHiResShot && !isVisible)
                 return;
             mip1radiusSq = bmodel->writable.mip1radiusSq;
             v10 = distanceScale[isVisible];
             distSq_4 = PointDistSqFromBounds(viewPos, bmodel->writable.mins, bmodel->writable.maxs) * v10;
             distSq = mip1radiusSq / (float)(distSq_4 + 100.0);
-            _mm_prefetch((const char *)modelSurf[1].surf, 1);
+            _mm_prefetch((const char *)modelSurf[1].surf, _MM_HINT_T0);
             R_StreamTouchImagesFromMaterial(material, distSq);
             if (altMaterial)
                 R_StreamTouchImagesFromMaterial(altMaterial, distSq);
@@ -2253,7 +2253,7 @@ void __cdecl MultiplePointDistSqFromBounds(
     {
         __debugbreak();
     }
-    if ( ((unsigned __int8)mip0mins & 0xF) != 0
+    if ( ((unsigned __int8)(uintptr_t)mip0mins & 0xF) != 0
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_stream.cpp",
                     3469,
@@ -2263,7 +2263,7 @@ void __cdecl MultiplePointDistSqFromBounds(
     {
         __debugbreak();
     }
-    if ( ((unsigned __int8)mip0maxs & 0xF) != 0
+    if ( ((unsigned __int8)(uintptr_t)mip0maxs & 0xF) != 0
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_stream.cpp",
                     3470,

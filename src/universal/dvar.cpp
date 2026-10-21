@@ -14,6 +14,7 @@
 #include "com_memory.h"
 #include "q_parse.h"
 #include <qcommon/dvar_cmds.h>
+#include <platform/minmax.h>
 
 int dvar_modifiedFlags;
 FastCriticalSection g_dvarCritSect;

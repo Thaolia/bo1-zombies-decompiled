@@ -47,6 +47,13 @@ struct SmallAllocatorTemplate//<GlassPhysics * *> // sizeof=0x4
     {
         using other = SmallAllocatorTemplate<U>;
     };
+
+    // Allocator requirement: libstdc++'s list::splice compares allocators (MSVC's STL never instantiates it here).
+    template<class U>
+    bool operator==(const SmallAllocatorTemplate<U> &other) const noexcept
+    {
+        return alloc == other.alloc;
+    }
 };
 
 // aislop

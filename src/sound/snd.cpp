@@ -17,7 +17,7 @@
 #include "snd_globals.h"
 #include "snd_bank.h"
 #include "snd_log.h"
-#include "snd_driver_xaudio2.h"
+#include "snd_driver.h"
 #include <cgame/cg_sound.h>
 #include "snd_debug.h"
 #include <qcommon/threads.h>

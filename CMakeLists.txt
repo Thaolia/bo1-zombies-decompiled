@@ -27,6 +27,19 @@ message(STATUS "BO1: platform=${BO1_PLATFORM} 64-bit=${BO1_ARCH_64} compiler=${C
 
 include(cmake_files.cmake)
 
+# GCC and clang (not clang-cl) get the MSVC-dialect shims in front of every file.
+# Narrowing in brace initialisers is only a warning on MSVC, which converts the value; GCC and clang make it an error
+# and convert the same way once it is allowed.
+if(NOT MSVC)
+    target_compile_options(BO1Zombies PRIVATE -include "${SRC_DIR}/platform/compat.h"
+        $<$<COMPILE_LANG_AND_ID:CXX,GNU>:-Wno-narrowing>
+        $<$<COMPILE_LANG_AND_ID:CXX,Clang>:-Wno-c++11-narrowing>)
+    # Without LTC_SOURCE, libtomcrypt's rand_prime.c calls libtommath's mp_read_unsigned_bin/mp_prime_is_prime through
+    # implicit declarations, as the MSVC build does. GCC 14+ and clang 16+ reject those by default.
+    set_source_files_properties("${SRC_DIR}/libs/libtomcrypt-1.17/src/math/rand_prime.c"
+        PROPERTIES COMPILE_OPTIONS "-Wno-error=implicit-function-declaration")
+endif()
+
 # ----- Preprocessor Defines -----
 # Common to both Debug and Release
 target_compile_definitions(BO1Zombies PUBLIC
@@ -85,7 +98,12 @@ if(BO1_PLATFORM STREQUAL "win32")
     # DXSDK_DIR: the June 2010 DirectX SDK root (Include/, Lib/x86/, Lib/x64/). Defaults to its installer's path;
     # pass -DDXSDK_DIR=<dir> to use an extracted copy instead.
     set(DXSDK_DIR "C:/Program Files (x86)/Microsoft DirectX SDK (June 2010)" CACHE PATH "June 2010 DirectX SDK root")
-    target_include_directories(BO1Zombies PUBLIC "${DXSDK_DIR}/Include")
+    if(MSVC)
+        target_include_directories(BO1Zombies PUBLIC "${DXSDK_DIR}/Include")
+    else()
+        # MinGW ships its own Windows/DirectX headers; the SDK only fills in the ones it lacks (dxerr.h, xapobase.h).
+        target_compile_options(BO1Zombies PRIVATE "SHELL:-idirafter \"${DXSDK_DIR}/Include\"")
+    endif()
 
     # ----- Library directories -----
     if(BO1_ARCH_64)
@@ -98,8 +116,10 @@ if(BO1_PLATFORM STREQUAL "win32")
     target_link_directories(BO1Zombies PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/binklib")
     target_link_directories(BO1Zombies PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/nvapi")
 
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT  /O2 /MP /W3 ${MSVC_WARNING_DISABLES} /permissive")
-    set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG} /MTd /Od /MP /W3 ${MSVC_WARNING_DISABLES} /permissive")
+    if(MSVC)
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT  /O2 /MP /W3 ${MSVC_WARNING_DISABLES} /permissive")
+        set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG} /MTd /Od /MP /W3 ${MSVC_WARNING_DISABLES} /permissive")
+    endif()
 
     if (MSVC AND WIN32 AND NOT MSVC_VERSION VERSION_LESS 142)
         target_link_options(BO1Zombies PRIVATE $<$<CONFIG:Debug>:/INCREMENTAL>)
@@ -134,7 +154,7 @@ if(BO1_PLATFORM STREQUAL "win32")
     target_link_libraries(BO1Zombies PUBLIC $<$<CONFIG:Debug>:d3dx9d.lib>)
     # ----- Release Links -----
     target_link_libraries(BO1Zombies PUBLIC $<$<CONFIG:Release>:d3dx9.lib>)
-    if(NOT BO1_ARCH_64)
+    if(MSVC AND NOT BO1_ARCH_64)
         target_link_options(BO1Zombies PRIVATE /machine:x86)
     endif()
 
@@ -142,7 +162,9 @@ if(BO1_PLATFORM STREQUAL "win32")
     # /DYNAMICBASE:NO - Turning this off causes directx to crash "directx has encountered an unrecoverable error".
     # /LARGEADDRESSAWARE - for convenience (4gb)
     # /DEBUG - PDB for both configs
-    target_link_options(BO1Zombies PRIVATE /DYNAMICBASE:NO /LARGEADDRESSAWARE /DEBUG)
+    if(MSVC)
+        target_link_options(BO1Zombies PRIVATE /DYNAMICBASE:NO /LARGEADDRESSAWARE /DEBUG)
+    endif()
 
     set_target_properties(BO1Zombies PROPERTIES WIN32_EXECUTABLE TRUE)
 
@@ -157,7 +179,9 @@ if(BO1_PLATFORM STREQUAL "win32")
         file(TO_NATIVE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" BO1_SOURCE_DIR_NATIVE)
         target_compile_options(BO1Zombies PRIVATE "/d1trimfile:${BO1_SOURCE_DIR_NATIVE}")
     endif()
-    target_link_options(BO1Zombies PRIVATE "/PDBALTPATH:%_PDB%")
+    if(MSVC)
+        target_link_options(BO1Zombies PRIVATE "/PDBALTPATH:%_PDB%")
+    endif()
 else()
     # posix / switch: the engine does not compile here yet. Phase 1 adds src/platform/compat.h and the
     # -fsyntax-only pass; see docs/PORTING.md.

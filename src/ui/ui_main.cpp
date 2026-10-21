@@ -47,7 +47,7 @@
 #include <client/cl_rank.h>
 #include <live/live_ticker.h>
 #include <database/db_file_load.h>
-#include <sound/snd_driver_xaudio2.h>
+#include <sound/snd_driver.h>
 #include <game_mp/g_main_mp.h>
 #include <live/live_win.h>
 #include <stringed/stringed_hooks.h>
@@ -125,7 +125,7 @@ const dvar_t *emblem_scroll_delay_first;
 const dvar_t *emblem_scroll_delay_rest;
 
 uiInfo_s uiInfoArray[1];
-const serverFilter_s serverFilters[1];
+const serverFilter_s serverFilters[1] = {};
 
 bool g_ingameMenusLoaded[1];
 

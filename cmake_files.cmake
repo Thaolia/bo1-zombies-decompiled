@@ -2319,6 +2319,17 @@ set(PHYSICS_FILES
 	${SRC_PHYSICS}
 )
 
+# ----- src/platform -----
+set(SRC_PLATFORM
+	"${SRC_DIR}/platform/compat.h"
+	"${SRC_DIR}/platform/minmax.h"
+)
+source_group("platform" FILES ${SRC_PLATFORM})
+
+set(PLATFORM_FILES
+	${SRC_PLATFORM}
+)
+
 # ----- src/qcommon -----
 set(SRC_QCOMMON
 	"${SRC_DIR}/qcommon/bitarray.h"
@@ -2382,6 +2393,7 @@ set(SRC_QCOMMON
 	"${SRC_DIR}/qcommon/mem_track.h"
 	"${SRC_DIR}/qcommon/msg.cpp"
 	"${SRC_DIR}/qcommon/msg.h"
+	"${SRC_DIR}/qcommon/msg_round.h"
 	"${SRC_DIR}/qcommon/msg_mp.cpp"
 	"${SRC_DIR}/qcommon/msg_mp.h"
 	"${SRC_DIR}/qcommon/net_chan_mp.cpp"
@@ -2486,10 +2498,12 @@ set(SRC_SOUND
 	"${SRC_DIR}/sound/snd_db.h"
 	"${SRC_DIR}/sound/snd_debug.cpp"
 	"${SRC_DIR}/sound/snd_debug.h"
+	"${SRC_DIR}/sound/snd_driver.h"
 	"${SRC_DIR}/sound/snd_driver_xaudio2.cpp"
 	"${SRC_DIR}/sound/snd_driver_xaudio2.h"
 	"${SRC_DIR}/sound/snd_driver_xaudio2_dsp.cpp"
 	"${SRC_DIR}/sound/snd_driver_xaudio2_dsp.h"
+	"${SRC_DIR}/sound/snd_dsp_types.h"
 	"${SRC_DIR}/sound/snd_dsp.cpp"
 	"${SRC_DIR}/sound/snd_dsp.h"
 	"${SRC_DIR}/sound/snd_dvar.cpp"
@@ -3004,6 +3018,7 @@ add_executable(${BIN_NAME}
 	${MONKEY_FILES}
 	${NVAPI_FILES}
 	${PHYSICS_FILES}
+	${PLATFORM_FILES}
 	${QCOMMON_FILES}
 	${RAGDOLL_FILES}
 	${SERVER_FILES}

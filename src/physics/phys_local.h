@@ -1,5 +1,6 @@
 #pragma once
 #include <universal/assertive.h>
+#include <cstddef>
 #include <cstring>
 
 #include <Windows.h> // interlockedxchg

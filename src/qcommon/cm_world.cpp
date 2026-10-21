@@ -1361,14 +1361,14 @@ void __cdecl CM_PointTraceToEntities_r(
         node = &cm_world.sectors[nodeIndex];
         if ( (clip->contentmask & node->contents.contentsEntities) == 0 )
             break;
-        //_mm_prefetch((const char *)trace, 1);
+        //_mm_prefetch((const char *)trace, _MM_HINT_T0);
         for ( entnum = node->contents.entities; entnum; entnum = check->nextEntityInWorldSector )
         {
             check = &sv.svEntities[entnum - 1];
             if ( !context->collide_entity_func || context->collide_entity_func(entnum - 1, context) )
             {
-                //_mm_prefetch((const char *)(sv.bpsWindow[8] + sv.bpsWindow[9] * (entnum - 1) + 224), 1);
-                //_mm_prefetch((const char *)&check->nextEntityInWorldSector, 1);
+                //_mm_prefetch((const char *)(sv.bpsWindow[8] + sv.bpsWindow[9] * (entnum - 1) + 224), _MM_HINT_T0);
+                //_mm_prefetch((const char *)&check->nextEntityInWorldSector, _MM_HINT_T0);
                 SV_TracePointToEntity(clip, check, trace);
             }
         }

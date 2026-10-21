@@ -1898,7 +1898,7 @@ unsigned int __cdecl Scr_ExecThread(scriptInstance_t inst, int handle, unsigned 
     unsigned int id; // [esp+1Ch] [ebp-4h]
 
     pos = (char *)&gScrVarPub[inst].programBuffer[handle];
-    _mm_prefetch(pos, 1);
+    _mm_prefetch(pos, _MM_HINT_T0);
     if (!gScrVmPub[inst].function_count)
     {
         if ((int *)gScrVmPub[inst].localVars != &gScrVmGlob[inst].starttime
@@ -2256,7 +2256,7 @@ unsigned int __cdecl Scr_ExecEntThreadNum(
     unsigned int id; // [esp+20h] [ebp-4h]
 
     pos = (char *)&gScrVarPub[inst].programBuffer[handle];
-    _mm_prefetch(pos, 1);
+    _mm_prefetch(pos, _MM_HINT_T0);
     if (!gScrVmPub[inst].function_count)
     {
         if ((int *)gScrVmPub[inst].localVars != &gScrVmGlob[inst].starttime
@@ -2332,7 +2332,7 @@ void __cdecl Scr_AddExecThread(scriptInstance_t inst, int handle, unsigned int p
     const char *varUsagePos; // [esp+Ch] [ebp-4h]
 
     pos = (char *)&gScrVarPub[inst].programBuffer[handle];
-    _mm_prefetch(pos, 1);
+    _mm_prefetch(pos, _MM_HINT_T0);
     if (!gScrVmPub[inst].function_count)
     {
         if ((int *)gScrVmPub[inst].localVars != &gScrVmGlob[inst].starttime
@@ -4154,7 +4154,7 @@ void __cdecl VM_UnarchiveStack(scriptInstance_t inst, unsigned int startLocalId,
     {
         __debugbreak();
     }
-    _mm_prefetch(stackValue->pos, 1);
+    _mm_prefetch(stackValue->pos, _MM_HINT_T0);
     gScrVmPub[inst].function_frame->fs.pos = stackValue->pos;
     ++gScrVmPub[inst].function_count;
     ++gScrVmPub[inst].function_frame;

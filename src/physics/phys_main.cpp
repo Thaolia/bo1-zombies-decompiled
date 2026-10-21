@@ -3033,7 +3033,7 @@ void __cdecl Phys_BodyGrabSnapshotNitrous(PhysObjUserData *userData, float delta
 
     body = userData->body;
     v2 = body;
-    _mm_prefetch((const char *)&v2, 1);
+    _mm_prefetch((const char *)&v2, _MM_HINT_T0);
     if ( !body && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\physics\\phys_main.cpp", 1360, 0, "%s", "body") )
         __debugbreak();
     rb2w = &userData->body->m_mat;

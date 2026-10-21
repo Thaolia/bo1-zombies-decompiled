@@ -12,6 +12,7 @@
 #include "r_primarylights.h"
 #include "r_foliage.h"
 #include "r_init.h"
+#include <platform/minmax.h>
 
 struct $ACD36BF6C142509D89D5FAE1478EBC2D // sizeof=0x64
 {                                       // XREF: .data:modelLightGlob/r

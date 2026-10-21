@@ -6,6 +6,7 @@
 #include "r_dvars.h"
 #include <qcommon/com_bsp_load_obj.h>
 #include <set>
+#include <platform/minmax.h>
 
 #if 0
 void __cdecl XModelReadSurface(XModel *model, unsigned __int8 **pos, void *(__cdecl *Alloc)(int), XSurface *surface)

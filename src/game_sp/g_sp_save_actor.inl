@@ -9,7 +9,8 @@
 
 #define AF(member, type) { offsetof(actor_s, member), sizeof(((actor_s *)0)->member), type }
 #define REACQUIRE(n) AF(pPotentialReacquireNode[n], 13)
-#define KNOWN(n) AF(sentientInfo[n].pLastKnownNode, 13)
+// .inl[n] is what actor_sentient_info_array::operator[] returns for n < 48; offsetof needs the plain member path.
+#define KNOWN(n) AF(sentientInfo.inl[n].pLastKnownNode, 13)
 #define KNOWN8(n) KNOWN(n), KNOWN(n + 1), KNOWN(n + 2), KNOWN(n + 3), KNOWN(n + 4), KNOWN(n + 5), KNOWN(n + 6), KNOWN(n + 7)
 static const SPEntitySaveField s_actorFields[] = {
     // SP 0x00A53B58 order. SP +0xDC8 AnimScriptHandle (11), +0xDD4 AnimScriptSpecific.name,

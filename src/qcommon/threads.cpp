@@ -270,12 +270,14 @@ void __cdecl SetThreadName(unsigned int dwThreadID, const char *szThreadName)
     if ( dwThreadID == 0xFFFFFFFF || dwThreadID == GetCurrentThreadId() )
         PROF_THREADNAME(szThreadName);
 
+#if defined(_MSC_VER)
     // this try/except needs to be here, otherwise it wont run without a debugger :D
     __try {
         RaiseException(0x406D1388, 0, sizeof(info) / sizeof(DWORD), (ULONG_PTR *)&info);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
     }
+#endif
 }
 
 DWORD WINAPI Sys_ThreadMain(LPVOID parameter)

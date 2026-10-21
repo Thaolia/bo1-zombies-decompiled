@@ -1038,9 +1038,11 @@ double __cdecl CG_GetVehicleCrossHairAlpha(int localClientNum)
             angleDiff_4 = (float)vehicle->currentState.u.vehicle.gunYaw * 0.0054931641;
             angleDiff = (float)vehicle->currentState.u.vehicle.gunPitch * 0.0054931641;
         }
-        if ( (float)(angleDiff_4 + s_arcEpsilon) < weapDef->leftArc
+        // Upstream bug kept as is (docs/PORTING.md): the "&&" before -rightArc is missing, so this compares a bool.
+        // The parentheses spell out how C++ already parses it.
+        if ( ((float)(angleDiff_4 + s_arcEpsilon) < weapDef->leftArc
             //&& COERCE_FLOAT(LODWORD(weapDef->rightArc) ^ _mask__NegFloat_) < (float)(angleDiff_4 - s_arcEpsilon) )
-            -(weapDef->rightArc) < (float)(angleDiff_4 - s_arcEpsilon) )
+            -(weapDef->rightArc)) < (float)(angleDiff_4 - s_arcEpsilon) )
         {
             if ( (float)(angleDiff + s_arcEpsilon) < weapDef->bottomArc
                 //&& COERCE_FLOAT(LODWORD(weapDef->topArc) ^ _mask__NegFloat_) < (float)(angleDiff - s_arcEpsilon) )

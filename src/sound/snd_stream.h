@@ -2,7 +2,7 @@
 #include "snd.h"
 #include <database/db_load.h>
 #include <tl/jobqueue/jobqueue_all.h>
-#include "snd_driver_xaudio2.h"
+#include "snd_driver.h"
 
 
 struct snd_buffer // sizeof=0x118

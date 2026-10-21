@@ -1607,7 +1607,7 @@ int __cdecl CG_AddPacketEntities(int localClientNum)
     numEntities = cgameGlob->nextSnap->numEntities;
     numEntities = cgameGlob->nextSnap->numEntities;
     if (numEntities)
-        _mm_prefetch((const char *)&CG_GetEntity(localClientNum, cgameGlob->nextSnap->entities[0].number)->nextState, 1);
+        _mm_prefetch((const char *)&CG_GetEntity(localClientNum, cgameGlob->nextSnap->entities[0].number)->nextState, _MM_HINT_T0);
     postPSEntNum = 1023;
 
     {
@@ -1619,8 +1619,7 @@ int __cdecl CG_AddPacketEntities(int localClientNum)
             entnum = cgameGlob->nextSnap->entities[num].number;
             if (num + 1 < numEntities)
                 _mm_prefetch(
-                    (const char *)&CG_GetEntity(localClientNum, cgameGlob->nextSnap->entities[num + 1].number)->nextState,
-                    1);
+                    (const char *)&CG_GetEntity(localClientNum, cgameGlob->nextSnap->entities[num + 1].number)->nextState, _MM_HINT_T0);
             cent = CG_GetEntity(localClientNum, entnum);
             if (EntPacketUpdateNeedsDelayed(localClientNum, cent, contextKey))
                 DelayListAdd(&delayList, cent);
@@ -1753,7 +1752,7 @@ void __cdecl CG_ProcessFakeEntity(int localClientNum, fake_centity_s *fakeEnt)
             case 6:
                 goto $LN21_3;
             case 8:
-                //_mm_prefetch((const char *)&cent->pose.108, 1);
+                //_mm_prefetch((const char *)&cent->pose.108, _MM_HINT_T0);
                 CG_Fx(localClientNum, cent);
                 break;
             case 9:

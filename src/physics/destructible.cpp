@@ -2278,20 +2278,20 @@ void __cdecl CG_UpdateDestructibles(int localClientNum, int msec)
 {
     unsigned int i; // [esp+40h] [ebp-8h]
 
-    _mm_prefetch((const char *)cg_destructibles[localClientNum], 1);
-    _mm_prefetch((const char *)&cg_destructibles[localClientNum][1], 1);
-    _mm_prefetch((const char *)&cg_destructibles[localClientNum][2], 1);
-    _mm_prefetch((const char *)&cg_destructibles[localClientNum][3], 1);
-    _mm_prefetch((const char *)&cg_destructibles[localClientNum][4], 1);
-    _mm_prefetch((const char *)&cg_destructibles[localClientNum][5], 1);
-    _mm_prefetch((const char *)&cg_destructibles[localClientNum][6], 1);
+    _mm_prefetch((const char *)cg_destructibles[localClientNum], _MM_HINT_T0);
+    _mm_prefetch((const char *)&cg_destructibles[localClientNum][1], _MM_HINT_T0);
+    _mm_prefetch((const char *)&cg_destructibles[localClientNum][2], _MM_HINT_T0);
+    _mm_prefetch((const char *)&cg_destructibles[localClientNum][3], _MM_HINT_T0);
+    _mm_prefetch((const char *)&cg_destructibles[localClientNum][4], _MM_HINT_T0);
+    _mm_prefetch((const char *)&cg_destructibles[localClientNum][5], _MM_HINT_T0);
+    _mm_prefetch((const char *)&cg_destructibles[localClientNum][6], _MM_HINT_T0);
     cg_updateTime[localClientNum] += msec;
     if ( cg_updateTime[localClientNum] > 300 )
     {
         cg_updateTime[localClientNum] -= 300;
         for ( i = 0; i < cg_numDestructibles[localClientNum]; ++i )
         {
-            _mm_prefetch((const char *)&cg_destructibles[localClientNum][i + 7], 1);
+            _mm_prefetch((const char *)&cg_destructibles[localClientNum][i + 7], _MM_HINT_T0);
             if ( cg_destructibles[localClientNum][i].entNum != 1023 )
             {
                 CG_DestructibleUpdateBurn(localClientNum, &cg_destructibles[localClientNum][i]);

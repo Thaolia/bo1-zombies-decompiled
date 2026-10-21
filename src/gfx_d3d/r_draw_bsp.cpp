@@ -204,7 +204,7 @@ void __cdecl R_DrawTrianglesLit(
                 __debugbreak();
             }
             bspSurf = &rgp.world->dpvs.surfaces[surfIndex];
-            _mm_prefetch((const char *)&rgp.world->dpvs.surfaces[list[index + 1]].lightmapIndex, 1);
+            _mm_prefetch((const char *)&rgp.world->dpvs.surfaces[list[index + 1]].lightmapIndex, _MM_HINT_T0);
             if ( r_lightConflicts->current.color[0]
                  | (reflectionProbeIndex - bspSurf->reflectionProbeIndex)
                  | (lightmapIndex - bspSurf->lightmapIndex) )

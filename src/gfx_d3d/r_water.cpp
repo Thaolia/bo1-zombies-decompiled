@@ -65,8 +65,8 @@ void __cdecl WaterFrequenciesAtTime(complex_s *H, const water_t *water, float t)
     H0 = water->H0;
     while ( vecKIndex < vecKCount )
     {
-        _mm_prefetch((const char *)wTerm + 512, 1);
-        _mm_prefetch((const char *)&H0[64], 1);
+        _mm_prefetch((const char *)wTerm + 512, _MM_HINT_T0);
+        _mm_prefetch((const char *)&H0[64], _MM_HINT_T0);
         if ( *(unsigned int *)wTerm )
         {
             v3 = (__int64)(*wTerm * ta);

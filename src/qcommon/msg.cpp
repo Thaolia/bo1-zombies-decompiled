@@ -2,6 +2,7 @@
 #include "common.h"
 #include <client_mp/cl_main_mp.h>
 #include "sv_msg_write.h"
+#include "msg_round.h"
 
 #include <cstring>
 
@@ -10,6 +11,7 @@
 // Keep the exe's x87 rounding and double bias for both MP and zombie snapshots.
 int __cdecl MSG_RoundFloatToInt(float value)
 {
+#if defined(_MSC_VER) && defined(_M_IX86)
     const double bias = 9.313225746154785e-10;
     int result;
     __asm
@@ -19,6 +21,9 @@ int __cdecl MSG_RoundFloatToInt(float value)
         fistp result
     }
     return result;
+#else
+    return MSG_RoundFloatToInt_C(value);
+#endif
 }
 
 int __cdecl MSG_ReadValueNoXor(msg_t *msg, int bits)

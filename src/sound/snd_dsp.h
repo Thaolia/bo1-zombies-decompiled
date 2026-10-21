@@ -1,5 +1,5 @@
 #pragma once
-#include "snd_driver_xaudio2_dsp.h"
+#include "snd_dsp_types.h"
 
 struct snd_dsp_meters // sizeof=0x18
 {                                                                             // XREF: snd_local_t/r

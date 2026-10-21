@@ -20,6 +20,8 @@
 #include <xmmintrin.h>
 #include <mmintrin.h>
 
+#include <cstring>
+
 // ---------------------------------------------------------------------------
 // SSE / MMX vertex skinning.
 //
@@ -37,15 +39,15 @@
 // ---------------------------------------------------------------------------
 
 // blend weights are uint16 in [0, 65535]; 1/65536 normalizes them to [0, 1)
-static const __m128 sse_weightScale = { { 1.0f / 65536.0f, 1.0f / 65536.0f, 1.0f / 65536.0f, 1.0f / 65536.0f } };
+static const __m128 sse_weightScale = { 1.0f / 65536.0f, 1.0f / 65536.0f, 1.0f / 65536.0f, 1.0f / 65536.0f };
 
 // packed unit vectors decode as (packed - shift) / scale, encode as packed * scale + shift
-static const __m128 sse_encodeShift = { { 127.0f, 127.0f, 127.0f, -192.0f } };
-static const __m128 sse_encodeScale = { { 127.0f, 127.0f, 127.0f, 255.0f } };
+static const __m128 sse_encodeShift = { 127.0f, 127.0f, 127.0f, -192.0f };
+static const __m128 sse_encodeScale = { 127.0f, 127.0f, 127.0f, 255.0f };
 
 // Black Ops binormal-sign normalization: keep xyz fully, keep only the sign bit of w, then OR in 1.0
 static const __declspec(align(16)) unsigned int k_binormalSignMask[4] = { 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0x80000000u };
-static const __m128 sse_wOne = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+static const __m128 sse_wOne = { 0.0f, 0.0f, 0.0f, 1.0f };
 
 // ---------------------------------------------------------------------------
 // intrinsic helpers
@@ -105,6 +107,14 @@ static __forceinline __m128 DecodeUnitVec(uint32_t packed)
 }
 
 // transform a packed unit vector by a bone's rotation and re-encode it (as floats ready to pack)
+// MSVC exposes vector lanes as union members (m128_u32); other compilers only allow loads through memory.
+static __forceinline uint32_t M128Lane(const __m128 &v, int lane)
+{
+    uint32_t value;
+    memcpy(&value, reinterpret_cast<const char *>(&v) + lane * sizeof(value), sizeof(value));
+    return value;
+}
+
 static __forceinline __m128 SkinUnitVec(const DObjSkelMat *m, uint32_t packed)
 {
     __m128 transformed = TransformDir(m, DecodeUnitVec(packed));
@@ -140,7 +150,7 @@ static __forceinline __m64 Sse_SkinVertex(const GfxPackedVertex *src, const uint
 {
     const __m128 *v = (const __m128 *)src;
     __m128 position = LoadSkinPosition(v[0]);
-    __m64 colorTexCoord = *(const __m64 *) & v[1].m128_u64[0];
+    __m64 colorTexCoord = *(const __m64 *)&v[1];
 
     const DObjSkelMat *bone0 = BoneAt(boneMatrix, blend[0]);
     __m128 pos0 = PackXyzW(TransformPoint(bone0, position), position);
@@ -152,8 +162,8 @@ static __forceinline __m64 Sse_SkinVertex(const GfxPackedVertex *src, const uint
         outPos = _mm_add_ps(outPos, _mm_mul_ps(DecodeWeight(blend[2 * w]), _mm_sub_ps(bonePos, pos0)));
     }
 
-    __m64 normalTangent = PackNormalTangent(SkinUnitVec(bone0, v[1].m128_u32[2]),
-        SkinUnitVec(bone0, v[1].m128_u32[3]));
+    __m64 normalTangent = PackNormalTangent(SkinUnitVec(bone0, M128Lane(v[1], 2)),
+        SkinUnitVec(bone0, M128Lane(v[1], 3)));
     _mm_stream_ps((float *)dst, outPos);
     _mm_stream_pi(dst + 2, colorTexCoord);
     _mm_stream_pi(dst + 3, normalTangent);
@@ -169,7 +179,7 @@ static __forceinline void Sse_SkinVertexSimple(const GfxPackedVertex *src, const
 {
     const __m128 *v = (const __m128 *)src;
     __m128 position = LoadSkinPosition(v[0]);
-    __m64 colorTexCoord = *(const __m64 *) & v[1].m128_u64[0];
+    __m64 colorTexCoord = *(const __m64 *)&v[1];
 
     const DObjSkelMat *bone0 = BoneAt(boneMatrix, blend[0]);
     __m128 pos0 = PackXyzW(TransformPoint(bone0, position), position);
@@ -192,11 +202,11 @@ static __forceinline __m64 Sse_SkinVertexRigid(const DObjSkelMat *bone, const Gf
 {
     const __m128 *v = (const __m128 *)src;
     __m128 srcPos = v[0];
-    __m64 colorTexCoord = *(const __m64 *) & v[1].m128_u64[0];
+    __m64 colorTexCoord = *(const __m64 *)&v[1];
 
     __m128 outPos = PackXyzW(TransformPoint(bone, srcPos), srcPos);
-    __m64 normalTangent = PackNormalTangent(SkinUnitVec(bone, v[1].m128_u32[2]),
-        SkinUnitVec(bone, v[1].m128_u32[3]));
+    __m64 normalTangent = PackNormalTangent(SkinUnitVec(bone, M128Lane(v[1], 2)),
+        SkinUnitVec(bone, M128Lane(v[1], 3)));
     _mm_stream_ps((float *)dst, outPos);
     _mm_stream_pi(dst + 2, colorTexCoord);
     _mm_stream_pi(dst + 3, normalTangent);
@@ -208,7 +218,7 @@ static __forceinline void Sse_SkinVertexRigidSimple(const DObjSkelMat *bone, con
 {
     const __m128 *v = (const __m128 *)src;
     __m128 srcPos = v[0];
-    __m64 colorTexCoord = *(const __m64 *) & v[1].m128_u64[0];
+    __m64 colorTexCoord = *(const __m64 *)&v[1];
 
     __m128 outPos = PackXyzW(TransformPoint(bone, srcPos), srcPos);
     _mm_stream_ps((float *)dst, outPos);
@@ -365,7 +375,7 @@ static void R_SkinXSurfaceRigidSse(const XSurface *surf, int totalVertCount,
         const DObjSkelMat *bone = BoneAt(boneMatrix, vertList->boneOffset);
         for (int i = 0; i < vertList->vertCount; ++i)
         {
-            _mm_prefetch((const char *)&src[4], 0);
+            _mm_prefetch((const char *)&src[4], _MM_HINT_NTA);
             Sse_SkinVertexRigid(bone, src, (__m64 *)dst);
             ++src;
             ++dst;
@@ -393,7 +403,7 @@ static void R_SkinXSurfaceRigidSseOut(const XSurface *surf, int totalVertCount, 
         const DObjSkelMat *bone = BoneAt(boneMatrix, vertList->boneOffset);
         for (int i = 0; i < vertList->vertCount; ++i)
         {
-            _mm_prefetch((const char *)&src[4], 0);
+            _mm_prefetch((const char *)&src[4], _MM_HINT_NTA);
             __m64 normalTangent = Sse_SkinVertexRigid(bone, src, (__m64 *)dst);
             _mm_stream_pi((__m64 *)dstVertNormals, normalTangent);
             ++src;
@@ -424,7 +434,7 @@ static void R_SkinXSurfaceRigidSseInOut(const XSurface *surf, int totalVertCount
         const DObjSkelMat *bone = BoneAt(boneMatrix, vertList->boneOffset);
         for (int i = 0; i < vertList->vertCount; ++i)
         {
-            _mm_prefetch((const char *)&src[4], 0);
+            _mm_prefetch((const char *)&src[4], _MM_HINT_NTA);
             Sse_SkinVertexRigidSimple(bone, src, (__m64 *)dst, *srcVertNormals, dstVertNormals);
             ++src;
             ++dst;

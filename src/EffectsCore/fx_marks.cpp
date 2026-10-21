@@ -1991,7 +1991,7 @@ void __cdecl FX_EmitMarkTri(
     if ( marksSystem->hasCarryIndex )
     {
         pIndexa = (r_double_index_t *)&outSurf->indices[outSurf->indexCount - 1];
-        if ( ((unsigned __int8)pIndexa & 3) != 0
+        if ( ((unsigned __int8)(uintptr_t)pIndexa & 3) != 0
             && !Assert_MyHandler(
                         "C:\\projects_pc\\cod\\codsrc\\src\\EffectsCore\\fx_marks.cpp",
                         1684,
@@ -2010,7 +2010,7 @@ void __cdecl FX_EmitMarkTri(
     else
     {
         pIndex = (r_double_index_t *)&outSurf->indices[outSurf->indexCount];
-        if ( ((unsigned __int8)pIndex & 3) != 0
+        if ( ((unsigned __int8)(uintptr_t)pIndex & 3) != 0
             && !Assert_MyHandler(
                         "C:\\projects_pc\\cod\\codsrc\\src\\EffectsCore\\fx_marks.cpp",
                         1670,
@@ -3060,7 +3060,7 @@ void __cdecl FX_ExpandMarkVerts_NoTransform_GfxPackedVertex_(
 
     if (!mark && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\EffectsCore\\fx_marks.cpp", 1484, 0, "%s", "mark"))
         __debugbreak();
-    _mm_prefetch((const char *)mark, 1);
+    _mm_prefetch((const char *)mark, _MM_HINT_T0);
     verts = R_GetMarkMeshVerts(baseVertex);
     pointCount = mark->pointCount;
     if (mark->radius < 0.1
@@ -3111,8 +3111,8 @@ void __cdecl FX_ExpandMarkVerts_NoTransform_GfxPackedVertex_(
         markPoint = (const FxMarkPoint *)group;
         do
         {
-            _mm_prefetch((const char *)&markPoint[5], 1);
-            _mm_prefetch((const char *)&outVert[2], 1);
+            _mm_prefetch((const char *)&markPoint[5], _MM_HINT_T0);
+            _mm_prefetch((const char *)&outVert[2], _MM_HINT_T0);
             castOutVert = (GfxPackedVertex *)outVert;
             delta = markPoint->xyz[0] - mark->origin[0];
             delta_4 = markPoint->xyz[1] - mark->origin[1];
@@ -3189,7 +3189,7 @@ void __cdecl FX_ExpandMarkVerts_NoTransform_GfxWorldVertex_(
 
     if (!mark && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\EffectsCore\\fx_marks.cpp", 1484, 0, "%s", "mark"))
         __debugbreak();
-    _mm_prefetch((const char *)mark, 1);
+    _mm_prefetch((const char *)mark, _MM_HINT_T0);
     verts = R_GetMarkMeshVerts(baseVertex);
     pointCount = mark->pointCount;
     if (mark->radius < 0.1
@@ -3240,8 +3240,8 @@ void __cdecl FX_ExpandMarkVerts_NoTransform_GfxWorldVertex_(
         markPoint = (const FxMarkPoint *)group;
         do
         {
-            _mm_prefetch((const char *)&markPoint[5], 1);
-            _mm_prefetch((const char *)&outVert[2], 1);
+            _mm_prefetch((const char *)&markPoint[5], _MM_HINT_T0);
+            _mm_prefetch((const char *)&outVert[2], _MM_HINT_T0);
             castOutVert = outVert;
             delta = markPoint->xyz[0] - mark->origin[0];
             delta_4 = markPoint->xyz[1] - mark->origin[1];

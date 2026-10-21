@@ -1,6 +1,8 @@
 #pragma once
 #include <tl/tl_system.h>
 
+#include <cstddef>
+
 #include <Windows.h>
 
 #define JQ_MAX_QUEUES 8

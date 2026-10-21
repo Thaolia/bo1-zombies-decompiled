@@ -1,6 +1,7 @@
 #pragma once
 #include "assertive.h"
 
+#include <cfloat>
 #include <math.h>
 #include "com_pack.h"
 

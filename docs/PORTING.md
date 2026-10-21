@@ -14,12 +14,17 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-21 | `/Ob1` on `src/gfx_d3d/rb_draw3d.cpp`, only when `MSVC_VERSION == 1943` | MSVC 19.43 (VS 17.13) crashes on this file at `/O2 /Ob2`: C1001 in `p2/main.cpp` line 255, at `rb_draw3d.cpp:244`, and `/MP` reports it as `D8040`. `/O2 /Ob1`, `/O1` and `/Od` all compile. MSVC 19.29 (v142) compiles the file but rejects upstream literal→`char*` conversions in 3 other files |
 | 2026-10-21 | `win32-msvc` preset builds into `build/` | `setup.ps1` and `Play.bat` hardcode `build\Release` |
 | 2026-10-21 | Fastfiles converted offline (`ffconv`) instead of patched at runtime | The loader copies 32-bit structs in place and stores pointers as packed 32-bit offsets (`db_stream_load.cpp:63-85`) |
+| 2026-10-21 | Phase 1 is checked with MinGW i686 GCC and clang (`mingw32-gcc`, `mingw32-clang`), not `linux64-clang` | A GNU-dialect compiler that still has `windows.h` and D3D9 headers, in 32-bit: only compiler-dialect errors show up, not OS-layer (phase 4) or pointer-width (phase 3) ones. The Linux syntax pass moves to phase 4 |
+| 2026-10-21 | `MSG_RoundFloatToInt_C` emulates x87 **24-bit** precision | `R_CreateDevice` has no `D3DCREATE_FPU_PRESERVE`, so D3D9 sets the main thread (device creation, `SV_Frame`, snapshot parsing) to single precision. 8 388 608 of the 2^32 inputs round differently at 53-bit |
+| 2026-10-21 | XAudio2 split: `sound/snd_driver.h` (engine-facing `SD_*` API) and `sound/snd_dsp_types.h` (plain DSP structs) | `snd.h` pulled XAudio2/XAPO into ~490 files. The June 2010 XAudio2 headers only parse with MSVC's preprocessor, so only `snd_driver_xaudio2.cpp` and `snd_driver_xaudio2_dsp.cpp` include them now; phase 4 replaces those two |
+| 2026-10-21 | `static_assert(sizeof(gjk_partition_t) == 112)` is MSVC-only | The Itanium C++ ABI (GCC, clang) reuses `gjk_base_t`'s tail padding: `ninds` lands at 0x48 and the size is 0x60. The struct is only allocated with `sizeof` |
+| 2026-10-21 | `phys_gjk.cpp`'s x87 requirement is only enforced on 32-bit MSVC | x64 and AArch64 have no x87. Upstream says this brings back gjk max-iteration warnings on `mp_array`; watch for them from phase 3 on |
 
 ## Phases
 | # | Phase | Status |
 |---|---|---|
 | 0 | Repo, toolchains, CMake presets, platform branches in `CMakeLists.txt` | done (2026-10-21) |
-| 1 | Compiler compat layer (`src/platform/compat.h`), no behaviour change | todo |
+| 1 | Compiler compat layer (`src/platform/compat.h`), no behaviour change | done (2026-10-21) |
 | 1c | `BO1_OFFLINE` stubs (Steam, DemonWare, live, voice, nvapi, Bink, mjpeg/vpx, monkey, CubeMapGenLib) | todo |
 | 2 | `tools/ffconv`: PC fastfiles → native-64 `IWffs` + GLSL 4.60/UBO shaders | todo |
 | 3 | 64-bit clean engine on Windows x64 (still D3D9) | todo |
@@ -46,12 +51,21 @@ Base: upstream commit `102f699` (2026-10-03).
     `C:\SDKs\DXSDK_Jun10\DXSDK\Redist`.
   - `Play.bat` runs the build and the user played Kino der Toten (2026-10-21).
 
-## Known upstream bugs (not fixed, noted for later)
-- `src/gfx_d3d/rb_draw3d.cpp:239`: `memcpy(gfxCmdBufState.refSamplerState, gfxCmdBufState.refSamplerState,
-  sizeof(gfxCmdBufState))` copies a whole struct's size onto one of its own members (overlap and overflow). This
-  is decompiler output and must be checked against the binary before being fixed.
-- **1**: `win32-msvc` behaves the same. `linux64-clang` passes `-fsyntax-only`. The `msg.cpp` rounding test passes
-  on millions of floats.
+- **1**: `win32-msvc` builds and plays the same. Every engine file except the two XAudio2 driver files passes
+  `-fsyntax-only` with MinGW GCC and clang.
+  The `msg.cpp` rounding test passes on all 2^32 floats.
+  - Commands (Linux): `cmake --preset mingw32-gcc -DDXSDK_DIR=<June 2010 SDK>`, then
+    `tools/syntax_check.py build/mingw32-gcc --exclude sound/snd_driver_xaudio2`; same with `mingw32-clang`.
+    Requires `mingw-w64` (apt).
+  - Rounding test: `g++ -std=c++20 -O2 -Isrc tests/msg_round/msg_round_test.cpp -o msg_round && ./msg_round`
+    (about 2.5 min on 16 threads). On x86 it compares with the real x87 sequence; elsewhere it checks the hash.
+  - Verified 2026-10-21:
+    - `mingw32-gcc`: 1250 files, only the two XAudio2 driver files fail (excluded on purpose, see decisions);
+    - `mingw32-clang`: 1248 files with the exclusion, 0 errors;
+    - rounding test with GCC 16 and clang 21 on x86-64: 0 mismatches, hash `0xac2adb9bc5e25a37`.
+    - `win32-msvc` Release: 0 errors, same vcxproj options as phase 0; Kino played by the user, same behaviour.
+  - clang warnings left for phase 3: `-Warray-bounds` on decompiled vector code, `-Wint-to-pointer-cast`,
+    `-Winvalid-offsetof` on `actor_s`.
 - **2**: each base zone round-trips. The native-64 load is compared field by field with the 32-bit load dump.
   Every GLSL passes `glslangValidator`. MojoShader rejections are reported.
 - **3**: `win64-clangcl` plays 10 rounds of Kino (box, Pack-a-Punch, perks, teleporter) with no assert.
@@ -59,6 +73,14 @@ Base: upstream commit `102f699` (2026-10-03).
   null-backend test of `gfx_d3d9emu` passes.
 - **5**: Kino plays 10 rounds docked and handheld with no crash, RAM logged every round, target 30 fps at 720p
   docked. Render-thread CPU time is recorded here to decide on phase 7.
+
+## Known upstream bugs (not fixed, noted for later)
+- `src/gfx_d3d/rb_draw3d.cpp:239`: `memcpy(gfxCmdBufState.refSamplerState, gfxCmdBufState.refSamplerState,
+  sizeof(gfxCmdBufState))` copies a whole struct's size onto one of its own members (overlap and overflow). This
+  is decompiler output and must be checked against the binary before being fixed.
+- `src/cgame/cg_draw_reticles.cpp` (vehicle gun yaw arc test): the `&&` before `-(weapDef->rightArc)` is missing,
+  so the code compares the bool `x < leftArc - rightArc` with a float. The pitch test just below has it. Phase 1
+  only added the parentheses C++ already applies.
 
 ## Audit findings (2026-10-21, upstream `102f699`)
 - Fastfiles (blocker):

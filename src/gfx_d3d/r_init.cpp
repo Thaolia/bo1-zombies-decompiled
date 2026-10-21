@@ -2,7 +2,12 @@
 #include <win32/win_main.h>
 #include <qcommon/common.h>
 
+#if defined(_MSC_VER)
 #include <dxerr.h>
+#else
+// The SDK's dxerr.h needs MSVC's SAL macros (__in), which libstdc++ uses as identifiers; MinGW ships dxerr9.h.
+#include <dxerr9.h>
+#endif
 #include <d3d9.h>
 #include "rb_backend.h"
 #include "r_dvars.h"
@@ -95,7 +100,11 @@ void __cdecl    R_FatalLockError(HRESULT hr)
 
 const char *__cdecl R_ErrorDescription(HRESULT hr)
 {
+#if defined(_MSC_VER)
     return DXGetErrorDescriptionA(hr);
+#else
+    return DXGetErrorDescription9A(hr);
+#endif
 }
 
 void __cdecl R_SetColorMappings()

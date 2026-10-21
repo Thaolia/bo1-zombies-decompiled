@@ -1171,7 +1171,7 @@ LABEL_6:
     leafNodes = tree->u.s.nodes;
     for ( i = 0; i < tree->u.s.nodeCount && g_path.circle.nodeCount < g_path.circle.maxNodes; ++i )
     {
-        _mm_prefetch((const char *)&gameWorldCurrent->path.nodes[leafNodes[i]], 1);
+        _mm_prefetch((const char *)&gameWorldCurrent->path.nodes[leafNodes[i]], _MM_HINT_T0);
         pnode = &gameWorldCurrent->path.nodes[leafNodes[i]];
         if ( get_pathnode_parent(pnode)->entnum == 1022 )
             Path_NodesInCylinder_process(pnode);

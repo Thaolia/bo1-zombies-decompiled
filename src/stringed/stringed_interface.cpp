@@ -1,6 +1,7 @@
 #include "stringed_interface.h"
 #include <universal/com_files.h>
 #include <universal/assertive.h>
+#include <cstring>
 
 int giFilesFound;
 

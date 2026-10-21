@@ -19,6 +19,26 @@
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
     },
     {
+      "name": "mingw32-gcc",
+      "displayName": "MinGW i686 GCC (phase 1 syntax pass, GNU dialect)",
+      "description": "Only for tools/syntax_check.py. Pass -DDXSDK_DIR=<June 2010 SDK root> for the headers MinGW lacks.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/mingw32-gcc",
+      "toolchainFile": "${sourceDir}/tools/toolchains/mingw-i686-gcc.cmake",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "CMAKE_EXPORT_COMPILE_COMMANDS": "ON" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "mingw32-clang",
+      "displayName": "MinGW i686 clang (phase 1 syntax pass, GNU dialect)",
+      "description": "Only for tools/syntax_check.py. Pass -DDXSDK_DIR=<June 2010 SDK root> for the headers MinGW lacks.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/mingw32-clang",
+      "toolchainFile": "${sourceDir}/tools/toolchains/mingw-i686-clang.cmake",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "CMAKE_EXPORT_COMPILE_COMMANDS": "ON" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
       "name": "linux64-clang",
       "displayName": "Linux x86_64 clang (phase 4: portable layer + GL backend)",
       "generator": "Ninja",

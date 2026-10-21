@@ -793,7 +793,7 @@ void __cdecl PrefetchArrayIndexed(char *mem, unsigned int elementCount, unsigned
                 (unsigned int)memIter <= ((umem + elementSize * elementCount - 1) & 0xFFFFFF80);
                 memIter += 128 )
     {
-        _mm_prefetch((const char *)memIter, 1);
+        _mm_prefetch((const char *)memIter, _MM_HINT_T0);
     }
 }
 

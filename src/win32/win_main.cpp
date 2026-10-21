@@ -1,7 +1,7 @@
 #include "win_main.h"
 #include "win_net.h"
 #include <game_mp/g_main_mp.h>
-#include <sound/snd_driver_xaudio2.h>
+#include <sound/snd_driver.h>
 #include "win_localize.h"
 #include <monkey/monkey.h>
 #include <qcommon/threads.h>

@@ -1,6 +1,8 @@
 #pragma once
 #include <universal/com_math.h>
 
+#include <cstddef>
+
 enum GfxDrawSceneMethod : __int32
 {                                                                             // XREF: GfxDrawMethod/r
         GFX_DRAW_SCENE_NONE                = 0x0,
