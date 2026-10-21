@@ -18,7 +18,7 @@ Base: upstream commit `102f699` (2026-10-03).
 ## Phases
 | # | Phase | Status |
 |---|---|---|
-| 0 | Repo, toolchains, CMake presets, platform branches in `CMakeLists.txt` | done on Linux side, **waiting for the Windows `win32-msvc` check** |
+| 0 | Repo, toolchains, CMake presets, platform branches in `CMakeLists.txt` | done (2026-10-21) |
 | 1 | Compiler compat layer (`src/platform/compat.h`), no behaviour change | todo |
 | 1c | `BO1_OFFLINE` stubs (Steam, DemonWare, live, voice, nvapi, Bink, mjpeg/vpx, monkey, CubeMapGenLib) | todo |
 | 2 | `tools/ffconv`: PC fastfiles → native-64 `IWffs` + GLSL 4.60/UBO shaders | todo |
@@ -41,7 +41,10 @@ Base: upstream commit `102f699` (2026-10-03).
       of the defines and a path-dependent GUID;
     - `cmake --build --preset win32-msvc-release` links `build/Release/BO1Zombies.exe` (PE32 i386) with 0
       errors.
-  - **Still to do by the user:** run `setup.ps1`, then `Play.bat`, and play Kino der Toten.
+  - `setup.ps1` copied a PC install (zones `IWffu100` v473, 11.2 GB) into `build/Release` on 2026-10-21. That
+    install has no `Redist\DirectX`, so `setup.ps1` now takes `-DxRedist` and was given the SDK's
+    `C:\SDKs\DXSDK_Jun10\DXSDK\Redist`.
+  - `Play.bat` runs the build and the user played Kino der Toten (2026-10-21).
 
 ## Known upstream bugs (not fixed, noted for later)
 - `src/gfx_d3d/rb_draw3d.cpp:239`: `memcpy(gfxCmdBufState.refSamplerState, gfxCmdBufState.refSamplerState,

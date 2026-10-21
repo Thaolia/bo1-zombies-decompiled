@@ -5,7 +5,10 @@
 # The game runs from build\Release and reads the original game's files (zone\, main\*.iwd, videos, DLLs) from
 # there. Your Steam install is only read, never changed. BlackOps.exe and BlackOpsMP.exe are not copied.
 param(
-    [string]$GameDir = 'C:\Program Files (x86)\Steam\steamapps\common\Call of Duty Black Ops'
+    [string]$GameDir = 'C:\Program Files (x86)\Steam\steamapps\common\Call of Duty Black Ops',
+    # folder holding Jun2010_d3dx9_43_x86.cab and APR2007_xinput_x86.cab; defaults to the install's Redist\DirectX.
+    # Pass the June 2010 DirectX SDK's Redist folder for an install that has none.
+    [string]$DxRedist = ''
 )
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path (Join-Path $GameDir 'zone'))) {
@@ -21,7 +24,7 @@ Copy-Item (Join-Path $PSScriptRoot 'src\binklib\binkw32.dll') $dst -Force
 Copy-Item (Join-Path $PSScriptRoot 'src\steam\redistributable_bin\*.dll') $dst -Force
 # runtimes the exe needs that a fresh Windows lacks, put next to the exe so nothing has to be installed:
 # DirectX 9 (d3dx9_43, xinput1_3) out of the game's own Redist\DirectX, Visual C++ 2015-2022 (x86) out of Visual Studio
-$dx = Join-Path $dst 'Redist\DirectX'
+$dx = if ($DxRedist) { $DxRedist } else { Join-Path $dst 'Redist\DirectX' }
 expand.exe (Join-Path $dx 'Jun2010_d3dx9_43_x86.cab') "-F:d3dx9_43.dll" $dst | Out-Null
 expand.exe (Join-Path $dx 'APR2007_xinput_x86.cab') "-F:xinput1_3.dll" $dst | Out-Null
 foreach ($f in 'd3dx9_43.dll', 'xinput1_3.dll') { if (-not (Test-Path (Join-Path $dst $f))) { throw "could not extract $f from $dx" } }

@@ -426,3 +426,6 @@ FodyWeavers.xsd
 .idea/*
 Debug/*
 __BO1Zombies
+# Retail game data, never committed (see CLAUDE.md)
+Call.of.Duty.Black.Ops.v87954/
+*.iso
