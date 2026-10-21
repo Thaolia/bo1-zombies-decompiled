@@ -1,0 +1,52 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "win32-msvc",
+      "displayName": "Windows x86 MSVC (upstream reference, D3D9)",
+      "description": "Builds into build/ so setup.ps1 and Play.bat find build/Release as before.",
+      "binaryDir": "${sourceDir}/build",
+      "architecture": { "value": "Win32", "strategy": "set" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "win64-clangcl",
+      "displayName": "Windows x64 clang-cl (phase 3: 64-bit cleanup, still D3D9)",
+      "binaryDir": "${sourceDir}/build/win64-clangcl",
+      "architecture": { "value": "x64", "strategy": "set" },
+      "toolset": { "value": "ClangCL", "strategy": "set" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "linux64-clang",
+      "displayName": "Linux x86_64 clang (phase 4: portable layer + GL backend)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux64-clang",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "switch",
+      "displayName": "Nintendo Switch (devkitA64 + libnx, phase 5)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/switch",
+      "toolchainFile": "$env{DEVKITPRO}/cmake/Switch.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "win32-msvc-release", "configurePreset": "win32-msvc", "configuration": "Release" },
+    { "name": "win32-msvc-debug", "configurePreset": "win32-msvc", "configuration": "Debug" },
+    { "name": "win64-clangcl-release", "configurePreset": "win64-clangcl", "configuration": "Release" },
+    { "name": "linux64-clang", "configurePreset": "linux64-clang" },
+    { "name": "switch", "configurePreset": "switch" }
+  ]
+}
