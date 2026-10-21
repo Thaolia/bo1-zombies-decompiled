@@ -25,6 +25,14 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-21 | Voice chat stubbed at the `groupvoice` entry points | `Sound_Init` fails as without a sound device, so `Voice_Init` leaves `g_voice_initialized` at 0. `win_voice.cpp` also holds `Live_GetClientNumForXuid`, so it stays |
 | 2026-10-21 | `CubeMapGenLib` stays in the offline build for now | It is neither online nor a binary SDK. Only reflection-probe generation (`r_reflectionProbeGenerate`, needs the map's BSP) uses it. Its filter threads use Win32, so phase 4 decides between porting and a guard |
 | 2026-10-21 | ccache wraps every compile when it is installed (`CMAKE_<LANG>_COMPILER_LAUNCHER`, set before `project()`) | It speeds up rebuilds of the ~1250 files on the Ninja presets (`mingw32-*`, `linux64-clang`, `switch`). The Visual Studio generator of the `win32-msvc*` presets ignores launchers, and the Windows side has no ccache. `compile_commands.json` does not list the launcher, so `tools/syntax_check.py` is unchanged |
+| 2026-10-21 | v1 zones: every zombies map (the 11 maps, Dead Ops Arcade included) and the zones they load; no campaign | The engine is the MP code base with the SP zombies parts: `+devmap cuba` stops with `Com_ERROR: Exceeded limit of 16 'font' assets` |
+| 2026-10-21 | `IWffs` zones are the retail zlib stream with every struct widened to its 64-bit layout, read by the same `db_load.cpp` traversal compiled 64-bit. Replaces the relocation-table format | Loading is more than copying: pool registration (`DB_AddXAsset` copies headers into pools), aliases to assets of other zones (`DB_ConvertOffsetToAlias`), insert pointers, script-string remapping, textures, shaders and sound banks all happen inside the `Load_*` traversal. A relocation loader would re-implement all of it |
+| 2026-10-21 | `ffconv` runs the real `db_load.cpp` (32-bit), transformed at build time | `Load_Stream`, `AllocLoad_*` and the pointer conversions get typed hooks, so each struct is captured with its C++ type; the engine's side-effect hooks (registration, D3D, sound, script strings) are stubbed. `db_load.cpp` itself is not edited |
+| 2026-10-21 | Struct layouts come from clang's record-layout dump of `db_load.cpp` (`-fdump-record-layouts-complete`) for the 32-bit and the 64-bit target | The same compiler front end and headers as the engine. The 32-bit table is checked against every `Load_Stream` size of the real loader; the 64-bit one against the phase 3 `static_assert`s. Bitfields exist in some records, so each 64-bit ABI (MSVC x64 for phase 3, AArch64 for the Switch) gets its own dump |
+| 2026-10-21 | 32-bit padding is copied into the 64-bit layout where it fits | `Glass` keeps a value in byte 62, which the decompiled struct calls padding: probably a field no code reads. Copying padding keeps the round trip strict |
+| 2026-10-21 | Leftover bytes outside the member of a union the loader walks are not kept | `cLeafBrushNode_s` leaves hold stale `children` bytes after their 4-byte `brushes` pointer, which needs 8 bytes on 64-bit. No code reads an inactive member. `--verify` counts these bytes apart |
+| 2026-10-21 | Shaders: one `shaders.pack` for all zones, keyed by FNV-1a 64 of the D3D9 bytecode (`src/gfx_d3d9emu/shader_pack.h`) | 13 704 unique shaders across 65 zones; one file instead of thousands on the SD card |
+| 2026-10-21 | MojoShader vendored unmodified (commit `ad5dff8`, GLSL profile only); `centroid` is cleared in the bytecode before translation and put back by ff_glsl.cpp | Its GLSL profile rejects `centroid` (28 pixel and 2 vertex shaders), which GLSL 4.60 supports |
 | 2026-10-21 | `phys_gjk.cpp`'s x87 requirement is only enforced on 32-bit MSVC | x64 and AArch64 have no x87. Upstream says this brings back gjk max-iteration warnings on `mp_array`; watch for them from phase 3 on |
 
 ## Phases
@@ -33,7 +41,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 0 | Repo, toolchains, CMake presets, platform branches in `CMakeLists.txt` | done (2026-10-21) |
 | 1 | Compiler compat layer (`src/platform/compat.h`), no behaviour change | done (2026-10-21) |
 | 1c | `BO1_OFFLINE` build (Steam, DemonWare, voice, NVAPI, Bink, mjpeg/vpx, monkey, Tracy out; `src/platform/stubs/`) | done (2026-10-21) |
-| 2 | `tools/ffconv`: PC fastfiles → native-64 `IWffs` + GLSL 4.60/UBO shaders | todo |
+| 2 | `tools/ffconv`: PC fastfiles → native-64 `IWffs` + GLSL 4.60/UBO shaders | done for the win64 ABI (2026-10-21); AArch64 layout tables wait for phase 4 |
 | 3 | 64-bit clean engine on Windows x64 (still D3D9) | todo |
 | 4 | Portable platform layer + D3D9-emu frontend + GL backend on Linux x86_64 | todo |
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | todo |
@@ -102,8 +110,36 @@ Base: upstream commit `102f699` (2026-10-03).
       23 s. `BinkGetError` now stays empty and the stub logs once that movies are skipped; the main-menu run then
       quits normally after 60 s and Kino still runs. The user then played the fixed offline build (map list
       included) with no problem.
-- **2**: each base zone round-trips. The native-64 load is compared field by field with the 32-bit load dump.
-  Every GLSL passes `glslangValidator`. MojoShader rejections are reported.
+- **2**, in steps:
+  - **2a** layout tables: `tools/ffconv/gen/layouts.py` turns the clang dumps into per-type tables (32-bit and
+    64-bit offset of every leaf field, pointer or bytes). Check: every 32-bit size matches the real `sizeof` and the
+    sizes `db_load.cpp` streams.
+  - **2b** traversal: `ffconv` (32-bit, MinGW) inflates a zone and walks it with the transformed `db_load.cpp`.
+    Check: on every zombies zone the walk consumes exactly `XFile.size` bytes and ends each block at
+    `XFile.blockSize`, with the asset count and names of the real load.
+  - **2c** widening: write the `IWffs` stream (64-bit structs, translated pointer offsets, `db_ff64.h` alignment).
+    Check: narrowing it back gives the retail stream byte for byte, on every zombies zone.
+  - **2d** shaders: MojoShader turns every unique vs_3_0/ps_3_0 into GLSL 4.60 (`vec4 c[256]` std140 UBO per
+    stage, samplers at their `s#` binding, alpha test as `discard`), in a shader pack keyed by bytecode hash.
+    Check: every GLSL passes `glslangValidator`; rejected shaders are listed.
+  - **2e** the `ffconv` command line over a whole install, and its README section.
+  - The final proof that a 64-bit engine loads the zones belongs to phase 3 (`win64-clangcl` plays Kino on them).
+  - Commands (WSL): `cd tools/ffconv && cmake --preset ffconv && cmake --build --preset ffconv`, then
+    `build/ffconv/ffconv.exe --verify --game <install> --out <dir> < /dev/null` (Windows paths) and
+    `tools/ffconv/gen/check_shader_pack.py <dir>/shaders.pack`. Needs `python3-clang` and `glslang-tools`.
+  - Verified 2026-10-21 on the PC install (65 zones: code, patch, menus and the 11 zombies maps with their
+    `_patch` and `en_` zones):
+    - layouts: 240 streamed types; every generated 32-bit size and alignment `static_assert`s against the i686
+      compiler;
+    - walk: every zone read to its last body byte, every block except temp ending exactly at its retail size;
+      36 036 assets, 2 486 702 pointers translated, no untyped allocation, no misaligned 64-bit chunk;
+    - round trip: 65/65 zones narrow back to the retail stream (1 429 254 369 body bytes), apart from 1 058 560
+      bytes outside walked union members, 149 201 of which held leftover data;
+    - output: 640 MB of zones (3.3 GB retail), 6 minutes with `--verify`;
+    - shaders: 13 704 unique (356 vs_3_0, 13 348 ps_3_0), all translated, all accepted by `glslangValidator
+      --target-env opengl`; `shaders.pack` is 127 MB.
+  - Not done in phase 2: AArch64 layout tables (`--abi aarch64`), which need the engine headers to parse for
+    AArch64 (phase 4); texture size reduction (`--max-tex`), left until Switch memory is measured (phase 5).
 - **3**: `win64-clangcl` plays 10 rounds of Kino (box, Pack-a-Punch, perks, teleporter) with no assert.
 - **4**: `linux64-clang` plays 10 rounds of Kino. RenderDoc captures for each pass. No GL debug errors. The
   null-backend test of `gfx_d3d9emu` passes.

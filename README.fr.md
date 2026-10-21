@@ -14,8 +14,15 @@ portage est dans `docs/ARCHITECTURE.md`, et le contrat du renderer (GL maintenan
 
 ## Données du jeu
 Aucun fichier du jeu n'est distribué. Il faut posséder Call of Duty: Black Ops sur Steam. Un convertisseur lancé
-sur ton PC (`tools/ffconv`, phase 2) transforme les fastfiles de ton install en format 64-bit pour le port. Tu
-copies ensuite le résultat sur la carte SD, dans `sdmc:/switch/bo1zm/`.
+sur ton PC (`tools/ffconv`) transforme les fastfiles de ton install en format 64-bit pour le port, et traduit leurs
+shaders en GLSL :
+
+    cd tools/ffconv && cmake --preset ffconv && cmake --build --preset ffconv      # depuis WSL ou Linux, MinGW + python3-clang
+    build\ffconv\ffconv.exe --verify --game "C:\...\Call of Duty Black Ops" --out C:\bo1zm
+
+Il lit les zones de toutes les maps zombies (environ 3 Go) et écrit `zone\` et `shaders.pack` dans `--out`, jamais
+dans l'install. `--verify` relit chaque zone écrite et la compare à l'originale. Tu copies ensuite le résultat sur la
+carte SD, dans `sdmc:/switch/bo1zm/`.
 
 ## Lancement sur Switch
 Le jeu doit être lancé en mode application (title takeover : maintenir R en lançant un jeu). Le mode applet,

@@ -7,7 +7,7 @@ The port adds layers around the decompiled engine and keeps the engine code as c
         │  run once on the user's PC
         ▼
  tools/ffconv  (x86 32-bit, reuses the engine's own Load_* code)
-        │  native-64 IWffs zones + relocation table
+        │  IWffs zones: the same zlib stream, every struct widened to its 64-bit layout
         │  shaders: D3D9 SM3 bytecode → MojoShader → GLSL 4.60 core (std140 UBOs, explicit bindings)
         ▼
  engine (src/, tl/) ── src/platform/compat.h       MSVC-isms for GCC/clang
@@ -46,6 +46,26 @@ not.
   needs the result: `qcommon/msg_round.h` reproduces the x87 snapshot rounding bit for bit (`tests/msg_round`).
 - Sound: the engine includes `sound/snd_driver.h` (driver API) and `sound/snd_dsp_types.h` (DSP structs). Only
   `snd_driver_xaudio2*.cpp` see XAudio2; a phase 4 backend implements the same `snd_driver.h`.
+
+## ffconv (phase 2)
+`tools/ffconv` is a 32-bit Windows tool (MinGW, `tools/ffconv/CMakePresets.json`) that turns the retail zones into
+`IWffs` zones and one `shaders.pack`. It never writes to the install.
+
+- **Walk**: the engine's own `db_load.cpp`, copied at build time by `gen/transform_db_load.py` with typed hooks:
+  each `Load_Stream` passes the `var*` global it streams from, each `AllocLoad_*` the type it allocates for.
+  `ff_stream.cpp` implements the engine's stream API (`db_stream.h`, `db_stream_load.h`) with the same 32-bit
+  positions as the engine, and tracks the 64-bit positions alongside. `ff_stubs.cpp` replaces registration, D3D,
+  sound and mod hooks.
+- **Layouts**: `gen/layouts.py` (libclang) parses `db_load.cpp` for the 32-bit and the 64-bit target and writes, per
+  streamed type, its leaf fields with both offsets: pointers, unions of pointers, unions of pointers and wider data
+  (converted with the member the loader walks), and bytes. 32-bit padding is copied where the 64-bit layout has room.
+- **Stream rules** shared with the 64-bit engine: `src/database/db_ff64.h` (header, ABI tag, pointer encoding,
+  alignment, block alignment).
+- **Proof**: `--verify` reads the written zone back, narrows it with the same walk and requires the retail stream byte
+  for byte, apart from leftover bytes outside a union's walked member.
+- **Shaders**: `ff_glsl.cpp` turns each vs_3_0/ps_3_0 into GLSL 4.60 with MojoShader (`third_party/mojoshader`, GLSL
+  profile only) and the interface of `docs/RENDERER.md`; `shaders.pack` (`src/gfx_d3d9emu/shader_pack.h`) holds
+  one translation per bytecode hash. `gen/check_shader_pack.py` validates a pack with `glslangValidator`.
 
 ## Offline build (phase 1c)
 `BO1_OFFLINE` is always on outside win32 and an option on win32. It drops these modules from the build:

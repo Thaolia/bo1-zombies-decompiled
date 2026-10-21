@@ -1,0 +1,18 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "ffconv",
+      "displayName": "ffconv, MinGW i686 GCC (32-bit Windows tool)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/../../build/ffconv",
+      "toolchainFile": "${sourceDir}/../toolchains/mingw-i686-gcc.cmake",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "ffconv", "configurePreset": "ffconv" }
+  ]
+}

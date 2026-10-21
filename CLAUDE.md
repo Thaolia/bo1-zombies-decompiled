@@ -31,7 +31,10 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
 - Do not "fix" a `static_assert(sizeof(X) == N)` by deleting it. Make it arch-conditional with the real 64-bit size,
   and know why the size changed.
 - Asset structs from fastfiles are only ever native-64 after `ffconv`. Never add runtime 32→64 patching to
-  `db_load.cpp`. The 64-bit loader is the relocation loader under `BO1_NATIVE64_FF`.
+  `db_load.cpp`: a 64-bit build reads `IWffs` zones whose stream `ffconv` already widened, with the same `Load_*`
+  traversal. Stream rules shared by both sides (alignment, pointer encoding) live in `src/database/db_ff64.h` only.
+- `ffconv` never edits `db_load.cpp` to make the conversion work: it transforms a copy at build time. A traversal
+  bug is fixed in the transform or in `db_load.cpp` itself, and the 32-bit build must keep behaving the same.
 - `qcommon/msg.cpp` float rounding must stay bit-exact with the x87 version. Run its test after any change there.
 - Script VM code positions (`EmitCodepos`, `Scr_ReadCodePos`, `Scr_ReadUnsigned`) must all use the same width.
 
@@ -56,5 +59,8 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
 - A new `BO1_OFFLINE` stub must reproduce a state the engine already handles (service absent, device missing,
   open failed). Never fake success. Find the symbols with the `win32-msvc-offline` link, not by hand, and compare
   headless runs against the reference on the main menu and on a map (`docs/PORTING.md`, phase 1c).
+- After a change to `db_load.cpp`, a struct a fastfile streams, `db_ff64.h` or `tools/ffconv`, rebuild `ffconv` and run
+  it with `--verify --game` on the install, then `tools/ffconv/gen/check_shader_pack.py` on the pack: every zombies
+  zone must round-trip and every shader must validate (`docs/PORTING.md`, phase 2).
 - Never make a GNU build pass by changing what MSVC compiles to. Prefer the spelling both accept with the same
   meaning (explicit cast, named constant, explicit include); otherwise guard with `#if defined(_MSC_VER)`.
