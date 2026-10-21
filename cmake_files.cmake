@@ -2330,6 +2330,21 @@ set(PLATFORM_FILES
 	${SRC_PLATFORM}
 )
 
+# ----- src/platform/stubs (BO1_OFFLINE only, added by CMakeLists.txt) -----
+set(SRC_PLATFORM_STUBS
+	"${SRC_DIR}/platform/stubs/bink_stub.cpp"
+	"${SRC_DIR}/platform/stubs/groupvoice_stub.cpp"
+	"${SRC_DIR}/platform/stubs/mjpeg_stub.cpp"
+	"${SRC_DIR}/platform/stubs/monkey_stub.cpp"
+	"${SRC_DIR}/platform/stubs/nvapi_stub.cpp"
+	"${SRC_DIR}/platform/stubs/steam_api_stub.cpp"
+)
+source_group("platform/stubs" FILES ${SRC_PLATFORM_STUBS})
+
+set(PLATFORM_STUBS_FILES
+	${SRC_PLATFORM_STUBS}
+)
+
 # ----- src/qcommon -----
 set(SRC_QCOMMON
 	"${SRC_DIR}/qcommon/bitarray.h"

@@ -23,3 +23,8 @@ c'est-à-dire l'album, ne donne qu'environ 400 Mo de RAM.
 
 ## Build PC d'origine
 Les instructions upstream (Windows, MSVC x86, D3D9) sont dans `README.md`, `setup.ps1` et `Play.bat`.
+
+## Build hors-ligne sur PC
+La build hors-ligne du port, sans Steam, Bink, NVAPI, DemonWare ni chat vocal, se joue déjà sur Windows avec les
+fichiers copiés par `setup.ps1` : `cmake --preset win32-msvc-offline`, `cmake --build --preset
+win32-msvc-offline-release`, puis `Play.bat offline`.

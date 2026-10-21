@@ -12,7 +12,7 @@ The port adds layers around the decompiled engine and keeps the engine code as c
         ▼
  engine (src/, tl/) ── src/platform/compat.h       MSVC-isms for GCC/clang
         │            ── src/platform/{win32,posix,switch}/  Sys_* (threads, files, memory, time)
-        │            ── src/platform/stubs/         Steam, DemonWare, live, voice, Bink (BO1_OFFLINE)
+        │            ── src/platform/stubs/         Steam, Bink, NVAPI, voice, mjpeg, monkey (BO1_OFFLINE)
         ▼
  src/gfx_d3d (unchanged IDirect3DDevice9 calls)
         ▼
@@ -28,10 +28,14 @@ The port adds layers around the decompiled engine and keeps the engine code as c
 | Preset | Purpose |
 |---|---|
 | `win32-msvc` | Upstream reference build, D3D9, retail fastfiles |
+| `win32-msvc-offline` | The reference with `BO1_OFFLINE=ON`, into `build/win32-offline`; run it with `Play.bat offline` |
 | `win64-clangcl` | 64-bit cleanup with D3D9 still in place, converted zones |
 | `mingw32-gcc`, `mingw32-clang` | Phase 1 syntax pass only (`tools/syntax_check.py`): GNU dialect, 32-bit, MinGW Windows headers |
 | `linux64-clang` | Portable platform layer + GL backend, desktop debugging |
 | `switch` | devkitA64 + libnx, `.nro` |
+
+The Ninja presets compile through ccache when it is installed (`apt install ccache`); the Visual Studio presets do
+not.
 
 ## Compiler compatibility (phase 1)
 - `src/platform/compat.h` is force-included for GCC and clang (never for MSVC or clang-cl). It maps `__declspec` forms
@@ -42,6 +46,28 @@ The port adds layers around the decompiled engine and keeps the engine code as c
   needs the result: `qcommon/msg_round.h` reproduces the x87 snapshot rounding bit for bit (`tests/msg_round`).
 - Sound: the engine includes `sound/snd_driver.h` (driver API) and `sound/snd_dsp_types.h` (DSP structs). Only
   `snd_driver_xaudio2*.cpp` see XAudio2; a phase 4 backend implements the same `snd_driver.h`.
+
+## Offline build (phase 1c)
+`BO1_OFFLINE` is always on outside win32 and an option on win32. It drops these modules from the build:
+- online: `DemonWare/`, `src/DW/`, `src/groupvoice/`;
+- Windows-only binary SDKs: `steam_api.lib`, `binkw32.lib` (with `src/binklib/`), `nvapi.lib`, `libvpx.lib` (with
+  `src/vpx/`);
+- dev tools: `src/mjpeg/` (movie capture), `src/monkey/` (test harness), Tracy.
+
+`src/platform/stubs/` defines what the rest of the engine still calls, in the state the engine already handles:
+
+| Stub | Behaves like |
+|---|---|
+| `steam_api_stub.cpp` | Steam client not running: init fails with `NoSteamClient`, every interface accessor returns NULL |
+| `bink_stub.cpp` | `BinkOpen` fails, so no movie plays (main menu background included); `BinkGetError` stays empty because the engine asserts on a pending error before each movie |
+| `nvapi_stub.cpp` | No NVIDIA driver: `NvAPI_Initialize` returns `NVAPI_LIBRARY_NOT_FOUND` |
+| `groupvoice_stub.cpp` | No sound device: `Sound_Init` fails and voice chat stays off |
+| `monkey_stub.cpp` | The harness never starts |
+| `mjpeg_stub.cpp` | Nothing is ever encoding; the `mjpeg` command prints a warning |
+
+The stubs define the Steam and Bink entry points inside the exe, so `BO1_OFFLINE` also defines `STEAM_API_NODLL` and
+`__RADINEXE__` (the SDKs' own switches that drop `dllimport`). `src/live/` and `CubeMapGenLib` stay compiled (see
+`docs/PORTING.md`).
 
 ## Runtime data on the Switch
 `sdmc:/switch/bo1zm/`: converted `zone/` from `ffconv`, `main/*.iwd` from the user's install, and the shader

@@ -10,7 +10,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-21 | v1 scope: solo offline zombies, base maps, no mods, no network | Smallest playable target. Solo already runs over in-memory loopback (`net_chan_mp.cpp:888-899`) |
 | 2026-10-21 | Renderer: OpenGL (SDL2 + mesa/nouveau) now, designed for a later deko3d backend | GL can be debugged on desktop with RenderDoc. deko3d is added only if profiling shows the GL driver is CPU-bound |
 | 2026-10-21 | Gallium Nine rejected | Removed from Mesa `main` (unmaintained). devkitPro `switch-mesa` is 20.1.0 and has no `ID3DPresent` backend for the Switch |
-| 2026-10-21 | `BO1_OFFLINE` stubs moved from phase 0 to phase 1c | Even the "small" subsystems are referenced across the engine (`monkey/` from 7 files, `mjpeg/` from 8). The exact symbol list comes from the first clang link on Linux, so it is not guessed by hand |
+| 2026-10-21 | `BO1_OFFLINE` stubs moved from phase 0 to phase 1c | Even the "small" subsystems are referenced across the engine (`monkey/` from 7 files, `mjpeg/` from 8). The exact symbol list comes from a linker, so it is not guessed by hand |
 | 2026-10-21 | `/Ob1` on `src/gfx_d3d/rb_draw3d.cpp`, only when `MSVC_VERSION == 1943` | MSVC 19.43 (VS 17.13) crashes on this file at `/O2 /Ob2`: C1001 in `p2/main.cpp` line 255, at `rb_draw3d.cpp:244`, and `/MP` reports it as `D8040`. `/O2 /Ob1`, `/O1` and `/Od` all compile. MSVC 19.29 (v142) compiles the file but rejects upstream literal→`char*` conversions in 3 other files |
 | 2026-10-21 | `win32-msvc` preset builds into `build/` | `setup.ps1` and `Play.bat` hardcode `build\Release` |
 | 2026-10-21 | Fastfiles converted offline (`ffconv`) instead of patched at runtime | The loader copies 32-bit structs in place and stores pointers as packed 32-bit offsets (`db_stream_load.cpp:63-85`) |
@@ -18,6 +18,13 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-21 | `MSG_RoundFloatToInt_C` emulates x87 **24-bit** precision | `R_CreateDevice` has no `D3DCREATE_FPU_PRESERVE`, so D3D9 sets the main thread (device creation, `SV_Frame`, snapshot parsing) to single precision. 8 388 608 of the 2^32 inputs round differently at 53-bit |
 | 2026-10-21 | XAudio2 split: `sound/snd_driver.h` (engine-facing `SD_*` API) and `sound/snd_dsp_types.h` (plain DSP structs) | `snd.h` pulled XAudio2/XAPO into ~490 files. The June 2010 XAudio2 headers only parse with MSVC's preprocessor, so only `snd_driver_xaudio2.cpp` and `snd_driver_xaudio2_dsp.cpp` include them now; phase 4 replaces those two |
 | 2026-10-21 | `static_assert(sizeof(gjk_partition_t) == 112)` is MSVC-only | The Itanium C++ ABI (GCC, clang) reuses `gjk_base_t`'s tail padding: `ninds` lands at 0x48 and the size is 0x60. The struct is only allocated with `sizeof` |
+| 2026-10-21 | Phase 1c symbol list comes from the MSVC link of a `win32-msvc-offline` preset, not from a Linux link | Linux cannot link before the phase 4 OS layer. On Windows the offline exe also runs, so each stub is played against the reference build on the same machine |
+| 2026-10-21 | Binary SDKs (Steam, Bink, NVAPI) are stubbed at their own API, not in the engine | The stubs reproduce states the engine already handles: Steam client not running (`win_steam.cpp` no-steam path), movie that fails to open (`R_Cinematic_StartPlayback_Now`), non-NVIDIA adapter (`dx.nvInitialized` 0). No engine file changes. Movies, including the main menu background, no longer play; ffmpeg has a Bink decoder if they are wanted back |
+| 2026-10-21 | `DemonWare/`, `src/DW/`, Tracy and `src/vpx/` are dropped with no stub | With them out of the link, nothing else is unresolved: no engine code calls into them in this build |
+| 2026-10-21 | `src/live/` stays in the offline build | It holds game state (stats, storage, 35k lines), not network code, and links without DemonWare |
+| 2026-10-21 | Voice chat stubbed at the `groupvoice` entry points | `Sound_Init` fails as without a sound device, so `Voice_Init` leaves `g_voice_initialized` at 0. `win_voice.cpp` also holds `Live_GetClientNumForXuid`, so it stays |
+| 2026-10-21 | `CubeMapGenLib` stays in the offline build for now | It is neither online nor a binary SDK. Only reflection-probe generation (`r_reflectionProbeGenerate`, needs the map's BSP) uses it. Its filter threads use Win32, so phase 4 decides between porting and a guard |
+| 2026-10-21 | ccache wraps every compile when it is installed (`CMAKE_<LANG>_COMPILER_LAUNCHER`, set before `project()`) | It speeds up rebuilds of the ~1250 files on the Ninja presets (`mingw32-*`, `linux64-clang`, `switch`). The Visual Studio generator of the `win32-msvc*` presets ignores launchers, and the Windows side has no ccache. `compile_commands.json` does not list the launcher, so `tools/syntax_check.py` is unchanged |
 | 2026-10-21 | `phys_gjk.cpp`'s x87 requirement is only enforced on 32-bit MSVC | x64 and AArch64 have no x87. Upstream says this brings back gjk max-iteration warnings on `mp_array`; watch for them from phase 3 on |
 
 ## Phases
@@ -25,7 +32,7 @@ Base: upstream commit `102f699` (2026-10-03).
 |---|---|---|
 | 0 | Repo, toolchains, CMake presets, platform branches in `CMakeLists.txt` | done (2026-10-21) |
 | 1 | Compiler compat layer (`src/platform/compat.h`), no behaviour change | done (2026-10-21) |
-| 1c | `BO1_OFFLINE` stubs (Steam, DemonWare, live, voice, nvapi, Bink, mjpeg/vpx, monkey, CubeMapGenLib) | todo |
+| 1c | `BO1_OFFLINE` build (Steam, DemonWare, voice, NVAPI, Bink, mjpeg/vpx, monkey, Tracy out; `src/platform/stubs/`) | done (2026-10-21) |
 | 2 | `tools/ffconv`: PC fastfiles → native-64 `IWffs` + GLSL 4.60/UBO shaders | todo |
 | 3 | 64-bit clean engine on Windows x64 (still D3D9) | todo |
 | 4 | Portable platform layer + D3D9-emu frontend + GL backend on Linux x86_64 | todo |
@@ -66,6 +73,35 @@ Base: upstream commit `102f699` (2026-10-03).
     - `win32-msvc` Release: 0 errors, same vcxproj options as phase 0; Kino played by the user, same behaviour.
   - clang warnings left for phase 3: `-Warray-bounds` on decompiled vector code, `-Wint-to-pointer-cast`,
     `-Winvalid-offsetof` on `actor_s`.
+- **1c**: the `win32-msvc-offline` build links with no Steam, Bink, NVAPI or libvpx library and plays Kino like the
+  reference. The `win32-msvc` vcxproj is unchanged.
+  - Windows commands: `cmake --preset win32-msvc-offline -DDXSDK_DIR=<June 2010 SDK>` then
+    `cmake --build --preset win32-msvc-offline-release`; play with `Play.bat offline`.
+  - Headless comparison (from the worktree root, one run per build, then compare the two logs):
+    `powershell -File tools\headless.ps1 -RunDir build\run\offline -ExeDir build\win32-offline\Release -Zombies -Client
+    -ShotsAtMs "30000 55000" -Commands "+set QuitOnError 1 +devmap zombie_theater" -AutoQuitMs 60000
+    -SaveLog build\run\offline.log`; the same without `-ExeDir`, with `reference` in place of `offline`.
+  - Main menu (it plays the `frontend` movie, which a `+devmap` run skips): the same command with
+    `-Commands "+set QuitOnError 1"` and `-AutoQuitMs 60000`.
+  - Verified 2026-10-21:
+    - the first offline link listed 84 unresolved externals: Steam (14), Bink (18), NVAPI (5), groupvoice (22),
+      monkey (9), mjpeg/yuv (9), CubeMapGenLib (7). None from DemonWare, `src/DW`, Tracy or `src/vpx`;
+    - with the stubs: 0 errors. The exe imports neither `steam_api.dll` nor `binkw32.dll` (`Secur32.dll` went with
+      DemonWare);
+    - `win32-msvc` vcxproj identical to phase 1 apart from CMake's own regeneration inputs;
+    - `tools/syntax_check.py` with MinGW GCC and clang, `-DBO1_OFFLINE=ON`, XAudio2 driver excluded: 1181 files
+      each, 0 errors (stubs included);
+    - headless client on Kino, two runs per build, Intel Iris Xe: all exit 0, no window, no crash. Error,
+      warning, Steam, voice and Bink lines are the same except the Steam init message. The other log differences
+      are timing (AI path warnings, random loading tips, frame counts), `in_monkey` no longer registered, and the
+      `SaveGame check` line (see known upstream issues). The 55 s screenshot shows Kino with the HUD (500 points,
+      M1911 8/24).
+    - the user's play test found an assert on the zombies map list (`r_cinematic.cpp(504)`,
+      `!binkError || binkError[0] == '\0'`): the first Bink stub returned an error string from `BinkGetError`, and
+      the engine checks that no error is pending before each movie. The headless main-menu run reproduced it in
+      23 s. `BinkGetError` now stays empty and the stub logs once that movies are skipped; the main-menu run then
+      quits normally after 60 s and Kino still runs. The user then played the fixed offline build (map list
+      included) with no problem.
 - **2**: each base zone round-trips. The native-64 load is compared field by field with the 32-bit load dump.
   Every GLSL passes `glslangValidator`. MojoShader rejections are reported.
 - **3**: `win64-clangcl` plays 10 rounds of Kino (box, Pack-a-Punch, perks, teleporter) with no assert.
@@ -81,6 +117,15 @@ Base: upstream commit `102f699` (2026-10-03).
 - `src/cgame/cg_draw_reticles.cpp` (vehicle gun yaw arc test): the `&&` before `-(weapDef->rightArc)` is missing,
   so the code compares the bool `x < leftArc - rightArc` with a float. The pitch test just below has it. Phase 1
   only added the parentheses C++ already applies.
+
+- `SaveGame check: segment 2 ... DIFFERENT` (`g_sp_savegame.cpp`, KB diagnostic): `r_exposureValue` is a
+  `DVAR_SAVED` dvar that the renderer frontend (`r_scene.cpp:4126`) updates while the server thread saves and
+  rewrites the globals, so the check can see two values. Seen on both reference runs and neither offline run
+  (2026-10-21). It is a race in the diagnostic, not in the save.
+
+- `/PDBALTPATH:%_PDB%` (upstream `CMakeLists.txt`): the Visual Studio generator escapes `%` to `%%`, so the exe
+  records the PDB as `%%%BO1Zombies.pdb%%%` and debuggers or `llvm-symbolizer` do not find `BO1Zombies.pdb`.
+  Workaround: copy the PDB next to the exe under that literal name. Fixing it changes the reference build.
 
 ## Audit findings (2026-10-21, upstream `102f699`)
 - Fastfiles (blocker):

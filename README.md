@@ -15,4 +15,8 @@ zombies on the base maps. It is a work in progress: see `docs/PORTING.md` for th
 No game data is distributed. A converter run on your own PC (`tools/ffconv`, phase 2) turns your Steam install's
 fastfiles into the 64-bit format the port loads.
 
+On Windows, the port's offline build (no Steam, Bink, NVAPI, DemonWare or voice chat) can already be played on the
+files `setup.ps1` copied: `cmake --preset win32-msvc-offline`, `cmake --build --preset win32-msvc-offline-release`,
+then `Play.bat offline`.
+
 French version: `README.fr.md`.

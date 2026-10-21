@@ -86,6 +86,9 @@ param(
     [int]$ThreadDumpFrames = 14,
     # run from this run folder (see .DESCRIPTION); '' = build\Release
     [string]$RunDir = '',
+    # with -RunDir: take BO1Zombies.exe and .pdb from this build output instead of build\Release, e.g.
+    # build\win32-offline\Release (the BO1_OFFLINE build); the game files still come from build\Release
+    [string]$ExeDir = '',
     # machine-wide cap on headless runs (slots 0..MaxSlots-1)
     [ValidateRange(1, 16)][int]$MaxSlots = 6,
     # when this run folder or every slot is busy, retry for up to this many seconds before refusing (exit 10)
@@ -104,6 +107,11 @@ if ($RunDir) {
     # build\Play is a player's own folder: never a headless run folder
     if ((Split-Path -Leaf $H) -ieq 'Play') { Write-Output "REFUSED: $H is a play folder, not a run folder"; exit 11 }
 }
+$E = $R                                 # where the run folder's exe and pdb come from
+if ($ExeDir) {
+    if (-not $RunDir) { Write-Output 'REFUSED: -ExeDir needs -RunDir (build\Release keeps its own exe)'; exit 11 }
+    $E = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($ExeDir)) { $ExeDir } else { Join-Path $repo $ExeDir })).TrimEnd('\')
+}
 $exe = Join-Path $H 'BO1Zombies.exe'
 # The filesystem opens console_mp.log under fs_game. Match the last command-line assignment,
 # including a quoted mod path; stock runs keep main. This also drives freshness checks and -SaveLog.
@@ -118,7 +126,7 @@ $log = Join-Path (Join-Path $H $logGame) 'console_mp.log'
 $steamGame = 'C:\Program Files (x86)\Steam\steamapps\common\Call of Duty Black Ops'   # READ ONLY: only listed
 $symbolizer = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x86\llvm-symbolizer.exe'
 
-if (-not (Test-Path (Join-Path $R 'BO1Zombies.exe'))) { throw "not built: $(Join-Path $R 'BO1Zombies.exe')" }
+if (-not (Test-Path (Join-Path $E 'BO1Zombies.exe'))) { throw "not built: $(Join-Path $E 'BO1Zombies.exe')" }
 # One run per run folder (its main\ log and players\ config are shared) and at most -MaxSlots runs machine-wide. Named
 # mutexes are held by this PowerShell process until it exits (the OS releases them if it dies; abandoned = acquired).
 function Get-BO1Mutex([string]$name) {
@@ -157,7 +165,8 @@ if ($H -ne $R) {
         if ((Test-Path $t) -and -not (Test-Path $l)) { New-Item -ItemType Junction -Path $l -Target $t | Out-Null }
     }
     # the same root files a build\Release run sees (setup.ps1 put them there), the exe and pdb refreshed after a rebuild
-    Get-ChildItem $R -File | Where-Object { $_.Name -in 'BO1Zombies.exe', 'BO1Zombies.pdb' -or $_.Extension -in '.dll', '.txt', '.bmp' } | ForEach-Object {
+    @(Get-ChildItem $R -File | Where-Object { $_.Extension -in '.dll', '.txt', '.bmp' }) +
+    @(Get-ChildItem $E -File | Where-Object { $_.Name -in 'BO1Zombies.exe', 'BO1Zombies.pdb' }) | ForEach-Object {
         $c = Join-Path $H $_.Name
         $old = Get-Item $c -ErrorAction SilentlyContinue
         if (-not $old -or $old.Length -ne $_.Length -or $old.LastWriteTimeUtc -ne $_.LastWriteTimeUtc) { Copy-Item $_.FullName $c -Force }

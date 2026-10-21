@@ -53,5 +53,8 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
 - Tooling runs from WSL2. MSVC/clang-cl builds run on the Windows side. devkitPro lives in `/opt/devkitpro`.
 - After touching a shared header or `src/platform/compat.h`, rerun `tools/syntax_check.py` on both `mingw32-gcc` and
   `mingw32-clang` (command in `docs/PORTING.md`, phase 1) and the `win32-msvc` build.
+- A new `BO1_OFFLINE` stub must reproduce a state the engine already handles (service absent, device missing,
+  open failed). Never fake success. Find the symbols with the `win32-msvc-offline` link, not by hand, and compare
+  headless runs against the reference on the main menu and on a map (`docs/PORTING.md`, phase 1c).
 - Never make a GNU build pass by changing what MSVC compiles to. Prefer the spelling both accept with the same
   meaning (explicit cast, named constant, explicit include); otherwise guard with `#if defined(_MSC_VER)`.

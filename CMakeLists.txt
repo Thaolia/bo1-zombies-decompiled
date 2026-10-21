@@ -1,4 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
+
+# ccache wraps every compile when it is installed. The Visual Studio generator ignores compiler launchers, so the
+# win32-msvc presets build without it.
+find_program(BO1_CCACHE ccache)
+if(BO1_CCACHE AND NOT CMAKE_GENERATOR MATCHES "^Visual Studio")
+    set(CMAKE_C_COMPILER_LAUNCHER "${BO1_CCACHE}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${BO1_CCACHE}")
+endif()
+
 project(BO1Zombies)
 
 set(BIN_NAME "BO1Zombies")
@@ -27,6 +36,26 @@ message(STATUS "BO1: platform=${BO1_PLATFORM} 64-bit=${BO1_ARCH_64} compiler=${C
 
 include(cmake_files.cmake)
 
+# BO1_OFFLINE builds the solo game without the online services (DemonWare, voice chat) and without the Windows-only
+# binary SDKs (Steam, Bink, NVAPI, libvpx). src/platform/stubs/ answers for them the way they behave on a PC with no
+# Steam client, no NVIDIA driver and no voice sound device, paths the engine already handles. The movie capture
+# (mjpeg, on libvpx), the monkey test harness and Tracy go too. It is always on outside win32; on win32 the
+# win32-msvc-offline preset turns it on so the stubs can be played against the reference build.
+if(BO1_PLATFORM STREQUAL "win32")
+    option(BO1_OFFLINE "Build without online services and Windows-only binary SDKs" OFF)
+else()
+    set(BO1_OFFLINE ON)
+endif()
+if(BO1_OFFLINE)
+    set_source_files_properties(
+        ${DW_DEMONWAREROOT_FILES} ${DW_BDCORE_FILES} ${DW_BDPLATFORM_FILES} ${DW_FILES} ${GROUPVOICE_FILES}
+        ${BINKLIB_FILES} ${VPX_FILES} ${MJPEG_FILES} ${MONKEY_FILES} ${TRACY_FILES}
+        PROPERTIES HEADER_FILE_ONLY ON)
+    target_sources(BO1Zombies PRIVATE ${PLATFORM_STUBS_FILES})
+    # The stubs define the Steam and Bink entry points in the exe: their headers must not declare them dllimport.
+    target_compile_definitions(BO1Zombies PUBLIC BO1_OFFLINE STEAM_API_NODLL __RADINEXE__)
+endif()
+
 # GCC and clang (not clang-cl) get the MSVC-dialect shims in front of every file.
 # Narrowing in brace initialisers is only a warning on MSVC, which converts the value; GCC and clang make it an error
 # and convert the same way once it is allowed.
@@ -46,11 +75,13 @@ target_compile_definitions(BO1Zombies PUBLIC
     BO1_MP
 )
 # Debug-only
-target_compile_definitions(BO1Zombies PUBLIC
-    $<$<CONFIG:Debug>:_DEBUG>
-    $<$<CONFIG:Debug>:TRACY_ENABLE>
-    $<$<CONFIG:Debug>:TRACY_ON_DEMAND>
-)
+target_compile_definitions(BO1Zombies PUBLIC $<$<CONFIG:Debug>:_DEBUG>)
+if(NOT BO1_OFFLINE)
+    target_compile_definitions(BO1Zombies PUBLIC
+        $<$<CONFIG:Debug>:TRACY_ENABLE>
+        $<$<CONFIG:Debug>:TRACY_ON_DEMAND>
+    )
+endif()
 # Release-only
 target_compile_definitions(BO1Zombies PUBLIC
     $<$<CONFIG:Release>:NDEBUG>
@@ -132,10 +163,12 @@ if(BO1_PLATFORM STREQUAL "win32")
     endif()
 
     # ----- Links -----
+    # The binary SDKs that src/platform/stubs/ replaces under BO1_OFFLINE
+    set(BO1_SDK_LIB "$<NOT:$<BOOL:${BO1_OFFLINE}>>")
     target_link_libraries(BO1Zombies PUBLIC
-        steam_api.lib
-        binkw32.lib
-        nvapi.lib
+        $<${BO1_SDK_LIB}:steam_api.lib>
+        $<${BO1_SDK_LIB}:binkw32.lib>
+        $<${BO1_SDK_LIB}:nvapi.lib>
         d3d9.lib
         ws2_32.lib
         dxguid.lib
@@ -144,7 +177,7 @@ if(BO1_PLATFORM STREQUAL "win32")
         xinput.lib
         xapobase.lib
         dxerr.lib
-        libvpx.lib
+        $<${BO1_SDK_LIB}:libvpx.lib>
         # June-2010 DirectX SDK libs (xapobase, dxerr) reference pre-VS2015 CRT
         # symbols (_vsnprintf, etc.) that the modern UCRT no longer exports.
         # legacy_stdio_definitions.lib provides shims so those static libs link.
