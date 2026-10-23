@@ -65,11 +65,11 @@ void __cdecl RB_SetPolyVert(float *xyz, GfxColor color, int tessVertIndex)
     *xyzw = *xyz;
     xyzw[1] = xyz[1];
     xyzw[2] = xyz[2];
-    *(float *)&tess.indices[16 * tessVertIndex - 87194] = 1.0f;
-    *(unsigned int *)&tess.indices[16 * tessVertIndex - 87186] = 1073643391;
-    *(GfxColor *)&tess.indices[16 * tessVertIndex - 87192] = color;
-    *(unsigned int *)&tess.indices[16 * tessVertIndex - 87190] = 0;
-    *(unsigned int *)&tess.indices[16 * tessVertIndex - 87188] = 0;
+    xyzw[3] = 1.0f;
+    tess.verts[tessVertIndex].normal.packed = 1073643391;
+    tess.verts[tessVertIndex].color = color;
+    *(unsigned int *)&tess.verts[tessVertIndex].texCoord[0] = 0;
+    *(unsigned int *)&tess.verts[tessVertIndex].texCoord[1] = 0;
 }
 
 void __cdecl RB_SetDebugBrushesAndPatchesCallback(void (__cdecl *callback)())
@@ -299,8 +299,7 @@ void __cdecl RB_DrawDebugSphere(trDebugSphere_t *sphere)
     int indexCount; // [esp+4524h] [ebp-205Ch]
     int j; // [esp+4528h] [ebp-2058h]
     int v39; // [esp+452Ch] [ebp-2054h]
-    unsigned __int8 src[2]; // [esp+4530h] [ebp-2050h] BYREF
-    _WORD v41[3071]; // [esp+4532h] [ebp-204Eh]
+    unsigned __int16 src[3072]; // [esp+4530h] [ebp-2050h] BYREF
     float v42; // [esp+5D30h] [ebp-850h]
     int v43; // [esp+5D34h] [ebp-84Ch]
     int v44; // [esp+5D38h] [ebp-848h]
@@ -465,27 +464,27 @@ void __cdecl RB_DrawDebugSphere(trDebugSphere_t *sphere)
                     v45 -= sideCount;
                     v47 -= sideCount;
                 }
-                *(_WORD *)&src[2 * indexCount] = v44;
-                v41[indexCount] = v45;
-                v41[indexCount + 1] = v46;
-                v41[indexCount + 2] = v46;
-                v41[indexCount + 3] = v45;
-                v41[indexCount + 4] = v47;
+                src[indexCount] = v44;
+                src[indexCount + 1] = v45;
+                src[indexCount + 2] = v46;
+                src[indexCount + 3] = v46;
+                src[indexCount + 4] = v45;
+                src[indexCount + 5] = v47;
                 indexCount += 6;
             }
         }
         for ( k = 0; k < sideCount; ++k )
         {
-            *(_WORD *)&src[2 * indexCount] = vertexCount - 2;
-            v41[indexCount] = k + 1;
-            v41[indexCount + 1] = k;
-            v41[indexCount + 2] = vertexCount - 1;
-            v41[indexCount + 3] = k + sideCount * (sideCount / 2 - 2);
-            v41[indexCount + 4] = k + sideCount * (sideCount / 2 - 2) + 1;
+            src[indexCount] = vertexCount - 2;
+            src[indexCount + 1] = k + 1;
+            src[indexCount + 2] = k;
+            src[indexCount + 3] = vertexCount - 1;
+            src[indexCount + 4] = k + sideCount * (sideCount / 2 - 2);
+            src[indexCount + 5] = k + sideCount * (sideCount / 2 - 2) + 1;
             if ( k == sideCount - 1 )
             {
-                v41[indexCount] -= sideCount;
-                v41[indexCount + 4] -= sideCount;
+                src[indexCount + 1] -= sideCount;
+                src[indexCount + 5] -= sideCount;
             }
             indexCount += 6;
         }
@@ -508,9 +507,9 @@ void __cdecl RB_DrawDebugSphere(trDebugSphere_t *sphere)
             BYTE1(v4) = (int)(float)((float)(*(float *)&v24[12 * m + 7716] * 127.0) + 127.5);
             BYTE2(v4) = (int)(float)((float)(*(float *)&v24[12 * m + 7720] * 127.0) + 127.5);
             HIBYTE(v4) = 63;
-            *(unsigned int *)&tess.indices[16 * v43 - 87186] = v4;
-            *(unsigned int *)&tess.indices[16 * v43 - 87192] = v50[m];
-            v2 = (float *)&tess.indices[16 * v43 - 87190];
+            tess.verts[v43].normal.packed = v4;
+            tess.verts[v43].color.packed = v50[m];
+            v2 = tess.verts[v43].texCoord;
             v3 = (float *)&v36[m];
             *v2 = *v3;
             v2[1] = v3[1];

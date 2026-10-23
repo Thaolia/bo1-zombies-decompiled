@@ -357,7 +357,7 @@ void __thiscall SDXA2RadverbEffect::Process(
     SND_RvFrame(
         &this->params,
         &this->state,
-        (const float *)frameCount,
+        (const float *)(uintptr_t)frameCount,
         &data[3 * frameCount],
         &data[frameCount],
         data,

@@ -359,7 +359,7 @@ void __cdecl CL_WriteDemoFromContinuousStateBuffer(int localClientNum, int conti
 {
     ClientArchiveData dst; // [esp+8h] [ebp-1080h] BYREF
     unsigned __int8 data[4096]; // [esp+38h] [ebp-1050h] BYREF
-    int v4; // [esp+103Ch] [ebp-4Ch]
+    demoContinuousStateBuffer_t *v4; // [esp+103Ch] [ebp-4Ch]
     msg_t buf; // [esp+1040h] [ebp-48h] BYREF
     int v6; // [esp+1070h] [ebp-18h] BYREF
     clientConnection_t *LocalClientConnection; // [esp+1074h] [ebp-14h]
@@ -370,25 +370,25 @@ void __cdecl CL_WriteDemoFromContinuousStateBuffer(int localClientNum, int conti
 
     v8 = 0;
     LocalClientConnection = CL_GetLocalClientConnection(localClientNum);
-    v4 = (int)&LocalClientConnection->demoContinuousStateBuffer[continuousStateBufferIndex];
+    v4 = &LocalClientConnection->demoContinuousStateBuffer[continuousStateBufferIndex];
     MSG_Init(&buf, data, 4096);
     count = 48;
-    index = *(unsigned int *)(v4 + 16);
-    while ( index != *(unsigned int *)(v4 + 20) )
+    index = v4->startClientArchiveIndex;
+    while ( index != v4->endClientArchiveIndex )
     {
         //BLOPS_NULLSUB();
-        memcpy((unsigned __int8 *)&dst, (unsigned __int8 *)(*(unsigned int *)(v4 + 12) + count * v8), count);
+        memcpy((unsigned __int8 *)&dst, &v4->archive[count * v8], count);
         CL_WriteDemoClientArchive(LocalClientConnection->demofile, 1u, &dst, index);
         index = (index + 1) % 256;
         ++v8;
     }
     buffer = 0;
     FS_WriteToDemo(&buffer, 1u, LocalClientConnection->demofile);
-    v6 = *(unsigned int *)v4;
+    v6 = v4->serverMessageSequence;
     FS_WriteToDemo((char *)&v6, 4u, LocalClientConnection->demofile);
-    v6 = *(unsigned int *)(v4 + 8);
+    v6 = v4->msgLen;
     FS_WriteToDemo((char *)&v6, 4u, LocalClientConnection->demofile);
-    FS_WriteToDemo(*(char **)(v4 + 4), *(unsigned int *)(v4 + 8), LocalClientConnection->demofile);
+    FS_WriteToDemo((char *)v4->msgData, v4->msgLen, LocalClientConnection->demofile);
 }
 
 void __cdecl CL_StopRecord_f()
@@ -1262,12 +1262,12 @@ void __cdecl CL_ResetSkeletonCache(unsigned int localClientNum)
     v1 = &clients[localClientNum];
     if ( !++v1->skelTimeStamp )
         ++v1->skelTimeStamp;
-    v1->skelMemoryStart = (char *)((unsigned int)&v1->skelMemory[15] & 0xFFFFFFF0);
+    v1->skelMemoryStart = (char *)((uintptr_t)&v1->skelMemory[15] & ~(uintptr_t)0xF);
     // mod: bo1_mod_maxactors > 32 poses its skeletons in a 4x larger buffer outside clientActive_t
     extern int g_maxActors;
     extern char g_cl_modSkelMemory[][262144 * 24];
     if (g_maxActors > 32)
-        v1->skelMemoryStart = (char *)((unsigned int)&g_cl_modSkelMemory[localClientNum][15] & 0xFFFFFFF0);
+        v1->skelMemoryStart = (char *)((uintptr_t)&g_cl_modSkelMemory[localClientNum][15] & ~(uintptr_t)0xF);
     v1->skelMemPos = 0;
 }
 
@@ -1763,7 +1763,7 @@ void __cdecl CL_DownloadsComplete(int localClientNum)
     else
     {
         Com_SyncThreads();
-        if ( fs_gameDirVar && *(_BYTE *)fs_gameDirVar->current.integer )
+        if ( fs_gameDirVar && *fs_gameDirVar->current.string )
         {
             v1 = va("%s/%s", fs_homepath->current.string, fs_gameDirVar->current.string);
             Sys_Mkdir(v1);
@@ -2692,9 +2692,9 @@ void __cdecl AllocatePerLocalClientMemory(int maxLocalClients, int maxClients, u
     int mem_neededb; // [esp+0h] [ebp-4h]
 
     CL_FreePerLocalClientMemory();
-    mem_needed = (2449480 + CL_PARSE_ENTITIES_EXTRA_BYTES) * maxLocalClients; // mod (L43): + the larger parseEntities ring
+    mem_needed = (CL_ACTIVE_RETAIL_SIZE + sizeof(clientConnection_t) + CL_PARSE_ENTITIES_EXTRA_BYTES) * maxLocalClients; // mod (L43): + the larger parseEntities ring
     if ( (flags & 1) == 0 )
-        mem_needed += (int)SV_AllocateClientMemory_SizeRequired(maxLocalClients, maxClients);
+        mem_needed += SV_AllocateClientMemory_SizeRequired(maxLocalClients, maxClients);
     mem_neededa = mem_needed + CG_AllocateClientMemory_SizeRequired(maxLocalClients);
     mem_neededb = mem_neededa + FX_AllocateClientMemory_SizeRequired(maxLocalClients);
     PMem_BeginAlloc(PerLocalClientMemoryName, 1u, TRACK_CLIENT);
@@ -2709,14 +2709,14 @@ void __cdecl AllocatePerLocalClientMemory(int maxLocalClients, int maxClients, u
                                                         0,
                                                         "PerLocalClient Memory",
                                                         42);
-    clients = (clientActive_t *)Hunk_UserAlloc(perLocalClientMemHunk, (1728768 + CL_PARSE_ENTITIES_EXTRA_BYTES) * maxLocalClients, 4, "clients");
+    clients = (clientActive_t *)Hunk_UserAlloc(perLocalClientMemHunk, (CL_ACTIVE_RETAIL_SIZE + CL_PARSE_ENTITIES_EXTRA_BYTES) * maxLocalClients, alignof(clientActive_t), "clients");
     clientConnections = (clientConnection_t *)Hunk_UserAlloc(
                                                                                             perLocalClientMemHunk,
-                                                                                            720712 * maxLocalClients,
-                                                                                            4,
+                                                                                            sizeof(clientConnection_t) * maxLocalClients,
+                                                                                            alignof(clientConnection_t),
                                                                                             "clientConnections");
-    memset((unsigned __int8 *)clients, 0, 1728768 * maxLocalClients);
-    memset((unsigned __int8 *)clientConnections, 0, 720712 * maxLocalClients);
+    memset((unsigned __int8 *)clients, 0, CL_ACTIVE_RETAIL_SIZE * maxLocalClients);
+    memset((unsigned __int8 *)clientConnections, 0, sizeof(clientConnection_t) * maxLocalClients);
     memset((unsigned __int8 *)&cls.gameState, 0, sizeof(cls.gameState));
     cls.serverId = 0;
     if ( (flags & 1) == 0 )
@@ -2963,7 +2963,7 @@ unsigned __int8 *__cdecl CL_DemoMemoryPoolAllocate(clientConnection_t *clc, int 
     unsigned __int8 *address; // [esp+4h] [ebp-8h]
     unsigned int newSize; // [esp+8h] [ebp-4h]
 
-    if ( (unsigned int)&clc->demoMemoryPool[clc->demoMemoryPoolEnd] % 4
+    if ( (uintptr_t)&clc->demoMemoryPool[clc->demoMemoryPoolEnd] % 4
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\client_mp\\cl_main_mp.cpp",
                     644,
@@ -4829,7 +4829,7 @@ int __cdecl CL_UpdateDirtyPings(int localClientNum, unsigned int source)
     if ( cls.lastServerPinged >= *count )
         cls.lastServerPinged = 0;
     firstPingedIndex = cls.lastServerPinged;
-    if ( cls.lastServerPinged >= (unsigned int)count
+    if ( cls.lastServerPinged >= (uintptr_t)count
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\client_mp\\cl_main_mp.cpp",
                     8050,
@@ -4847,7 +4847,7 @@ int __cdecl CL_UpdateDirtyPings(int localClientNum, unsigned int source)
         slot = cls.lastServerPinged++;
         if ( cls.lastServerPinged >= *count )
             cls.lastServerPinged = 0;
-        if ( slot >= (unsigned int)count
+        if ( slot >= (uintptr_t)count
             && !Assert_MyHandler(
                         "C:\\projects_pc\\cod\\codsrc\\src\\client_mp\\cl_main_mp.cpp",
                         8062,

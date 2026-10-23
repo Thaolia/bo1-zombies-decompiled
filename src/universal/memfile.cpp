@@ -138,6 +138,7 @@ void __cdecl MemFile_EndSegment(MemoryFile *memFile)
     // KB substitutes miniLZO: use its workspace size to avoid overrunning the server's LargeLocal arena.
     LargeLocal workmem_large_local(LZO1X_1_MEM_COMPRESS); // [esp+0h] [ebp-1Ch] BYREF
     unsigned int *out_len; // [esp+8h] [ebp-14h]
+    lzo_uint compressedLen; // lzo_uint is 8 bytes on 64-bit, the stream keeps a 4-byte length
     unsigned __int8 *workmem; // [esp+Ch] [ebp-10h]
     int err; // [esp+10h] [ebp-Ch]
     int len; // [esp+14h] [ebp-8h]
@@ -187,8 +188,9 @@ void __cdecl MemFile_EndSegment(MemoryFile *memFile)
                     memFile->cacheBuffer,
                     memFile->cacheBufferUsed,
                     &memFile->buffer[memFile->bytesUsed],
-                    (lzo_uint*)out_len,
+                    &compressedLen,
                     workmem);
+                *out_len = compressedLen;
                 memFile->cacheBufferUsed = 0;
                 memFile->bytesUsed += *out_len;
                 //LargeLocal::~LargeLocal(&workmem_large_local);
@@ -328,6 +330,7 @@ void __cdecl MemFile_WriteDataFlushInternal(MemoryFile *memFile)
     // zombies: the linked miniLZO compressor needs more workspace than SP's 0x2000 (SP 0x006531B2).
     LargeLocal workmem_large_local(LZO1X_1_MEM_COMPRESS); // [esp+0h] [ebp-10h] BYREF
     unsigned int *len; // [esp+8h] [ebp-8h]
+    lzo_uint compressedLen; // lzo_uint is 8 bytes on 64-bit, the stream keeps a 4-byte length
     unsigned __int8 *workmem; // [esp+Ch] [ebp-4h]
 
     if ( !memFile->compress_enabled )
@@ -362,8 +365,9 @@ LABEL_14:
             memFile->cacheBuffer,
             memFile->cacheBufferUsed,
             &memFile->buffer[memFile->bytesUsed],
-            (lzo_uint*)len,
+            &compressedLen,
             workmem);
+        *len = compressedLen;
         memFile->cacheBufferUsed = 0;
         memFile->bytesUsed += *len;
         //LargeLocal::~LargeLocal(&workmem_large_local);
@@ -457,7 +461,7 @@ void __cdecl MemFile_ReadData(MemoryFile *memFile, int byteCount, unsigned __int
 {
     int cacheBufferAvail; // [esp+0h] [ebp-18h]
     unsigned int in_len; // [esp+8h] [ebp-10h]
-    unsigned int len; // [esp+Ch] [ebp-Ch] BYREF
+    lzo_uint len; // [esp+Ch] [ebp-Ch] BYREF
     int size; // [esp+10h] [ebp-8h]
     int bytesLeft; // [esp+14h] [ebp-4h]
 
@@ -516,7 +520,7 @@ void __cdecl MemFile_ReadData(MemoryFile *memFile, int byteCount, unsigned __int
                     in_len = *(unsigned int *)&memFile->buffer[memFile->bytesUsed];
                     memFile->bytesUsed += 4;
                     //lzopro_lzo1x_decompress(&memFile->buffer[memFile->bytesUsed], 0, memFile->cacheBuffer, &len);
-                    lzo1x_decompress(&memFile->buffer[memFile->bytesUsed], 0, memFile->cacheBuffer, (lzo_uint*)&len, NULL);
+                    lzo1x_decompress(&memFile->buffer[memFile->bytesUsed], 0, memFile->cacheBuffer, &len, NULL);
                     memFile->cacheBufferAvail = len;
                     memFile->cacheBufferUsed = 0;
                     memFile->bytesUsed += in_len;

@@ -8,6 +8,14 @@ void *g_phys_memory_buffer;
 int g_phys_memory_buffer_size;
 phys_memory_manager *g_phys_memory_manager;
 
+// AArch64 faults on a misaligned atomic access, so on 64-bit every word the pools swap with a 64-bit atomic (the
+// manager cursor, a pool's free-list head, a slot's extra_info::m_allocation_owner) must be 8-aligned.
+#if defined(_M_X64) || defined(__x86_64__) || defined(_M_ARM64) || defined(__aarch64__)
+#define PHYS_ASSERT_ATOMIC_ALIGNED(p) assert(((uintptr_t)(p) & 7) == 0)
+#else
+#define PHYS_ASSERT_ATOMIC_ALIGNED(p) ((void)0)
+#endif
+
 void __cdecl phys_memory_manager_term()
 {
     g_phys_memory_buffer = 0;
@@ -40,23 +48,23 @@ void __cdecl transient_allocator_update_largest_size()
     ;
 }
 
-int phys_memory_manager::allocate(unsigned int size, unsigned int alignment)
+uintptr_t phys_memory_manager::allocate(unsigned int size, unsigned int alignment)
 {
     unsigned int v3; // edx
-    unsigned int v4; // eax
-    volatile unsigned __int32 *p_m_buffer_cur; // edi
-    signed __int32 v6; // esi
-    int v7; // edx
-    unsigned int v9; // [esp+Ch] [ebp-8h]
+    uintptr_t v4; // eax
+    char *volatile *p_m_buffer_cur; // edi
+    char *v6; // esi
+    uintptr_t v7; // edx
+    uintptr_t v9; // [esp+Ch] [ebp-8h]
     //phys_memory_manager *v10; // [esp+10h] [ebp-4h]
     unsigned int alignmenta; // [esp+20h] [ebp+Ch]
 
     v3 = alignment - 1;
-    v4 = ~(alignment - 1);
+    v4 = ~(uintptr_t)(alignment - 1);
     //v10 = this;
     alignmenta = alignment - 1;
     v9 = v4;
-    p_m_buffer_cur = (volatile unsigned __int32 *)&this->m_buffer_cur;
+    p_m_buffer_cur = &this->m_buffer_cur;
     // zombies (q1 c11): SP phys_memory_manager::allocate (SP 0x008F6F90) loads m_buffer_cur ONCE per try and
     // CASes the aligned end computed from that same value. KB loaded it twice (aligned start from the first
     // load, CAS comparand from the second), so when another thread allocated in between, the CAS succeeded with
@@ -64,10 +72,10 @@ int phys_memory_manager::allocate(unsigned int size, unsigned int alignment)
     while ( 1 )
     {
         v6 = *p_m_buffer_cur;
-        v7 = v4 & (v6 + v3);
+        v7 = v4 & ((uintptr_t)v6 + v3);
         if ( (char *)(v7 + size) > this->m_buffer_end )
             return 0;
-        if ( _InterlockedCompareExchange(p_m_buffer_cur, v7 + size, v6) == v6 )
+        if ( _InterlockedCompareExchangePointer((void *volatile *)p_m_buffer_cur, (void *)(v7 + size), v6) == v6 )
             break;
         //this = v10;
         v3 = alignmenta;
@@ -81,7 +89,7 @@ phys_slot_pool *phys_memory_manager::allocate_slot_pool()
     minspec_mutex *p_m_slot_pool_allocate_mutex; // ebx
     int m_list_preallocated_slot_pools_count; // eax
     phys_slot_pool *v4; // edi
-    int v6; // eax
+    uintptr_t v6; // eax
     volatile unsigned int Target; // [esp+Ch] [ebp-4h] BYREF
 
     p_m_slot_pool_allocate_mutex = &this->m_slot_pool_allocate_mutex;
@@ -93,7 +101,7 @@ phys_slot_pool *phys_memory_manager::allocate_slot_pool()
     if ( m_list_preallocated_slot_pools_count >= 28 )
     {
         //v6 = phys_memory_manager::allocate(this, 0x18u, 8u);
-        v6 = this->allocate(24, 8);
+        v6 = this->allocate(sizeof(phys_slot_pool), alignof(phys_slot_pool));
         ++this->m_list_slot_pool_count;
         v4 = (phys_slot_pool *)v6;
     }
@@ -135,9 +143,17 @@ phys_slot_pool *__thiscall phys_memory_manager::get_slot_pool(
     {
         __debugbreak();
     }
-    slot_sizea = slot_size + 8;
+#if defined(_M_X64) || defined(__x86_64__) || defined(_M_ARM64) || defined(__aarch64__)
+    // Each slot is bump-allocated with slot_alignment and ends with its extra_info, so 8-aligning both the slot and
+    // the user part keeps the 8-byte extra_info words (one is CASed) and the free-list link at the slot start
+    // 8-aligned. Callers passing 4 just share the pool of the rounded size; PMM_FREE/PMM_VALIDATE round the same way.
+    if ( slot_alignment < alignof(phys_slot_pool::extra_info) )
+        slot_alignment = alignof(phys_slot_pool::extra_info);
+    slot_size = (slot_size + alignof(phys_slot_pool::extra_info) - 1) & ~(unsigned int)(alignof(phys_slot_pool::extra_info) - 1);
+#endif
+    slot_sizea = slot_size + sizeof(phys_slot_pool::extra_info);
     //v5 = phys_slot_pool::encode_size_alignment(slot_size + 8, slot_alignment);
-    v5 = phys_slot_pool::encode_size_alignment(slot_size + 8, slot_alignment);
+    v5 = phys_slot_pool::encode_size_alignment(slot_size + sizeof(phys_slot_pool::extra_info), slot_alignment);
     p_m_slot_pool_map_mutex = &this->m_slot_pool_map_mutex;
     //minspec_read_write_mutex::ReadLock(&this->m_slot_pool_map_mutex);
     this->m_slot_pool_map_mutex.ReadLock();
@@ -163,6 +179,7 @@ phys_slot_pool *__thiscall phys_memory_manager::get_slot_pool(
         {
             //i = phys_memory_manager::allocate_slot_pool(this);
             i = this->allocate_slot_pool();
+            PHYS_ASSERT_ATOMIC_ALIGNED(&i->m_first_free_slot);
             i->m_first_free_slot.m_ptr = 0;
             i->m_first_free_slot.m_tag = 0;
             i->m_map_key = phys_slot_pool::encode_size_alignment(slot_sizea, slot_alignment);
@@ -257,7 +274,7 @@ phys_memory_manager::phys_memory_manager(char *memory_buffer, int memory_buffer_
 
 void __cdecl phys_memory_manager_init(void *const memory_buffer, int memory_buffer_size)
 {
-    unsigned int v2; // ecx
+    uintptr_t v2; // ecx
 
     if ( g_phys_memory_buffer
         && _tlAssert("source/phys_mem_new.cpp", 237, "g_phys_memory_buffer == NULL", "") )
@@ -274,13 +291,14 @@ void __cdecl phys_memory_manager_init(void *const memory_buffer, int memory_buff
     {
         __debugbreak();
     }
-    v2 = ((unsigned int)memory_buffer + 7) & 0xFFFFFFF8;
+    v2 = ((uintptr_t)memory_buffer + 7) & ~(uintptr_t)7;
     g_phys_memory_buffer = memory_buffer;
     g_phys_memory_buffer_size = memory_buffer_size;
     g_phys_memory_manager = (phys_memory_manager *)v2;
     if (v2)
     {
-        new ((void*)v2) phys_memory_manager((char*)(v2 + sizeof(phys_memory_manager)), (int)(((unsigned int)memory_buffer + memory_buffer_size) - v2 - sizeof(phys_memory_manager)));
+        PHYS_ASSERT_ATOMIC_ALIGNED(&g_phys_memory_manager->m_buffer_cur);
+        new ((void*)v2) phys_memory_manager((char*)(v2 + sizeof(phys_memory_manager)), (int)(((uintptr_t)memory_buffer + memory_buffer_size) - v2 - sizeof(phys_memory_manager)));
         //phys_memory_manager::phys_memory_manager(
         //    (phys_memory_manager *)v2,
         //    (char *)(v2 + 976),
@@ -295,6 +313,8 @@ void phys_slot_pool::extra_info_init(char *slot)
     if ( slot )
     {
         ei = (phys_slot_pool::extra_info *)&slot[(unsigned __int16)this->m_map_key - sizeof(phys_slot_pool::extra_info)];
+        PHYS_ASSERT_ATOMIC_ALIGNED(slot);
+        PHYS_ASSERT_ATOMIC_ALIGNED(&ei->m_allocation_owner);
         ei->m_slot_pool_owner = this;
         ei->m_allocation_owner = (void *)0xFEDCBA98;
 
@@ -372,10 +392,10 @@ void __thiscall phys_slot_pool::extra_info_allocate(char *slot)
         __debugbreak();
     }
 
-    if ((phys_slot_pool *)_InterlockedCompareExchange(
-        (volatile unsigned __int32 *)&ei->m_allocation_owner,
-        0xFEDCBA98,
-        (signed __int32)this) != this
+    if ((phys_slot_pool *)_InterlockedCompareExchangePointer(
+        (void *volatile *)&ei->m_allocation_owner,
+        (void *)0xFEDCBA98,
+        this) != this
         && _tlAssert("source/phys_mem_new.cpp", 312, "retv", "internal error."))
     {
         __debugbreak();
@@ -464,10 +484,10 @@ void __thiscall phys_slot_pool::extra_info_free(unsigned __int8 *slot)
         __debugbreak();
     }
 
-    if ((phys_slot_pool *)_InterlockedCompareExchange(
-        (volatile unsigned __int32 *)&ei->m_allocation_owner,
-        (signed __int32)this,
-        0xFEDCBA98) != (phys_slot_pool *)0xFEDCBA98
+    if ((phys_slot_pool *)_InterlockedCompareExchangePointer(
+        (void *volatile *)&ei->m_allocation_owner,
+        this,
+        (void *)0xFEDCBA98) != (phys_slot_pool *)0xFEDCBA98
         && _tlAssert(
             "source/phys_mem_new.cpp",
             332,
@@ -537,7 +557,7 @@ void __thiscall phys_slot_pool::validate_slot(char *slot)
     {
         __debugbreak();
     }
-    if ((unsigned int)ei->m_allocation_owner != 0xFEDCBA98
+    if (ei->m_allocation_owner != (void *)0xFEDCBA98
         && _tlAssert(
             "source/phys_mem_new.cpp",
             347,
@@ -599,8 +619,8 @@ void phys_slot_pool::free_slot(unsigned __int8 *slot)
     while (1)
     {
         cur = *(volatile signed __int64 *)&this->m_first_free_slot;
-        *(unsigned int *)slot = LODWORD(cur); // link slot->next = current head
-        next = __SPAIR64__(HIDWORD(cur) + 1, (unsigned int)slot);
+        *(char **)slot = phys_tagged_ptr(cur); // link slot->next = current head
+        next = phys_tagged_pack(slot, phys_tagged_tag(cur) + 1);
         if (_InterlockedCompareExchange64(
             (volatile signed __int64 *)&this->m_first_free_slot,
             next,
@@ -656,11 +676,11 @@ char * phys_slot_pool::allocate_slot()
     while (1)
     {
         cur = *(volatile signed __int64 *)&this->m_first_free_slot;
-        v3 = (char *)LODWORD(cur);
+        v3 = phys_tagged_ptr(cur);
         if (!v3)
             break; // free list empty, fall through to fresh alloc
 
-        next = __SPAIR64__(HIDWORD(cur) + 1, *(unsigned int *)v3);
+        next = phys_tagged_pack(*(char **)v3, phys_tagged_tag(cur) + 1);
         if (_InterlockedCompareExchange64(
             (volatile signed __int64 *)&this->m_first_free_slot,
             next,

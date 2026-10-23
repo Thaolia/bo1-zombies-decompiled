@@ -3,4 +3,4 @@
 
 void __cdecl RB_TouchAllImages();
 void __cdecl RB_TouchImage(GfxImage *image);
-int __cdecl RB_CompareTouchImages(int *e0, int *e1);
+int __cdecl RB_CompareTouchImages(GfxImage *const *e0, GfxImage *const *e1);

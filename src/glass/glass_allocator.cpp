@@ -16,10 +16,10 @@ void __thiscall SmallAllocator::Init(void *buffer, unsigned int bs, unsigned int
     ptr = (char *)this->memory;
     for ( i = 0; i < this->numBlocks - 1; ++i )
     {
-        *(unsigned int *)ptr = (unsigned int)&ptr[this->blockSize];
+        *(char **)ptr = &ptr[this->blockSize];
         ptr += this->blockSize;
     }
-    *(unsigned int *)ptr = 0;
+    *(char **)ptr = 0;
 }
 
 void **__thiscall SmallAllocator::Allocate(unsigned int size)
@@ -82,8 +82,8 @@ void __thiscall SmallAllocator::Free(void **ptr, unsigned int num)
 bool __thiscall SmallAllocator::IsValidPointer(void *ptr)
 {
     return ptr >= this->memory
-            && !(((unsigned int)ptr - (unsigned int)this->memory) % this->blockSize)
-            && (unsigned int)ptr - (unsigned int)this->memory < this->numBlocks * this->blockSize;
+            && !(((uintptr_t)ptr - (uintptr_t)this->memory) % this->blockSize)
+            && (uintptr_t)ptr - (uintptr_t)this->memory < this->numBlocks * this->blockSize;
 }
 
 void __thiscall Allocator::Memory::Init()
@@ -131,8 +131,8 @@ void __thiscall Allocator::Init(void *buf, int size)
     Allocator::Memory *end; // [esp+Ch] [ebp-4h]
 
     this->buffer = buf;
-    end = (Allocator::Memory *)(((int)this->buffer + size - 21) & 0xFFFFFFF0);
-    this->head = (Allocator::Memory *)(((int)this->buffer + 15) & 0xFFFFFFF0);
+    end = (Allocator::Memory *)(((uintptr_t)this->buffer + size - (sizeof(Allocator::Memory) + 1)) & ~(uintptr_t)15);
+    this->head = (Allocator::Memory *)(((uintptr_t)this->buffer + 15) & ~(uintptr_t)15);
     //Allocator::Memory::Init(this->head);
     this->head->Init();
     this->tail = end;
@@ -172,7 +172,7 @@ Allocator::Memory **__thiscall Allocator::Allocate(int size, void *userData)
     if ( this->freeHead == this->tail )
         return 0;
     bestFit = 0;
-    sizea = (size + 31) & 0xFFFFFFF0;
+    sizea = (size + offsetof(Allocator::Memory, prevFree) + 15) & ~15;
     for ( free = this->freeHead; free != this->tail; free = free->nextFree )
     {
         if ( free->next )
@@ -237,8 +237,8 @@ void __thiscall Allocator::Free(unsigned int *ptr)
 
     if ( ptr )
     {
-        mem = (Allocator::Memory *)(ptr - 4);
-        if ( *(ptr - 1)
+        mem = (Allocator::Memory *)((char *)ptr - offsetof(Allocator::Memory, prevFree));
+        if ( mem->nextFree
             && !Assert_MyHandler(
                         "C:\\projects_pc\\cod\\codsrc\\src\\glass\\glass_allocator.cpp",
                         233,
@@ -250,7 +250,7 @@ void __thiscall Allocator::Free(unsigned int *ptr)
         }
         if ( this->freeHead == this->tail )
         {
-            *ptr = 0;
+            mem->prevFree = 0;
             mem->nextFree = this->tail;
             this->freeHead = mem;
         }
@@ -266,7 +266,7 @@ void __thiscall Allocator::Free(unsigned int *ptr)
             {
                 __debugbreak();
             }
-            if ( !*ptr )
+            if ( !mem->prevFree )
                 this->freeHead = mem;
         }
         while ( mem->prev && mem->prev == mem->prevFree )
@@ -278,10 +278,13 @@ void __thiscall Allocator::Free(unsigned int *ptr)
 
 unsigned int __thiscall Allocator::GetMemorySize(unsigned int *ptr)
 {
+    Allocator::Memory *mem;
+
     if ( !ptr )
         return -1;
-    if ( *(ptr - 4) )
-        return *(ptr - 4) - (unsigned int)(ptr - 4);
+    mem = (Allocator::Memory *)((char *)ptr - offsetof(Allocator::Memory, prevFree));
+    if ( mem->next )
+        return (char *)mem->next - (char *)mem;
     else
         return 0;
 }

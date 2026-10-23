@@ -295,15 +295,15 @@ void __cdecl Scr_EmitAnimationInternal(scriptInstance_t inst, char *pos, unsigne
     if ( animId )
     {
         VariableValueAddress = GetVariableValueAddress(inst, animId);
-        *(unsigned int *)pos = VariableValueAddress->next;
-        VariableValueAddress->next = (unsigned int)pos;
+        *(const char **)pos = VariableValueAddress->u.codePosValue;
+        VariableValueAddress->u.codePosValue = pos;
     }
     else
     {
         NewVariable = GetNewVariable(inst, names, animName);
-        *(unsigned int *)pos = 0;
+        *(const char **)pos = 0;
         tempValue.type = 7;
-        tempValue.u.intValue = (int)pos;
+        tempValue.u.codePosValue = pos;
         SetVariableValue(inst, NewVariable, &tempValue);
     }
 }
@@ -388,7 +388,7 @@ void __cdecl SetVariableValue(scriptInstance_t inst, unsigned int id, VariableVa
     RemoveRefToValue(inst, entryValue->w.status & 0x1F, entryValue->u.u);
     entryValue->w.status &= 0xFFFFFFE0;
     entryValue->w.status |= value->type;
-    entryValue->u.next = value->u.intValue;
+    entryValue->u.u = value->u;
 }
 
 // BO1TODO: move to scr_variable
@@ -939,7 +939,7 @@ void __cdecl Scr_LoadAnimTreeAtIndex(
                 v7 = SL_ConvertToString(filenameId, SCRIPTINSTANCE_CLIENT);
                 gScrAnimPub[1].xanim_lookup[user][index] = CScr_RetrieveAnimTree(v7, names, filenameId, index);
                 insertValue.type = VAR_CODEPOS;
-                insertValue.u.intValue = (int)gScrAnimPub[1].xanim_lookup[user][index].anims;
+                insertValue.u.codePosValue = (const char *)gScrAnimPub[1].xanim_lookup[user][index].anims;
                 Variable = GetVariable(SCRIPTINSTANCE_CLIENT, fileId, 1u);
                 SetVariableValue(SCRIPTINSTANCE_CLIENT, Variable, &insertValue);
             }
@@ -998,7 +998,7 @@ void __cdecl Scr_LoadAnimTreeAtIndex(
                 RemoveRefToObject(inst, gScrAnimPub[inst].animtree_node);
                 gScrAnimPub[inst].animtree_node = 0;
                 tempValue.type = 7;
-                tempValue.u.intValue = (int)animtree.anims;
+                tempValue.u.codePosValue = (const char *)animtree.anims;
                 v13 = GetVariable(inst, fileId, 1u);
                 SetVariableValue(inst, v13, &tempValue);
                 XAnimSetupSyncNodes(animtree.anims);
@@ -1231,7 +1231,7 @@ void __cdecl ConnectScriptToAnim(
     if ( animId )
     {
         value = GetVariableValueAddress(inst, animId);
-        if ( !value->next )
+        if ( !value->u.codePosValue )
         {
             v7 = SL_ConvertToString(filename, inst);
             v6 = SL_ConvertToString(name, inst);
@@ -1244,12 +1244,12 @@ void __cdecl ConnectScriptToAnim(
         }
         anim.index = index;
         anim.tree = treeIndex;
-        for ( codePos = (char *)value->next; codePos; codePos = (char *)nextCodePos )
+        for ( codePos = (char *)value->u.codePosValue; codePos; codePos = (char *)nextCodePos )
         {
             nextCodePos = *(const char **)codePos;
             *(scr_anim_s *)codePos = anim;
         }
-        value->next = 0;
+        value->u.codePosValue = 0;
     }
 }
 
@@ -1276,13 +1276,13 @@ void __cdecl Scr_CheckAnimsDefined(scriptInstance_t inst, unsigned int names, un
             __debugbreak();
         }
         value = GetVariableValueAddress(inst, animId);
-        if ( value->next )
+        if ( value->u.codePosValue )
         {
             v4 = SL_ConvertToString(filename, inst);
             v3 = SL_ConvertToString(name, inst);
             msg = va("animation '%s' not defined in anim tree '%s'", v3, v4);
             if ( Scr_IsInOpcodeMemory(inst, value->u.codePosValue) )
-                CompileError2(inst, (char *)value->next, "%s", msg);
+                CompileError2(inst, (char *)value->u.codePosValue, "%s", msg);
             else
                 Com_Error(ERR_DROP, "%s", msg);
         }
@@ -2799,7 +2799,7 @@ scr_animtree_t __cdecl Scr_FindAnimTree(scriptInstance_t inst, const char *filen
     {
         __debugbreak();
     }
-    return (scr_animtree_t)tempValue.u.intValue;
+    return scr_animtree_t((XAnim_s *)tempValue.u.codePosValue);
 }
 
 VariableValue __cdecl Scr_EvalVariable(scriptInstance_t inst, unsigned int id)
@@ -2820,7 +2820,7 @@ VariableValue __cdecl Scr_EvalVariable(scriptInstance_t inst, unsigned int id)
         __debugbreak();
     }
     value.type = entryValue->w.status & 0x1F;
-    value.u.intValue = entryValue->u.u.intValue;
+    value.u = entryValue->u.u;
     if ( value.type >= 0xDu
         && !Assert_MyHandler(
                     "c:\\projects_pc\\cod\\codsrc\\src\\clientscript\\scr_variable.h",

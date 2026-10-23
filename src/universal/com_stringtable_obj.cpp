@@ -81,7 +81,7 @@ void __cdecl StringTable_ParseFileIntoTable(const char *filename, StringTable *t
         {
             __debugbreak();
         }
-        table->values = (StringTableCell *)StringTable_Alloc(8 * valueCount);
+        table->values = (StringTableCell *)StringTable_Alloc(sizeof(StringTableCell) * valueCount);
         table->cellIndex = (__int16 *)StringTable_Alloc(2 * valueCount);
         for ( idx = 0; idx < valueCount; ++idx )
             table->cellIndex[idx] = idx;
@@ -197,7 +197,7 @@ void __cdecl StringTable_ParseFileIntoTable(const char *filename, StringTable *t
             __debugbreak();
         }
         s_sortTable = table;
-        qsort(table->cellIndex, valueCount, 2u, (int (__cdecl *)(const void *, const void *))CellCompare);
+        qsort(table->cellIndex, valueCount, sizeof(*(table->cellIndex)), (int (__cdecl *)(const void *, const void *))CellCompare);
         s_sortTable = 0;
         Com_EndParseSession();
         if ( buffer )
@@ -260,7 +260,7 @@ void __cdecl StringTable_GetAsset_LoadObj(const char *filename, StringTable **ta
     table = (StringTable *)Hunk_FindDataForFile(12, filename);
     if ( !table )
     {
-        table = (StringTable *)StringTable_Alloc(0x14u);
+        table = (StringTable *)StringTable_Alloc(sizeof(StringTable));
         table->name = 0;
         table->columnCount = 0;
         table->rowCount = 0;

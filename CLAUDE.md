@@ -28,8 +28,17 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
 
 ## 64-bit rules
 - A pointer stored in an integer is `uintptr_t`, never `unsigned int`, `int`, `DWORD` or `LODWORD(ptr)`.
-- Do not "fix" a `static_assert(sizeof(X) == N)` by deleting it. Make it arch-conditional with the real 64-bit size,
-  and know why the size changed.
+- Do not "fix" a `static_assert(sizeof(X) == N)` by deleting it. Make it arch-conditional with the real 64-bit size
+  (`BO1_ARCH_SIZE(n32, n64)`, `src/platform/arch_size.h`), and know why the size changed. A class with a base class
+  takes `BO1_ABI_SIZE` (MSVC and Itanium differ); measure the MSVC sizes with `clang --target=x86_64-pc-windows-msvc`
+  (command in `docs/PORTING.md`, phase 3), not by guessing from the MinGW numbers.
+- After any 64-bit fix in a `.cpp`, run `tools/codediff.py build/mingw32-gcc <files>`. "identical" is the goal; read
+  and explain every remaining difference before keeping the edit.
+- A literal byte count (`Hunk_UserAlloc(hunk, 73728, ...)`, `memset(p, 0, 0x8D388)`) is a 32-bit `sizeof` in disguise.
+  Write `sizeof`/`offsetof` instead; `tools/litsizes.py` lists the ones it can see.
+- When a 64-bit crash reveals a bug family (a 32-bit stride, a 4-byte view, a casted call), inventory the whole tree
+  for it before moving on: `tools/ptrcasts.py`, `tools/litsizes.py`, or a replay of the `mingw64-clang` compile commands
+  with one clang warning (`-Wfortify-source`, `-Wcast-function-type-mismatch`; method in `docs/PORTING.md`, phase 3).
 - Asset structs from fastfiles are only ever native-64 after `ffconv`. Never add runtime 32→64 patching to
   `db_load.cpp`: a 64-bit build reads `IWffs` zones whose stream `ffconv` already widened, with the same `Load_*`
   traversal. Stream rules shared by both sides (alignment, pointer encoding) live in `src/database/db_ff64.h` only.
@@ -53,9 +62,13 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
 - Commits: English messages, no Claude co-author line.
 - Before claiming a phase step done, run its verification listed in `docs/PORTING.md` and report the actual
   output. "It compiles" is not "it works".
-- Tooling runs from WSL2. MSVC/clang-cl builds run on the Windows side. devkitPro lives in `/opt/devkitpro`.
+- Tooling runs from WSL2. MSVC builds run on the Windows side. devkitPro lives in `/opt/devkitpro`.
+- Search sources with `grep -a`: some files hold Latin-1 bytes, and plain `grep` treats them as binary and prints
+  none of their lines.
 - After touching a shared header or `src/platform/compat.h`, rerun `tools/syntax_check.py` on both `mingw32-gcc` and
-  `mingw32-clang` (command in `docs/PORTING.md`, phase 1) and the `win32-msvc` build.
+  `mingw32-clang` (command in `docs/PORTING.md`, phase 1).
+- Between merges, build only `win64-msvc`. Build `win32-msvc` once before each merge into `switch` (it catches
+  MSVC-x86-only errors the GNU checks cannot see, e.g. an intrinsic declared only by `<intrin.h>`).
 - A new `BO1_OFFLINE` stub must reproduce a state the engine already handles (service absent, device missing,
   open failed). Never fake success. Find the symbols with the `win32-msvc-offline` link, not by hand, and compare
   headless runs against the reference on the main menu and on a map (`docs/PORTING.md`, phase 1c).

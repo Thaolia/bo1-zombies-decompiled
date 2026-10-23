@@ -109,7 +109,12 @@ struct BO1ProfScope
         if (!z->registered)
             BO1_ProfRegister(z);
         zone = z;
+#if defined(_M_IX86) || defined(__i386__)
         main = __readfsdword(0x24) == g_bo1ProfMainThread;
+#else
+        // x64 TEB: ClientId.UniqueThread, what GetCurrentThreadId reads
+        main = __readgsdword(0x48) == g_bo1ProfMainThread;
+#endif
         if (!main || !z->mainDepth++)
             start = __rdtsc();
     }
@@ -184,7 +189,12 @@ struct SvProfScope
     bool on;
     explicit SvProfScope(int cat)
     {
+#if defined(_M_IX86) || defined(__i386__)
         on = g_svProfOn && __readfsdword(0x24) == g_svProfThread && g_svProfDepth < 63;
+#else
+        // x64 TEB: ClientId.UniqueThread, what GetCurrentThreadId reads
+        on = g_svProfOn && __readgsdword(0x48) == g_svProfThread && g_svProfDepth < 63;
+#endif
         if (!on)
             return;
         const unsigned long long now = __rdtsc();

@@ -378,7 +378,7 @@ void __cdecl CG_PredictPlayerState(int localClientNum)
     }
     cgameGlob->predictedPlayerEntity.nextState.number = ps->clientNum;
     BG_PlayerStateToEntityState(ps, &cgameGlob->predictedPlayerEntity.nextState, 0, 0);
-    *((unsigned int *)&cgameGlob->predictedPlayerEntity + 201) |= 2u;
+    cgameGlob->predictedPlayerEntity.flagWord |= 2u;
     memcpy(
         &cgameGlob->predictedPlayerEntity.currentState,
         &cgameGlob->predictedPlayerEntity.nextState.lerp,
@@ -415,9 +415,9 @@ void __cdecl CG_PredictPlayerState(int localClientNum)
             if ( vehicle->nitrousVeh->m_phys_user_data )
             {
                 Sys_EnterCriticalSection(CRITSECT_PHYSICS);
-                Phys_ObjGetPosition((int)vehicle->nitrousVeh->m_phys_user_data, origin, absAxis);
-                Phys_ObjGetVelocities((int)vehicle->nitrousVeh->m_phys_user_data, tVelocity, aVelocity);
-                Phys_ObjGetCenterOfMass((int)vehicle->nitrousVeh->m_phys_user_data, origin);
+                Phys_ObjGetPosition((intptr_t)vehicle->nitrousVeh->m_phys_user_data, origin, absAxis);
+                Phys_ObjGetVelocities((intptr_t)vehicle->nitrousVeh->m_phys_user_data, tVelocity, aVelocity);
+                Phys_ObjGetCenterOfMass((intptr_t)vehicle->nitrousVeh->m_phys_user_data, origin);
                 Sys_LeaveCriticalSection(CRITSECT_PHYSICS);
                 AxisToAngles(absAxis, angles);
                 inVehicle = 1;
@@ -497,7 +497,7 @@ void __cdecl CG_PredictPlayerState_Internal(int localClientNum)
     {
         CG_InterpolatePlayerState(localClientNum, 0);
         centTarget = CG_GetEntity(localClientNum, cgameGlob->followCameraClient);
-        if ( ((*((unsigned int *)centTarget + 201) >> 1) & 1) != 0 )
+        if ( ((centTarget->flagWord >> 1) & 1) != 0 )
         {
             CL_GetUserCmd(localClientNum, current, &latestCmd);
             FollowCameraMove(cgameGlob, centTarget, &latestCmd);
@@ -960,7 +960,7 @@ char __cdecl CG_ShouldInterpolatePlayerStateViewClamp(int localClientNum, const 
         cent = CG_GetEntity(localClientNum, prevSnap->ps.viewlocked_entNum);
         if ( cent )
         {
-            if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 )
+            if ( ((cent->flagWord >> 1) & 1) != 0 )
             {
                 vehInfo = CG_GetVehicleInfo(cent->nextState.vehicleState.vehicleInfoIndex);
                 if ( !vehInfo

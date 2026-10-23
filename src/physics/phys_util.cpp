@@ -105,10 +105,10 @@ void __cdecl nuge::get_ballistic_info(
     int v8; // edi
     double v9; // st7
     rigid_body *const *v10; // edi
-    float *v11; // edx
-    float *v12; // edx
-    float *v13; // edx
-    float *v14; // edx
+    rigid_body *v11; // edx
+    rigid_body *v12; // edx
+    rigid_body *v13; // edx
+    rigid_body *v14; // edx
     rigid_body *v15; // edx
     float v16; // [esp-30h] [ebp-3Ch]
     float v17; // [esp-30h] [ebp-3Ch]
@@ -193,73 +193,73 @@ void __cdecl nuge::get_ballistic_info(
         v46 = 4 * v48;
         do
         {
-            v11 = (float *)*((unsigned int *)v10 - 2);
+            v11 = v10[-2];
             if ( v11 )
             {
-                v49 = 1.0 / v11[60];
-                v31 = v49 * v11[24];
-                v36 = v11[25] * v49;
-                v41 = v11[26] * v49;
+                v49 = 1.0 / v11->m_inv_mass;
+                v31 = v49 * v11->m_mat.w.x;
+                v36 = v11->m_mat.w.y * v49;
+                v41 = v11->m_mat.w.z * v49;
                 v5->x = v5->x + v31;
                 v5->y = v5->y + v36;
                 v5->z = v5->z + v41;
-                v16 = v11[36] * v49;
-                v21 = v11[37] * v49;
-                v26 = v11[38] * v49;
+                v16 = v11->m_t_vel.x * v49;
+                v21 = v11->m_t_vel.y * v49;
+                v26 = v11->m_t_vel.z * v49;
                 v6->x = v6->x + v16;
                 v6->y = v6->y + v21;
                 v6->z = v26 + v6->z;
                 *total_mass = v49 + *total_mass;
             }
-            v12 = (float *)*((unsigned int *)v10 - 1);
+            v12 = v10[-1];
             if ( v12 )
             {
-                v50 = 1.0 / v12[60];
-                v32 = v50 * v12[24];
-                v37 = v12[25] * v50;
-                v42 = v12[26] * v50;
+                v50 = 1.0 / v12->m_inv_mass;
+                v32 = v50 * v12->m_mat.w.x;
+                v37 = v12->m_mat.w.y * v50;
+                v42 = v12->m_mat.w.z * v50;
                 v5->x = v5->x + v32;
                 v5->y = v5->y + v37;
                 v5->z = v5->z + v42;
-                v17 = v12[36] * v50;
-                v22 = v12[37] * v50;
-                v27 = v12[38] * v50;
+                v17 = v12->m_t_vel.x * v50;
+                v22 = v12->m_t_vel.y * v50;
+                v27 = v12->m_t_vel.z * v50;
                 v6->x = v6->x + v17;
                 v6->y = v6->y + v22;
                 v6->z = v27 + v6->z;
                 *total_mass = v50 + *total_mass;
             }
-            v13 = (float *)*v10;
+            v13 = *v10;
             if ( *v10 )
             {
-                v51 = 1.0 / v13[60];
-                v33 = v51 * v13[24];
-                v38 = v13[25] * v51;
-                v43 = v13[26] * v51;
+                v51 = 1.0 / v13->m_inv_mass;
+                v33 = v51 * v13->m_mat.w.x;
+                v38 = v13->m_mat.w.y * v51;
+                v43 = v13->m_mat.w.z * v51;
                 v5->x = v5->x + v33;
                 v5->y = v5->y + v38;
                 v5->z = v5->z + v43;
-                v18 = v13[36] * v51;
-                v23 = v13[37] * v51;
-                v28 = v13[38] * v51;
+                v18 = v13->m_t_vel.x * v51;
+                v23 = v13->m_t_vel.y * v51;
+                v28 = v13->m_t_vel.z * v51;
                 v6->x = v6->x + v18;
                 v6->y = v6->y + v23;
                 v6->z = v28 + v6->z;
                 *total_mass = v51 + *total_mass;
             }
-            v14 = (float *)*((unsigned int *)v10 + 1);
+            v14 = v10[1];
             if ( v14 )
             {
-                v52 = 1.0 / v14[60];
-                v34 = v52 * v14[24];
-                v39 = v14[25] * v52;
-                v44 = v14[26] * v52;
+                v52 = 1.0 / v14->m_inv_mass;
+                v34 = v52 * v14->m_mat.w.x;
+                v39 = v14->m_mat.w.y * v52;
+                v44 = v14->m_mat.w.z * v52;
                 v5->x = v5->x + v34;
                 v5->y = v5->y + v39;
                 v5->z = v5->z + v44;
-                v19 = v14[36] * v52;
-                v24 = v14[37] * v52;
-                v29 = v14[38] * v52;
+                v19 = v14->m_t_vel.x * v52;
+                v24 = v14->m_t_vel.y * v52;
+                v29 = v14->m_t_vel.z * v52;
                 v6->x = v6->x + v19;
                 v6->y = v6->y + v24;
                 v6->z = v29 + v6->z;
@@ -336,9 +336,9 @@ void    nuge::apply_ballistic_target(
     double v21; // st7
     unsigned int v22; // ecx
     rigid_body *const *v23; // eax
-    int v24; // edx
-    int v25; // edx
-    int v26; // edx
+    rigid_body *v24; // edx
+    rigid_body *v25; // edx
+    rigid_body *v26; // edx
     rigid_body *v27; // eax
     int v28; // esi
     rigid_body *v29; // ecx
@@ -468,17 +468,17 @@ void    nuge::apply_ballistic_target(
             v20 = 4 * v22;
             do
             {
-                v24 = *((_DWORD *)v23 - 2);
+                v24 = v23[-2];
                 if (v24)
                 {
-                    s_ = *(float *)(v24 + 240);
+                    s_ = v24->m_inv_mass;
                     s1_ = s_ * s_;
                     B = 1.0 / s1_ + B;
                 }
-                v25 = *((_DWORD *)v23 - 1);
+                v25 = v23[-1];
                 if (v25)
                 {
-                    s_ = *(float *)(v25 + 240);
+                    s_ = v25->m_inv_mass;
                     s1_ = s_ * s_;
                     B = 1.0 / s1_ + B;
                 }
@@ -488,10 +488,10 @@ void    nuge::apply_ballistic_target(
                     s1_ = s_ * s_;
                     B = 1.0 / s1_ + B;
                 }
-                v26 = *((_DWORD *)v23 + 1);
+                v26 = v23[1];
                 if (v26)
                 {
-                    s_ = *(float *)(v26 + 240);
+                    s_ = v26->m_inv_mass;
                     s1_ = s_ * s_;
                     B = 1.0 / s1_ + B;
                 }

@@ -330,7 +330,7 @@ void __cdecl CG_InitDestructibles(int localClientNum)
     Destructible *v1; // [esp+0h] [ebp-8h]
     int i; // [esp+4h] [ebp-4h]
 
-    memset((unsigned __int8 *)cg_destructibles[localClientNum], 0, 0x60C0u);
+    memset((unsigned __int8 *)cg_destructibles[localClientNum], 0, 144 * sizeof(Destructible));
     for ( i = 0; i < 144; ++i )
     {
         v1 = &cg_destructibles[localClientNum][i];
@@ -2344,7 +2344,6 @@ void __cdecl CG_DestructibleRadiusDamage(
     float v8; // [esp+10h] [ebp-B4h]
     float v9; // [esp+14h] [ebp-B0h]
     float v10; // [esp+18h] [ebp-ACh]
-    const centity_s **p_attacker; // [esp+28h] [ebp-9Ch]
     unsigned __int8 boneIndex; // [esp+33h] [ebp-91h] BYREF
     float ent_axis[4][3]; // [esp+34h] [ebp-90h] BYREF
     XModel *model; // [esp+64h] [ebp-60h]
@@ -2377,14 +2376,15 @@ void __cdecl CG_DestructibleRadiusDamage(
         {
             de = &g_destructible_events[g_destructible_events_count++];
             de->type = 1;
-            de->ehe.localClientNum = (int)self;
-            p_attacker = &de->ed.attacker;
+            de->erd.self = self;
+            // point is a float[3] (cg_event.cpp passes the origin); the decompiled stores went through ed's fields at
+            // erd's 32-bit offsets, which no longer overlap on 64-bit.
             de->erd.point[0] = *(float *)point;
-            p_attacker[1] = point[1];
-            p_attacker[2] = point[2];
-            de->ed.dir[2] = damgeInner;
-            de->ed.point[0] = damgeOuter;
-            de->ed.point[1] = radius;
+            de->erd.point[1] = *((float *)point + 1);
+            de->erd.point[2] = *((float *)point + 2);
+            de->erd.damgeInner = damgeInner;
+            de->erd.damgeOuter = damgeOuter;
+            de->erd.radius = radius;
             de->erd.mod = mod;
         }
     }
@@ -2922,11 +2922,11 @@ void __cdecl CG_ProcessDestructibleEvents()
             if ( type == 1 )
             {
                 CG_DestructibleRadiusDamage(
-                    de->ed.self,
-                    &de->ed.attacker,
-                    de->ed.dir[2],
-                    de->ed.point[0],
-                    de->ed.point[1],
+                    de->erd.self,
+                    (const centity_s **)de->erd.point,
+                    de->erd.damgeInner,
+                    de->erd.damgeOuter,
+                    de->erd.radius,
                     de->erd.mod,
                     0);
             }
@@ -2982,8 +2982,8 @@ void __cdecl CG_DestructibleDamage(
         {
             de = &g_destructible_events[g_destructible_events_count++];
             de->type = 0;
-            de->ehe.localClientNum = (int)self;
-            de->ehe.event = (int)attacker;
+            de->ed.self = self;
+            de->ed.attacker = attacker;
             de->ed.dir[0] = *dir;
             de->ed.dir[1] = dir[1];
             de->ed.dir[2] = dir[2];

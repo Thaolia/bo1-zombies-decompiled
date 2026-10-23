@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <cstdio> // FILE
 #include <cmath> // isnan
 
@@ -12,13 +13,13 @@ enum AssertOccurance : __int32
 struct AddressInfo_s // sizeof=0x110
 {                                       // XREF: .data:g_assertAddress/r
                                         // AddressInfo/r
-    unsigned int address;               // XREF: Assert_DoStackTrace(char *,int,int,void *)+96/w
+    uintptr_t address;                  // XREF: Assert_DoStackTrace(char *,int,int,void *)+96/w
     char moduleName[64];
     char bestFunction[64];
     char bestFunctionFilename[64];
-    unsigned int bestFunctionAddress;
+    uintptr_t bestFunctionAddress;
     char bestLineFilename[64];
-    unsigned int bestLineAddress;
+    uintptr_t bestLineAddress;
     unsigned int bestLineNumber;
 };
 
@@ -26,7 +27,7 @@ void __cdecl FixWindowsDesktop();
 int __cdecl Assert_DoStackTrace(char *msg, int nIgnore, int type, int *context);
 int __cdecl LoadMapFiles(char *msg);
 void __cdecl LoadMapFilesForDir(const char *dir);
-char __cdecl ParseMapFile(FILE *fp, unsigned int baseAddress, const char *mapName);
+char __cdecl ParseMapFile(FILE *fp, uintptr_t baseAddress, const char *mapName);
 void __cdecl ParseError(const char *msg);
 char __cdecl ReadLine(FILE *fp);
 char __cdecl SkipLines(int lineCount, FILE *fp);

@@ -26,15 +26,15 @@ GfxLightDef *__cdecl R_LoadLightDef(const char *name)
         return 0;
     if ( fileSize )
     {
-        def = Hunk_Alloc(0x10u, "R_RegisterLightDef", 21);
-        *(unsigned int *)def = (unsigned int)Hunk_Alloc(strlen(name) + 1, "R_RegisterLightDef", 21);
+        def = Hunk_Alloc(sizeof(GfxLightDef), "R_RegisterLightDef", 21);
+        ((GfxLightDef *)def)->name = (const char *)Hunk_Alloc(strlen(name) + 1, "R_RegisterLightDef", 21);
         if ( !def
             && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_light_load_obj.cpp", 110, 0, "%s", "def") )
         {
             __debugbreak();
         }
         readPos = file;
-        readPos = R_LoadLightImage(file, (GfxLightImage *)(def + 4));
+        readPos = R_LoadLightImage(file, &((GfxLightDef *)def)->attenuation);
         v4 = name;
         v3 = *(char **)def;
         do
@@ -45,7 +45,7 @@ GfxLightDef *__cdecl R_LoadLightDef(const char *name)
         while ( v2 );
         I_strlwr(*(char **)def);
         FS_FreeFile(file);
-        *((unsigned int *)def + 3) = 0;
+        ((GfxLightDef *)def)->lmapLookupStart = 0;
         return (GfxLightDef *)def;
     }
     else

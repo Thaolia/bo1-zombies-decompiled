@@ -812,7 +812,7 @@ void __cdecl R_ResizeWindow()
     SetWindowLongA(hwnd, -16, style);
     SetWindowPos(
         hwnd,
-        (HWND)(wndParms.fullscreen - 2),
+        (HWND)(intptr_t)(wndParms.fullscreen - 2),
         wndParms.x,
         wndParms.y,
         rc.right - rc.left,
@@ -972,7 +972,7 @@ void __cdecl R_SetWndParms(GfxWindowParms *wndParms)
     {
         refreshRateString = Dvar_EnumToString(r_displayRefresh);
         sscanf(refreshRateString, "%i Hz", &refreshRate);
-        wndParms->hz = (int)R_ClosestRefreshRateForMode(wndParms->displayWidth, wndParms->displayHeight, refreshRate);
+        wndParms->hz = R_ClosestRefreshRateForMode(wndParms->displayWidth, wndParms->displayHeight, refreshRate);
     }
     else
     {
@@ -984,12 +984,12 @@ void __cdecl R_SetWndParms(GfxWindowParms *wndParms)
     wndParms->aaSamples = r_aaSamples->current.integer;
 }
 
-const char *__cdecl R_ClosestRefreshRateForMode(unsigned int width, unsigned int height, int refreshRate)
+int __cdecl R_ClosestRefreshRateForMode(unsigned int width, unsigned int height, int refreshRate)
 {
     const char *v4; // eax
     int top; // [esp+0h] [ebp-10h]
     int bot; // [esp+4h] [ebp-Ch]
-    const char *comparison; // [esp+8h] [ebp-8h]
+    int comparison; // [esp+8h] [ebp-8h]
     int mid; // [esp+Ch] [ebp-4h]
 
     bot = 0;
@@ -997,18 +997,18 @@ const char *__cdecl R_ClosestRefreshRateForMode(unsigned int width, unsigned int
     while ( bot <= top )
     {
         mid = (bot + top) / 2;
-        comparison = (const char *)(dx.displayModes[mid].Width - width);
+        comparison = dx.displayModes[mid].Width - width;
         if ( !comparison )
         {
-            comparison = &dx.resolutionNameTable[4 * mid - 1023][-(int)height];
+            comparison = dx.displayModes[mid].Height - height;
             if ( !comparison )
             {
-                comparison = &dx.resolutionNameTable[4 * mid - 1022][-refreshRate];
+                comparison = dx.displayModes[mid].RefreshRate - refreshRate;
                 if ( !comparison )
-                    return (const char *)refreshRate;
+                    return refreshRate;
             }
         }
-        if ( (int)comparison >= 0 )
+        if ( comparison >= 0 )
             top = mid - 1;
         else
             bot = mid + 1;
@@ -1029,18 +1029,18 @@ const char *__cdecl R_ClosestRefreshRateForMode(unsigned int width, unsigned int
     {
         __debugbreak();
     }
-    if ( dx.displayModes[top].Width == width && dx.resolutionNameTable[4 * top - 1023] == (const char *)height )
-        return dx.resolutionNameTable[4 * top - 1022];
-    if ( dx.displayModes[bot].Width != width || dx.resolutionNameTable[4 * bot - 1023] != (const char *)height )
+    if ( dx.displayModes[top].Width == width && dx.displayModes[top].Height == height )
+        return dx.displayModes[top].RefreshRate;
+    if ( dx.displayModes[bot].Width != width || dx.displayModes[bot].Height != height )
     {
         v4 = va(
                      "%i = (%i %i), %i = (%i %i), want (%i %i)",
                      top,
                      dx.displayModes[top].Width,
-                     dx.resolutionNameTable[4 * bot - 1023],
+                     dx.displayModes[bot].Height,
                      bot,
                      dx.displayModes[bot].Width,
-                     dx.resolutionNameTable[4 * bot - 1023],
+                     dx.displayModes[bot].Height,
                      width,
                      height);
         if ( !Assert_MyHandler(
@@ -1052,7 +1052,7 @@ const char *__cdecl R_ClosestRefreshRateForMode(unsigned int width, unsigned int
                         v4) )
             __debugbreak();
     }
-    return dx.resolutionNameTable[4 * bot - 1022];
+    return dx.displayModes[bot].RefreshRate;
 }
 
 bool __cdecl R_SetCustomResolution(GfxWindowParms *wndParms)
@@ -1374,23 +1374,23 @@ void __cdecl R_EnumDisplayModes(unsigned int adapterIndex)
                      &dx.displayModes[dx.displayModeCount]);
         if ( hr >= 0 )
         {
-            if ( !dx.resolutionNameTable[4 * dx.displayModeCount - 1022] )
-                dx.resolutionNameTable[4 * dx.displayModeCount - 1022] = (const char *)60;
+            if ( !dx.displayModes[dx.displayModeCount].RefreshRate )
+                dx.displayModes[dx.displayModeCount].RefreshRate = 60;
             ++dx.displayModeCount;
         }
     }
-    qsort(dx.displayModes, dx.displayModeCount, 0x10u, (int (__cdecl *)(const void *, const void *))R_CompareDisplayModes);
+    qsort(dx.displayModes, dx.displayModeCount, sizeof(*(dx.displayModes)), (int (__cdecl *)(const void *, const void *))R_CompareDisplayModes);
     resolutionCount = 0;
     refreshRateCount = 0;
     for ( modeIndex = 0; modeIndex < dx.displayModeCount; ++modeIndex )
     {
         resolutionCount = R_AddValidResolution(
                                                 dx.displayModes[modeIndex].Width,
-                                                (int)dx.resolutionNameTable[4 * modeIndex - 1023],
+                                                dx.displayModes[modeIndex].Height,
                                                 resolutionCount,
                                                 availableResolutions);
         refreshRateCount = R_AddValidRefreshRate(
-                                                 (int)dx.resolutionNameTable[4 * modeIndex - 1022],
+                                                 dx.displayModes[modeIndex].RefreshRate,
                                                  refreshRateCount,
                                                  availableRefreshRates);
     }
@@ -1416,7 +1416,7 @@ void __cdecl R_EnumDisplayModes(unsigned int adapterIndex)
                          defaultResolutionIndex,
                          0x21u,
                          "Direct X resolution mode");
-    qsort(availableRefreshRates, refreshRateCount, 4u, (int (__cdecl *)(const void *, const void *))R_CompareRefreshRates);
+    qsort(availableRefreshRates, refreshRateCount, sizeof(*(availableRefreshRates)), (int (__cdecl *)(const void *, const void *))R_CompareRefreshRates);
     defaultRefreshRateIndex = 0;
     for ( refreshRateIndex = 0; refreshRateIndex < refreshRateCount; ++refreshRateIndex )
     {
@@ -1556,7 +1556,7 @@ int __stdcall R_MonitorEnumCallback(HMONITOR__ *monitorHandle, HDC__ *hdc, tagRE
     }
     else
     {
-        userData[1] = (unsigned int)monitorHandle;
+        ((GfxEnumMonitors *)userData)->foundMonitor = monitorHandle;
         return 0;
     }
 }

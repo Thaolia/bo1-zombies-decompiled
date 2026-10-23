@@ -4,6 +4,7 @@
 #include <cstddef>
 
 #include <Windows.h>
+#include <platform/arch_size.h>
 
 #define JQ_MAX_QUEUES 8
 
@@ -200,7 +201,7 @@ struct __declspec(align(4)) jqBatch // sizeof=0x7C
 
     jqBatch();
 };
-static_assert(sizeof(jqBatch) == 124);
+static_assert(sizeof(jqBatch) == BO1_ARCH_SIZE(124, 152));
 
 template <typename T, int SIZE>
 struct __declspec(align(8)) jqAtomicQueue//<jqBatch,32> // sizeof=0x50

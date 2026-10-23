@@ -122,7 +122,7 @@ unsigned int __cdecl R_DrawXModelSurfLitInternal(
             break;
         v5 = 4 * LOWORD(drawSurf.packed);
         modelSurf = (const GfxModelRigidSurface *)&data->surfsBuffer[v5];
-        if (*(unsigned __int16 *)&data->surfsBuffer[v5 + 14] != baseGfxEntIndex)
+        if (*(unsigned __int16 *)&data->surfsBuffer[v5 + offsetof(GfxModelRigidSurface, surf.info.gfxEntIndex)] != baseGfxEntIndex)
         {
             if (R_DrawXModelSurfCheckBreak(
                 modelSurf->surf.info.gfxEntIndex,
@@ -158,7 +158,7 @@ void __cdecl R_GetWorldMatrixForModelSurf(const GfxModelRigidSurface *modelSurf,
     float scale; // [esp+64h] [ebp-18h]
     float4 scaleVec; // [esp+68h] [ebp-14h]
 
-    quat = *(float4 *)modelSurf->placement.base.quat;
+    quat = Float4Load(modelSurf->placement.base.quat);
     if ( !Vec4IsNormalized(quat.v)
         && !Assert_MyHandler(
                     "c:\\projects_pc\\cod\\codsrc\\src\\universal\\com_vector4_novec.h",
@@ -332,7 +332,7 @@ unsigned int __cdecl R_DrawXModelSurfCameraInternal(
             break;
         v4 = 4 * LOWORD(drawSurf.packed);
         modelSurf = (const GfxModelRigidSurface *)&data->surfsBuffer[v4];
-        if (*(unsigned __int16 *)&data->surfsBuffer[v4 + 14] != baseGfxEntIndex)
+        if (*(unsigned __int16 *)&data->surfsBuffer[v4 + offsetof(GfxModelRigidSurface, surf.info.gfxEntIndex)] != baseGfxEntIndex)
         {
             if (R_DrawXModelSurfCheckBreak(
                 modelSurf->surf.info.gfxEntIndex,

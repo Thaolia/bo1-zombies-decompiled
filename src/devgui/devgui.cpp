@@ -77,7 +77,7 @@ devguiGlob_t *__cdecl DevGui_GetMenu(unsigned __int16 handle)
     {
         __debugbreak();
     }
-    return (devguiGlob_t *)((char *)&devguiGlob + 40 * handle - 40);
+    return (devguiGlob_t *)((char *)&devguiGlob + (int)sizeof(DevMenuItem) * handle - (int)sizeof(DevMenuItem));
 }
 
 unsigned __int16 __cdecl DevGui_ConstructPath_r(unsigned __int16 parent, const char *path)
@@ -182,8 +182,8 @@ unsigned __int16 __cdecl DevGui_GetMenuHandle(DevMenuItem *menu)
 {
     unsigned __int16 handle; // [esp+0h] [ebp-4h]
 
-    handle = ((char *)menu - (char *)&devguiGlob) / 40 + 1;
-    if ( ((unsigned __int16)(((char *)menu - (char *)&devguiGlob) / 40) == 0xFFFF || handle > 0x800u)
+    handle = ((char *)menu - (char *)&devguiGlob) / (ptrdiff_t)sizeof(DevMenuItem) + 1;
+    if ( ((unsigned __int16)(((char *)menu - (char *)&devguiGlob) / (ptrdiff_t)sizeof(DevMenuItem)) == 0xFFFF || handle > 0x800u)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\devgui\\devgui.cpp",
                     233,
@@ -195,7 +195,7 @@ unsigned __int16 __cdecl DevGui_GetMenuHandle(DevMenuItem *menu)
     {
         __debugbreak();
     }
-    return ((char *)menu - (char *)&devguiGlob) / 40 + 1;
+    return ((char *)menu - (char *)&devguiGlob) / (ptrdiff_t)sizeof(DevMenuItem) + 1;
 }
 
 int __cdecl DevGui_CompareMenus(const DevMenuItem *menu0, const DevMenuItem *menu1)
@@ -556,7 +556,7 @@ void __cdecl DevGui_FreeMenu_r(unsigned __int16 handle)
             DevGui_FreeMenu_r(menu->menus[0].child.menu);
         }
         DevGui_FreeMenu_r(menu->menus[0].nextSibling);
-        *(unsigned int *)menu->menus[0].label = (unsigned int)devguiGlob.nextFreeMenu;
+        *(uintptr_t *)menu->menus[0].label = (uintptr_t)devguiGlob.nextFreeMenu;
         devguiGlob.nextFreeMenu = (DevMenuItem *)menu;
     }
 }
@@ -1539,12 +1539,7 @@ void __cdecl DevGui_DrawGraph(const DevMenuItem *menu, int localClientNum)
     knot[0] = *v3;
     knot[1] = v3[1];
     if ( graph->textCallback )
-        ((void (__cdecl *)(DevGraph *, unsigned int, unsigned int, char *, int))graph->textCallback)(
-            graph,
-            LODWORD(knot[0]),
-            LODWORD(knot[1]),
-            text,
-            256);
+        graph->textCallback(graph, knot[0], knot[1], text, 256);
     else
         sprintf(text, "X: %.4f, Y: %.4f", knot[0], knot[1]);
     DevGui_DrawFont(x, y, (const unsigned __int8 *)&devgui_colorText->current, text, 1.0, 1.0);
@@ -1564,8 +1559,8 @@ void __cdecl DevGui_Init()
     screen_xPad = RETURN_ZERO32();
     screen_yPad = RETURN_ZERO32();
     for ( menuIndex = 0; menuIndex < 0x7FF; ++menuIndex )
-        *(unsigned int *)devguiGlob.menus[menuIndex].label = (unsigned int)&devguiGlob.menus[menuIndex + 1];
-    *(unsigned int *)devguiGlob.menus[menuIndex].label = 0;
+        *(uintptr_t *)devguiGlob.menus[menuIndex].label = (uintptr_t)&devguiGlob.menus[menuIndex + 1];
+    *(uintptr_t *)devguiGlob.menus[menuIndex].label = 0;
     devguiGlob.nextFreeMenu = (DevMenuItem *)&devguiGlob;
     devguiGlob.topmostMenu.childType = 0;
     devguiGlob.topmostMenu.childMenuMemory = 0;

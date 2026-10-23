@@ -190,7 +190,7 @@ void __cdecl SND_PlayInternal(
 
         if ( snd_assert_on_enqueue
             && snd_assert_on_enqueue->current.integer
-            && *(_BYTE *)snd_assert_on_enqueue->current.integer
+            && *snd_assert_on_enqueue->current.string
             && SND_HashName(snd_assert_on_enqueue->current.string) == id
             && !Assert_MyHandler(
                         "C:\\projects_pc\\cod\\codsrc\\src\\sound\\snd_public_async.cpp",
@@ -1263,8 +1263,8 @@ void __cdecl SND_SubtitleNotify(const char *subtitle, unsigned int lengthMs)
     if ( cmd )
     {
         cmd->type = SND_NOTIFY_SUBTITLE;
-        cmd->context.length.ent = (unsigned int)subtitle;
-        cmd->context.ent_update.handle.handle = lengthMs;
+        cmd->context.subtitle.subtitle = subtitle;
+        cmd->context.subtitle.lengthMs = lengthMs;
         SND_NotifyPush(cmd);
     }
 }
@@ -1296,7 +1296,7 @@ void __cdecl SND_FreePlaybackNotify(snd_playback *playback)
     if ( cmd )
     {
         cmd->type = SND_NOTIFY_PLAYBACK_FREE;
-        cmd->context.ent_update.handle.handle = (int)playback;
+        cmd->context.playback_free.playback = playback;
         SND_NotifyPush(cmd);
     }
 }

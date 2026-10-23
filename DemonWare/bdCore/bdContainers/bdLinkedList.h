@@ -4,6 +4,7 @@
 #include <Windows.h>
 
 #include <DemonWare/bdCore/bdReference/bdReferencable.h>
+#include <platform/arch_size.h>
 
 // ALL AISLOP, THIS DOESNT DESERVE ANY BETTER
 // 
@@ -161,4 +162,4 @@ struct bdLinkedList
     }
 };
 
-static_assert(sizeof(bdLinkedList<void *>) == 0x0C, "bdLinkedList size mismatch");
+static_assert(sizeof(bdLinkedList<void *>) == BO1_ARCH_SIZE(0x0C, 24), "bdLinkedList size mismatch");

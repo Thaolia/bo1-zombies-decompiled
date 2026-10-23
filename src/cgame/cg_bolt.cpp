@@ -35,7 +35,7 @@ unsigned int __cdecl CG_AddBolt(
                 const float *position,
                 const float *normal,
                 unsigned __int8 tagIndex,
-                int physUserBody)
+                intptr_t physUserBody)
 {
     const char *Name; // eax
     int ModelIndex; // eax
@@ -107,7 +107,7 @@ void __cdecl CG_UpdateBolt(int localClientNum)
         if ( bolt
             && bolt->nextState.lerp.u.player.meleeWeapon != 1022
             && bolt->linkInfo
-            && ((*((unsigned int *)CG_GetEntity(localClientNum, bolt->linkInfo->linkEnt) + 201) >> 1) & 1) == 0 )
+            && ((CG_GetEntity(localClientNum, bolt->linkInfo->linkEnt)->flagWord >> 1) & 1) == 0 )
         {
             bolt->nextState.lerp.u.player.meleeWeapon = 1023;
             bolt->nextState.lerp.eFlags |= 0x20u;

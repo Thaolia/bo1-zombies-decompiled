@@ -8,13 +8,13 @@ gjk_polygon_cylinder_t *__cdecl create_gjkcc_gjk_geom(
                 float (*maxs)[3],
                 int stype,
                 gjk_collision_visitor *allocator);
-gjkcc_info *__cdecl create_gjkcc_info(unsigned int gjkcc_id, bool is_server_thread, const float *origin);
+gjkcc_info *__cdecl create_gjkcc_info(uintptr_t gjkcc_id, bool is_server_thread, const float *origin);
 
 void __cdecl destroy_gjkcc_info(gjkcc_info *gcci_);
 void __cdecl destroy_client_gjkcc_info(int localClientNum);
 void    gjkcc_prolog(const gjkcc_input_t *gjkcc_in, float *origin);
 void __cdecl gjkcc_epilog(const gjkcc_input_t *gjkcc_in, const float *origin);
-gjkcc_info *__cdecl find_gjkcc_info(unsigned int gjkcc_id, bool is_server_thread);
+gjkcc_info *__cdecl find_gjkcc_info(uintptr_t gjkcc_id, bool is_server_thread);
 
 
 

@@ -563,7 +563,7 @@ void __cdecl CScrCmd_IsBurning(scr_entref_t entref)
             CG_GetFakeEntity(entref.client, entref.entnum);
     }
     isBurning = 0;
-    if ( (pSelf->currentState.eFlags2 & 0x200000) != 0 || ((*((unsigned int *)pSelf + 201) >> 5) & 1) != 0 )
+    if ( (pSelf->currentState.eFlags2 & 0x200000) != 0 || ((pSelf->flagWord >> 5) & 1) != 0 )
         isBurning = 1;
     Scr_AddBool(isBurning, SCRIPTINSTANCE_CLIENT);
 }
@@ -1863,7 +1863,7 @@ void __cdecl CScr_GetStance(scr_entref_t entref)
         if ( EntNum_IsCsc(entref.entnum) )
             CG_GetFakeEntity(entref.client, entref.entnum);
     }
-    if ( ((*((unsigned int *)pSelf + 201) >> 1) & 1) == 0 )
+    if ( ((pSelf->flagWord >> 1) & 1) == 0 )
         Scr_Error("GetStance can not be used on a player that is not in the snapshot.", 0);
     if ( pSelf->nextState.eType == 1 || pSelf->nextState.eType == 5 )
     {
@@ -1918,7 +1918,7 @@ void __cdecl CScr_SetFlagAsAway(scr_entref_t entref)
         if ( EntNum_IsCsc(entref.entnum) )
             CG_GetFakeEntity(entref.client, entref.entnum);
     }
-    if ( ((*((unsigned int *)pSelf + 201) >> 1) & 1) != 0 )
+    if ( ((pSelf->flagWord >> 1) & 1) != 0 )
     {
         if ( (unsigned int)Scr_GetNumParam(SCRIPTINSTANCE_CLIENT) >= 2 )
         {
@@ -2250,7 +2250,7 @@ void __cdecl CScr_PlayDogstepSound(int localClientNum, centity_s *cent, eFoot fo
         *(_QWORD *)end = *(_QWORD *)&footMatrix[3][0];
         end[2] = footMatrix[3][2] - footprintGroundTraceDown;
         surfType = (CM_TracePointDown(start, end, 2065, 0x3F00000, footMatrix[3], 0, 0) & 0x3F00000) >> 20;
-        if ( (cent->currentState.eFlags2 & 0x200000) != 0 || ((*((unsigned int *)cent + 201) >> 5) & 1) != 0 )
+        if ( (cent->currentState.eFlags2 & 0x200000) != 0 || ((cent->flagWord >> 5) & 1) != 0 )
             Scr_AddInt(1, SCRIPTINSTANCE_CLIENT);
         else
             Scr_AddInt(0, SCRIPTINSTANCE_CLIENT);

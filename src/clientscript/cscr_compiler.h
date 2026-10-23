@@ -46,7 +46,7 @@ struct scrCompilePub_t // sizeof=0x21038
                                         // Scr_FindBreakpointInfo+4E/r ...
     int func_table_size;                // XREF: AddFunction+22/r
                                         // AddFunction+58/r ...
-    int func_table[1024];               // XREF: AddFunction+36/r
+    uintptr_t func_table[1024];             // XREF: AddFunction+36/r
                                         // AddFunction+C5/w ...
 };
 
@@ -206,7 +206,7 @@ void (__cdecl *__cdecl GetFunction(scriptInstance_t inst, const char **pName, in
 void (__cdecl *__cdecl GetMethod(scriptInstance_t inst, const char **pName, int *type))(scr_entref_t);
 int __cdecl GetExpressionCount(sval_u exprlist);
 unsigned int __cdecl Scr_GetBuiltin(scriptInstance_t inst, sval_u func_name);
-int __cdecl CompareCaseInfo(unsigned int *elem1, unsigned int *elem2);
+int __cdecl CompareCaseInfo(const uintptr_t *elem1, const uintptr_t *elem2);
 void __cdecl ScriptCompile(
                 scriptInstance_t inst,
                 sval_u val,
@@ -315,6 +315,7 @@ void __cdecl EmitValue(scriptInstance_t inst, VariableCompileValue *constValue);
 void __cdecl EmitGetUndefined(scriptInstance_t inst, sval_u sourcePos);
 void __cdecl EmitGetInteger(scriptInstance_t inst, int value, sval_u sourcePos);
 void __cdecl EmitCodepos(scriptInstance_t inst, const char *pos);
+void __cdecl EmitInt(scriptInstance_t inst, int value);
 void __cdecl EmitGetFloat(scriptInstance_t inst, float value, sval_u sourcePos);
 void __cdecl EmitFloat(scriptInstance_t inst, float value);
 void __cdecl EmitGetString(scriptInstance_t inst, unsigned int value, sval_u sourcePos);
@@ -391,7 +392,7 @@ void __cdecl EmitCall(scriptInstance_t inst, sval_u func_name, sval_u params, bo
 void __cdecl EmitDecTop(scriptInstance_t inst);
 int __cdecl EmitExpressionList(scriptInstance_t inst, sval_u exprlist, scr_block_s *block);
 void __cdecl AddExpressionListOpcodePos(scriptInstance_t inst, sval_u exprlist);
-int __cdecl AddFunction(scriptInstance_t inst, int func);
+int __cdecl AddFunction(scriptInstance_t inst, uintptr_t func);
 void __cdecl EmitPreFunctionCall(scriptInstance_t inst, sval_u func_name);
 void __cdecl EmitPostFunctionCall(
                 scriptInstance_t inst,

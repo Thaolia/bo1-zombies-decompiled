@@ -8,6 +8,7 @@
 #include <game_mp/g_main_mp.h>
 #include <xanim/xmodel_load_obj.h>
 #include <xanim/xmodel_utils.h>
+#include <platform/arch_size.h>
 
 cspField_t destructiblePieceFields[70] =
 {
@@ -655,6 +656,24 @@ DestructiblePiece *__cdecl DestructiblePieceLoadFile(const char *name, Destructi
     }
 }
 
+static_assert(offsetof(DestructibleDef, model) == BO1_ARCH_SIZE(4, offsetof(DestructibleDef, model)));
+static_assert(offsetof(DestructibleDef, numPieces) == BO1_ARCH_SIZE(12, offsetof(DestructibleDef, numPieces)));
+static_assert(offsetof(DestructibleDef, pieces) == BO1_ARCH_SIZE(16, offsetof(DestructibleDef, pieces)));
+static_assert(offsetof(DestructiblePiece, parentPiece) == BO1_ARCH_SIZE(240, offsetof(DestructiblePiece, parentPiece)));
+static_assert(offsetof(DestructiblePiece, parentDamagePercent) == BO1_ARCH_SIZE(244, offsetof(DestructiblePiece, parentDamagePercent)));
+static_assert(offsetof(DestructiblePiece, entityDamageTransfer) == BO1_ARCH_SIZE(264, offsetof(DestructiblePiece, entityDamageTransfer)));
+static_assert(offsetof(DestructiblePiece, physConstraints) == BO1_ARCH_SIZE(268, offsetof(DestructiblePiece, physConstraints)));
+static_assert(offsetof(DestructiblePiece, health) == BO1_ARCH_SIZE(272, offsetof(DestructiblePiece, health)));
+static_assert(offsetof(DestructiblePiece, damageSound) == BO1_ARCH_SIZE(276, offsetof(DestructiblePiece, damageSound)));
+static_assert(offsetof(DestructiblePiece, burnEffect) == BO1_ARCH_SIZE(280, offsetof(DestructiblePiece, burnEffect)));
+static_assert(offsetof(DestructiblePiece, burnSound) == BO1_ARCH_SIZE(284, offsetof(DestructiblePiece, burnSound)));
+static_assert(offsetof(DestructiblePiece, enableLabel) == BO1_ARCH_SIZE(288, offsetof(DestructiblePiece, enableLabel)));
+static_assert(offsetof(DestructiblePiece, hideBones) == BO1_ARCH_SIZE(292, offsetof(DestructiblePiece, hideBones)));
+static_assert(offsetof(DestructibleStage, breakHealth) == BO1_ARCH_SIZE(4, offsetof(DestructibleStage, breakHealth)));
+static_assert(offsetof(DestructibleStage, physPreset) == BO1_ARCH_SIZE(44, offsetof(DestructibleStage, physPreset)));
+static_assert(sizeof(DestructiblePiece) == BO1_ARCH_SIZE(312, sizeof(DestructiblePiece)));
+static_assert(sizeof(DestructibleStage) == BO1_ARCH_SIZE(48, sizeof(DestructibleStage)));
+
 void __cdecl DestructibleDef_Strcpy(unsigned __int8 *member, const char *keyValue)
 {
     char v2; // [esp+3h] [ebp-25h]
@@ -673,23 +692,24 @@ void __cdecl DestructibleDef_Strcpy(unsigned __int8 *member, const char *keyValu
             *v3++ = *v4++;
         }
         while ( v2 );
-        *(unsigned int *)member = (unsigned int)buf;
+        *(unsigned __int8 **)member = buf;
     }
     else
     {
-        *(unsigned int *)member = (unsigned int)"";
+        *(const char **)member = "";
     }
 }
 
 int __cdecl Destructible_ParseDefSpecificFieldType(unsigned __int8 *pStruct, char *pValue, int iFieldType)
 {
+    DestructibleDef *ddef = (DestructibleDef *)pStruct;
     float v4; // [esp+0h] [ebp-50h]
     float v5; // [esp+4h] [ebp-4Ch]
     float v6; // [esp+8h] [ebp-48h]
     float v7; // [esp+Ch] [ebp-44h]
     int v8; // [esp+3Ch] [ebp-14h]
 
-    if ( *((unsigned int *)pStruct + 4) )
+    if ( ddef->pieces )
     {
         if ( iFieldType < 15 || iFieldType > 46 )
         {
@@ -717,75 +737,75 @@ int __cdecl Destructible_ParseDefSpecificFieldType(unsigned __int8 *pStruct, cha
                                                     {
                                                         if ( iFieldType < 399 || iFieldType > 430 )
                                                         {
-                                                            if ( iFieldType >= 431 && iFieldType <= 462 && iFieldType - 431 < *((unsigned int *)pStruct + 3) )
-                                                                *(_WORD *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 431) + 288) = SL_GetLowercaseString(pValue, 0, SCRIPTINSTANCE_SERVER);
+                                                            if ( iFieldType >= 431 && iFieldType <= 462 && iFieldType - 431 < (unsigned int)ddef->numPieces )
+                                                                ddef->pieces[iFieldType - 431].enableLabel = SL_GetLowercaseString(pValue, 0, SCRIPTINSTANCE_SERVER);
                                                         }
-                                                        else if ( iFieldType - 399 < *((unsigned int *)pStruct + 3) )
+                                                        else if ( iFieldType - 399 < (unsigned int)ddef->numPieces )
                                                         {
-                                                            *(float *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 399) + 264) = (float)atoi(pValue) * 0.0099999998;
+                                                            ddef->pieces[iFieldType - 399].entityDamageTransfer = (float)atoi(pValue) * 0.0099999998;
                                                         }
                                                     }
-                                                    else if ( iFieldType - 367 < *((unsigned int *)pStruct + 3) )
+                                                    else if ( iFieldType - 367 < (unsigned int)ddef->numPieces )
                                                     {
                                                         DestructibleDef_Strcpy(
-                                                            (unsigned __int8 *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 367) + 284),
+                                                            (unsigned __int8 *)&ddef->pieces[iFieldType - 367].burnSound,
                                                             pValue);
                                                     }
                                                 }
-                                                else if ( iFieldType - 335 < *((unsigned int *)pStruct + 3) )
+                                                else if ( iFieldType - 335 < (unsigned int)ddef->numPieces )
                                                 {
-                                                    *(unsigned int *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 335) + 280) = (unsigned int)FX_Register(pValue);
+                                                    ddef->pieces[iFieldType - 335].burnEffect = FX_Register(pValue);
                                                 }
                                             }
-                                            else if ( !G_ExitAfterToolComplete() && iFieldType - 303 < *((unsigned int *)pStruct + 3) )
+                                            else if ( !G_ExitAfterToolComplete() && iFieldType - 303 < (unsigned int)ddef->numPieces )
                                             {
                                                 DestructibleDef_Strcpy(
-                                                    (unsigned __int8 *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 303) + 276),
+                                                    (unsigned __int8 *)&ddef->pieces[iFieldType - 303].damageSound,
                                                     pValue);
                                             }
                                         }
-                                        else if ( iFieldType - 271 < *((unsigned int *)pStruct + 3) && pValue && *pValue )
+                                        else if ( iFieldType - 271 < (unsigned int)ddef->numPieces && pValue && *pValue )
                                         {
-                                            *(unsigned int *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 271) + 268) = (unsigned int)XModel_PhysConstraintsPrecache(pValue, 0);
+                                            ddef->pieces[iFieldType - 271].physConstraints = XModel_PhysConstraintsPrecache(pValue, 0);
                                         }
                                     }
-                                    else if ( iFieldType - 239 < *((unsigned int *)pStruct + 3) )
+                                    else if ( iFieldType - 239 < (unsigned int)ddef->numPieces )
                                     {
                                         v4 = atof(pValue);
-                                        *(float *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 239) + 260) = v4;
+                                        ddef->pieces[iFieldType - 239].impactDamageScale = v4;
                                     }
                                 }
-                                else if ( iFieldType - 207 < *((unsigned int *)pStruct + 3) )
+                                else if ( iFieldType - 207 < (unsigned int)ddef->numPieces )
                                 {
                                     v5 = atof(pValue);
-                                    *(float *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 207) + 256) = v5;
+                                    ddef->pieces[iFieldType - 207].meleeDamageScale = v5;
                                 }
                             }
-                            else if ( iFieldType - 175 < *((unsigned int *)pStruct + 3) )
+                            else if ( iFieldType - 175 < (unsigned int)ddef->numPieces )
                             {
                                 v6 = atof(pValue);
-                                *(float *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 175) + 252) = v6;
+                                ddef->pieces[iFieldType - 175].explosiveDamageScale = v6;
                             }
                         }
-                        else if ( iFieldType - 143 < *((unsigned int *)pStruct + 3) )
+                        else if ( iFieldType - 143 < (unsigned int)ddef->numPieces )
                         {
                             v7 = atof(pValue);
-                            *(float *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 143) + 248) = v7;
+                            ddef->pieces[iFieldType - 143].bulletDamageScale = v7;
                         }
                     }
-                    else if ( iFieldType - 111 < *((unsigned int *)pStruct + 3) )
+                    else if ( iFieldType - 111 < (unsigned int)ddef->numPieces )
                     {
-                        *(float *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 111) + 244) = (float)atoi(pValue) / 100.0;
+                        ddef->pieces[iFieldType - 111].parentDamagePercent = (float)atoi(pValue) / 100.0;
                     }
                 }
                 else
                 {
                     v8 = iFieldType - 79;
-                    if ( iFieldType - 79 < *((unsigned int *)pStruct + 3) )
+                    if ( iFieldType - 79 < (unsigned int)ddef->numPieces )
                     {
-                        *(_BYTE *)(*((unsigned int *)pStruct + 4) + 312 * v8 + 240) = atoi(pValue);
-                        if ( *(unsigned __int8 *)(*((unsigned int *)pStruct + 4) + 312 * v8 + 240) != 255
-                            && *(unsigned __int8 *)(*((unsigned int *)pStruct + 4) + 312 * v8 + 240) >= *((int *)pStruct + 3)
+                        ddef->pieces[v8].parentPiece = atoi(pValue);
+                        if ( ddef->pieces[v8].parentPiece != 255
+                            && ddef->pieces[v8].parentPiece >= ddef->numPieces
                             && !Assert_MyHandler(
                                         "C:\\projects_pc\\cod\\codsrc\\src\\physics\\destructibledef_load_obj.cpp",
                                         854,
@@ -798,28 +818,27 @@ int __cdecl Destructible_ParseDefSpecificFieldType(unsigned __int8 *pStruct, cha
                     }
                 }
             }
-            else if ( iFieldType - 47 < *((unsigned int *)pStruct + 3) )
+            else if ( iFieldType - 47 < (unsigned int)ddef->numPieces )
             {
-                *(unsigned int *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 47) + 272) = atoi(pValue);
+                ddef->pieces[iFieldType - 47].health = atoi(pValue);
             }
         }
         else
         {
-            DestructiblePieceLoadFile(pValue, (DestructiblePiece *)(*((unsigned int *)pStruct + 4) + 312 * (iFieldType - 15)));
+            DestructiblePieceLoadFile(pValue, &ddef->pieces[iFieldType - 15]);
         }
         return 1;
     }
     else
     {
-        if ( iFieldType >= 15 && iFieldType <= 46 && iFieldType - 15 + 1 > *((unsigned int *)pStruct + 3) )
-            *((unsigned int *)pStruct + 3) = iFieldType - 15 + 1;
+        if ( iFieldType >= 15 && iFieldType <= 46 && iFieldType - 15 + 1 > (unsigned int)ddef->numPieces )
+            ddef->numPieces = iFieldType - 15 + 1;
         return 1;
     }
 }
 
 DestructibleDef *__cdecl DestructibleDefLoadFile(const char *name, void *(__cdecl *Alloc)(int))
 {
-    unsigned __int8 *v3; // eax
     void *v4; // eax
     char *v5; // eax
     char *v6; // eax
@@ -838,6 +857,7 @@ DestructibleDef *__cdecl DestructibleDefLoadFile(const char *name, void *(__cdec
     char buffer[32768]; // [esp+74h] [ebp-8020h] BYREF
     const char *last; // [esp+8078h] [ebp-1Ch]
     unsigned __int8 *pStruct; // [esp+807Ch] [ebp-18h]
+    DestructibleDef *ddef;
     unsigned int count; // [esp+8080h] [ebp-14h]
     signed int v23; // [esp+8084h] [ebp-10h]
     int f; // [esp+8088h] [ebp-Ch] BYREF
@@ -864,7 +884,8 @@ DestructibleDef *__cdecl DestructibleDefLoadFile(const char *name, void *(__cdec
                     FS_FCloseFile(f);
                     if ( Info_Validate(buffer) )
                     {
-                        pStruct = (unsigned __int8 *)Alloc(24);
+                        pStruct = (unsigned __int8 *)Alloc(sizeof(DestructibleDef));
+                        ddef = (DestructibleDef *)pStruct;
                         if ( !pStruct
                             && !Assert_MyHandler(
                                         "C:\\projects_pc\\cod\\codsrc\\src\\physics\\destructibledef_load_obj.cpp",
@@ -875,13 +896,12 @@ DestructibleDef *__cdecl DestructibleDefLoadFile(const char *name, void *(__cdec
                         {
                             __debugbreak();
                         }
-                        v3 = pStruct;
-                        *(unsigned int *)pStruct = 0;
-                        *((unsigned int *)v3 + 1) = 0;
-                        *((unsigned int *)v3 + 2) = 0;
-                        *((unsigned int *)v3 + 3) = 0;
-                        *((unsigned int *)v3 + 4) = 0;
-                        *((unsigned int *)v3 + 5) = 0;
+                        ddef->name = 0;
+                        ddef->model = 0;
+                        ddef->pristineModel = 0;
+                        ddef->numPieces = 0;
+                        ddef->pieces = 0;
+                        ddef->clientOnly = 0;
                         if ( ParseConfigStringToStruct(
                                      pStruct,
                                      destructibleDefFields,
@@ -891,10 +911,10 @@ DestructibleDef *__cdecl DestructibleDefLoadFile(const char *name, void *(__cdec
                                      (int (__cdecl *)(unsigned __int8 *, const char *, const int, const int))Destructible_ParseDefSpecificFieldType,
                                      DestructibleDef_Strcpy) )
                         {
-                            count = 312 * *((unsigned int *)pStruct + 3);
+                            count = sizeof(DestructiblePiece) * (unsigned int)ddef->numPieces;
                             v4 = Alloc(count);
-                            *((unsigned int *)pStruct + 4) = (unsigned int)v4;
-                            memset(*((unsigned __int8 **)pStruct + 4), 0, count);
+                            ddef->pieces = (DestructiblePiece *)v4;
+                            memset((unsigned __int8 *)ddef->pieces, 0, count);
                             if ( ParseConfigStringToStruct(
                                          pStruct,
                                          destructibleDefFields,
@@ -904,32 +924,28 @@ DestructibleDef *__cdecl DestructibleDefLoadFile(const char *name, void *(__cdec
                                          (int (__cdecl *)(unsigned __int8 *, const char *, const int, const int))Destructible_ParseDefSpecificFieldType,
                                          DestructibleDef_Strcpy) )
                             {
-                                model = (XModel *)*((unsigned int *)pStruct + 1);
+                                model = ddef->model;
                                 if ( model )
                                 {
-                                    for ( i = 0; i < *((unsigned int *)pStruct + 3); ++i )
+                                    for ( i = 0; i < (unsigned int)ddef->numPieces; ++i )
                                     {
                                         for ( j = 0; j < 5; ++j )
                                         {
-                                            *(float *)(*((unsigned int *)pStruct + 4) + 312 * i + 48 * j + 4) = *(float *)(312 * i
-                                                                                                                                                                                         + *((unsigned int *)pStruct + 4)
-                                                                                                                                                                                         + 48 * j
-                                                                                                                                                                                         + 4)
-                                                                                                                                                                    / 100.0;
-                                            namea = *(unsigned __int16 *)(312 * i + *((unsigned int *)pStruct + 4) + 48 * j);
+                                            ddef->pieces[i].stages[j].breakHealth = ddef->pieces[i].stages[j].breakHealth / 100.0;
+                                            namea = ddef->pieces[i].stages[j].showBone;
                                             if ( namea )
                                             {
                                                 index = 0;
                                                 if ( XModelGetBoneIndex(model, namea, &index) )
                                                 {
-                                                    if ( *(unsigned int *)(*((unsigned int *)pStruct + 4) + 312 * i + 48 * j + 44) )
+                                                    if ( ddef->pieces[i].stages[j].physPreset )
                                                     {
                                                         if ( !XModelGetCollmapForBoneIndex(model, index) )
                                                         {
                                                             v13 = j;
                                                             v11 = i;
                                                             v9 = model->name;
-                                                            v7 = **(const char ***)(*((unsigned int *)pStruct + 4) + 312 * i + 48 * j + 44);
+                                                            v7 = ddef->pieces[i].stages[j].physPreset->name;
                                                             v6 = SL_ConvertToString(namea, SCRIPTINSTANCE_SERVER);
                                                             Com_PrintError(
                                                                 20,
@@ -943,7 +959,7 @@ DestructibleDef *__cdecl DestructibleDefLoadFile(const char *name, void *(__cdec
                                                                 v13);
                                                         }
                                                     }
-                                                    *(unsigned int *)(*((unsigned int *)pStruct + 4) + 312 * i + 4 * ((int)index >> 5) + 292) = *(unsigned int *)(312 * i + *((unsigned int *)pStruct + 4) + 4 * ((int)index >> 5) + 292) | (0x80000000 >> (index & 0x1F));
+                                                    ddef->pieces[i].hideBones[(int)index >> 5] = ddef->pieces[i].hideBones[(int)index >> 5] | (0x80000000 >> (index & 0x1F));
                                                 }
                                                 else
                                                 {

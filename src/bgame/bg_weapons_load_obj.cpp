@@ -1119,7 +1119,7 @@ flameTable *__cdecl BG_LoadFlameTableInternal(const char *folder, char *name)
     flameTable *fTable; // [esp+2868h] [ebp-4h]
 
     len = strlen("FLAMETABLEFILE");
-    fTable = (flameTable *)Hunk_AllocLow(0x1DCu, "BG_LoadFlameTableInternal", 10);
+    fTable = (flameTable *)Hunk_AllocLow(sizeof(flameTable), "BG_LoadFlameTableInternal", 10);
     InitFlameTable(fTable);
     Com_sprintf(dest, 0x40u, "weapons/%s/%s", folder, name);
     v6 = FS_FOpenFileByMode(dest, &f, FS_READ);
@@ -1213,7 +1213,7 @@ void __cdecl InitFlameTable(flameTable *fTable)
     while ( iField < 119 )
     {
         if ( !pField->iFieldType )
-            *(unsigned int *)((char *)&fTable->flameVar_streamChunkGravityStart + pField->iOffset) = (unsigned int)"";
+            *(const char **)((char *)&fTable->flameVar_streamChunkGravityStart + pField->iOffset) = "";
         ++iField;
         ++pField;
     }
@@ -2104,7 +2104,7 @@ WeaponFullDef *__cdecl BG_LoadWeaponVariantDefInternal(const char *folder, char 
     WeaponFullDef *weapFullDef; // [esp+8h] [ebp-Ch]
     WeaponDef *weapDef; // [esp+10h] [ebp-4h]
 
-    weapFullDef = (WeaponFullDef *)Hunk_AllocLow(0xC48u, "BG_LoadWeaponVariantDefInternal", 10);
+    weapFullDef = (WeaponFullDef *)Hunk_AllocLow(sizeof(WeaponFullDef), "BG_LoadWeaponVariantDefInternal", 10);
     InitWeaponDef(weapFullDef);
     weapDef = &weapFullDef->weapDef;
     if (!BG_LoadWeaponVariantDefFile(weapFullDef, folder, name))
@@ -2248,7 +2248,7 @@ char __cdecl BG_WeaponUpdateField(const char *weaponName, char *keyValue)
     if ( w )
     {
         weapVariantDef = (WeaponVariantDef *)BG_GetWeaponVariantDef(w);
-        memcpy(&weapFullDef, weapVariantDef, 0xE4u);
+        memcpy(&weapFullDef, weapVariantDef, sizeof(WeaponVariantDef));
         memcpy(&weapFullDef.weapDef, weapVariantDef->weapDef, sizeof(weapFullDef.weapDef));
         if ( !ParseConfigStringToStruct(
                         (unsigned __int8 *)&weapFullDef,
@@ -2279,9 +2279,9 @@ bool __cdecl BG_FlameTableUpdateField(const char *flameTableName, char *keyValue
 WeaponVariantDef *__cdecl BG_LoadDefaultWeaponVariantDef()
 {
     if ( useFastFile->current.enabled )
-        return (WeaponVariantDef *)((int (__cdecl *)(WeaponVariantDef *(__cdecl *)()))BG_LoadDefaultWeaponVariantDef_FastFile)(BG_LoadDefaultWeaponVariantDef_FastFile);
+        return BG_LoadDefaultWeaponVariantDef_FastFile();
     else
-        return (WeaponVariantDef *)((int (__cdecl *)(WeaponFullDef *(__cdecl *)()))BG_LoadDefaultWeaponVariantDef_LoadObj)(BG_LoadDefaultWeaponVariantDef_LoadObj);
+        return &BG_LoadDefaultWeaponVariantDef_LoadObj()->weapVariantDef;
 }
 
 WeaponFullDef *__cdecl BG_LoadDefaultWeaponVariantDef_LoadObj()

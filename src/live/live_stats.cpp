@@ -1524,12 +1524,12 @@ void __cdecl LiveStats_PublishNews(int controllerIndex)
                 {
                     targetValue = StringTable_GetColumnValueForRow(statsMilestonestable, rowNum, 2);
                     name = s_statsMilestonesCompleted[controllerIndex][j].name;
-                    v17 = (unsigned int)&name[strlen(name) + 1];
+                    v17 = (uintptr_t)&name[strlen(name) + 1];
                     v14 = (char *)&newRank + 3;
                     while ( *++v14 )
                         ;
                     v15 = s_statsMilestonesCompleted[controllerIndex][j].name;
-                    memcpy(v14, v15, v17 - (unsigned int)v15);
+                    memcpy(v14, v15, v17 - (uintptr_t)v15);
                     v11 = va(
                                     "userPublishNews TICKER_STATSMILESTONEUPDATE %s %s %s\n",
                                     localized_weaponname_string,
@@ -2445,7 +2445,7 @@ void __cdecl LiveStats_SortPersonalBests(int controllerIndex)
         qsort(
             s_personalBests[controllerIndex],
             s_currentPersonalBest[controllerIndex],
-            0x14u,
+            sizeof(personalBest_t),
             (int (__cdecl *)(const void *, const void *))LiveStats_ComparePersonalBests);
         numPersonalBests = 0;
         for ( personalBestNum = 0; personalBestNum < LiveStats_GetNumPersonalBests(controllerIndex); ++personalBestNum )
@@ -2517,21 +2517,21 @@ void __cdecl LiveStats_SortPercentageCompleted(int type)
             qsort(
                 s_sortedChallengeList,
                 s_totalNumberOfUnlockedItems,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeComparePercentageCompleted);
             break;
         case 5:
             qsort(
                 s_sortedAttachmentsList,
                 s_numSortedAttachments,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeComparePercentageCompleted);
             break;
         case 4:
             qsort(
                 s_sortedWeaponGroupList,
                 s_numSortedWeaponGroup,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeComparePercentageCompleted);
             break;
         default:
@@ -2541,7 +2541,7 @@ void __cdecl LiveStats_SortPercentageCompleted(int type)
                     qsort(
                         s_sortedChallengeList,
                         s_numSortedChallenges,
-                        0x24u,
+                        sizeof(challengeInfo_t),
                         (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeComparePercentageCompleted);
             }
             else
@@ -2549,7 +2549,7 @@ void __cdecl LiveStats_SortPercentageCompleted(int type)
                 qsort(
                     s_sortedGlobalChallengeList,
                     s_numSortedGlobalChallenges,
-                    0x24u,
+                    sizeof(challengeInfo_t),
                     (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeComparePercentageCompleted);
             }
             break;
@@ -2597,21 +2597,21 @@ void __cdecl LiveStats_SortNearestToCompletion(int type)
             qsort(
                 s_sortedChallengeList,
                 s_totalNumberOfUnlockedItems,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareNumToTargetValue);
             break;
         case 5:
             qsort(
                 s_sortedAttachmentsList,
                 s_numSortedAttachments,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareNumToTargetValue);
             break;
         case 4:
             qsort(
                 s_sortedWeaponGroupList,
                 s_numSortedWeaponGroup,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareNumToTargetValue);
             break;
         default:
@@ -2621,7 +2621,7 @@ void __cdecl LiveStats_SortNearestToCompletion(int type)
                     qsort(
                         s_sortedChallengeList,
                         s_numSortedChallenges,
-                        0x24u,
+                        sizeof(challengeInfo_t),
                         (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareNumToTargetValue);
             }
             else
@@ -2629,7 +2629,7 @@ void __cdecl LiveStats_SortNearestToCompletion(int type)
                 qsort(
                     s_sortedGlobalChallengeList,
                     s_numSortedGlobalChallenges,
-                    0x24u,
+                    sizeof(challengeInfo_t),
                     (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareNumToTargetValue);
             }
             break;
@@ -2650,21 +2650,21 @@ void __cdecl LiveStats_SortReward(int type)
             qsort(
                 s_sortedChallengeList,
                 s_totalNumberOfUnlockedItems,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareReward);
             break;
         case 5:
             qsort(
                 s_sortedAttachmentsList,
                 s_numSortedAttachments,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareReward);
             break;
         case 4:
             qsort(
                 s_sortedWeaponGroupList,
                 s_numSortedWeaponGroup,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareReward);
             break;
         default:
@@ -2674,7 +2674,7 @@ void __cdecl LiveStats_SortReward(int type)
                     qsort(
                         s_sortedChallengeList,
                         s_numSortedChallenges,
-                        0x24u,
+                        sizeof(challengeInfo_t),
                         (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareReward);
             }
             else
@@ -2682,7 +2682,7 @@ void __cdecl LiveStats_SortReward(int type)
                 qsort(
                     s_sortedGlobalChallengeList,
                     s_numSortedGlobalChallenges,
-                    0x24u,
+                    sizeof(challengeInfo_t),
                     (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareReward);
             }
             break;
@@ -2706,21 +2706,21 @@ void __cdecl LiveStats_SortDefault(int type)
             qsort(
                 s_sortedChallengeList,
                 s_totalNumberOfUnlockedItems,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareDefault);
             break;
         case 5:
             qsort(
                 s_sortedAttachmentsList,
                 s_numSortedAttachments,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareDefault);
             break;
         case 4:
             qsort(
                 s_sortedWeaponGroupList,
                 s_numSortedWeaponGroup,
-                0x24u,
+                sizeof(challengeInfo_t),
                 (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareDefault);
             break;
         default:
@@ -2730,7 +2730,7 @@ void __cdecl LiveStats_SortDefault(int type)
                     qsort(
                         s_sortedChallengeList,
                         s_numSortedChallenges,
-                        0x24u,
+                        sizeof(challengeInfo_t),
                         (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareDefault);
             }
             else
@@ -2738,7 +2738,7 @@ void __cdecl LiveStats_SortDefault(int type)
                 qsort(
                     s_sortedGlobalChallengeList,
                     s_numSortedGlobalChallenges,
-                    0x24u,
+                    sizeof(challengeInfo_t),
                     (int (__cdecl *)(const void *, const void *))LiveStats_ChallengeCompareDefault);
             }
             break;

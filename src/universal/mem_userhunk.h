@@ -1,4 +1,7 @@
 #pragma once
+#include <cstddef>
+#include <cstdint>
+#include <platform/arch_size.h>
 
 #define HF_FIXEDSIZE 4
 
@@ -25,17 +28,29 @@ struct __declspec(align(4)) HunkUserDefault // sizeof=0x2C
     HunkUserDefault *current;
     HunkUserDefault *next;
     int maxSize;
-    int end;
-    int pos;
-    int locked;
+    // end, pos and locked are addresses inside the hunk (the decompiler typed them int): signed so the comparisons
+    // the 32-bit code makes on them keep their signedness
+    intptr_t end;
+    intptr_t pos;
+    intptr_t locked;
     unsigned __int8 buf[1];
     // padding byte
     // padding byte
     // padding byte
 };
+static_assert(offsetof(HunkUserDefault, buf) == BO1_ARCH_SIZE(40, 72));
+static_assert(sizeof(HunkUserDefault) == BO1_ARCH_SIZE(44, 80));
+
+// The HU_SCHEME_DEBUG hunk: a HunkUser header followed by a first-fit hunk on the rest of the buffer
+struct HunkUserDebug // sizeof=0x14
+{
+    HunkUser hunkUser;
+    HunkUser *firstFit;
+};
+static_assert(sizeof(HunkUserDebug) == BO1_ARCH_SIZE(20, 32));
 
 HunkUser *__cdecl Hunk_UserDebugInit(
-                unsigned int *buffer,
+                HunkUserDebug *buffer,
                 int size,
                 HU_ALLOCATION_SCHEME scheme,
                 unsigned int flags,
@@ -44,7 +59,7 @@ HunkUser *__cdecl Hunk_UserDebugInit(
                 int type);
 void __cdecl Hunk_UserDebugReset(HunkUser *_user);
 void __cdecl Hunk_UserDebugDestroy(HunkUser *_user);
-int __cdecl Hunk_UserDebugAlloc(HunkUser *_user, int size, int alignment);
+uintptr_t __cdecl Hunk_UserDebugAlloc(HunkUser *_user, int size, int alignment);
 void __cdecl Hunk_UserDebugFree(HunkUser *_user, unsigned int *ptr);
 HunkUser *__cdecl Hunk_UserDefaultInit(
                 unsigned __int8 *buffer,
@@ -56,7 +71,7 @@ HunkUser *__cdecl Hunk_UserDefaultInit(
                 int type);
 void __cdecl Hunk_UserDefaultReset(HunkUserDefault *_user);
 void __cdecl Hunk_UserDefaultDestroy(HunkUserDefault *_user);
-int __cdecl Hunk_UserDefaultAlloc(HunkUserDefault *_user, unsigned int size, int alignment, const char *name);
+uintptr_t __cdecl Hunk_UserDefaultAlloc(HunkUserDefault *_user, unsigned int size, int alignment, const char *name);
 void __cdecl Hunk_UserDefaultFree(HunkUser *user, void *ptr);
 void __cdecl Hunk_UserStartup();
 void __cdecl Hunk_UserShutdown();

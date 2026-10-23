@@ -8,10 +8,10 @@ static const SPEntitySaveField s_badPlaceFields[] = {
 static const SPEntitySaveField s_badPlaceBrushFields[] = {
     { offsetof(badplace_parms_t, brush.volume), sizeof(((badplace_parms_t *)0)->brush.volume), 2 } // SP 0x00A5402C
 };
-static_assert(sizeof(badplace_t) == 0x2C && sizeof(badplace_parms_t) == 0x1C, "DERIVED bad place image");
-static_assert(offsetof(badplace_t, name) == 8 && offsetof(badplace_t, type) == 0xA
+BO1_SAVE_IMAGE_ASSERT(sizeof(badplace_t) == 0x2C && sizeof(badplace_parms_t) == 0x1C, "DERIVED bad place image");
+BO1_SAVE_IMAGE_ASSERT(offsetof(badplace_t, name) == 8 && offsetof(badplace_t, type) == 0xA
     && offsetof(badplace_t, parms) == 0x10, "DERIVED bad place fields");
-static_assert(ARRAY_COUNT(g_badplaces) == 256, "SP bad place count");
+BO1_SAVE_IMAGE_ASSERT(ARRAY_COUNT(g_badplaces) == 256, "SP bad place count");
 
 // SP 0x00A54020 is the empty table used for every parms type except brush (2).
 static const SPEntitySaveField *G_BadPlaceParmsFields(const badplace_t *place, unsigned *count)

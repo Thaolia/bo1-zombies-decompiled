@@ -10,6 +10,7 @@
 #include "db_memory.h"
 #include "db_stream.h"
 #include "db_stream_load.h"
+#include "db_ff64.h"
 #include "db_load.h"
 #include <tl/tl_system.h>
 
@@ -139,7 +140,7 @@ void __cdecl DB_LoadedExternalData(unsigned int size)
     _InterlockedExchangeAdd(&g_loadedExternalBytes, size);
 }
 
-unsigned __int8 *__cdecl DB_LoadXFileDataNullTerminated(unsigned __int8 *pos)
+int __cdecl DB_LoadXFileDataNullTerminated(unsigned __int8 *pos)
 {
     unsigned __int8 *origPos; // [esp+0h] [ebp-4h]
 
@@ -152,7 +153,7 @@ unsigned __int8 *__cdecl DB_LoadXFileDataNullTerminated(unsigned __int8 *pos)
             *pos = g_load.deflateBuffer[g_load.deflateBufferPos++];
     }
     while ( *pos++ );
-    return (unsigned __int8 *)(pos - origPos);
+    return (int)(pos - origPos);
 }
 
 void __cdecl DB_LoadXFileSetSize(int size)
@@ -360,6 +361,29 @@ int __cdecl DB_ReadData()
     return 1;
 }
 
+// 64-bit builds read IWffs zones (db_ff64.h), converted by tools/ffconv for this build's ABI.
+static void DB_ReadIWffsHeader(const char *magic)
+{
+    unsigned int header[2];
+
+    if ( memcmp(magic, DB_FF64_MAGIC, 8u) )
+        Com_Error(ERR_DROP, "Fastfile for zone '%s' is not an IWffs zone: convert the game with tools/ffconv", g_load.filename);
+    if ( g_load.stream.avail_in < sizeof(header) )
+        Com_Error(ERR_DROP, "Fastfile for zone '%s' is corrupt or unreadable.", g_load.filename);
+    memcpy(header, g_load.stream.next_in, sizeof(header));
+    g_load.stream.next_in += sizeof(header);
+    g_load.stream.avail_in -= sizeof(header);
+    if ( header[0] != DB_FF64_VERSION || !DB_FF64_BUILD_ABI || header[1] != DB_FF64_BUILD_ABI )
+        Com_Error(
+            ERR_DROP,
+            "Fastfile for zone '%s' was converted for another build (version %u, ABI %u; this build reads %u, %u)",
+            g_load.filename,
+            header[0],
+            header[1],
+            DB_FF64_VERSION,
+            DB_FF64_BUILD_ABI);
+}
+
 void __cdecl DB_LoadXFileInternal()
 {
     unsigned intv0; // eax
@@ -397,42 +421,50 @@ void __cdecl DB_LoadXFileInternal()
     *(unsigned int *)&magic[4] = *((unsigned int *)g_load.stream.next_in + 1);
     g_load.stream.next_in += 8;
     g_load.stream.avail_in -= 8;
-    if ( memcmp(magic, "IWff0100", 8u) && memcmp(magic, "IWffu100", 8u) )
+    if constexpr (sizeof(void *) == 8)
     {
-        //BLOPS_NULLSUB();
-        Com_Error(ERR_DROP, "Fastfile for zone '%s' is corrupt or unreadable.", g_load.filename);
+        DB_ReadIWffsHeader(magic);
+        fileIsSecure = false;
     }
-    if ( g_load.stream.avail_in < 4
-        && !Assert_MyHandler(
-                    "C:\\projects_pc\\cod\\codsrc\\src\\database\\db_file_load.cpp",
-                    1787,
-                    0,
-                    "%s",
-                    "sizeof( version ) <= g_load.stream.avail_in") )
+    else
     {
-        __debugbreak();
+        if ( memcmp(magic, "IWff0100", 8u) && memcmp(magic, "IWffu100", 8u) )
+        {
+            //BLOPS_NULLSUB();
+            Com_Error(ERR_DROP, "Fastfile for zone '%s' is corrupt or unreadable.", g_load.filename);
+        }
+        if ( g_load.stream.avail_in < 4
+            && !Assert_MyHandler(
+                        "C:\\projects_pc\\cod\\codsrc\\src\\database\\db_file_load.cpp",
+                        1787,
+                        0,
+                        "%s",
+                        "sizeof( version ) <= g_load.stream.avail_in") )
+        {
+            __debugbreak();
+        }
+        version = *(unsigned int *)g_load.stream.next_in;
+        g_load.stream.next_in += 4;
+        g_load.stream.avail_in -= 4;
+        if ( version != 473 )
+        {
+            if ( version >= 0x1D9 )
+                Com_Error(
+                    ERR_DROP,
+                    "Fastfile for zone '%s' is newer than client executable (version %d, expecting %d)",
+                    g_load.filename,
+                    version,
+                    473);
+            else
+                Com_Error(
+                    ERR_DROP,
+                    "Fastfile for zone '%s' is out of date (version %d, expecting %d)",
+                    g_load.filename,
+                    version,
+                    473);
+        }
+        fileIsSecure = memcmp(magic, "IWffu100", 8u) != 0;
     }
-    version = *(unsigned int *)g_load.stream.next_in;
-    g_load.stream.next_in += 4;
-    g_load.stream.avail_in -= 4;
-    if ( version != 473 )
-    {
-        if ( version >= 0x1D9 )
-            Com_Error(
-                ERR_DROP,
-                "Fastfile for zone '%s' is newer than client executable (version %d, expecting %d)",
-                g_load.filename,
-                version,
-                473);
-        else
-            Com_Error(
-                ERR_DROP,
-                "Fastfile for zone '%s' is out of date (version %d, expecting %d)",
-                g_load.filename,
-                version,
-                473);
-    }
-    fileIsSecure = memcmp(magic, "IWffu100", 8u) != 0;
     err = DB_AuthLoad_InflateInit(&g_load.stream, fileIsSecure);
     failureReason = 0;
     if ( fileIsSecure )
@@ -506,7 +538,7 @@ void __cdecl DB_LoadXFileInternal()
 void Load_XAssetListCustom()
 {
     varXAssetList = &g_varXAssetList;
-    DB_LoadXFileData((unsigned __int8 *)&g_varXAssetList, 16);
+    DB_LoadXFileData((unsigned __int8 *)&g_varXAssetList, sizeof(g_varXAssetList));
     DB_PushStreamPos(4u);
     varScriptStringList = &varXAssetList->stringList;
     Load_ScriptStringList(0);
@@ -519,7 +551,7 @@ void __cdecl Load_XAssetArrayCustom(int count)
     XAsset *var; // [esp+0h] [ebp-8h]
     int i; // [esp+4h] [ebp-4h]
 
-    Load_Stream(1, (unsigned __int8 *)varXAsset, 8 * count);
+    Load_Stream(1, (unsigned __int8 *)varXAsset, sizeof(XAsset) * count);
     var = varXAsset;
     for ( i = 0; i < count; ++i )
     {

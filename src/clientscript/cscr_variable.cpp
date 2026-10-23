@@ -81,7 +81,7 @@ void __cdecl Scr_DumpScriptThreads(scriptInstance_t inst)
     }
     if ( num )
     {
-        infoArray = (ThreadDebugInfo *)Z_TryVirtualAlloc(140 * num, "Scr_DumpScriptThreads", 0);
+        infoArray = (ThreadDebugInfo *)Z_TryVirtualAlloc(sizeof(ThreadDebugInfo) * num, "Scr_DumpScriptThreads", 0);
         if ( infoArray )
         {
             num = 0;
@@ -100,8 +100,8 @@ void __cdecl Scr_DumpScriptThreads(scriptInstance_t inst)
                     {
                         --size;
                         type = *buf++;
-                        u.intValue = *(int *)buf;
-                        buf += 4;
+                        u = *(const VariableUnion *)buf;
+                        buf += sizeof(VariableUnion);
                         if ( type == 7 )
                             info.pos[info.posSize++] = u.codePosValue;
                     }
@@ -113,7 +113,7 @@ void __cdecl Scr_DumpScriptThreads(scriptInstance_t inst)
                         pInfo->pos[j] = info.pos[info.posSize - j];
                 }
             }
-            qsort(infoArray, num, 0x8Cu, (int (__cdecl *)(const void *, const void *))ThreadInfoCompare);
+            qsort(infoArray, num, sizeof(ThreadDebugInfo), (int (__cdecl *)(const void *, const void *))ThreadInfoCompare);
             Com_Printf(24, "********************************\n");
             varUsage = 0.0f;
             endonUsage = 0.0f;
@@ -196,10 +196,11 @@ int __cdecl ThreadInfoCompare(unsigned int *info1, unsigned int *info2)
 
     for ( i = 0; ; ++i )
     {
-        if ( i >= info1[32] || i >= info2[32] )
-            return info1[32] - info2[32];
-        pos1 = (const char *)info1[i];
-        pos2 = (const char *)info2[i];
+        if ( i >= (unsigned int)((const ThreadDebugInfo *)info1)->posSize
+            || i >= (unsigned int)((const ThreadDebugInfo *)info2)->posSize )
+            return ((const ThreadDebugInfo *)info1)->posSize - ((const ThreadDebugInfo *)info2)->posSize;
+        pos1 = ((const ThreadDebugInfo *)info1)->pos[i];
+        pos2 = ((const ThreadDebugInfo *)info2)->pos[i];
         if ( pos1 != pos2 )
             break;
     }
@@ -228,14 +229,14 @@ void __cdecl Scr_DumpScriptVariables(
     int filteredCount; // [esp+14h] [ebp-10h]
     int i; // [esp+18h] [ebp-Ch]
     int ia; // [esp+18h] [ebp-Ch]
-    char *infoArray; // [esp+1Ch] [ebp-8h]
+    VariableDebugInfo *infoArray; // [esp+1Ch] [ebp-8h]
     int count; // [esp+20h] [ebp-4h]
 
     if (gScrVarDebugPub[inst]
         && (gScrVarPub[inst].developer
             || !spreadsheet && !fileName && !functionName && !lineSort && !functionSummary && !minCount))
     {
-        infoArray = Z_TryVirtualAlloc(4718560, "Scr_DumpScriptVariables", 0);
+        infoArray = (VariableDebugInfo *)Z_TryVirtualAlloc(sizeof(VariableDebugInfo) * (4718560 / 16), "Scr_DumpScriptVariables", 0);
         if (infoArray)
         {
             num = 0;
@@ -244,7 +245,7 @@ void __cdecl Scr_DumpScriptVariables(
                 pos = (char *)gScrVarDebugPub[inst]->varUsage[index];
                 if (pos)
                 {
-                    pInfo = (VariableDebugInfo *)&infoArray[16 * num];
+                    pInfo = &infoArray[num];
                     if (!fileName || Scr_PrevCodePosFileNameMatches(inst, pos, fileName))
                     {
                         if (functionName || functionSummary)
@@ -271,32 +272,32 @@ void __cdecl Scr_DumpScriptVariables(
                 if (summary)
                 {
                     VariableInfoCompareCallBack = (int(__cdecl *)(const void *, const void *))VariableInfoFileNameCompare;
-                    qsort(infoArray, num, 0x10u, (int(__cdecl *)(const void *, const void *))VariableInfoFileNameCompare);
+                    qsort(infoArray, num, sizeof(VariableDebugInfo), (int(__cdecl *)(const void *, const void *))VariableInfoFileNameCompare);
                 }
                 else if (functionSummary)
                 {
                     VariableInfoCompareCallBack = (int(__cdecl *)(const void *, const void *))VariableInfoFunctionCompare;
-                    qsort(infoArray, num, 0x10u, (int(__cdecl *)(const void *, const void *))VariableInfoFunctionCompare);
+                    qsort(infoArray, num, sizeof(VariableDebugInfo), (int(__cdecl *)(const void *, const void *))VariableInfoFunctionCompare);
                 }
                 else
                 {
                     VariableInfoCompareCallBack = (int(__cdecl *)(const void *, const void *))CompareThreadIndices;
-                    qsort(infoArray, num, 0x10u, (int(__cdecl *)(const void *, const void *))CompareThreadIndices);
+                    qsort(infoArray, num, sizeof(VariableDebugInfo), (int(__cdecl *)(const void *, const void *))CompareThreadIndices);
                 }
                 i = 0;
                 while (i < num)
                 {
-                    pInfoa = (VariableDebugInfo *)&infoArray[16 * i];
+                    pInfoa = &infoArray[i];
                     do
                     {
                         ++pInfoa->varUsage;
-                        --*(_DWORD *)&infoArray[16 * i++ + 12];
-                    } while (i < num && !VariableInfoCompareCallBack(pInfoa, &infoArray[16 * i]));
+                        --infoArray[i++].varUsage;
+                    } while (i < num && !VariableInfoCompareCallBack(pInfoa, &infoArray[i]));
                 }
                 if (lineSort)
-                    qsort(infoArray, num, 0x10u, (int(__cdecl *)(const void *, const void *))VariableInfoFileLineCompare);
+                    qsort(infoArray, num, sizeof(VariableDebugInfo), (int(__cdecl *)(const void *, const void *))VariableInfoFileLineCompare);
                 else
-                    qsort(infoArray, num, 0x10u, (int(__cdecl *)(const void *, const void *))VariableInfoCountCompare);
+                    qsort(infoArray, num, sizeof(VariableDebugInfo), (int(__cdecl *)(const void *, const void *))VariableInfoCountCompare);
                 Com_Printf(24, "********************************\n");
                 if (spreadsheet)
                 {
@@ -317,7 +318,7 @@ void __cdecl Scr_DumpScriptVariables(
                 filteredCount = 0;
                 for (ia = 0; ia < num; ++ia)
                 {
-                    pInfob = (VariableDebugInfo *)&infoArray[16 * ia];
+                    pInfob = &infoArray[ia];
                     if (pInfob->varUsage)
                     {
                         count += pInfob->varUsage;
@@ -377,8 +378,8 @@ int __cdecl VariableInfoFileNameCompare(unsigned int *info1, unsigned int *info2
     const char *fileName1; // [esp+0h] [ebp-8h]
     const char *fileName2; // [esp+4h] [ebp-4h]
 
-    fileName1 = (const char *)info1[1];
-    fileName2 = (const char *)info2[1];
+    fileName1 = ((const VariableDebugInfo *)info1)->fileName;
+    fileName2 = ((const VariableDebugInfo *)info2)->fileName;
     if ( !fileName1 )
         return 1;
     if ( fileName2 )
@@ -395,8 +396,8 @@ int __cdecl VariableInfoFunctionCompare(unsigned int *info1, unsigned int *info2
     fileNameCompare = VariableInfoFileNameCompare(info1, info2);
     if ( fileNameCompare )
         return fileNameCompare;
-    functionName1 = (const char *)info1[2];
-    functionName2 = (const char *)info2[2];
+    functionName1 = ((const VariableDebugInfo *)info1)->functionName;
+    functionName2 = ((const VariableDebugInfo *)info2)->functionName;
     if ( !functionName1 )
         return 1;
     if ( functionName2 )
@@ -406,7 +407,7 @@ int __cdecl VariableInfoFunctionCompare(unsigned int *info1, unsigned int *info2
 
 int __cdecl VariableInfoCountCompare(unsigned int *info1, unsigned int *info2)
 {
-    return info2[3] - info1[3];
+    return ((const VariableDebugInfo *)info2)->varUsage - ((const VariableDebugInfo *)info1)->varUsage;
 }
 
 int __cdecl VariableInfoFileLineCompare(unsigned int *info1, unsigned int *info2)
@@ -484,13 +485,13 @@ void __cdecl Scr_InitVariables(scriptInstance_t inst)
     if (gScrVarDebugPub[inst])
     {
         gScrVarDebugPub[inst]->varUsage = (const char **)Scr_AllocVarsMem(inst, 
-            4 * VARIABLELIST_SIZE(inst) /* retail 0x11FFF8 */,
-            4u,
+            sizeof(const char *) * VARIABLELIST_SIZE(inst) /* retail 0x11FFF8 */,
+            alignof(const char *),
             4,
             1u,
             gScriptVarsAlloc,
             TRACK_SCRIPT);
-        memset((unsigned __int8 *)gScrVarDebugPub[inst]->varUsage, 0, 4 * VARIABLELIST_SIZE(inst) /* retail 0x11FFF8 */);
+        memset((unsigned __int8 *)gScrVarDebugPub[inst]->varUsage, 0, sizeof(const char *) * VARIABLELIST_SIZE(inst) /* retail 0x11FFF8 */);
     }
     Scr_InitVariableRange(inst, 1u, VARIABLELIST_CHILD_BEGIN(inst) - 1);
     Scr_InitVariableRange(inst, VARIABLELIST_CHILD_BEGIN(inst), VARIABLELIST_SIZE(inst));
@@ -3938,7 +3939,7 @@ void __cdecl SetNewVariableValue(scriptInstance_t inst, unsigned int id, Variabl
         __debugbreak();
     }
     entryValue->w.status |= value->type;
-    entryValue->u.next = value->u.intValue;
+    entryValue->u.u = value->u;
 }
 
 VariableValueInternal_u *__cdecl GetVariableValueAddress(scriptInstance_t inst, unsigned int id)
@@ -4067,7 +4068,7 @@ void __cdecl SetVariableEntityFieldValue(
             __debugbreak();
         }
         entryValue->w.status |= value->type;
-        entryValue->u.next = value->u.intValue;
+        entryValue->u.u = value->u;
     }
 }
 
@@ -4565,7 +4566,7 @@ char __cdecl Scr_CastString(scriptInstance_t inst, VariableValue *value)
         return 1;
     case 4:
         value->type = 2;
-        constTempVector = (const float *)value->u.intValue;
+        constTempVector = value->u.vectorValue;
         value->u.intValue = SL_GetStringForVector(inst, value->u.vectorValue);
         RemoveRefToVector(inst, constTempVector);
         return 1;
@@ -4685,7 +4686,7 @@ void __cdecl Scr_CastVector(scriptInstance_t inst, VariableValue *value)
         }
     }
     value->type = 4;
-    value->u.intValue = (int)Scr_AllocVector(inst, vec);
+    value->u.vectorValue = Scr_AllocVector(inst, vec);
 }
 
 unsigned int __cdecl Scr_EvalFieldObject(scriptInstance_t inst, unsigned int tempVariable, VariableValue *value)
@@ -4842,9 +4843,9 @@ void __cdecl Scr_EvalEquality(scriptInstance_t inst, VariableValue *value1, Vari
             break;
         case 4:
             value1->type = 6;
-            v3 = *(float *)value1->u.intValue == *(float *)value2->u.intValue
-                && *(float *)(value1->u.intValue + 4) == *(float *)(value2->u.intValue + 4)
-                && *(float *)(value1->u.intValue + 8) == *(float *)(value2->u.intValue + 8);
+            v3 = value1->u.vectorValue[0] == value2->u.vectorValue[0]
+                && value1->u.vectorValue[1] == value2->u.vectorValue[1]
+                && value1->u.vectorValue[2] == value2->u.vectorValue[2];
             RemoveRefToVector(inst, value1->u.vectorValue);
             RemoveRefToVector(inst, value2->u.vectorValue);
             value1->u.intValue = v3;
@@ -4904,7 +4905,7 @@ void __cdecl Scr_CastWeakerPair(scriptInstance_t inst, VariableValue *value1, Va
                 *tempVector = value2->u.floatValue;
                 tempVector[1] = value2->u.floatValue;
                 tempVector[2] = value2->u.floatValue;
-                value2->u.intValue = (int)tempVector;
+                value2->u.vectorValue = tempVector;
                 value2->type = 4;
                 return;
             }
@@ -4914,7 +4915,7 @@ void __cdecl Scr_CastWeakerPair(scriptInstance_t inst, VariableValue *value1, Va
                 *v3 = (float)value2->u.intValue;
                 v3[1] = (float)value2->u.intValue;
                 v3[2] = (float)value2->u.intValue;
-                value2->u.intValue = (int)v3;
+                value2->u.vectorValue = v3;
                 value2->type = 4;
                 return;
             }
@@ -4927,7 +4928,7 @@ void __cdecl Scr_CastWeakerPair(scriptInstance_t inst, VariableValue *value1, Va
             *tempVectora = value1->u.floatValue;
             tempVectora[1] = value1->u.floatValue;
             tempVectora[2] = value1->u.floatValue;
-            value1->u.intValue = (int)tempVectora;
+            value1->u.vectorValue = tempVectora;
             value1->type = 4;
             return;
         }
@@ -4937,7 +4938,7 @@ void __cdecl Scr_CastWeakerPair(scriptInstance_t inst, VariableValue *value1, Va
             *tempVectorb = (float)value1->u.intValue;
             tempVectorb[1] = (float)value1->u.intValue;
             tempVectorb[2] = (float)value1->u.intValue;
-            value1->u.intValue = (int)tempVectorb;
+            value1->u.vectorValue = tempVectorb;
             value1->type = 4;
         }
         else
@@ -5147,12 +5148,12 @@ void __cdecl Scr_EvalPlus(scriptInstance_t inst, VariableValue *value1, Variable
             break;
         case 4:
             v12 = Scr_AllocVector(inst);
-            *v12 = *(float *)value1->u.intValue + *(float *)value2->u.intValue;
-            v12[1] = *(float *)(value1->u.intValue + 4) + *(float *)(value2->u.intValue + 4);
-            v12[2] = *(float *)(value1->u.intValue + 8) + *(float *)(value2->u.intValue + 8);
+            *v12 = value1->u.vectorValue[0] + value2->u.vectorValue[0];
+            v12[1] = value1->u.vectorValue[1] + value2->u.vectorValue[1];
+            v12[2] = value1->u.vectorValue[2] + value2->u.vectorValue[2];
             RemoveRefToVector(inst, value1->u.vectorValue);
             RemoveRefToVector(inst, value2->u.vectorValue);
-            value1->u.intValue = (int)v12;
+            value1->u.vectorValue = v12;
             break;
         case 5:
             value1->u.floatValue = value1->u.floatValue + value2->u.floatValue;
@@ -5185,7 +5186,7 @@ void __cdecl Scr_CastWeakerStringPair(scriptInstance_t inst, VariableValue *valu
                 {
                     case 4:
                         value2->type = 2;
-                        constTempVector = (const float *)value2->u.intValue;
+                        constTempVector = value2->u.vectorValue;
                         value2->u.intValue = SL_GetStringForVector(inst, value2->u.vectorValue);
                         RemoveRefToVector(inst, constTempVector);
                         return;
@@ -5219,7 +5220,7 @@ LABEL_28:
             {
                 case 4:
                     value1->type = 2;
-                    constTempVectora = (const float *)value1->u.intValue;
+                    constTempVectora = value1->u.vectorValue;
                     value1->u.intValue = SL_GetStringForVector(inst, value1->u.vectorValue);
                     RemoveRefToVector(inst, constTempVectora);
                     return;
@@ -5268,12 +5269,12 @@ void __cdecl Scr_EvalMinus(scriptInstance_t inst, VariableValue *value1, Variabl
     {
         case 4:
             tempVector = Scr_AllocVector(inst);
-            *tempVector = *(float *)value1->u.intValue - *(float *)value2->u.intValue;
-            tempVector[1] = *(float *)(value1->u.intValue + 4) - *(float *)(value2->u.intValue + 4);
-            tempVector[2] = *(float *)(value1->u.intValue + 8) - *(float *)(value2->u.intValue + 8);
+            *tempVector = value1->u.vectorValue[0] - value2->u.vectorValue[0];
+            tempVector[1] = value1->u.vectorValue[1] - value2->u.vectorValue[1];
+            tempVector[2] = value1->u.vectorValue[2] - value2->u.vectorValue[2];
             RemoveRefToVector(inst, value1->u.vectorValue);
             RemoveRefToVector(inst, value2->u.vectorValue);
-            value1->u.intValue = (int)tempVector;
+            value1->u.vectorValue = tempVector;
             break;
         case 5:
             value1->u.floatValue = value1->u.floatValue - value2->u.floatValue;
@@ -5308,12 +5309,12 @@ void __cdecl Scr_EvalMultiply(scriptInstance_t inst, VariableValue *value1, Vari
     {
         case 4:
             tempVector = Scr_AllocVector(inst);
-            *tempVector = *(float *)value1->u.intValue * *(float *)value2->u.intValue;
-            tempVector[1] = *(float *)(value1->u.intValue + 4) * *(float *)(value2->u.intValue + 4);
-            tempVector[2] = *(float *)(value1->u.intValue + 8) * *(float *)(value2->u.intValue + 8);
+            *tempVector = value1->u.vectorValue[0] * value2->u.vectorValue[0];
+            tempVector[1] = value1->u.vectorValue[1] * value2->u.vectorValue[1];
+            tempVector[2] = value1->u.vectorValue[2] * value2->u.vectorValue[2];
             RemoveRefToVector(inst, value1->u.vectorValue);
             RemoveRefToVector(inst, value2->u.vectorValue);
-            value1->u.intValue = (int)tempVector;
+            value1->u.vectorValue = tempVector;
             break;
         case 5:
             value1->u.floatValue = value1->u.floatValue * value2->u.floatValue;
@@ -5348,26 +5349,26 @@ void __cdecl Scr_EvalDivide(scriptInstance_t inst, VariableValue *value1, Variab
     {
         case 4:
             tempVector = Scr_AllocVector(inst);
-            if ( *(float *)value2->u.intValue == 0.0
-                || *(float *)(value2->u.intValue + 4) == 0.0
-                || *(float *)(value2->u.intValue + 8) == 0.0 )
+            if ( value2->u.vectorValue[0] == 0.0
+                || value2->u.vectorValue[1] == 0.0
+                || value2->u.vectorValue[2] == 0.0 )
             {
                 *tempVector = 0.0f;
                 tempVector[1] = 0.0f;
                 tempVector[2] = 0.0f;
                 RemoveRefToVector(inst, value1->u.vectorValue);
                 RemoveRefToVector(inst, value2->u.vectorValue);
-                value1->u.intValue = (int)tempVector;
+                value1->u.vectorValue = tempVector;
                 Scr_Error(inst, "divide by 0", 0);
             }
             else
             {
-                *tempVector = *(float *)value1->u.intValue / *(float *)value2->u.intValue;
-                tempVector[1] = *(float *)(value1->u.intValue + 4) / *(float *)(value2->u.intValue + 4);
-                tempVector[2] = *(float *)(value1->u.intValue + 8) / *(float *)(value2->u.intValue + 8);
+                *tempVector = value1->u.vectorValue[0] / value2->u.vectorValue[0];
+                tempVector[1] = value1->u.vectorValue[1] / value2->u.vectorValue[1];
+                tempVector[2] = value1->u.vectorValue[2] / value2->u.vectorValue[2];
                 RemoveRefToVector(inst, value1->u.vectorValue);
                 RemoveRefToVector(inst, value2->u.vectorValue);
-                value1->u.intValue = (int)tempVector;
+                value1->u.vectorValue = tempVector;
             }
             break;
         case 5:
@@ -6054,7 +6055,7 @@ void __cdecl Scr_EvalArray(scriptInstance_t inst, VariableValue *value, Variable
             else
             {
                 index->type = 5;
-                index->u.floatValue = *(float *)(value->u.intValue + 4 * index->u.intValue);
+                index->u.floatValue = value->u.vectorValue[index->u.intValue];
                 RemoveRefToVector(inst, value->u.vectorValue);
             }
         }
@@ -6144,7 +6145,7 @@ unsigned int __cdecl Scr_EvalArrayRef(scriptInstance_t inst, unsigned int parent
         varValue.type = parentValue->w.status & 0x1F;
         if (varValue.type)
         {
-            varValue.u.intValue = parentValue->u.u.intValue;
+            varValue.u = parentValue->u.u;
         add_array:
             if (varValue.type == 1)
             {
@@ -6478,7 +6479,7 @@ void __cdecl ClearArray(scriptInstance_t inst, unsigned int parentId, VariableVa
             __debugbreak();
         }
         varValue.type = parentValue->w.status & 0x1F;
-        varValue.u.intValue = parentValue->u.u.intValue;
+        varValue.u = parentValue->u.u;
     }
     else
     {
@@ -7124,14 +7125,14 @@ double __cdecl Scr_GetThreadUsage(scriptInstance_t inst, const VariableStackBuff
     VariableUnion u; // [esp+10h] [ebp-8h]
 
     size = stackBuf->size;
-    buf = &stackBuf->buf[5 * size];
+    buf = &stackBuf->buf[(sizeof(VariableUnion) + 1) * size];
     usage = Scr_GetObjectUsage(inst, stackBuf->localId);
     *endonUsage = Scr_GetEndonUsage(inst, stackBuf->localId);
     localId = stackBuf->localId;
     while ( size )
     {
-        bufa = buf - 4;
-        u.intValue = *(int *)bufa;
+        bufa = buf - sizeof(VariableUnion);
+        u = *(const VariableUnion *)bufa;
         buf = bufa - 1;
         --size;
         if ( *buf == 7 )
@@ -7669,7 +7670,7 @@ int __cdecl Scr_FindAllThreads(scriptInstance_t inst, unsigned int selfId, unsig
         entryValue = &gScrVarGlob[inst].variableList[id + VARIABLELIST_CHILD_BEGIN(inst)];
         if ( (entryValue->w.status & 0x60) != 0 && (entryValue->w.status & 0x1F) == 0xA )
         {
-            for ( threadId = *(unsigned int *)(entryValue->u.next + 8); threadId; threadId = GetSafeParentLocalId(inst, threadId) )
+            for ( threadId = entryValue->u.u.stackValue->localId; threadId; threadId = GetSafeParentLocalId(inst, threadId) )
             {
                 if ( selfId == Scr_GetSelf(inst, threadId) )
                 {
@@ -7704,7 +7705,7 @@ int __cdecl Scr_FindAllThreads(scriptInstance_t inst, unsigned int selfId, unsig
             {
                 if ( GetValueType(inst, stackId) == 10 )
                 {
-                    for ( threadIda = *(unsigned int *)(GetVariableValueAddress(inst, stackId)->next + 8);
+                    for ( threadIda = GetVariableValueAddress(inst, stackId)->u.stackValue->localId;
                                 threadIda;
                                 threadIda = GetSafeParentLocalId(inst, threadIda) )
                     {

@@ -22,7 +22,7 @@ XAnimServerNotifyList *g_currList;
 
 int __cdecl XAnimTreeSize()
 {
-    return 8;
+    return sizeof(XAnimTree_s);
 }
 
 bool __cdecl XAnimTreeHasInfo(const XAnimTree_s *tree)
@@ -97,7 +97,7 @@ XAnimParts *__cdecl XAnimPrecache(char *name, void *(__cdecl *Alloc)(int))
     XAnimParts *parts; // [esp+10h] [ebp-4h]
 
     if ( useFastFile->current.enabled )
-        result = (XAnimParts *)((int (__cdecl *)(char *, unsigned __int8 *(__cdecl *)(unsigned int)))XAnimFindData_FastFile)(
+        result = ((XAnimParts *(__cdecl *)(char *, unsigned __int8 *(__cdecl *)(unsigned int)))XAnimFindData_FastFile)(
                                                          name,
                                                          (unsigned char*(*)(unsigned int))Hunk_AllocXAnimPrecache);
     else
@@ -109,7 +109,7 @@ XAnimParts *__cdecl XAnimPrecache(char *name, void *(__cdecl *Alloc)(int))
         {
             Com_PrintWarning(19, "WARNING: Couldn't find xanim '%s', using default xanim '%s' instead\n", name, "void");
             if ( useFastFile->current.enabled )
-                Data_LoadObj = (XAnimParts *)((int (__cdecl *)(const char *, unsigned __int8 *(__cdecl *)(unsigned int)))XAnimFindData_FastFile)("void",(unsigned char *(*)(unsigned int))Hunk_AllocXAnimPrecache);
+                Data_LoadObj = ((XAnimParts *(__cdecl *)(const char *, unsigned __int8 *(__cdecl *)(unsigned int)))XAnimFindData_FastFile)("void",(unsigned char *(*)(unsigned int))Hunk_AllocXAnimPrecache);
             else
                 Data_LoadObj = XAnimFindData_LoadObj((char *)"void", (void *(__cdecl *)(int))Hunk_AllocXAnimPrecache);
             defaultParts = Data_LoadObj;
@@ -160,7 +160,7 @@ XAnimParts *__cdecl XAnimClone(XAnimParts *fromParts, void *(__cdecl *Alloc)(int
     __int16 notifyInfoIndex; // [esp+18h] [ebp-8h]
     unsigned __int16 *boneNames; // [esp+1Ch] [ebp-4h]
 
-    toParts = (XAnimParts *)Alloc(104);
+    toParts = (XAnimParts *)Alloc(sizeof(XAnimParts));
     memcpy(toParts, fromParts, sizeof(XAnimParts));
     boneNames = toParts->names;
     size = toParts->boneCount[9];
@@ -188,7 +188,7 @@ void __cdecl XAnimCreate(XAnim_s *anims, unsigned int animIndex, char *name)
     XAnimParts *parts; // [esp+30h] [ebp-4h]
 
     if ( useFastFile->current.enabled )
-        Data_LoadObj = (XAnimParts *)((int (__cdecl *)(char *, unsigned __int8 *(__cdecl *)(unsigned int)))XAnimFindData_FastFile)(
+        Data_LoadObj = ((XAnimParts *(__cdecl *)(char *, unsigned __int8 *(__cdecl *)(unsigned int)))XAnimFindData_FastFile)(
                                                                      name,
                                                                      (unsigned char *(*)(unsigned int))Hunk_AllocXAnimPrecache);
     else
@@ -391,8 +391,8 @@ XAnim_s *__cdecl XAnimCreateAnimsWithValues(
         __debugbreak();
     if ( !Alloc && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\xanim\\xanim.cpp", 684, 0, "%s", "Alloc") )
         __debugbreak();
-    anims = (XAnim_s *)Alloc(16 * size + 20 * iTotalValueCount + 24);
-    memset((unsigned __int8 *)anims, 0, 16 * size + 20 * iTotalValueCount + 24);
+    anims = (XAnim_s *)Alloc(offsetof(XAnim_s, entries) + sizeof(XAnimEntry) * size + sizeof(XAnimParam) * iTotalValueCount);
+    memset((unsigned __int8 *)anims, 0, offsetof(XAnim_s, entries) + sizeof(XAnimEntry) * size + sizeof(XAnimParam) * iTotalValueCount);
     anims->size = size;
     anims->paramSize = iTotalValueCount;
     if ( anims->paramSize )
@@ -409,8 +409,8 @@ XAnim_s *__cdecl XAnimCreateAnimsWithValues(
         }
         while ( v5 );
         anims->debugName = newDebugName;
-        anims->debugAnimNames = (const char **)Hunk_UserAlloc(g_DebugHunkUser, 4 * size, 4, "XAnimCreateAnims");
-        memset((unsigned __int8 *)anims->debugAnimNames, 0, 4 * size);
+        anims->debugAnimNames = (const char **)Hunk_UserAlloc(g_DebugHunkUser, sizeof(const char *) * size, alignof(const char *), "XAnimCreateAnims");
+        memset((unsigned __int8 *)anims->debugAnimNames, 0, sizeof(const char *) * size);
     }
     anims->wasLoggedIfMissing = (bool *)Hunk_UserAlloc(g_DebugHunkUser, size, 4, "XAnimCreateAnims");
     memset((unsigned __int8 *)anims->wasLoggedIfMissing, 0, size);
@@ -4302,7 +4302,7 @@ void __cdecl XAnimSetupSyncNodes_r(XAnim_s *anims, unsigned int animIndex, int p
                     if ( !useFastFile->current.enabled )
                         XAnimPrecache((char *)"void_loop", (void *(__cdecl *)(int))Hunk_AllocXAnimPrecache);
                     if ( useFastFile->current.enabled )
-                        Data_LoadObj = (XAnimParts *)((int (__cdecl *)(const char *, unsigned __int8 *(__cdecl *)(unsigned int)))XAnimFindData_FastFile)(
+                        Data_LoadObj = ((XAnimParts *(__cdecl *)(const char *, unsigned __int8 *(__cdecl *)(unsigned int)))XAnimFindData_FastFile)(
                                                                                      "void_loop",
                                                                                      (unsigned char*(*)(unsigned int))Hunk_AllocXAnimPrecache);
                     else

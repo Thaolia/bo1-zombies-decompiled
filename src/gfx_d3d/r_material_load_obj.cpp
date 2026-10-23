@@ -1389,19 +1389,19 @@ MaterialTechnique *__cdecl Material_LoadTechnique(char *name)
         }
         else if ( passCount )
         {
-            stateMapSize = 4 * passCount;
+            stateMapSize = sizeof(MaterialStateMap *) * passCount;
             nameSize = strlen(name) + 1;
-            technique = Material_Alloc(nameSize + 24 * passCount + 8);
-            stateMapForPass = (MaterialStateMap **)&technique[20 * passCount + 8];
-            *(unsigned int *)technique = (unsigned int)&stateMapForPass[passCount];
+            technique = Material_Alloc(nameSize + (sizeof(MaterialPass) + sizeof(MaterialStateMap *)) * passCount + offsetof(MaterialTechnique, passArray));
+            stateMapForPass = (MaterialStateMap **)&technique[sizeof(MaterialPass) * passCount + offsetof(MaterialTechnique, passArray)];
+            ((MaterialTechnique *)technique)->name = (const char *)&stateMapForPass[passCount];
             memcpy(*(unsigned __int8 **)technique, (unsigned __int8 *)name, nameSize);
 
-            *((_WORD *)technique + 2) = techFlags;
+            ((MaterialTechnique *)technique)->flags = techFlags;
             if ( !strcmp(*(const char **)technique, "zprepass")
                 || !strncmp(*(const char **)technique, "pimp_technique_zprepass_", 0x18u)
                 || !strncmp(*(const char **)technique, "pimp_technique_layer_zprepass_", 0x1Eu) )
             {
-                *((_WORD *)technique + 2) |= 4u;
+                ((MaterialTechnique *)technique)->flags |= 4u;
             }
             for ( passIndex = 0; passIndex < passCount; ++passIndex )
             {
@@ -1418,12 +1418,12 @@ MaterialTechnique *__cdecl Material_LoadTechnique(char *name)
                 }
                 if ( vertexDecl->hasOptionalSource )
                 {
-                    *((_WORD *)technique + 2) |= 8u;
+                    ((MaterialTechnique *)technique)->flags |= 8u;
                     break;
                 }
             }
-            *((_WORD *)technique + 3) = passCount;
-            memcpy(technique + 8, (unsigned __int8 *)passes, 20 * passCount);
+            ((MaterialTechnique *)technique)->passCount = passCount;
+            memcpy((unsigned __int8 *)((MaterialTechnique *)technique)->passArray, (unsigned __int8 *)passes, sizeof(MaterialPass) * passCount);
             memcpy((unsigned __int8 *)stateMapForPass, (unsigned __int8 *)stateMap, stateMapSize);
             return (MaterialTechnique *)technique;
         }
@@ -1478,7 +1478,7 @@ char __cdecl Material_LoadPass(
         {
             if ( !Material_LoadPassPixelShader((const char **)text, techFlags, &v10, pass, 0x80u, &argCount, args) )
                 goto LABEL_8;
-            qsort(args, argCount, 8u, (int (__cdecl *)(const void *, const void *))Material_CompareShaderArgumentsForRuntime);
+            qsort(args, argCount, sizeof(*(args)), (int (__cdecl *)(const void *, const void *))Material_CompareShaderArgumentsForRuntime);
             firstArg = 0;
             pass->perPrimArgCount = Material_CountArgsWithUpdateFrequency(MTL_UPDATE_PER_PRIM, args, argCount, &firstArg);
             pass->perObjArgCount = Material_CountArgsWithUpdateFrequency(MTL_UPDATE_PER_OBJECT, args, argCount, &firstArg);
@@ -1552,8 +1552,8 @@ char __cdecl Material_LoadPass(
                 ++v6;
             }
             argCount = pass->stableArgCount + pass->perObjArgCount + pass->perPrimArgCount;
-            pass->localArgs = (MaterialShaderArgument *)Material_Alloc(8 * argCount);
-            memcpy((unsigned __int8 *)pass->localArgs, (unsigned __int8 *)args, 8 * argCount);
+            pass->localArgs = (MaterialShaderArgument *)Material_Alloc(sizeof(MaterialShaderArgument) * argCount);
+            memcpy((unsigned __int8 *)pass->localArgs, (unsigned __int8 *)args, sizeof(MaterialShaderArgument) * argCount);
             localArgs = pass->localArgs;
             for ( j = 0; j < pass->perPrimArgCount; ++j )
             {
@@ -2127,7 +2127,7 @@ char __cdecl Material_LoadPassVertexDecl(
     bool existing; // [esp+1Fh] [ebp-31h] BYREF
     const char *token; // [esp+20h] [ebp-30h]
     int routingIndex; // [esp+24h] [ebp-2Ch]
-    unsigned __int8 dest[2]; // [esp+2Ah] [ebp-26h] BYREF
+    unsigned __int8 dest; // [esp+2Bh] [ebp-25h] BYREF
     MaterialStreamRouting routing[16]; // [esp+2Ch] [ebp-24h] BYREF
 
     for ( routingIndex = 0; ; ++routingIndex )
@@ -2143,9 +2143,9 @@ char __cdecl Material_LoadPassVertexDecl(
         if ( !Material_MatchToken(text, ".") )
             return 0;
         token = (const char *)Com_Parse(text);
-        if ( !Material_StreamDestForName(text, token, &dest[1]) )
+        if ( !Material_StreamDestForName(text, token, &dest) )
             return 0;
-        if ( !Material_ResourceDestForStreamDest(dest[1], inputTable, inputCount, &resourceDest) )
+        if ( !Material_ResourceDestForStreamDest(dest, inputTable, inputCount, &resourceDest) )
             return 0;
         if ( !Material_MatchToken(text, "=") )
             return 0;
@@ -2160,11 +2160,11 @@ char __cdecl Material_LoadPassVertexDecl(
             return 0;
         for ( insertIndex = routingIndex;
                     insertIndex > 0
-             && dest[2 * insertIndex] >= (int)source
-             && (dest[2 * insertIndex] != source || dest[2 * insertIndex + 1] >= (int)resourceDest);
+             && routing[insertIndex - 1].source >= (int)source
+             && (routing[insertIndex - 1].source != source || routing[insertIndex - 1].dest >= (int)resourceDest);
                     --insertIndex )
         {
-            routing[insertIndex] = *(MaterialStreamRouting *)&dest[2 * insertIndex];
+            routing[insertIndex] = routing[insertIndex - 1];
         }
         routing[insertIndex].source = source;
         routing[insertIndex].dest = resourceDest;
@@ -2598,7 +2598,7 @@ MaterialVertexShader *__cdecl Material_LoadVertexShader(char *shaderName)
         __debugbreak();
     }
     nameSize = strlen(shaderName) + 1;
-    totalSize = programSize + nameSize + 16;
+    totalSize = programSize + nameSize + sizeof(MaterialVertexShader);
     mtlShader = (MaterialVertexShader *)Material_Alloc(totalSize);
     program = (DWORD*)&mtlShader[1];
     mtlShader->name = (char *)&mtlShader[1] + programSize;
@@ -2606,7 +2606,7 @@ MaterialVertexShader *__cdecl Material_LoadVertexShader(char *shaderName)
     v4 = shader;
     v2 = (unsigned __int8 *)shader->GetBufferPointer();
     //v2 = (unsigned __int8 *)((int (__thiscall *)(ID3DXBuffer *))shader->GetBufferPointer)(shader);
-    memcpy((unsigned __int8 *)program, v2, (unsigned int)v4);
+    memcpy((unsigned __int8 *)program, v2, (unsigned int)(uintptr_t)v4);
     hr = dx.device->CreateVertexShader((const DWORD*)program, &mtlShader->prog.vs);
     //hr = ((int (__stdcall *)(IDirect3DDevice9 *, unsigned int *, MaterialVertexShaderProgram *, unsigned int))dx.device->CreateVertexShader)(
     //             dx.device,
@@ -2659,11 +2659,11 @@ ID3DXBuffer *__cdecl Material_CompileShader(
     unsigned int lineNumber[2]; // [esp+81Ch] [ebp-8648h] BYREF
     char dest[516]; // [esp+824h] [ebp-8640h] BYREF
     unsigned int shaderTextLen; // [esp+A28h] [ebp-843Ch]
-    int v18; // [esp+A2Ch] [ebp-8438h] BYREF
+    intptr_t v18; // [esp+A2Ch] [ebp-8438h] BYREF
     HRESULT hr; // [esp+A30h] [ebp-8434h]
     GfxAssembledShaderText prog; // [esp+A34h] [ebp-8430h] BYREF
     char *shaderString; // [esp+8E50h] [ebp-14h]
-    unsigned int v22[2]; // [esp+8E54h] [ebp-10h] BYREF
+    uintptr_t v22[2]; // [esp+8E54h] [ebp-10h] BYREF
     ID3DXBuffer *shader; // [esp+8E5Ch] [ebp-8h] BYREF
     int v24; // [esp+8E60h] [ebp-4h]
 
@@ -2696,12 +2696,12 @@ LABEL_22:
     if ( v22[0] )
     {
         v13 = 0;
-        v6 = (const char *)(*(int (__stdcall **)(unsigned int))(*(unsigned int *)v22[0] + 12))(v22[0]);
+        v6 = (*(const char *(__stdcall **)(uintptr_t))(*(uintptr_t *)v22[0] + 3 * sizeof(void *)))(v22[0]);
         if ( I_stristr(v6, "error") )
             v12 = Com_ScriptError;
         else
             v12 = Com_ScriptWarning;
-        errorMessage = (char *)(*(int (__stdcall **)(unsigned int))(*(unsigned int *)v22[0] + 12))(v22[0]);
+        errorMessage = (*(char *(__stdcall **)(uintptr_t))(*(uintptr_t *)v22[0] + 3 * sizeof(void *)))(v22[0]);
         Material_FileIncludeFileAndLineNumber(&prog, errorMessage, &fileName, lineNumber);
         if ( v12 )
         {
@@ -2722,7 +2722,7 @@ LABEL_22:
             Com_SetScriptWarningPrefix(prefix);
             Com_SetScriptErrorPrefix(ScriptErrorPrefix);
         }
-        (*(void (__thiscall **)(unsigned int, unsigned int))(*(unsigned int *)v22[0] + 8))(v22[0], v22[0]);
+        (*(void (__thiscall **)(uintptr_t, uintptr_t))(*(uintptr_t *)v22[0] + 2 * sizeof(void *)))(v22[0], v22[0]);
     }
     if ( hr < 0 )
     {
@@ -2740,12 +2740,12 @@ LABEL_22:
             Hunk_FreeTempMemory(shaderString);
             return 0;
         }
-        (*(void (__stdcall **)(int))(*(unsigned int *)v18 + 8))(v18);
+        (*(void (__stdcall **)(intptr_t))(*(uintptr_t *)v18 + 2 * sizeof(void *)))(v18);
         Material_CacheShaderDX(shaderString, shaderTextLen, entryPoint, target, shader, 0);
         goto LABEL_22;
     }
     if ( v18 )
-        (*(void (__stdcall **)(int))(*(unsigned int *)v18 + 8))(v18);
+        (*(void (__stdcall **)(intptr_t))(*(uintptr_t *)v18 + 2 * sizeof(void *)))(v18);
     Com_ScriptError("%s compilation failed - NULL shader\n", dest);
     Hunk_FreeTempMemory(shaderString);
     return 0;
@@ -4616,10 +4616,10 @@ char __cdecl Material_SetShaderArguments(
         qsort(
             localArgs,
             usedCount,
-            8u,
+            sizeof(MaterialShaderArgument),
             (int (__cdecl *)(const void *, const void *))Material_CompareShaderArgumentsForCombining);
         usedCounta = Material_CombineShaderArguments(usedCount, localArgs);
-        memcpy((unsigned __int8 *)&args[*argCount], (unsigned __int8 *)localArgs, 8 * usedCounta);
+        memcpy((unsigned __int8 *)&args[*argCount], (unsigned __int8 *)localArgs, sizeof(MaterialShaderArgument) * usedCounta);
         *argCount += usedCounta;
         return 1;
     }
@@ -4655,7 +4655,7 @@ unsigned int __cdecl Material_CombineShaderArguments(unsigned int usedCount, Mat
         if ( !Material_AttemptCombineShaderArguments(&localArgs[dstIndex], &localArgs[srcIndex]) )
         {
             ++dstIndex;
-            LODWORD(v2.literalConst) = localArgs[srcIndex].u.nameHash;
+            v2 = localArgs[srcIndex].u;
             *(unsigned int *)&localArgs[dstIndex].type = *(unsigned int *)&localArgs[srcIndex].type;
             localArgs[dstIndex].u = v2;
         }
@@ -4948,7 +4948,7 @@ char __cdecl Material_AddShaderArgumentFromLiteral(
     {
         __debugbreak();
     }
-    arg->u.codeSampler = (unsigned int)literal;
+    arg->u.literalConst = literal;
     return MaterialAddShaderArgument(shaderName, paramName, arg, registerUsage);
 }
 
@@ -5237,7 +5237,7 @@ MaterialPixelShader *__cdecl Material_LoadPixelShader(char *shaderName)
         __debugbreak();
     }
     nameSize = strlen(shaderName) + 1;
-    totalSize = programSize + nameSize + 16;
+    totalSize = programSize + nameSize + sizeof(MaterialPixelShader);
     mtlShader = (MaterialPixelShader *)Material_Alloc(totalSize);
     program = (DWORD*)&mtlShader[1];
     mtlShader->name = (char *)&mtlShader[1] + programSize;
@@ -6032,7 +6032,7 @@ Material *__cdecl Material_CreateLayered(
     qsort(
         newMtl->textureTable,
         newMtl->textureCount,
-        0x10u,
+        sizeof(MaterialTextureDef),
         (int (__cdecl *)(const void *, const void *))CompareHashedMaterialTextures);
     qsort(
         newMtl->localConstantTable,
@@ -7037,7 +7037,7 @@ Material *__cdecl Material_LoadRaw(const MaterialRaw *mtlRaw, unsigned int mater
     material->localTechniqueSet = techniqueSet;
     if ( mtlRaw->textureCount )
     {
-        material->textureTable = (MaterialTextureDef *)Material_Alloc(16 * mtlRaw->textureCount);
+        material->textureTable = (MaterialTextureDef *)Material_Alloc(sizeof(MaterialTextureDef) * mtlRaw->textureCount);
         textureTableRaw = (const MaterialTextureDefRaw *)((char *)mtlRaw + mtlRaw->textureTableOffset);
         texIndex = 0;
         for ( texIndexIn = 0; texIndexIn < mtlRaw->textureCount; ++texIndexIn )
@@ -7172,7 +7172,7 @@ void __cdecl Material_BuildStateBitsTable(Material *material, __int16 toolFlags,
 {
     MaterialTechnique *v3; // [esp+0h] [ebp-1074h]
     unsigned int i; // [esp+4h] [ebp-1070h]
-    int v5; // [esp+8h] [ebp-106Ch]
+    MaterialStateMap *const *v5; // [esp+8h] [ebp-106Ch]
     unsigned int stateBitsTable[2]; // [esp+Ch] [ebp-1068h] BYREF
     _QWORD stateBitsOut[4]; // [esp+104Ch] [ebp-28h] BYREF
     unsigned int stateBitsCount; // [esp+106Ch] [ebp-8h] BYREF
@@ -7184,12 +7184,12 @@ void __cdecl Material_BuildStateBitsTable(Material *material, __int16 toolFlags,
         v3 = material->localTechniqueSet->techniques[i];
         if ( v3 )
         {
-            v5 = (int)&v3->passArray[v3->passCount];
+            v5 = (MaterialStateMap *const *)&v3->passArray[v3->passCount];
             for ( j = 0; j < v3->passCount; ++j )
                 Material_RemapStateBits(
                     material,
                     toolFlags,
-                    *(const MaterialStateMap **)(v5 + 4 * j),
+                    v5[j],
                     refStateBits,
                     (unsigned int *)&stateBitsOut[j]);
             material->stateBitsEntry[i] = Material_AddStateBitsArrayToTable(
@@ -7388,7 +7388,7 @@ void __cdecl Material_PreLoadAllShaderText()
     shaderListLib3 = FS_ListFilesInLocation("shaders/", (char *)"fx", FS_LIST_PURE_ONLY, &fileCountLib3, 8);
     mtlLoadGlob.cachedShaderCount = fileCountLib3 + fileCountLib2 + fileCountLib1;
     mtlLoadGlob.cachedShaderText = (GfxCachedShaderText *)Hunk_Alloc(
-                                                                                                                    12 * (fileCountLib3 + fileCountLib2 + fileCountLib1),
+                                                                                                                    sizeof(GfxCachedShaderText) * (fileCountLib3 + fileCountLib2 + fileCountLib1),
                                                                                                                     "Material_PreLoadShaderText",
                                                                                                                     23);
     cachedIndex = 0;

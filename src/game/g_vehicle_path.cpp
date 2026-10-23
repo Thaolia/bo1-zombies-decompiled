@@ -15,17 +15,17 @@ static const float s_invalidAngles[3] = { 3.1415927, 3.1415927, 3.1415927 };
 
 vn_field_t vn_fields[12] =
 {
-  { "targetname", 0, { 2 }, F_STRING, false },
-  { "target", 2, { 2 }, F_STRING, false },
-  { "target2", 4, { 2 }, F_STRING, false },
-  { "script_linkname", 6, { 2 }, F_STRING, false },
-  { "script_noteworthy", 8, { 2 }, F_STRING, false },
-  { "origin", 24, { 12 }, F_VECTOR, true },
-  { "angles", 36, { 12 }, F_VECTOR, false },
-  { "speed", 16, { 4 }, F_FLOAT, false },
-  { "radius", 52, { 4 }, F_FLOAT, false },
-  { "lookahead", 20, { 4 }, F_FLOAT, false },
-  { "spawnflags", 12, { 4 }, F_INT, false },
+  { "targetname", offsetof(vehicle_node_t, name), { 2 }, F_STRING, false },
+  { "target", offsetof(vehicle_node_t, target), { 2 }, F_STRING, false },
+  { "target2", offsetof(vehicle_node_t, target2), { 2 }, F_STRING, false },
+  { "script_linkname", offsetof(vehicle_node_t, script_linkname), { 2 }, F_STRING, false },
+  { "script_noteworthy", offsetof(vehicle_node_t, script_noteworthy), { 2 }, F_STRING, false },
+  { "origin", offsetof(vehicle_node_t, origin), { 12 }, F_VECTOR, true },
+  { "angles", offsetof(vehicle_node_t, angles), { 12 }, F_VECTOR, false },
+  { "speed", offsetof(vehicle_node_t, speed), { 4 }, F_FLOAT, false },
+  { "radius", offsetof(vehicle_node_t, pathNode.radius), { 4 }, F_FLOAT, false },
+  { "lookahead", offsetof(vehicle_node_t, lookAhead), { 4 }, F_FLOAT, false },
+  { "spawnflags", offsetof(vehicle_node_t, flags), { 4 }, F_INT, false },
   { NULL, 0, { 0 }, F_INT, false }
 };
 

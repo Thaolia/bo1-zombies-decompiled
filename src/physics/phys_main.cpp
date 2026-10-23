@@ -125,6 +125,7 @@ struct smodel_debug_info_t // sizeof=0x8
     cStaticModel_s *smodel;             // XREF: draw_static_models_bounds(void)+DE/w
     float dist2;                        // XREF: draw_static_models_bounds(void)+ED/w
 };
+int __cdecl SortSModelDebugInfosByDist(const smodel_debug_info_t *a, const smodel_debug_info_t *b);
 
 smodel_debug_info_t smodel_debug_infos[16384];
 
@@ -539,7 +540,7 @@ broad_phase_info *__cdecl create_broad_phase_info()
     phys_free_list<broad_phase_info>::T_internal *v2; // esi
 
     p_g_list_broad_phase_info = &G_BPM->g_list_broad_phase_info;
-    v1 = (phys_free_list<broad_phase_info>::T_internal *)PMM_ALLOC(0x90u, 0x10u);
+    v1 = (phys_free_list<broad_phase_info>::T_internal *)PMM_ALLOC(sizeof(phys_free_list<broad_phase_info>::T_internal), phys_free_list<broad_phase_info>::T_internal_alignment());
     v2 = v1;
     if (v1)
     {
@@ -854,7 +855,7 @@ PhysObjUserData * Phys_CreateUserBody(float *position, int id, PhysicsGeomType g
     float rot_[3][3]; // [esp+12Ch] [ebp-104h] BYREF
     float trans_[4]; // [esp+158h] [ebp-D8h] BYREF
     user_rigid_body *body; // [esp+168h] [ebp-C8h]
-    int bodyId; // [esp+16Ch] [ebp-C4h]
+    intptr_t bodyId; // [esp+16Ch] [ebp-C4h]
     PhysObjUserData *userData; // [esp+170h] [ebp-C0h]
     PhysGlob *v31; // [esp+174h] [ebp-BCh]
     phys_free_list<PhysObjUserData>::iterator i; // [esp+178h] [ebp-B8h]
@@ -1054,7 +1055,7 @@ PhysObjUserData * Phys_CreateUserBody(float *position, int id, PhysicsGeomType g
             userData->body = body;
             userData->refcount = 1;
             userData->id = (int)id;
-            bodyId = (int)userData;
+            bodyId = (intptr_t)userData;
             for (j = 0; j < 16; ++j)
             {
                 if (!physGlob.userRigidBodies[j])
@@ -1095,6 +1096,9 @@ PhysObjUserData *__cdecl Phys_CreateUserData(int worldIndex)
     return userData;
 }
 
+static_assert(offsetof(phys_free_list<PhysObjUserData>::T_internal, m_data) == BO1_ARCH_SIZE(16, offsetof(phys_free_list<PhysObjUserData>::T_internal, m_data)));
+static_assert(offsetof(PhysObjUserData, id) == BO1_ARCH_SIZE(220, offsetof(PhysObjUserData, id)));
+
 PhysObjUserData * Phys_CreateBodyFromState(
                 int worldIndex,
                 const BodyState *state,
@@ -1128,7 +1132,7 @@ PhysObjUserData * Phys_CreateBodyFromState(
     float volume; // [esp+324h] [ebp-70h] BYREF
     phys_vec3 dim; // [esp+328h] [ebp-6Ch] BYREF
     rigid_body *body; // [esp+340h] [ebp-54h]
-    int bodyId; // [esp+344h] [ebp-50h]
+    intptr_t bodyId; // [esp+344h] [ebp-50h]
     PhysObjUserData *userData; // [esp+348h] [ebp-4Ch]
     PhysGlob *v100; // [esp+34Ch] [ebp-48h]
     phys_free_list<PhysObjUserData>::iterator i; // [esp+350h] [ebp-44h]
@@ -1156,8 +1160,8 @@ PhysObjUserData * Phys_CreateBodyFromState(
             v100 = &physGlob;
             if (&physGlob == (PhysGlob *)i.m_ptr)
                 break;
-            userData = (PhysObjUserData *)&i.m_ptr[2];
-            if (i.m_ptr[29].m_next_T_internal == (phys_free_list<PhysObjUserData>::T_internal_base *)state->id)
+            userData = &((phys_free_list<PhysObjUserData>::T_internal *)i.m_ptr)->m_data;
+            if (userData->id == state->id)
             {
                 destroy_gjk_geom(gjk_geom_list);
                 ++userData->refcount;
@@ -1228,7 +1232,7 @@ PhysObjUserData * Phys_CreateBodyFromState(
     m2w.w.y = state->position[1];
     m2w.w.z = state->position[2];
 
-    bodyId = (int)userData;
+    bodyId = (intptr_t)userData;
 
     userData->m_gjk_geom_list.m_first_geom = gjk_geom_list->m_first_geom;
     userData->m_gjk_geom_list.m_geom_count = gjk_geom_list->m_geom_count;
@@ -1457,7 +1461,7 @@ PhysObjUserData *__cdecl Phys_ObjCreateAxis(
     return Phys_CreateBodyFromState(worldIndex, &state, gjk_geom_list, do_collision_test);
 }
 
-void    Phys_ObjSetPosition(int id, float *newPosition)
+void    Phys_ObjSetPosition(intptr_t id, float *newPosition)
 {
     phys_mat44 *v3; // [esp-B8h] [ebp-DCh]
     phys_vec3 newPos; // [esp-38h] [ebp-5Ch] BYREF
@@ -1512,7 +1516,7 @@ void    Phys_ObjSetPosition(int id, float *newPosition)
     }
 }
 
-void __cdecl Phys_ObjSetOrientation(int id, const float *newPosition, const float *newOrientation)
+void __cdecl Phys_ObjSetOrientation(intptr_t id, const float *newPosition, const float *newOrientation)
 {
     float *v3; // esi
     phys_mat44 *p_m_mat; // [esp+Ch] [ebp-CCh]
@@ -1569,7 +1573,7 @@ void __cdecl Phys_ObjSetOrientation(int id, const float *newPosition, const floa
     }
 }
 
-void    Phys_ObjSetAngularVelocity(int id, float *angularVel)
+void    Phys_ObjSetAngularVelocity(intptr_t id, float *angularVel)
 {
     rigid_body *body = Phys_GetUserData(id)->body;
 
@@ -1594,7 +1598,7 @@ void __thiscall rigid_body::dangerous_set_a_vel(const phys_vec3 *a_vel)
     }
 }
 
-void Phys_ObjSetVelocity(int id, float *velocity)
+void Phys_ObjSetVelocity(intptr_t id, float *velocity)
 {
     rigid_body *body = Phys_GetUserData(id)->body;
 
@@ -1619,7 +1623,7 @@ void __thiscall rigid_body::dangerous_set_t_vel(const phys_vec3 *t_vel)
     }
 }
 
-void    Phys_ObjSetAngularVelocityRaw(int id, float *angularVel)
+void    Phys_ObjSetAngularVelocityRaw(intptr_t id, float *angularVel)
 {
     phys_vec3 v3; // [esp-20h] [ebp-2Ch] BYREF
     float v4; // [esp-10h] [ebp-1Ch]
@@ -1643,7 +1647,7 @@ void    Phys_ObjSetAngularVelocityRaw(int id, float *angularVel)
     body->dangerous_set_a_vel(&v3);
 }
 
-void    Phys_ObjGetPosition(int id, float *outPosition, float (*outRotation)[3])
+void    Phys_ObjGetPosition(intptr_t id, float *outPosition, float (*outRotation)[3])
 {
     phys_mat44 m2w; // [esp-Ch] [ebp-5Ch] BYREF
     const phys_mat44 *rb2w; // [esp+3Ch] [ebp-14h]
@@ -1661,7 +1665,7 @@ void    Phys_ObjGetPosition(int id, float *outPosition, float (*outRotation)[3])
     Phys_NitrousMat44ToVec33(&m2w, outRotation);
 }
 
-void __cdecl Phys_ObjGetVelocities(int id, float *tvel, float *avel)
+void __cdecl Phys_ObjGetVelocities(intptr_t id, float *tvel, float *avel)
 {
     rigid_body *body; // [esp+0h] [ebp-4h]
 
@@ -1675,7 +1679,7 @@ void __cdecl Phys_ObjGetVelocities(int id, float *tvel, float *avel)
     Phys_NitrousVecToVec3(&body->m_a_vel, avel);
 }
 
-void __cdecl Phys_ObjGetCenterOfMass(int id, float *outPosition)
+void __cdecl Phys_ObjGetCenterOfMass(intptr_t id, float *outPosition)
 {
     PhysObjUserData *UserData; // eax
 
@@ -1688,7 +1692,7 @@ void __cdecl Phys_ObjGetCenterOfMass(int id, float *outPosition)
     Phys_NitrousVecToVec3(&UserData->body->m_mat.w, outPosition);
 }
 
-void __cdecl Phys_ObjAddCollFlags(int physObjId, int collFlags)
+void __cdecl Phys_ObjAddCollFlags(intptr_t physObjId, int collFlags)
 {
     if (!physObjId
         && !Assert_MyHandler(
@@ -1717,7 +1721,7 @@ void __cdecl Phys_ObjAddCollFlags(int physObjId, int collFlags)
     }
 }
 
-void __cdecl Phys_ObjRemoveCollFlags(int physObjId, int collFlags)
+void __cdecl Phys_ObjRemoveCollFlags(intptr_t physObjId, int collFlags)
 {
     if (!physObjId
         && !Assert_MyHandler(
@@ -1756,16 +1760,16 @@ void __cdecl fixup_wheel_constraints(rigid_body *rb)
     while ( wci_end != (phys_free_list<rigid_body_constraint_wheel> *)wci )
     {
         if ( wci != (phys_free_list<rigid_body_constraint_wheel>::T_internal_base *)-16
-            && (rigid_body *)wci[2].m_next_T_internal == rb )
+            && phys_free_list<rigid_body_constraint_wheel>::data_of(wci)->b2 == rb )
         {
             //rigid_body_constraint_wheel::set_no_collision((rigid_body_constraint_wheel *)&wci[2]);
-            ((rigid_body_constraint_wheel *)&wci[2])->set_no_collision();
+            (phys_free_list<rigid_body_constraint_wheel>::data_of(wci))->set_no_collision();
         }
         wci = wci->m_next_T_internal;
     }
 }
 
-void __cdecl Phys_ObjDestroy(int worldIndex, int id)
+void __cdecl Phys_ObjDestroy(int worldIndex, intptr_t id)
 {
     int i; // [esp+Ch] [ebp-8h]
     PhysObjUserData *userData; // [esp+10h] [ebp-4h]
@@ -1868,7 +1872,7 @@ void    Phys_AddCacheImpulses()
 }
 
 void __cdecl Phys_ObjAddCustomForce(
-                int physObjId,
+                intptr_t physObjId,
                 const float *hitPos,
                 const float *hitDir,
                 int mod,
@@ -1941,7 +1945,7 @@ void __cdecl Phys_ObjAddCustomForce(
     }
 }
 
-void    Phys_ObjAddForce(int id, float *worldPos, float *impulse, bool relative)
+void    Phys_ObjAddForce(intptr_t id, float *worldPos, float *impulse, bool relative)
 {
     phys_vec3 v7; // [esp+4h] [ebp-BCh] BYREF
     phys_vec3 v11; // [esp+24h] [ebp-9Ch] BYREF
@@ -1996,7 +2000,7 @@ void    Phys_ObjAddForce(int id, float *worldPos, float *impulse, bool relative)
     }
 }
 
-void    Phys_ObjAddTorque(int id, float *torque)
+void    Phys_ObjAddTorque(intptr_t id, float *torque)
 {
     phys_vec3 torq; // [esp-2Ch] [ebp-4Ch] BYREF
     phys_vec3 _torque; // [esp-Ch] [ebp-2Ch] BYREF
@@ -2029,7 +2033,7 @@ void __thiscall rigid_body::add_torque(const phys_vec3 *torque)
 }
 
 void __cdecl Phys_ObjBulletImpact(
-                int id,
+                intptr_t id,
                 const float *worldPosRaw,
                 const float *bulletDirRaw,
                 float bulletSpeed,
@@ -2093,7 +2097,7 @@ void __cdecl Phys_TweakBulletImpact(float *worldPos, float *bulletDir, const flo
     worldPos[2] = worldPos[2] + offset_8;
 }
 
-int __cdecl Phys_ObjGetSnapshot(int id, float *outPos, float (*outMat)[3])
+int __cdecl Phys_ObjGetSnapshot(intptr_t id, float *outPos, float (*outMat)[3])
 {
     PhysObjUserData *userData; // [esp+Ch] [ebp-4h]
 
@@ -2292,8 +2296,8 @@ void    Phys_FindAndRenderEntityBrushes(const float *pos, int contentmask)
     void *v3; // esp
     const XModel *XModell; // eax
     const XModel *v5; // eax
-    unsigned int v6; // [esp-38FCh] [ebp-3908h]
-    unsigned int v7; // [esp-38FCh] [ebp-3908h]
+    uintptr_t v6; // [esp-38FCh] [ebp-3908h]
+    uintptr_t v7; // [esp-38FCh] [ebp-3908h]
     const chull_t *collmap_chull; // [esp-38E8h] [ebp-38F4h]
     PhysGeomList *Collmap; // [esp-38E4h] [ebp-38F0h]
     phys_mat44 v10; // [esp-38E0h] [ebp-38ECh] BYREF
@@ -2393,7 +2397,7 @@ void    Phys_FindAndRenderEntityBrushes(const float *pos, int contentmask)
                 v36 = (const float *)v47;
             else
                 v36 = v48;
-            v6 = (unsigned int)v40;
+            v6 = (uintptr_t)v40;
             XModell = DObjGetXModel(ServerDObj, 0);
             render_xmodel_chull(XModell, v6, &v38, v36);
         }
@@ -2403,7 +2407,7 @@ void    Phys_FindAndRenderEntityBrushes(const float *pos, int contentmask)
                 v35 = (const float *)v47;
             else
                 v35 = v48;
-            render_brushmodel_chull(v40->s.index.brushmodel, (unsigned int)v40, &v38, v35);
+            render_brushmodel_chull(v40->s.index.brushmodel, (uintptr_t)v40, &v38, v35);
         }
     }
     v34 = Phys_GetMaskFromDVar() == 0x2820011
@@ -2424,21 +2428,21 @@ void    Phys_FindAndRenderEntityBrushes(const float *pos, int contentmask)
                 ClientDObj = Com_GetClientDObj(v43[j], v32);
                 if ( ClientDObj )
                 {
-                    if ( ((*((unsigned int *)Entity + 201) >> 15) & 1) != 0 )
+                    if ( ((Entity->flagWord >> 15) & 1) != 0 )
                         v26 = (const float *)v44;
                     else
                         v26 = (const float *)v45;
-                    v7 = (unsigned int)Entity;
+                    v7 = (uintptr_t)Entity;
                     v5 = DObjGetXModel(ClientDObj, 0);
                     render_xmodel_chull(v5, v7, &v28, v26);
                 }
                 else if (Entity->nextState.solid == 0xFFFFFF)
                 {
-                    if ( ((*((unsigned int *)Entity + 201) >> 15) & 1) != 0 )
+                    if ( ((Entity->flagWord >> 15) & 1) != 0 )
                         v25 = (const float *)v44;
                     else
                         v25 = (const float *)v45;
-                    render_brushmodel_chull(Entity->nextState.index.brushmodel, (unsigned int)Entity, &v28, v25);
+                    render_brushmodel_chull(Entity->nextState.index.brushmodel, (uintptr_t)Entity, &v28, v25);
                 }
             }
         }
@@ -2473,15 +2477,15 @@ void    Phys_FindAndRenderEntityBrushes(const float *pos, int contentmask)
                 Phys_Vec3ToNitrousVec(v12->pose.origin, &v10.w);
                 if ( k )
                 {
-                    render_brushmodel_chull(EntityDef->brushModel, (unsigned int)EntityDef, &v10, v46);
+                    render_brushmodel_chull(EntityDef->brushModel, (uintptr_t)EntityDef, &v10, v46);
                 }
                 else
                 {
-                    render_xmodel_chull(EntityDef->xModel, (unsigned int)EntityDef, &v10, v48);
+                    render_xmodel_chull(EntityDef->xModel, (uintptr_t)EntityDef, &v10, v48);
                     if ( XModelHasCollmap(EntityDef->xModel) )
                     {
                         Collmap = XModelGetCollmap(EntityDef->xModel, 0);
-                        collmap_chull = get_collmap_chull(Collmap, (unsigned int)EntityDef);
+                        collmap_chull = get_collmap_chull(Collmap, (uintptr_t)EntityDef);
                         render_chull(collmap_chull, &v10, v46);
                     }
                 }
@@ -2892,7 +2896,7 @@ void __cdecl print_static_models_stats()
     signed int j; // [esp+24h] [ebp-1002Ch]
     signed int i; // [esp+28h] [ebp-10028h]
     cStaticModel_s *smodel; // [esp+2Ch] [ebp-10024h]
-    unsigned int base[16384]; // [esp+30h] [ebp-10020h] BYREF
+    cStaticModel_s *base[16384]; // [esp+30h] [ebp-10020h] BYREF
     int refcount; // [esp+10030h] [ebp-20h]
     float v7; // [esp+10034h] [ebp-1Ch]
     float v8; // [esp+10038h] [ebp-18h]
@@ -2909,16 +2913,16 @@ void __cdecl print_static_models_stats()
         numStaticModels = 0x4000;
     num = numStaticModels;
     for ( i = 0; i < (int)num; ++i )
-        base[i] = (unsigned int) & cm.staticModelList[i];
-    qsort(base, num, 4u, SortModelsFunc);
+        base[i] = &cm.staticModelList[i];
+    qsort(base, num, sizeof(base[0]), SortModelsFunc);
     refcount = 1;
-    smodel = (cStaticModel_s *)base[0];
-    dims = *(float *)(base[0] + 68) - *(float *)(base[0] + 56);
-    v11 = *(float *)(base[0] + 72) - *(float *)(base[0] + 60);
-    v12 = *(float *)(base[0] + 76) - *(float *)(base[0] + 64);
+    smodel = base[0];
+    dims = base[0]->absmax[0] - base[0]->absmin[0];
+    v11 = base[0]->absmax[1] - base[0]->absmin[1];
+    v12 = base[0]->absmax[2] - base[0]->absmin[2];
     for ( j = 1; j < (int)num; ++j )
     {
-        v1 = (cStaticModel_s *)base[j];
+        v1 = base[j];
         if ( v1->xmodel == smodel->xmodel )
         {
             ++refcount;
@@ -2944,8 +2948,8 @@ void __cdecl print_static_models_stats()
 
 int __cdecl SortModelsFunc(const void *a, const void *b)
 {
-    if ( *(unsigned int *)(*(unsigned int *)a + 4) <= *(unsigned int *)(*(unsigned int *)b + 4) )
-        return *(unsigned int *)(*(unsigned int *)a + 4) < *(unsigned int *)(*(unsigned int *)b + 4);
+    if ( (uintptr_t)(*(cStaticModel_s *const *)a)->xmodel <= (uintptr_t)(*(cStaticModel_s *const *)b)->xmodel )
+        return (uintptr_t)(*(cStaticModel_s *const *)a)->xmodel < (uintptr_t)(*(cStaticModel_s *const *)b)->xmodel;
     else
         return -1;
 }
@@ -2981,7 +2985,7 @@ void __cdecl draw_static_models_bounds()
         smodel_debug_infos[j].smodel = smodel;
         smodel_debug_infos[j].dist2 = len2;
     }
-    qsort(smodel_debug_infos, nmodels, 8u, (int(__cdecl *)(const void *, const void *))SortSModelsByDist);
+    qsort(smodel_debug_infos, nmodels, sizeof(*(smodel_debug_infos)), (int(__cdecl *)(const void *, const void *))SortSModelDebugInfosByDist);
     for (i = 0; ; ++i)
     {
         v0 = nmodels >= nboxes ? nboxes : nmodels;
@@ -3007,6 +3011,15 @@ int __cdecl SortSModelsByDist(float *a, float *b)
     return -1;
 }
 
+int __cdecl SortSModelDebugInfosByDist(const smodel_debug_info_t *a, const smodel_debug_info_t *b)
+{
+    if ( a->dist2 > b->dist2 )
+        return 1;
+    if ( b->dist2 <= a->dist2 )
+        return 0;
+    return -1;
+}
+
 
 int __cdecl buoyancy_worker()
 {
@@ -3014,11 +3027,11 @@ int __cdecl buoyancy_worker()
 
     for ( i = g_pop_iter.m_ptr; g_pop_iter_end.m_ptr != i; i = g_pop_iter.m_ptr )
     {
-        if ( (phys_free_list<PhysObjUserData>::T_internal_base *)_InterlockedCompareExchange(
-                                                                                                                             (volatile unsigned __int32 *)&g_pop_iter,
-                                                                                                                             (signed __int32)i->m_next_T_internal,
-                                                                                                                             (signed __int32)i) == i )
-            Phys_BodyGrabSnapshotNitrous((PhysObjUserData *)&i[2], g_delta_t);
+        if ( (phys_free_list<PhysObjUserData>::T_internal_base *)_InterlockedCompareExchangePointer(
+                                                                                                                             (void *volatile *)&g_pop_iter.m_ptr,
+                                                                                                                             i->m_next_T_internal,
+                                                                                                                             i) == i )
+            Phys_BodyGrabSnapshotNitrous(&((phys_free_list<PhysObjUserData>::T_internal *)i)->m_data, g_delta_t);
     }
     return 0;
 }
@@ -3054,14 +3067,8 @@ void __cdecl Phys_BodyGrabSnapshotNitrous(PhysObjUserData *userData, float delta
 //void __cdecl Nitrous_ForEachBody<void(__cdecl *)(PhysObjUserData &, float)>(void(__cdecl *func)(PhysObjUserData *, float), float t)
 void __cdecl Nitrous_ForEachBody(void(__cdecl *func)(PhysObjUserData *, float), float t)
 {
-    PhysGlob *i; // [esp+Ch] [ebp-4h]
-
-    for (i = (PhysGlob *)physGlob.objects.m_dummy_head.m_next_T_internal;
-        &physGlob != i;
-        i = (PhysGlob *)i->objects.m_dummy_head.m_next_T_internal)
-    {
-        ((void(__cdecl *)(PhysObjUserData **, _DWORD))func)(i->objects.m_ptr_list, LODWORD(t));
-    }
+    for (phys_free_list<PhysObjUserData>::iterator it = physGlob.objects.begin(); it != physGlob.objects.end(); ++it)
+        func(*it, t);
 }
 
 int num_destructible_hits;
@@ -3342,6 +3349,8 @@ void collide_vehicle_wheels(PhysObjUserData *userData)
     float v12; // [esp+54h] [ebp-550h]
     float v13; // [esp+58h] [ebp-54Ch]
     phys_vec3 v14; // [esp+5Ch] [ebp-548h] BYREF
+    phys_vec3 hitn_loc;
+    const phys_vec3 *hitn_loc_ptr;
     phys_vec3 *v15; // [esp+84h] [ebp-520h]
     phys_vec3 v16; // [esp+88h] [ebp-51Ch] BYREF
     phys_vec3 *p_m_ground_vel; // [esp+9Ch] [ebp-508h]
@@ -3401,7 +3410,6 @@ void collide_vehicle_wheels(PhysObjUserData *userData)
                 //rigid_body_constraint_wheel::get_wheel_collide_segment(v33, v41, &rb->m_mat, &v30, &v31);
                 v33->get_wheel_collide_segment(&rb->m_mat, &v30, &v31);
                 v29 = (float)(v30.z - v31.z) * 0.30000001;
-                LODWORD(p0[3]) = (DWORD)&v30.z;
                 v30.z = v30.z + v29;
                 Phys_NitrousVecToVec3(&v30, p0);
                 Phys_NitrousVecToVec3(&v31, p1);
@@ -3433,10 +3441,10 @@ void collide_vehicle_wheels(PhysObjUserData *userData)
                     v21.x = v15->x;
                     v21.y = v15->y;
                     v21.z = v15->z;
-                    LODWORD(v14.z) = (DWORD)phys_inv_multiply((phys_vec3 *)&v14.w, &TraceResultsRigidBody->m_mat, &v20);
-                    v20.x = *(float *)LODWORD(v14.z);
-                    v20.y = *(float *)(LODWORD(v14.z) + 4);
-                    v20.z = *(float *)(LODWORD(v14.z) + 8);
+                    hitn_loc_ptr = phys_inv_multiply(&hitn_loc, &TraceResultsRigidBody->m_mat, &v20);
+                    v20.x = hitn_loc_ptr->x;
+                    v20.y = hitn_loc_ptr->y;
+                    v20.z = hitn_loc_ptr->z;
                     //rigid_body_constraint_wheel::set_collision(v33, TraceResultsRigidBody, &v21, &v20);
                     v33->set_collision(TraceResultsRigidBody, &v21, &v20);
                     LODWORD(v14.y) = (traceResults.sflags & 0x3F00000) >> 20;
@@ -3514,11 +3522,11 @@ int __cdecl wheel_collision_worker(jqBatch *__)
 
     for (i = g_wpop_iter.m_ptr; g_wpop_iter_end.m_ptr != i; i = g_wpop_iter.m_ptr)
     {
-        if ((phys_free_list<PhysObjUserData>::T_internal_base *)_InterlockedCompareExchange(
-            (volatile unsigned __int32 *)&g_wpop_iter,
-            (signed __int32)i->m_next_T_internal,
-            (signed __int32)i) == i)
-            collide_vehicle_wheels((PhysObjUserData *)&i[2]);
+        if ((phys_free_list<PhysObjUserData>::T_internal_base *)_InterlockedCompareExchangePointer(
+            (void *volatile *)&g_wpop_iter.m_ptr,
+            i->m_next_T_internal,
+            i) == i)
+            collide_vehicle_wheels(&((phys_free_list<PhysObjUserData>::T_internal *)i)->m_data);
     }
     return 0;
 }
@@ -3743,7 +3751,7 @@ void __cdecl Phys_RunToTime(int timeNow)
     }
 }
 
-void __cdecl Phys_ObjGetInterpolatedState(int id, float *outPos, float *outQuat)
+void __cdecl Phys_ObjGetInterpolatedState(intptr_t id, float *outPos, float *outQuat)
 {
     float oldMat[3][3]; // [esp+10h] [ebp-84h] BYREF
     float newPos[3]; // [esp+34h] [ebp-60h] BYREF
@@ -3772,7 +3780,7 @@ void __cdecl Phys_ObjGetInterpolatedState(int id, float *outPos, float *outQuat)
     }
 }
 
-void    Phys_SetUserBody(int id, float *position)
+void    Phys_SetUserBody(intptr_t id, float *position)
 {
     phys_mat44 dictator; // [esp-Ch] [ebp-7Ch] BYREF
     float dictator_52; // [esp+34h] [ebp-3Ch]
@@ -3813,7 +3821,7 @@ void    Phys_SetUserBody(int id, float *position)
 }
 
 
-bool __cdecl Phys_ObjIsAsleep(int id)
+bool __cdecl Phys_ObjIsAsleep(intptr_t id)
 {
     const char *v1; // eax
     float _p1[3]; // [esp+2Ch] [ebp-1Ch] BYREF
@@ -3849,7 +3857,7 @@ unsigned int __thiscall rigid_body::is_dangerous()
     return this->m_flags & 0x80;
 }
 
-bool __cdecl Phys_ObjIsAsleepSingle(int id)
+bool __cdecl Phys_ObjIsAsleepSingle(intptr_t id)
 {
     const char *v1; // eax
     float _p1[3]; // [esp+2Ch] [ebp-1Ch] BYREF
@@ -3894,8 +3902,8 @@ void __cdecl Phys_SetHingeParams(rigid_body_constraint_ragdoll *id, float motorS
 }
 
 rigid_body_constraint_ragdoll * Phys_CreateHinge(
-                int obj1,
-                int obj2,
+                intptr_t obj1,
+                intptr_t obj2,
                 const float *anchor,
                 float *axis,
                 float motorSpeed,
@@ -4023,8 +4031,8 @@ void __cdecl Phys_SetAngularMotorParams(rigid_body_constraint_ragdoll *id, const
 }
 
 rigid_body_constraint_ragdoll * Phys_CreateSwivel(
-                int obj1,
-                int obj2,
+                intptr_t obj1,
+                intptr_t obj2,
                 const float *anchor,
                 unsigned int numAxes,
                 float (*axes)[3],

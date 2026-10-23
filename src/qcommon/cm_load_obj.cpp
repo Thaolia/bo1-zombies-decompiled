@@ -124,7 +124,7 @@ MapEnts *__cdecl MapEnts_GetFromString(char *name, const char *entityString, int
     const char *begin; // [esp+A38h] [ebp-4h]
     const char *entityStringa; // [esp+A48h] [ebp+Ch]
 
-    mapEnts = (MapEnts *)CM_Hunk_Alloc(12, "CMod_LoadEntityString", 31);
+    mapEnts = (MapEnts *)CM_Hunk_Alloc(sizeof(MapEnts), "CMod_LoadEntityString", 31);
     nameLen = strlen(name);
     mapEnts->name = (const char *)CM_Hunk_Alloc(nameLen + 1, "CMod_LoadEntityString", 31);
     memcpy((unsigned __int8 *)mapEnts->name, (unsigned __int8 *)name, nameLen + 1);
@@ -184,7 +184,7 @@ void __cdecl CM_LoadMapFromBsp(const char *name, bool usePvs)
     const char *v4; // [esp+Ch] [ebp-18h]
     unsigned int version; // [esp+20h] [ebp-4h]
 
-    Com_Memset((unsigned int *)&cm, 0, 332);
+    Com_Memset((unsigned int *)&cm, 0, sizeof(cm));
     cm.name = (const char *)CM_Hunk_Alloc(strlen(name) + 1, "CM_LoadMapFromBsp", 26);
     v4 = name;
     v3 = (char *)cm.name;
@@ -235,9 +235,9 @@ void CMod_LoadMaterials()
         cm.materials[matIndex].contentFlags &= 0xDFFFFFFB;
 }
 
-unsigned int CMod_LoadNodes()
+uintptr_t CMod_LoadNodes()
 {
-    unsigned int result; // eax
+    uintptr_t result; // eax
     int j; // [esp+0h] [ebp-1Ch]
     cNode_t *out; // [esp+4h] [ebp-18h]
     char *in; // [esp+Ch] [ebp-10h]
@@ -248,7 +248,7 @@ unsigned int CMod_LoadNodes()
     in = Com_GetBspLump(LUMP_NODES, 0x24u, &count);
     if ( !count )
         Com_Error(ERR_DROP, "Map has no nodes");
-    cm.nodes = (cNode_t *)CM_Hunk_Alloc(8 * count, "CMod_LoadNodes", 26);
+    cm.nodes = (cNode_t *)CM_Hunk_Alloc(sizeof(cNode_t) * count, "CMod_LoadNodes", 26);
     result = count;
     cm.numNodes = count;
     out = cm.nodes;
@@ -264,7 +264,7 @@ unsigned int CMod_LoadNodes()
                 Com_Error(ERR_DROP, "CMod_LoadNodes: children exceeded");
         }
         ++nodeIter;
-        result = (unsigned int)&out[1];
+        result = (uintptr_t)&out[1];
         ++out;
         in += 36;
     }
@@ -327,9 +327,9 @@ void CMod_LoadCollisionEdgeWalkable()
     Com_Memcpy(cm.triEdgeIsWalkable, in, count);
 }
 
-unsigned int CMod_LoadCollisionBorders()
+uintptr_t CMod_LoadCollisionBorders()
 {
-    unsigned int result; // eax
+    uintptr_t result; // eax
     CollisionBorder *out; // [esp+0h] [ebp-14h]
     const DiskCollBorder *in; // [esp+8h] [ebp-Ch]
     unsigned int index; // [esp+Ch] [ebp-8h]
@@ -351,23 +351,23 @@ unsigned int CMod_LoadCollisionBorders()
         out->start = in->start;
         out->length = in->length;
         ++index;
-        result = (unsigned int)&in[1];
+        result = (uintptr_t)&in[1];
         ++in;
         ++out;
     }
     return result;
 }
 
-unsigned int CMod_LoadCollisionPartitions()
+uintptr_t CMod_LoadCollisionPartitions()
 {
-    unsigned int result; // eax
+    uintptr_t result; // eax
     CollisionPartition *out; // [esp+0h] [ebp-14h]
     char *in; // [esp+8h] [ebp-Ch]
     unsigned int index; // [esp+Ch] [ebp-8h]
     unsigned int count; // [esp+10h] [ebp-4h] BYREF
 
     in = Com_GetBspLump(LUMP_COLLISIONPARTITIONS, 0x14u, &count);
-    cm.partitions = (CollisionPartition *)CM_Hunk_Alloc(20 * count, "CMod_LoadCollisionPartitions", 29);
+    cm.partitions = (CollisionPartition *)CM_Hunk_Alloc(sizeof(CollisionPartition) * count, "CMod_LoadCollisionPartitions", 29);
     result = count;
     cm.partitionCount = count;
     out = cm.partitions;
@@ -401,7 +401,7 @@ unsigned int CMod_LoadCollisionPartitions()
             __debugbreak();
         }
         ++index;
-        result = (unsigned int)(in + 20);
+        result = (uintptr_t)(in + 20);
         in += 20;
         ++out;
     }
@@ -477,10 +477,10 @@ void __cdecl CMod_LoadBrushRelated(unsigned int version, bool usePvs)
     CMod_LoadSubmodelBrushNodes();
     CM_InitBoxHull();
     ++cm.leafbrushNodes;
-    leafbrushNodesCount = (TempMallocAlignStrict(0) - (char *)cm.leafbrushNodes) / 20;
+    leafbrushNodesCount = (TempMallocAlignStrict(0) - (char *)cm.leafbrushNodes) / (int)sizeof(cLeafBrushNode_s);
     cm.leafbrushNodesCount = leafbrushNodesCount + 1;
-    leafbrushNodes = (cLeafBrushNode_s *)CM_Hunk_Alloc(20 * (leafbrushNodesCount + 1), "CMod_LoadBrushRelated", 27);
-    memcpy(&leafbrushNodes[1].axis, &cm.leafbrushNodes->axis, 20 * leafbrushNodesCount);
+    leafbrushNodes = (cLeafBrushNode_s *)CM_Hunk_Alloc(sizeof(cLeafBrushNode_s) * (leafbrushNodesCount + 1), "CMod_LoadBrushRelated", 27);
+    memcpy(&leafbrushNodes[1].axis, &cm.leafbrushNodes->axis, sizeof(cLeafBrushNode_s) * leafbrushNodesCount);
     cm.leafbrushNodes = leafbrushNodes;
     Hunk_UserDestroy(user);
 }
@@ -834,7 +834,7 @@ cLeafBrushNode_s *__cdecl CMod_AllocLeafBrushNode()
 {
     cLeafBrushNode_s *result; // eax
 
-    result = (cLeafBrushNode_s *)TempMallocAlignStrict(20);
+    result = (cLeafBrushNode_s *)TempMallocAlignStrict(sizeof(cLeafBrushNode_s));
     *(unsigned int *)&result->axis = 0;
     result->contents = 0;
     result->data.leaf.brushes = 0;
@@ -976,7 +976,7 @@ const unsigned __int8 *CMod_LoadBrushes()
     allocSizeBrushVerts = 12 * vertsCount;
     cm.brushVerts = (float (*)[3])CM_Hunk_Alloc(12 * vertsCount, "CMod_LoadBrushes", 27);
     memcpy((unsigned __int8 *)cm.brushVerts, inVerts, allocSizeBrushVerts);
-    result = (const unsigned __int8 *)vertsCount;
+    result = (const unsigned __int8 *)(uintptr_t)vertsCount;
     cm.numBrushVerts = vertsCount;
     outVerts = cm.brushVerts;
     outBrush = cm.brushes;
@@ -1246,9 +1246,9 @@ unsigned int CMod_LoadLeafBrushes()
     return result;
 }
 
-unsigned int CMod_LoadCollisionAabbTrees()
+uintptr_t CMod_LoadCollisionAabbTrees()
 {
-    unsigned int result; // eax
+    uintptr_t result; // eax
     CollisionAabbTree *out; // [esp+0h] [ebp-14h]
     char *in; // [esp+8h] [ebp-Ch]
     unsigned int index; // [esp+Ch] [ebp-8h]
@@ -1272,7 +1272,7 @@ unsigned int CMod_LoadCollisionAabbTrees()
         out->childCount = *((_WORD *)in + 13);
         out->u.firstChildIndex = *((unsigned int *)in + 7);
         ++index;
-        result = (unsigned int)(in + 32);
+        result = (uintptr_t)(in + 32);
         in += 32;
         ++out;
     }

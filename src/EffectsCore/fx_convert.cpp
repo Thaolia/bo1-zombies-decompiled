@@ -2,6 +2,7 @@
 #include <gfx_d3d/r_material_load_obj.h>
 #include "FxCurve.h"
 #include <qcommon/common.h>
+#include <xanim/xmodel.h>
 
 float4 NATIVE_VERTEX_PERM = { { 3.972236e-34, 0.0, 0.0, 0.0 } };
 
@@ -69,10 +70,10 @@ const FxEffectDef *__cdecl FX_Convert(const FxEditorEffectDef *editorEffect, voi
                 elemVisual = &edElemDef->visuals[visualIndex];
                 if ( elemVisual->anonymous )
                 {
-                    if ( !*((unsigned int *)elemVisual->anonymous + 59) )
+                    if ( !elemVisual->model->physPreset )
                     {
                         v2 = FX_RegisterPhysPreset("default");
-                        *((unsigned int *)elemVisual->anonymous + 59) = (unsigned int)v2;
+                        elemVisual->model->physPreset = v2;
                         Com_PrintError(
                             20,
                             "ERROR: no physics preset specified for the FX model [%s]\n",
@@ -1879,24 +1880,24 @@ void __cdecl FX_ReserveElemDefMemory(FxElemDef *elemDef, unsigned __int8 **memPo
     if ( elemDef->elemType == 11 )
     {
         elemDef->visuals.markArray = (FxElemMarkVisuals *)*memPool;
-        *memPool += 8 * elemDef->visualCount;
+        *memPool += sizeof(FxElemMarkVisuals) * elemDef->visualCount;
     }
     else if ( elemDef->visualCount > 1u )
     {
         elemDef->visuals.markArray = (FxElemMarkVisuals *)*memPool;
-        *memPool += 4 * elemDef->visualCount;
+        *memPool += sizeof(FxElemVisuals) * elemDef->visualCount;
     }
 }
 
 void __cdecl FX_CopyMarkVisuals(const FxEditorElemDef *edElemDef, FxElemMarkVisuals *markVisualsArray)
 {
     //memcpy((unsigned __int8 *)markVisualsArray, (unsigned __int8 *)&edElemDef->692, 8 * edElemDef->visualCount);
-    memcpy((unsigned __int8 *)markVisualsArray, (unsigned __int8 *)&edElemDef->markVisuals, 8 * edElemDef->visualCount);
+    memcpy((unsigned __int8 *)markVisualsArray, (unsigned __int8 *)&edElemDef->markVisuals, sizeof(FxElemMarkVisuals) * edElemDef->visualCount);
 }
 
 void __cdecl FX_CopyVisuals(const FxEditorElemDef *edElemDef, FxElemVisuals *visualsArray)
 {
-    memcpy((unsigned __int8 *)visualsArray, (unsigned __int8 *)&edElemDef->visuals, 4 * edElemDef->visualCount);
+    memcpy((unsigned __int8 *)visualsArray, (unsigned __int8 *)&edElemDef->visuals, sizeof(FxElemVisuals) * edElemDef->visualCount);
 }
 
 void __cdecl FX_ConvertEffectDefRef(FxEffectDefRef *ref, const FxEffectDef *effectDef)
@@ -2259,19 +2260,19 @@ int __cdecl FX_CopyEmittedElemDefs(
                 FX_ReserveElemDefMemory(elemDef, memPool);
                 memcpy(
                     (unsigned __int8 *)elemDef->velSamples,
-                    (unsigned __int8 *)elemDefEmit[47].spawnSound,
+                    (const unsigned __int8 *)((const FxElemDef *)elemDefEmit)->velSamples,
                     96 * (elemDef->velIntervalCount + 1));
                 if ( elemDef->visSamples )
                     memcpy(
                         (void*)elemDef->visSamples->base.color,
-                        (unsigned __int8 *)elemDefEmit[48].spawnSound,
+                        (const unsigned __int8 *)((const FxElemDef *)elemDefEmit)->visSamples,
                         48 * (elemDef->visStateIntervalCount + 1));
                 if ( elemDef->visualCount > 1u )
                     memcpy(
                         (unsigned __int8 *)elemDef->visuals.markArray,
-                        (unsigned __int8 *)elemDefEmit[49].spawnSound,
-                        4 * elemDef->visualCount);
-                FX_ConvertElemSpawnSound(&elemDef->spawnSound, elemDefEmit + 70, memPool);
+                        (const unsigned __int8 *)((const FxElemDef *)elemDefEmit)->visuals.array,
+                        sizeof(FxElemVisuals) * elemDef->visualCount);
+                FX_ConvertElemSpawnSound(&elemDef->spawnSound, &((const FxElemDef *)elemDefEmit)->spawnSound, memPool);
             }
         }
     }
@@ -2290,11 +2291,11 @@ int __cdecl FX_AdditionalBytesNeededForElemDef(
     bytesNeeded = 96 * velStateSampleCount + 48 * visStateSampleCount;
     if ( elemType == 11 )
     {
-        bytesNeeded += 8 * visualCount;
+        bytesNeeded += (int)sizeof(FxElemMarkVisuals) * visualCount;
     }
     else if ( visualCount > 1 )
     {
-        bytesNeeded += 4 * visualCount;
+        bytesNeeded += (int)sizeof(FxElemVisuals) * visualCount;
     }
     if ( elemSpawnSound->spawnSound && *elemSpawnSound->spawnSound )
         bytesNeeded += &elemSpawnSound->spawnSound[strlen(elemSpawnSound->spawnSound) + 1] - elemSpawnSound->spawnSound;

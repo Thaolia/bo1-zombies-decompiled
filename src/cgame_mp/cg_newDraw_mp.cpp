@@ -3754,7 +3754,7 @@ void __cdecl CG_DrawPlayerTargetHighlights(int localClientNum, const rectDef_s *
         for ( i = 0; i < 32; ++i )
         {
             cent = CG_GetEntity(localClientNum, i);
-            if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0
+            if ( ((cent->flagWord >> 1) & 1) != 0
                 && cent->nextState.number != cgameGlob->clientNum
                 && cent->nextState.eType == 1
                 && (cent->nextState.lerp.eFlags & 0x40000) == 0 )
@@ -3850,7 +3850,7 @@ void __cdecl CG_DrawPlayerTargetHighlightsFriendly(
     if ( ShouldDrawPlayerTargetHighlights(localClientNum, cgameGlob) )
     {
         cent = CG_GetEntity(localClientNum, cgameGlob->clientNum);
-        if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0
+        if ( ((cent->flagWord >> 1) & 1) != 0
             && cent->nextState.eType == 1
             && (cent->nextState.lerp.eFlags & 0x40000) == 0 )
         {
@@ -4591,11 +4591,10 @@ void    CG_DrawPlayerStance(
     const char *v10; // [esp+30h] [ebp-48h]
     float deltaTime; // [esp+34h] [ebp-44h] BYREF
     float halfWidth; // [esp+38h] [ebp-40h]
-    const char *proneStr; // [esp+3Ch] [ebp-3Ch]
     float drawColor[4]; // [esp+40h] [ebp-38h] BYREF
     float y; // [esp+50h] [ebp-28h]
-    const cgs_t *x; // [esp+54h] [ebp-24h]
-    const cgs_t *cgs; // [esp+58h] [ebp-20h]
+    int x; // [esp+54h] [ebp-24h]
+    int cgs; // [esp+58h] [ebp-20h]
     double fadeAlpha; // [esp+5Ch] [ebp-1Ch]
     float v19; // [esp+64h] [ebp-14h]
     cg_s *cgameGlob; // [esp+68h] [ebp-10h]
@@ -4609,9 +4608,9 @@ void    CG_DrawPlayerStance(
     v19 = hud_fade_stance->current.value * 1000.0;
     //fadeAlpha = DOUBLE_9_313225746154785eN10;
     fadeAlpha = 9.313225746154785e-10;
-    cgs = (const cgs_t *)(int)(v19 + 9.313225746154785e-10);
+    cgs = (int)(v19 + 9.313225746154785e-10);
     x = cgs;
-    y = CG_FadeHudMenu(localClientNum, hud_fade_stance, cgameGlob->stanceFadeTime, (int)cgs);
+    y = CG_FadeHudMenu(localClientNum, hud_fade_stance, cgameGlob->stanceFadeTime, cgs);
     if ( y != 0.0 )
     {
         if ( cg_hudStanceHintPrints->current.enabled )
@@ -4632,7 +4631,6 @@ void    CG_DrawPlayerStance(
         //BLOPS_NULLSUB((jpeg_decompress_struct *)&drawColor[2]);
         deltaTime = *color;
         halfWidth = color[1];
-        proneStr = (const char *)*((unsigned int *)color + 2);
         if ( (cgameGlob->predictedPlayerState.pm_flags & 0x1000) != 0 && cgameGlob->proneBlockedEndTime < cgameGlob->time )
             cgameGlob->proneBlockedEndTime = cgameGlob->time + 1500;
         if ( cgameGlob->proneBlockedEndTime > cgameGlob->time )
@@ -5704,7 +5702,7 @@ double __cdecl CG_GetClosestTargetToGuidedMissile(int localClientNum)
     for ( i = 0; i < 32; ++i )
     {
         cent = CG_GetEntity(localClientNum, i);
-        if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0
+        if ( ((cent->flagWord >> 1) & 1) != 0
             && cent->nextState.number != cgameGlob->clientNum
             && cent->nextState.eType == 1
             && (cent->nextState.lerp.eFlags & 0x40000) == 0 )

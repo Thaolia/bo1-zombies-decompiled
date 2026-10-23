@@ -1709,10 +1709,9 @@ unsigned int __cdecl R_RenderDrawSurfListMaterial(const GfxDrawSurfListArgs *lis
                 R_SetupPass(prepassContext, 0);
                 passPrepassContext_4 = prepassContext.state;
             }
-            subListCount = ((int (__cdecl *)(const GfxDrawSurfListArgs *, GfxCmdBufSourceState *, GfxCmdBufState *))rb_tessTable[(drawSurf.packed >> 51) & 0xF])(
+            subListCount = rb_tessTable[(drawSurf.packed >> 51) & 0xF](
                                              listArgs,
-                                             passPrepassContext,
-                                             passPrepassContext_4);
+                                             { passPrepassContext, passPrepassContext_4 });
         }
 
         if ( isPixelCostEnabled )
@@ -5469,7 +5468,7 @@ void __cdecl RB_ExecuteRenderCommandsLoop(const void *cmds, int *ui3dTextureWind
         v3 = -1;
     while (1)
     {
-        if (((int)execState.cmd & 3) != 0
+        if (((uintptr_t)execState.cmd & 3) != 0
             && !Assert_MyHandler(
                 "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\rb_backend.cpp",
                 5999,
@@ -5804,7 +5803,7 @@ void     RB_RenderThread(unsigned int threadContext)
     {
         Value = Sys_GetValue(2);
         //if ( !_setjmp3(Value, 0) )
-        if ( !_setjmp(*(jmp_buf*)Value) )
+        if ( !setjmp(*(jmp_buf *)Value) )
             break;
         if ( r_glob.isRenderingRemoteUpdate )
         {

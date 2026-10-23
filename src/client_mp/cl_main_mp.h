@@ -20,6 +20,7 @@
 #include <server/server.h>
 #include <gfx_d3d/r_init.h>
 #include <server_mp/sv_init_mp.h>
+#include <platform/arch_size.h>
 
 // zombies: capacity for SP levels; the live count is Com_GetMaxActorCorpses() (MP 8)
 #define MAX_ACTOR_CORPSES MAX_ACTOR_CORPSES_SP
@@ -370,7 +371,9 @@ struct clientActive_t // sizeof=0x1A6100
 };
 // mod (L43): bytes the parseEntities ring adds over retail (sizeof=0x1A6100 with 2048); cl_main_mp.cpp allocates them.
 #define CL_PARSE_ENTITIES_EXTRA_BYTES ((CL_PARSE_ENTITIES_COUNT - 2048) * (int)sizeof(entityState_s))
-static_assert(sizeof(clientActive_t) <= 0x1A6100 + CL_PARSE_ENTITIES_EXTRA_BYTES, "clientActive_t outgrew its allocation");
+// The retail clientActive_t slot (0x1A6100 with 2048 parseEntities); 64-bit pointers grow the same fields to 1737216.
+#define CL_ACTIVE_RETAIL_SIZE BO1_ARCH_SIZE(0x1A6100, 1737216)
+static_assert(sizeof(clientActive_t) <= CL_ACTIVE_RETAIL_SIZE + CL_PARSE_ENTITIES_EXTRA_BYTES, "clientActive_t outgrew its allocation");
 
 struct clientLogo_t // sizeof=0x18
 {                                                                             // XREF: clientStatic_t/r

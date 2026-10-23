@@ -1,4 +1,5 @@
 #include "r_water_sim.h"
+#include "rb_tess.h"
 #include "r_init.h"
 #include <qcommon/com_bsp.h>
 #include "r_foliage.h"
@@ -1331,6 +1332,7 @@ void __cdecl R_RenderWaterModel(unsigned int viewIndex)
     float interpolate; // [esp+4Ch] [ebp-24h]
     bool lod; // [esp+50h] [ebp-20h]
     char *modelSurf; // [esp+54h] [ebp-1Ch]
+    GfxModelWaterSurface *waterSurf;
     unsigned int n; // [esp+5Ch] [ebp-14h]
     float lodOrigin[3]; // [esp+64h] [ebp-Ch] BYREF
 
@@ -1350,25 +1352,26 @@ void __cdecl R_RenderWaterModel(unsigned int viewIndex)
             {
                 mesh0 = &tile->meshes.data[tile->meshes.head];
                 mesh1 = &tile->meshes.data[((unsigned __int8)tile->meshes.head + 1) & 3];
-                modelSurf = R_SurfaceAlloc(0x2Cu);
+                modelSurf = R_SurfaceAlloc(sizeof(GfxModelWaterSurface));
                 if ( !modelSurf )
                     return;
+                waterSurf = (GfxModelWaterSurface *)modelSurf;
                 interpolate = (double)(data.frame - mesh1->lastSkinTime) / 16.0;
-                *((float *)modelSurf + 5) = interpolate;
-                *((unsigned int *)modelSurf + 1) = (unsigned int)data.vertexBuffer;
-                *((unsigned int *)modelSurf + 2) = (unsigned int)data.vertexBuffer;
-                *((unsigned int *)modelSurf + 3) = mesh0->baseVertex;
-                *((unsigned int *)modelSurf + 4) = mesh1->baseVertex;
+                waterSurf->interpolate = interpolate;
+                waterSurf->vb0 = data.vertexBuffer;
+                waterSurf->vb1 = data.vertexBuffer;
+                waterSurf->baseVertex0 = mesh0->baseVertex;
+                waterSurf->baseVertex1 = mesh1->baseVertex;
                 v1 = (float)tile->worldY * config.gridScale;
                 v2 = (float)tile->worldZ * config.gridScale;
-                *((float *)modelSurf + 8) = (float)tile->worldX * config.gridScale;
-                *((float *)modelSurf + 9) = v1;
-                *((float *)modelSurf + 10) = v2;
-                dist = Vec3DistanceSq((const float *)modelSurf + 8, lodOrigin);
+                waterSurf->origin[0] = (float)tile->worldX * config.gridScale;
+                waterSurf->origin[1] = v1;
+                waterSurf->origin[2] = v2;
+                dist = Vec3DistanceSq(waterSurf->origin, lodOrigin);
                 lod = dist >= 2250000.0;
-                *(unsigned int *)modelSurf = (unsigned int)data.indexBuffer[lod];
-                *((unsigned int *)modelSurf + 6) = 289;
-                *((unsigned int *)modelSurf + 7) = data.tileTriCount[lod];
+                waterSurf->ib = data.indexBuffer[lod];
+                waterSurf->vertCount = 289;
+                waterSurf->triCount = data.tileTriCount[lod];
                 surfId = modelSurf - (char *)frontEndDataOut;
                 if ( (((_BYTE)(uintptr_t)modelSurf - (_BYTE)(uintptr_t)frontEndDataOut) & 3) != 0
                     && !Assert_MyHandler(
@@ -1422,7 +1425,7 @@ void *FlushBuffers()
     {
         //channel_t<float4>::Cache(data.buffer, 0, 0, 1);
         data.buffer[0].Cache(0, false, true);
-        result = (void *)(i + 1);
+        result = (void *)(uintptr_t)(i + 1);
     }
     for (j = 0; j < 4; ++j)
     {
@@ -1438,7 +1441,7 @@ void *FlushBuffers()
     {
         //channel_t<char>::Cache(&data.flooroffset, 0, 0, 1);
         data.flooroffset.Cache(0, false, true);
-        result = (void *)(m + 1);
+        result = (void *)(uintptr_t)(m + 1);
     }
     for (n = 0; n < 4; ++n)
     {
@@ -1643,23 +1646,23 @@ void    R_WaterSimulationUpdateFrame(const WaterSimulationCmd *cmd)
         v128 = half.v[3];
         damping.u[0] = zero.u[0];
     }
-    *(float4 *)&v120[8] = g_swizzleYBWD;
+    Float4Store(&v120[8], g_swizzleYBWD);
     v119 = *(_QWORD *)g_swizzleYBWD.v;
     *(_QWORD *)v120 = *(_QWORD *)&g_swizzleYBWD.unitVec[2].packed;
-    *(float4 *)&v118[8] = g_swizzleXAYA;
+    Float4Store(&v118[8], g_swizzleXAYA);
     v117 = *(_QWORD *)g_swizzleXAYA.v;
     *(_QWORD *)v118 = *(_QWORD *)&g_swizzleXAYA.unitVec[2].packed;
-    *(float4 *)&v116[8] = g_swizzleYABA;
+    Float4Store(&v116[8], g_swizzleYABA);
     v115 = *(_QWORD *)g_swizzleYABA.v;
     *(_QWORD *)v116 = *(_QWORD *)&g_swizzleYABA.unitVec[2].packed;
-    *(float4 *)&v114[8] = g_swizzleXAZC;
+    Float4Store(&v114[8], g_swizzleXAZC);
     v113 = *(_QWORD *)g_swizzleXAZC.v;
     *(_QWORD *)v114 = *(_QWORD *)&g_swizzleXAZC.unitVec[2].packed;
-    *(float4 *)&v112[8] = g_keepY;
+    Float4Store(&v112[8], g_keepY);
     v111 = *(_QWORD *)g_keepY.v;
     *(_QWORD *)v112 = *(_QWORD *)&g_keepY.unitVec[2].packed;
-    *(float4 *)&winddir[20] = g_keepXZ;
-    *(float4 *)&winddir[4] = g_keepXZ;
+    Float4Store(&winddir[20], g_keepXZ);
+    Float4Store(&winddir[4], g_keepXZ);
     Vec3Normalize(&zero.v[1]);
     zero.u[1] ^= _mask__NegFloat_;
     zero.u[2] ^= _mask__NegFloat_;
@@ -2780,9 +2783,10 @@ void    R_WaterSimulationSkinMesh(const WaterSimulationCmd *cmd)
     float zdata[4]; // [esp+4B0h] [ebp-120h]
     float4 minBox; // [esp+4C0h] [ebp-110h]
     float4 maxBox; // [esp+4D0h] [ebp-100h]
-    int tilev; // [esp+4E0h] [ebp-F0h]
+    const tilemesh_t *tilev; // [esp+4E0h] [ebp-F0h]
     int tileu; // [esp+4E4h] [ebp-ECh]
-    GfxWaterVertex *dest; // [esp+4E8h] [ebp-E8h]
+    unsigned int dest; // [esp+4E8h] [ebp-E8h]
+    unsigned __int8 *vertPos;
     tilemesh_t *mesh; // [esp+4ECh] [ebp-E4h]
     unsigned int tilenum; // [esp+4F0h] [ebp-E0h]
     unsigned int srcBuf; // [esp+4F4h] [ebp-DCh]
@@ -2867,20 +2871,20 @@ void    R_WaterSimulationSkinMesh(const WaterSimulationCmd *cmd)
     normalOffset.v[0] = 128.0f;
     normalOffset.v[1] = 127.0f;
 
-    dest = (GfxWaterVertex *)cmd->skin.srcBuf;
+    dest = cmd->skin.srcBuf;
     for ( tileu = 0; (unsigned int)tileu < 0x10; ++tileu )
     {
-        tilev = (int)cmd->skin.meshesEA[tileu];
+        tilev = cmd->skin.meshesEA[tileu];
         if ( tilev )
         {
             if ( !Sys_QueryD3DDeviceOKEvent() )
                 return;
-            maxBox.u[3] = (unsigned int)R_LockVertexBuffer(data.vertexBuffer, 0, 0, 0x1000u);
-            if ( !maxBox.u[3] )
+            vertPos = (unsigned __int8 *)R_LockVertexBuffer(data.vertexBuffer, 0, 0, 0x1000u);
+            if ( !vertPos )
                 return;
-            maxBox.u[3] += 16 * *(unsigned int *)(tilev + 24);
-            maxBox.u[2] = *(unsigned int *)tilev;
-            maxBox.u[1] = *(unsigned int *)(tilev + 4);
+            vertPos += 16 * tilev->baseVertex;
+            maxBox.u[2] = tilev->srcU;
+            maxBox.u[1] = tilev->srcV;
             minBox.v[2] = -FLT_MAX;
             minBox.v[3] = -FLT_MAX;
             maxBox.v[0] = -FLT_MAX;
@@ -2900,52 +2904,55 @@ void    R_WaterSimulationSkinMesh(const WaterSimulationCmd *cmd)
                 {
                     worldV = worldU + maxBox.u[2];
                     worldUV.u[3] = v + maxBox.u[1];
-                    worldUV.u[2] = worldU + *(unsigned int *)(tilev + 8);
-                    worldUV.u[1] = v + *(unsigned int *)(tilev + 12);
-                    Float4LoadFloats(
-                        ((float)(int)worldUV.u[2]),
-                        ((float)(int)worldUV.u[1]),
-                        (0.0),
-                        (0.0),
-                        (float4 *)&tileUV.unitVec[1]);
+                    worldUV.u[2] = worldU + tilev->worldX;
+                    worldUV.u[1] = v + tilev->worldY;
+                    // The three Float4LoadFloats stores of this loop each straddled two of these locals (one
+                    // 16-byte store in the binary); their lanes are written one by one so no store leaves its local.
+                    tileUV.u[1] = (unsigned int)(float)(int)worldUV.u[2];
+                    tileUV.u[2] = (unsigned int)(float)(int)worldUV.u[1];
+                    tileUV.u[3] = 0;
+                    worldUV.u[0] = 0;
                     v162 = (unsigned int)v;
                     *(float *)&y = (float)(unsigned int)v;
                     v161 = (unsigned int)worldU;
                     *(float *)&x = (float)(unsigned int)worldU;
-                    Float4LoadFloats(x, y, (0.0), (0.0), (float4 *)v163);
-                    *(float4 *)&a[4] = *ReadValue(&v160, worldV - 1, worldUV.u[3] - 1, (unsigned int)dest);
+                    v163[0] = *(float *)&x;
+                    v163[1] = *(float *)&y;
+                    v163[2] = 0.0f;
+                    tileUV.u[0] = 0;
+                    Float4Store(&a[4], *ReadValue(&v160, worldV - 1, worldUV.u[3] - 1, dest));
                     v157 = *(_QWORD *)&a[4];
                     v158 = *(float *)&a[12];
                     *(unsigned int *)a = *(unsigned int *)&a[16];
-                    *(float4 *)&b[4] = *ReadValue(&v156, worldV, worldUV.u[3] - 1, (unsigned int)dest);
+                    Float4Store(&b[4], *ReadValue(&v156, worldV, worldUV.u[3] - 1, dest));
                     v153 = *(_QWORD *)&b[4];
                     v154 = *(float *)&b[12];
                     *(unsigned int *)b = *(unsigned int *)&b[16];
-                    *(float4 *)&c[4] = *ReadValue(&v152, worldV + 1, worldUV.u[3] - 1, (unsigned int)dest);
+                    Float4Store(&c[4], *ReadValue(&v152, worldV + 1, worldUV.u[3] - 1, dest));
                     v149 = *(_QWORD *)&c[4];
                     v150 = *(float *)&c[12];
                     *(unsigned int *)c = *(unsigned int *)&c[16];
-                    *(float4 *)&d[4] = *ReadValue(&v148, worldV - 1, worldUV.u[3], (unsigned int)dest);
+                    Float4Store(&d[4], *ReadValue(&v148, worldV - 1, worldUV.u[3], dest));
                     v145 = *(_QWORD *)&d[4];
                     v146 = *(float *)&d[12];
                     *(unsigned int *)d = *(unsigned int *)&d[16];
-                    *(float4 *)&e[4] = *ReadValue(&v144, worldV, worldUV.u[3], (unsigned int)dest);
+                    Float4Store(&e[4], *ReadValue(&v144, worldV, worldUV.u[3], dest));
                     v141 = *(_QWORD *)&e[4];
                     v142 = *(float *)&e[12];
                     *(unsigned int *)e = *(unsigned int *)&e[16];
-                    *(float4 *)&f[4] = *ReadValue(&v140, worldV + 1, worldUV.u[3], (unsigned int)dest);
+                    Float4Store(&f[4], *ReadValue(&v140, worldV + 1, worldUV.u[3], dest));
                     v137 = *(_QWORD *)&f[4];
                     v138 = *(float *)&f[12];
                     *(unsigned int *)f = *(unsigned int *)&f[16];
-                    *(float4 *)&g[4] = *ReadValue(&v136, worldV - 1, worldUV.u[3] + 1, (unsigned int)dest);
+                    Float4Store(&g[4], *ReadValue(&v136, worldV - 1, worldUV.u[3] + 1, dest));
                     v133 = *(_QWORD *)&g[4];
                     v134 = *(float *)&g[12];
                     *(unsigned int *)g = *(unsigned int *)&g[16];
-                    *(float4 *)&h[4] = *ReadValue(&v132, worldV, worldUV.u[3] + 1, (unsigned int)dest);
+                    Float4Store(&h[4], *ReadValue(&v132, worldV, worldUV.u[3] + 1, dest));
                     v129 = *(_QWORD *)&h[4];
                     v130 = *(float *)&h[12];
                     *(unsigned int *)h = *(unsigned int *)&h[16];
-                    *(float4 *)&i[4] = *ReadValue(&v128, worldV + 1, worldUV.u[3] + 1, (unsigned int)dest);
+                    Float4Store(&i[4], *ReadValue(&v128, worldV + 1, worldUV.u[3] + 1, dest));
                     *(_QWORD *)&avgpos[12] = *(_QWORD *)&i[4];
                     waterheight = *(float *)&i[12];
                     *(unsigned int *)i = *(unsigned int *)&i[16];
@@ -3099,12 +3106,10 @@ void    R_WaterSimulationSkinMesh(const WaterSimulationCmd *cmd)
                     tangent.u[0] = 0;
                     Vec3NormalizeTo(&zOffset.v[1], &zOffset.v[1]);
                     binormal.u[0] = 0;
-                    Float4LoadFloats(
-                        (0.0),
-                        (0.0),
-                        ((float)((float)*(__int16 *)&avgpos[8] / config.gridScale) - (float)*(int *)(tilev + 16)),
-                        (0.0),
-                        (float4 *)&finalPos.unitVec[1]);
+                    finalPos.u[1] = 0;
+                    finalPos.u[2] = 0;
+                    finalPos.u[3] = (unsigned int)((float)((float)*(__int16 *)&avgpos[8] / config.gridScale) - (float)tilev->worldZ);
+                    zOffset.u[0] = 0;
                     v93 = (float)((float)(zoffset.v[1] + finalPos.v[1]) * posOffset.v[1]) + normalScale.v[1];
                     v94 = (float)((float)(zoffset.v[2] + finalPos.v[2]) * posOffset.v[2]) + normalScale.v[2];
                     v95 = (float)((float)(zoffset.v[3] + finalPos.v[3]) * posOffset.v[3]) + normalScale.v[3];
@@ -3194,10 +3199,10 @@ void    R_WaterSimulationSkinMesh(const WaterSimulationCmd *cmd)
                     v57 = v81;
                     v58 = v82;
                     v59 = v15;
-                    *(_BYTE *)maxBox.u[3] = (int)v80;
-                    *(_BYTE *)(maxBox.u[3] + 1) = (int)v57;
-                    *(_BYTE *)(maxBox.u[3] + 2) = (int)v58;
-                    *(_BYTE *)(maxBox.u[3] + 3) = (int)v59;
+                    *vertPos = (int)v80;
+                    vertPos[1] = (int)v57;
+                    vertPos[2] = (int)v58;
+                    vertPos[3] = (int)v59;
                     v55 = g_swizzleXYAB;
                     v49 = *(_QWORD *)&binormal.unitVec[1].packed;
                     v50 = binormal.u[3];
@@ -3221,7 +3226,7 @@ void    R_WaterSimulationSkinMesh(const WaterSimulationCmd *cmd)
                     BYTE1(finalNormal) = *((_BYTE *)&v49 + g_swizzleXYAB.unitVec[3].array[2]);
                     BYTE2(finalNormal) = *((_BYTE *)&v49 + g_swizzleXYAB.unitVec[3].array[1]);
                     HIBYTE(finalNormal) = *((_BYTE *)&v49 + g_swizzleXYAB.unitVec[3].array[0]);
-                    v39 = (_BYTE *)(maxBox.u[3] + 4);
+                    v39 = vertPos + 4;
                     if ( (float)((float)((float)((float)(v45 * normalOffset.v[1]) + *(float *)&mesh) + 0.5) - 0.0) < 0.0 )
                         v38 = g_zero.v[0];
                     else
@@ -3263,8 +3268,8 @@ void    R_WaterSimulationSkinMesh(const WaterSimulationCmd *cmd)
                     v39[1] = (int)v41;
                     v39[2] = (int)v43;
                     v39[3] = (int)v21;
-                    *(unsigned int *)(maxBox.u[3] + 8) = data.colors.v[256 * worldUV.unitVec[3].array[0] + (unsigned __int8)worldV].packed;
-                    v36 = (_BYTE *)(maxBox.u[3] + 12);
+                    *(unsigned int *)(vertPos + 8) = data.colors.v[256 * worldUV.unitVec[3].array[0] + (unsigned __int8)worldV].packed;
+                    v36 = vertPos + 12;
                     v35 = (float)worldUV.unitVec[2].array[0] + 0.5;
                     if ( (float)(v35 - 255.0) < 0.0 )
                         v34 = (float)worldUV.unitVec[2].array[0] + 0.5;
@@ -3305,7 +3310,7 @@ void    R_WaterSimulationSkinMesh(const WaterSimulationCmd *cmd)
                     else
                         v24 = 0.0f;
                     v36[3] = (int)v24;
-                    maxBox.u[3] += 16;
+                    vertPos += 16;
                 }
             }
             R_UnlockVertexBuffer(data.vertexBuffer);

@@ -142,7 +142,7 @@ void __cdecl R_GetModelList(XAssetHeader header, XAssetHeader *data)
     {
         __debugbreak();
     }
-    data[(int)data->xmodelPieces++ + 1] = header;
+    data[(intptr_t)data->xmodelPieces++ + 1] = header;
 }
 
 XModel *__cdecl R_RegisterModel(char *name)
@@ -332,7 +332,7 @@ int    R_SkinXModel(
     XSurface *v15; // [esp+3Ch] [ebp-1C5Ch]
     int i; // [esp+44h] [ebp-1C54h]
     unsigned __int8 *v17; // [esp+48h] [ebp-1C50h]
-    unsigned __int8 v18[7180]; // [esp+4Ch] [ebp-1C4Ch] BYREF
+    unsigned __int8 v18[128 * sizeof(GfxModelRigidSurface) + 12]; // [esp+4Ch] [ebp-1C4Ch] BYREF
     unsigned int v19[5]; // [esp+1C58h] [ebp-40h] BYREF
     int surfaceCount; // [esp+1C6Ch] [ebp-2Ch]
     XSurface *surfaces; // [esp+1C70h] [ebp-28h] BYREF
@@ -393,13 +393,13 @@ LABEL_42:
                 v11 = -2;
             else
                 v11 = -1;
-            *(unsigned int *)v17 = v11;
-            *((unsigned int *)v17 + 1) = (unsigned int)v15;
-            *((_WORD *)v17 + 7) = gfxEntIndex;
-            *((_WORD *)v17 + 8) = 0;
-            memcpy(v17 + 24, placement, 0x1Cu);
-            *((float *)v17 + 13) = scale;
-            v17 += 56;
+            ((GfxModelRigidSurface *)v17)->surf.skinnedCachedOffset = v11;
+            ((GfxModelRigidSurface *)v17)->surf.xsurf = v15;
+            ((GfxModelRigidSurface *)v17)->surf.info.gfxEntIndex = gfxEntIndex;
+            ((GfxModelRigidSurface *)v17)->surf.info.lightingHandle = 0;
+            memcpy(&((GfxModelRigidSurface *)v17)->placement.base, placement, 0x1Cu);
+            ((GfxModelRigidSurface *)v17)->placement.scale = scale;
+            v17 += sizeof(GfxModelRigidSurface);
         }
     }
     v10 = _InterlockedExchangeAdd(&frontEndDataOut->surfPos, v17 - v18);

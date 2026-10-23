@@ -203,7 +203,7 @@ void __cdecl DynEnt_LoadEntities()
     num = 0;
     if ( cm.num_constraints )
     {
-        cm.constraints = (PhysConstraint *)DynEnt_Alloc(cm.num_constraints, 168);
+        cm.constraints = (PhysConstraint *)DynEnt_Alloc(cm.num_constraints, sizeof(PhysConstraint));
         DynEnt_GetEntityConstraintParams(&constraintParams, cm.constraints, cm.num_constraints);
     }
     data_p = Com_EntityString(0);
@@ -478,10 +478,10 @@ void __cdecl DynEnt_LoadEntities()
                 ++num;
         }
     }
-    qsort(base, num, 0x54u, (int (__cdecl *)(const void *, const void *))DynEnt_CompareEntities);
+    qsort(base, num, sizeof(DynEntityDef), (int (__cdecl *)(const void *, const void *))DynEnt_CompareEntities);
     for ( i = 0; i < (int)num; ++i )
     {
-        v58 = (char *)base + 84 * i;
+        v58 = (char *)((DynEntityDef *)base + i);
         if ( *((unsigned int *)v58 + 8) )
         {
             drawType = DYNENT_DRAW_MODEL;
@@ -587,7 +587,7 @@ void __cdecl DynEnt_LoadEntities()
         Com_Error(ERR_DROP, "Max ropes count exceeded! %d.\n", 300);
         cm.max_ropes = 300;
     }
-    cm.ropes = (rope_t *)Hunk_Alloc(3188 * cm.max_ropes, "ropes", 10);
+    cm.ropes = (rope_t *)Hunk_Alloc(sizeof(rope_t) * cm.max_ropes, "ropes", 10);
     for ( drawType = DYNENT_DRAW_MODEL; (unsigned int)drawType < DYNENT_DRAW_COUNT; ++drawType )
     {
         collType = (DynEntityCollType)drawType;
@@ -1359,7 +1359,7 @@ char __cdecl DynEnt_Create(
     {
         __debugbreak();
     }
-    Com_Memset((unsigned int *)dynEntDef, 0, 84);
+    Com_Memset((unsigned int *)dynEntDef, 0, sizeof(DynEntityDef));
     if ( params->typeName[0] )
     {
         dynEntDef->type = (DynEntityType)DynEnt_GetType(params->typeName);
@@ -1620,7 +1620,7 @@ PhysPreset *__cdecl DynEnt_AutoCreatePhysPreset(const DynEntityDef *dynEntDef, c
                 return physPreset;
         }
     }
-    physPreset = (PhysPreset *)Hunk_Alloc(0x54u, "DynEnt_AllocPhysPreset", 22);
+    physPreset = (PhysPreset *)Hunk_Alloc(sizeof(PhysPreset), "DynEnt_AllocPhysPreset", 22);
     memset((unsigned __int8 *)physPreset, 0, sizeof(PhysPreset));
     if ( dynEntDef->xModel )
     {

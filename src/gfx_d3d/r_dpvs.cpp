@@ -1279,7 +1279,7 @@ void __cdecl R_AddSceneDObj(unsigned int entnum, unsigned int viewIndex)
     {
         __debugbreak();
     }
-    *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum) = 1;
+    scene.dpvs.entVisData[viewIndex][entnum] = 1;
 }
 
 void __cdecl R_DrawAllSceneEnt(const GfxViewInfo *viewInfo)
@@ -1347,7 +1347,7 @@ void __cdecl R_DrawAllSceneEnt(const GfxViewInfo *viewInfo)
                 }
                 while ( viewIndex < 7 )
                 {
-                    sceneEntVisData[viewIndex][sceneEntIndex] = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum);
+                    sceneEntVisData[viewIndex][sceneEntIndex] = scene.dpvs.entVisData[viewIndex][entnum];
                     visData |= sceneEntVisData[viewIndex++][sceneEntIndex];
                 }
             }
@@ -1361,13 +1361,13 @@ void __cdecl R_DrawAllSceneEnt(const GfxViewInfo *viewInfo)
                         if ( (views[viewIndex].renderFxFlagsCull & gfxEnt->renderFxFlags) != 0 )
                             v2 = 0;
                         else
-                            v2 = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum);
+                            v2 = scene.dpvs.entVisData[viewIndex][entnum];
                         sceneEntVisData[viewIndex][sceneEntIndex] = v2;
                         visData |= sceneEntVisData[viewIndex][sceneEntIndex];
                     }
                     while ( viewIndex < 7 )
                     {
-                        sceneEntVisData[viewIndex][sceneEntIndex] = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum);
+                        sceneEntVisData[viewIndex][sceneEntIndex] = scene.dpvs.entVisData[viewIndex][entnum];
                         visData |= sceneEntVisData[viewIndex++][sceneEntIndex];
                     }
                     if ( (visData & 1) != 0
@@ -1387,7 +1387,7 @@ void __cdecl R_DrawAllSceneEnt(const GfxViewInfo *viewInfo)
                 visData = 0;
                 for ( viewIndex = 0; viewIndex < 3; ++viewIndex )
                 {
-                    viewVisData = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum);
+                    viewVisData = scene.dpvs.entVisData[viewIndex][entnum];
                     if ( !viewVisData )
                         viewVisData = 1;
                     sceneEntVisData[viewIndex][sceneEntIndex] = (views[viewIndex].renderFxFlagsCull & gfxEnt->renderFxFlags) == 0
@@ -1397,7 +1397,7 @@ void __cdecl R_DrawAllSceneEnt(const GfxViewInfo *viewInfo)
                 }
                 while ( viewIndex < 7 )
                 {
-                    sceneEntVisData[viewIndex][sceneEntIndex] = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum);
+                    sceneEntVisData[viewIndex][sceneEntIndex] = scene.dpvs.entVisData[viewIndex][entnum];
                     visData |= sceneEntVisData[viewIndex++][sceneEntIndex];
                 }
             }
@@ -1413,7 +1413,7 @@ void __cdecl R_DrawAllSceneEnt(const GfxViewInfo *viewInfo)
             }
             while ( viewIndex < 7 )
             {
-                sceneEntVisData[viewIndex][sceneEntIndex] = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum);
+                sceneEntVisData[viewIndex][sceneEntIndex] = scene.dpvs.entVisData[viewIndex][entnum];
                 visData |= sceneEntVisData[viewIndex++][sceneEntIndex];
             }
 LABEL_65:
@@ -1446,7 +1446,7 @@ LABEL_65:
             visData = 0;
             for ( viewIndex = 0; viewIndex < 3; ++viewIndex )
             {
-                viewVisDataa = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum);
+                viewVisDataa = scene.dpvs.entVisData[viewIndex][entnum];
                 if ( !viewVisDataa )
                     viewVisDataa = 1;
                 sceneEntVisData[viewIndex][sceneEntIndex] = viewVisDataa;
@@ -1454,7 +1454,7 @@ LABEL_65:
             }
             while ( viewIndex < 7 )
             {
-                sceneEntVisData[viewIndex][sceneEntIndex] = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum);
+                sceneEntVisData[viewIndex][sceneEntIndex] = scene.dpvs.entVisData[viewIndex][entnum];
                 visData |= sceneEntVisData[viewIndex++][sceneEntIndex];
             }
             goto LABEL_65;
@@ -1462,12 +1462,12 @@ LABEL_65:
         visData = 0;
         for ( viewIndex = 0; viewIndex < 3; ++viewIndex )
         {
-            sceneEntVisData[viewIndex][sceneEntIndex] = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum);
+            sceneEntVisData[viewIndex][sceneEntIndex] = scene.dpvs.entVisData[viewIndex][entnum];
             visData |= sceneEntVisData[viewIndex][sceneEntIndex];
         }
         while ( viewIndex < 7 )
         {
-            sceneEntVisData[viewIndex][sceneEntIndex] = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum);
+            sceneEntVisData[viewIndex][sceneEntIndex] = scene.dpvs.entVisData[viewIndex][entnum];
             visData |= sceneEntVisData[viewIndex++][sceneEntIndex];
         }
         if ( (visData & 1) != 0
@@ -1510,7 +1510,7 @@ LABEL_65:
                     if ( (views[viewIndex].renderFxFlagsCull & gfxEnta->renderFxFlags) != 0 )
                         v1 = 0;
                     else
-                        v1 = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnuma);
+                        v1 = scene.dpvs.entVisData[viewIndex][entnuma];
                     sceneEntVisData[viewIndex][sceneEntIndexa] = v1;
                     visData |= sceneEntVisData[viewIndex][sceneEntIndexa];
                 }
@@ -1519,7 +1519,7 @@ LABEL_65:
             {
                 for ( viewIndex = 0; viewIndex < 3; ++viewIndex )
                 {
-                    viewVisDatab = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnuma);
+                    viewVisDatab = scene.dpvs.entVisData[viewIndex][entnuma];
                     if ( !viewVisDatab )
                         viewVisDatab = 1;
                     sceneEntVisData[viewIndex][sceneEntIndexa] = (views[viewIndex].renderFxFlagsCull & gfxEnta->renderFxFlags) == 0
@@ -1530,7 +1530,7 @@ LABEL_65:
             }
             while ( viewIndex < 7 )
             {
-                sceneEntVisData[viewIndex][sceneEntIndexa] = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnuma);
+                sceneEntVisData[viewIndex][sceneEntIndexa] = scene.dpvs.entVisData[viewIndex][entnuma];
                 visData |= sceneEntVisData[viewIndex++][sceneEntIndexa];
             }
         }
@@ -1545,7 +1545,7 @@ LABEL_65:
             {
                 for ( viewIndex = 0; viewIndex < 3; ++viewIndex )
                 {
-                    sceneEntVisData[viewIndex][sceneEntIndexa] = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnuma);
+                    sceneEntVisData[viewIndex][sceneEntIndexa] = scene.dpvs.entVisData[viewIndex][entnuma];
                     visData |= sceneEntVisData[viewIndex][sceneEntIndexa];
                 }
             }
@@ -1553,7 +1553,7 @@ LABEL_65:
             {
                 for ( viewIndex = 0; viewIndex < 3; ++viewIndex )
                 {
-                    viewVisDatac = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnuma);
+                    viewVisDatac = scene.dpvs.entVisData[viewIndex][entnuma];
                     if ( !viewVisDatac )
                         viewVisDatac = 1;
                     sceneEntVisData[viewIndex][sceneEntIndexa] = viewVisDatac;
@@ -1562,7 +1562,7 @@ LABEL_65:
             }
             while ( viewIndex < 7 )
             {
-                sceneEntVisData[viewIndex][sceneEntIndexa] = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnuma);
+                sceneEntVisData[viewIndex][sceneEntIndexa] = scene.dpvs.entVisData[viewIndex][entnuma];
                 visData |= sceneEntVisData[viewIndex++][sceneEntIndexa];
             }
         }
@@ -1608,7 +1608,7 @@ LABEL_65:
         {
             for ( viewIndex = 0; viewIndex < 3; ++viewIndex )
             {
-                sceneEntVisData[viewIndex][sceneEntIndexb] = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnumb);
+                sceneEntVisData[viewIndex][sceneEntIndexb] = scene.dpvs.entVisData[viewIndex][entnumb];
                 visData |= sceneEntVisData[viewIndex][sceneEntIndexb];
             }
         }
@@ -1616,7 +1616,7 @@ LABEL_65:
         {
             for ( viewIndex = 0; viewIndex < 3; ++viewIndex )
             {
-                viewVisDatad = *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnumb);
+                viewVisDatad = scene.dpvs.entVisData[viewIndex][entnumb];
                 if ( !viewVisDatad )
                     viewVisDatad = 1;
                 sceneEntVisData[viewIndex][sceneEntIndexb] = viewVisDatad;
@@ -1669,9 +1669,9 @@ int __cdecl R_DrawBModel(
     {
         __debugbreak();
     }
-    size = 20 * surfaceCount + 32;
+    size = sizeof(BModelSurface) * surfaceCount + 32;
     if ( constSet )
-        size = 20 * surfaceCount + 152;
+        size = sizeof(BModelSurface) * surfaceCount + 152;
     newConstantSet = 0;
     startSurfPos = _InterlockedExchangeAdd(&frontEndDataOut->surfPos, size);
     if ( size + startSurfPos <= 0x40000 )
@@ -2130,7 +2130,7 @@ void __cdecl R_FilterEntIntoCells_r(FilterEntInfo *entInfo, mnode_t *node, const
         bit = 0x80000000 >> (entnum & 0x1F);
         entCellBits[entnum >> 5] |= bit;
         dpvsGlob.entVisBits[localClientNum][wordIndex] |= bit;
-        *(unsigned int *)(scene.dynSModelVisBitsCamera[localClientNum - 4] + 4 * entnum) = (unsigned int)entInfo->info.bmodel;
+        scene.dpvs.entInfo[localClientNum][entnum] = entInfo->info;
     }
 }
 
@@ -2488,7 +2488,7 @@ void __cdecl R_InitialEntityCulling()
                         v11 = 0;
 LABEL_20:
                         if ( v11 )
-                            *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum) = 2;
+                            scene.dpvs.entVisData[viewIndex][entnum] = 2;
                     }
                 }
                 if ( r_showCullXModels->current.enabled )
@@ -2517,7 +2517,7 @@ LABEL_20:
                              dpvsView->frustumPlanes,
                              dpvsView->frustumPlaneCount) )
                 {
-                    *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum) = 2;
+                    scene.dpvs.entVisData[viewIndex][entnum] = 2;
                 }
             }
             if ( r_showCullXModels->current.enabled )
@@ -2588,7 +2588,7 @@ LABEL_20:
             v5 = 0;
 LABEL_51:
             if ( v5 )
-                *(_BYTE *)(scene.dynSModelVisBitsCamera[viewIndex - 13] + entnum) = 2;
+                scene.dpvs.entVisData[viewIndex][entnum] = 2;
         }
     }
     glassBrushCount = scene.glassBrushCount;
@@ -2719,9 +2719,9 @@ void __cdecl R_AddCellDynBrushSurfacesInFrustumCmd(DpvsPlane **data)
 {
     unsigned int oldViewIndex; // [esp+0h] [ebp-8h]
 
-    oldViewIndex = R_SetVisData(*((unsigned __int16 *)data + 4));
+    oldViewIndex = R_SetVisData(((const DpvsDynamicCellCmd *)data)->viewIndex);
     if ( r_drawDynEnts->current.enabled )
-        R_CullDynBrushInCell((unsigned int)data[1], *data, *((unsigned __int8 *)data + 10));
+        R_CullDynBrushInCell(((const DpvsDynamicCellCmd *)data)->cellIndex, *data, ((const DpvsDynamicCellCmd *)data)->planeCount);
     R_SetVisData(oldViewIndex);
 }
 
@@ -3880,7 +3880,7 @@ void __cdecl R_ShowCull(const float *viewOrigin)
     {
         sceneEntCount = scene.sceneDObjCount;
         sceneEntVisData = scene.sceneDObjVisData[0];
-        entInfo = (GfxEntCellRefInfo *)scene.dynSModelVisBitsCamera[scene.dpvs.localClientNum - 4];
+        entInfo = scene.dpvs.entInfo[scene.dpvs.localClientNum];
         for ( sceneEntIndex = 0; sceneEntIndex < sceneEntCount; ++sceneEntIndex )
         {
             sceneEnt = &scene.sceneDObj[sceneEntIndex];
@@ -3992,7 +3992,7 @@ void __cdecl R_InitSceneData(int localClientNum)
     for ( cellIndex = 0; cellIndex < 2 * cellCount; ++cellIndex )
         Com_Memset(&rgp.world->dpvsPlanes.sceneEntCellBits[256 * cellIndex + offset], 0, 4 * (gfxCfg.entCount >> 5));
     memset((unsigned __int8 *)dpvsGlob.entVisBits[localClientNum], 0, 4 * (gfxCfg.entCount >> 5));
-    memset((unsigned __int8 *)scene.dynSModelVisBitsCamera[localClientNum - 4], 0, 4 * gfxCfg.entCount);
+    memset((unsigned __int8 *)scene.dpvs.entInfo[localClientNum], 0, sizeof(GfxEntCellRefInfo) * gfxCfg.entCount);
 }
 
 void __cdecl DynEntCl_InitFilter()
@@ -4035,7 +4035,7 @@ void __cdecl R_InitSceneBuffers()
     }
     scene.entOverflowedDrawBuf = (unsigned int *)R_AllocGlobalVariable(gfxCfg.entCount >> 3, "R_InitSceneBuffers");
     for ( viewIndex = 0; viewIndex < 7; ++viewIndex )
-        scene.dynSModelVisBitsCamera[viewIndex - 13] = (unsigned int)R_AllocGlobalVariable(
+        scene.dpvs.entVisData[viewIndex] = (unsigned __int8 *)R_AllocGlobalVariable(
                                                                                                                                      gfxCfg.entCount,
                                                                                                                                      "R_InitSceneBuffers");
     scene.dpvs.sceneXModelIndex = (unsigned __int16 *)R_AllocGlobalVariable(2 * gfxCfg.entCount, "R_InitSceneBuffers");
@@ -4045,8 +4045,7 @@ void __cdecl R_InitSceneBuffers()
         dpvsGlob.entVisBits[localClientNum] = (unsigned int *)R_AllocGlobalVariable(
                                                                                                                         4 * (gfxCfg.entCount >> 5),
                                                                                                                         "R_InitSceneBuffers");
-        scene.dynSModelVisBitsCamera[localClientNum - 4] = (unsigned int)R_AllocGlobalVariable(
-                                                                                                                                             4 * gfxCfg.entCount,
+        scene.dpvs.entInfo[localClientNum] = (GfxEntCellRefInfo *)R_AllocGlobalVariable(sizeof(GfxEntCellRefInfo) * gfxCfg.entCount,
                                                                                                                                              "R_InitSceneBuffers");
     }
 }
@@ -4057,13 +4056,13 @@ void __cdecl R_ShutdownSceneBuffers()
     unsigned int viewIndex; // [esp+4h] [ebp-4h]
 
     for ( viewIndex = 0; viewIndex < 7; ++viewIndex )
-        R_FreeGlobalVariable((void *)scene.dynSModelVisBitsCamera[viewIndex - 13]);
+        R_FreeGlobalVariable(scene.dpvs.entVisData[viewIndex]);
     R_FreeGlobalVariable(scene.dpvs.sceneXModelIndex);
     R_FreeGlobalVariable(scene.dpvs.sceneDObjIndex);
     for ( localClientNum = 0; localClientNum < gfxCfg.maxClientViews; ++localClientNum )
     {
         R_FreeGlobalVariable(dpvsGlob.entVisBits[localClientNum]);
-        R_FreeGlobalVariable((void *)scene.dynSModelVisBitsCamera[localClientNum - 4]);
+        R_FreeGlobalVariable(scene.dpvs.entInfo[localClientNum]);
     }
 }
 
@@ -4119,7 +4118,7 @@ void __cdecl R_ClearDpvsScene()
     }
     Com_Memset(scene.entOverflowedDrawBuf, 0, gfxCfg.entCount >> 3);
     for ( i = 0; i < 7; ++i )
-        Com_Memset((unsigned int *)scene.dynSModelVisBitsCamera[i - 13], 0, gfxCfg.entCount);
+        Com_Memset(scene.dpvs.entVisData[i], 0, gfxCfg.entCount);
     Com_Memcpy(rgp.world->dpvs.smodelVisDataCameraSaved, rgp.world->dpvs.smodelVisData[0], rgp.world->dpvs.smodelCount);
     Com_Memcpy(
         rgp.world->dpvs.surfaceVisDataCameraSaved,
@@ -4170,7 +4169,7 @@ void __cdecl R_ClearDpvsScene_For_ExtraCam()
     }
     Com_Memset(scene.entOverflowedDrawBuf, 0, gfxCfg.entCount >> 3);
     for ( i = 0; i < 7; ++i )
-        Com_Memset((unsigned int *)scene.dynSModelVisBitsCamera[i - 13], 0, gfxCfg.entCount);
+        Com_Memset(scene.dpvs.entVisData[i], 0, gfxCfg.entCount);
     for ( ia = 0; ia < 3; ++ia )
     {
         Com_Memset((unsigned int *)rgp.world->dpvs.smodelVisData[ia], 0, rgp.world->dpvs.smodelCount);
@@ -4771,7 +4770,7 @@ void __cdecl R_AddWorldSurfacesPortalWalk(int cameraCellIndex)
     int j; // [esp+14h] [ebp-109Ch]
     _BYTE v4[128]; // [esp+18h] [ebp-1098h] BYREF
     unsigned int v5; // [esp+9Ch] [ebp-1014h]
-    GfxCell *v6[1025]; // [esp+A0h] [ebp-1010h]
+    unsigned int v6[1025]; // [esp+A0h] [ebp-1010h]
     GfxCell *cell; // [esp+10A4h] [ebp-Ch]
     int i; // [esp+10A8h] [ebp-8h]
     DpvsView *dpvsView; // [esp+10ACh] [ebp-4h]
@@ -4841,7 +4840,7 @@ void __cdecl R_AddWorldSurfacesPortalWalk(int cameraCellIndex)
                         {
                             __debugbreak();
                         }
-                        v6[v5++] = (GfxCell *)j;
+                        v6[v5++] = j;
                     }
                 }
                 dpvsGlob.farPlaneEnabled = 0;
@@ -4849,7 +4848,7 @@ void __cdecl R_AddWorldSurfacesPortalWalk(int cameraCellIndex)
                 memset((unsigned __int8 *)dpvsGlob.cellForceInvisibleBits, 0, sizeof(dpvsGlob.cellForceInvisibleBits));
                 for ( k = 0; k < (int)v5; ++k )
                 {
-                    v1 = &rgp.world->cells[(unsigned int)v6[k]];
+                    v1 = &rgp.world->cells[v6[k]];
                     R_AddCellSurfacesAndCullGroupsInFrustumDelayed(
                         v1,
                         dpvsView->frustumPlanes,

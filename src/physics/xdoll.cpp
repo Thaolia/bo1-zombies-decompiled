@@ -159,7 +159,7 @@ void __cdecl XDoll_Update(int msec)
             {
                 cent = CG_GetEntity(body->client_index, body->entity_index);
                 obj = Com_GetClientDObj(body->entity_index, body->client_index);
-                if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 && cent->destructible && obj )
+                if ( ((cent->flagWord >> 1) & 1) != 0 && cent->destructible && obj )
                 {
                     if ( body->userBodyBoneHash )
                     {
@@ -422,7 +422,7 @@ char __cdecl XDoll_CreatePhysObj(
             if ( model->collSurfs )
                 surfFlags = model->collSurfs->surfFlags;
             else
-                surfFlags = (int)"t";
+                surfFlags = (int)(intptr_t)"t";
             aabb_gjk_geom = create_aabb_gjk_geom(
                                                 model->mins,
                                                 model->maxs,
@@ -433,7 +433,7 @@ char __cdecl XDoll_CreatePhysObj(
         }
         Sys_EnterCriticalSection(CRITSECT_PHYSICS);
         bone->physPreset = physPreset;
-        bone->rigidBody = (int)Phys_ObjCreate(0, origin, quat, vec3_origin, physPreset, &gjk_geom_list, 1, -1);
+        bone->rigidBody = (intptr_t)Phys_ObjCreate(0, origin, quat, vec3_origin, physPreset, &gjk_geom_list, 1, -1);
         userData = (PhysObjUserData *)bone->rigidBody;
         if ( !userData->m_bpb
             && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\physics\\xdoll.cpp", 327, 0, "%s", "userData->m_bpb") )
@@ -575,7 +575,7 @@ int __cdecl XDoll_CreateXDollForConstraints(
         if ( CG_DObjGetWorldTagMatrix(&cent->pose, obj, body->userBodyBoneHash, mat, origin) )
         {
             UserBody = Phys_CreateUserBody(origin, entity_index, PHYS_GEOM_CAPSULE);
-            body->userBody = (int)UserBody;
+            body->userBody = (intptr_t)UserBody;
             if ( body->userBody )
                 Phys_SetUserBody(body->userBody, origin);
         }

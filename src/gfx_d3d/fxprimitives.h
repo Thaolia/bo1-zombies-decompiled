@@ -419,6 +419,9 @@ struct FxPool
 
 
 
+// physObjId holds a PhysObjUserData pointer. Packing to 4 keeps it inside origin's 12 bytes on 64-bit, so FxElem stays
+// 0x2C there too: the elem pool's 16-bit handles (FX_PoolToHandle_Generic) and FX_FreeElem's memset rely on that size.
+#pragma pack(push, 4)
 struct FxElem // sizeof=0x2C
 {                                       // XREF: FxElemContainer/r
     unsigned __int8 defIndex;
@@ -431,7 +434,7 @@ struct FxElem // sizeof=0x2C
     union //$A58BA6DA60295001BBA5E9F807131CF1 // sizeof=0xC
     {                                       // XREF: FxElem/r
                                             // FX_UpdateElement/r
-        int physObjId;
+        intptr_t physObjId;
         float origin[3];
     };
     //FxElem::<unnamed_type_u> u;
@@ -457,6 +460,8 @@ struct FxElem // sizeof=0x2C
 
     static constexpr size_t HANDLE_SCALE = 4;
 };
+#pragma pack(pop)
+static_assert(sizeof(FxElem) == 0x2C, "FxElem");
 
 struct FxElemShared // sizeof=0x4
 {                                       // XREF: FxElemContainer/r

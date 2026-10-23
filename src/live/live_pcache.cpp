@@ -430,13 +430,15 @@ void __cdecl PCache_InvalidateComponent(PCacheComponent *component)
 
 void __cdecl PCache_ReleasePlayerEmblem(PCacheComponent *comp)
 {
-    if ( LODWORD(comp[13].xuid) )
-        CL_CompositePushCancel(comp[13].xuid);
-    if ( HIDWORD(comp[13].xuid) )
-        CL_CompositeReleaseImage((GfxImage *)HIDWORD(comp[13].xuid));
-    HIDWORD(comp[13].xuid) = 0;
-    comp[13].type = 0;
-    LODWORD(comp[13].xuid) = 0;
+    PCachePlayerEmblem *emblem = (PCachePlayerEmblem *)comp;
+
+    if ( emblem->jobID )
+        CL_CompositePushCancel(emblem->jobID);
+    if ( emblem->image )
+        CL_CompositeReleaseImage(emblem->image);
+    emblem->image = 0;
+    emblem->background = 0;
+    emblem->jobID = 0;
 }
 
 void __cdecl PCache_BatchUpdatePlayerEmblems(int controllerIndex, PCachePlayerEmblem *emblems, int count)

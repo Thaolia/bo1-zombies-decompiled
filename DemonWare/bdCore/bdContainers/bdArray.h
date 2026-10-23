@@ -39,7 +39,7 @@ struct bdArray
     // clear (destroys elements + frees buffer)
     // ---------------------------------------------------------------------
 
-    inline int clear()
+    inline intptr_t clear()
     {
         unsigned int count = m_size;
         T *data = m_data;
@@ -55,17 +55,17 @@ struct bdArray
         m_data = nullptr;
         m_capacity = 0;
         m_size = 0;
-        return (int)this;
+        return (intptr_t)this;
     }
 
     // ---------------------------------------------------------------------
     // capacity decrease (matches shrink heuristic exactly)
     // ---------------------------------------------------------------------
 
-    inline int decreaseCapacity(unsigned int a2)
+    inline intptr_t decreaseCapacity(unsigned int a2)
     {
         if (m_capacity <= 4 * m_size)
-            return (int)this;
+            return (intptr_t)this;
 
         unsigned int reduce;
         if (a2 <= m_capacity - m_size)
@@ -94,14 +94,14 @@ struct bdArray
 
         bdMemory::deallocate(m_data);
         m_data = newData;
-        return (int)this;
+        return (intptr_t)this;
     }
 
     // ---------------------------------------------------------------------
     // capacity increase
     // ---------------------------------------------------------------------
 
-    inline int increaseCapacity(unsigned int a2)
+    inline intptr_t increaseCapacity(unsigned int a2)
     {
         unsigned int grow = (a2 <= m_capacity) ? m_capacity : a2;
         unsigned int newCap = grow + m_capacity;
@@ -121,17 +121,17 @@ struct bdArray
 
         m_data = newData;
         m_capacity = newCap;
-        return (int)this;
+        return (intptr_t)this;
     }
 
     // ---------------------------------------------------------------------
     // assignment operator
     // ---------------------------------------------------------------------
 
-    inline int operator=(const bdArray &rhs)
+    inline intptr_t operator=(const bdArray &rhs)
     {
         if (this == &rhs)
-            return (int)this;
+            return (intptr_t)this;
 
         unsigned int rhsSize = rhs.m_size;
 

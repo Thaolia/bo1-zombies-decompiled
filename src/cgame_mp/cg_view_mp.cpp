@@ -1029,7 +1029,7 @@ void __cdecl CG_GetTurretEntityOrgAngles(int localClientNum, float *origin, floa
         __debugbreak();
     }
     if ( cgameGlob->killCamEntity == 1023
-        || (cent = CG_GetEntity(localClientNum, cgameGlob->killCamEntity), ((*((unsigned int *)cent + 201) >> 1) & 1) == 0)
+        || (cent = CG_GetEntity(localClientNum, cgameGlob->killCamEntity), ((cent->flagWord >> 1) & 1) == 0)
         || cent == (centity_s *)-108 )
     {
         *origin = cgameGlob->killCamLastEntityOrg[0];
@@ -1235,7 +1235,7 @@ const vehicle_info_t *__cdecl CG_GetKillCamVehicleInfo(int localClientNum)
     if ( cgameGlob->killCamEntity != 1023 )
     {
         cent = CG_GetEntity(localClientNum, cgameGlob->killCamEntity);
-        if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 )
+        if ( ((cent->flagWord >> 1) & 1) != 0 )
             vehicleInfoIndex = cent->nextState.vehicleState.vehicleInfoIndex;
     }
     info = CG_GetVehicleInfo(vehicleInfoIndex);
@@ -1984,7 +1984,7 @@ void __cdecl LerpKillCamView(int localClientNum)
             if ( cgameGlob->killCamEntity != 1023 && cgameGlob->killCamFirstFrameRan )
             {
                 cent = CG_GetEntity(localClientNum, cgameGlob->killCamEntity);
-                if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 && cgameGlob->frametime > 0 )
+                if ( ((cent->flagWord >> 1) & 1) != 0 && cgameGlob->frametime > 0 )
                 {
                     entityVel[0] = cent->pose.origin[0] - cgameGlob->killCamPrevBombOrigin[0];
                     entityVel[1] = cent->pose.origin[1] - cgameGlob->killCamPrevBombOrigin[1];
@@ -2804,7 +2804,7 @@ void CG_OffsetThirdPersonView(int localClientNum)
                 CG_GetEntity(localClientNum,
                     cgameGlob->predictedPlayerState.corpseIndex + 32);
 
-            if (((*((_DWORD *)cent + 201) >> 1) & 1) != 0)
+            if (((cent->flagWord >> 1) & 1) != 0)
             {
                 DObj *obj = Com_GetClientDObj(cent->nextState.number, localClientNum);
                 if (obj)
@@ -3888,7 +3888,7 @@ void __cdecl CG_UpdateThirdPerson(int localClientNum, bool forExtraCam)
     if ( (cgameGlob->nextSnap->ps.eFlags & 0x4000) != 0 && (cgameGlob->nextSnap->ps.otherFlags & 2) == 0 )
     {
         cent = CG_GetEntity(localClientNum, cgameGlob->nextSnap->ps.viewlocked_entNum);
-        if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 )
+        if ( ((cent->flagWord >> 1) & 1) != 0 )
         {
             if ( CG_GetVehicleInfo(cent->nextState.vehicleState.vehicleInfoIndex)->remoteControl )
                 cgameGlob->renderingThirdPerson = TP_FOR_MODEL;
@@ -4064,7 +4064,7 @@ void __cdecl CG_UpdateRemoteControlEntityViewOffset(int localClientNum)
 
     cgameGlob = CG_GetLocalClientGlobals(localClientNum);
     vehicle = CG_GetEntity(localClientNum, cgameGlob->nextSnap->ps.viewlocked_entNum);
-    if ( ((*((unsigned int *)vehicle + 201) >> 1) & 1) != 0 )
+    if ( ((vehicle->flagWord >> 1) & 1) != 0 )
     {
         Vec3Lerp(
             vehicle->currentState.pos.trBase,
@@ -4861,7 +4861,7 @@ void __cdecl CG_CacheKillCamEntityPose(int localClientNum)
             __debugbreak();
         }
         cent = CG_GetEntity(localClientNum, cgameGlob->killCamLastEntityNum);
-        if ( ((*((unsigned int *)cent + 201) >> 1) & 1) == 0
+        if ( ((cent->flagWord >> 1) & 1) == 0
             && !Assert_MyHandler(
                         "C:\\projects_pc\\cod\\codsrc\\src\\cgame_mp\\cg_view_mp.cpp",
                         2534,
@@ -4909,7 +4909,7 @@ void __cdecl CG_CacheKillCamLookAtEntityOrigin(int localClientNum)
     if ( cgameGlob->killCamLookAtEntity != 1023 )
     {
         centTarget = CG_GetEntity(localClientNum, cgameGlob->killCamLookAtEntity);
-        if ( ((*((unsigned int *)centTarget + 201) >> 1) & 1) != 0 )
+        if ( ((centTarget->flagWord >> 1) & 1) != 0 )
         {
             if ( centTarget->pose.eType != 1
                 && !Assert_MyHandler(

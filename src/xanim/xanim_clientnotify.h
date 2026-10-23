@@ -1,5 +1,6 @@
 #pragma once
 #include <clientscript/cscr_stringlist.h>
+#include <platform/arch_size.h>
 
 struct ClientNotifyData // sizeof=0x10
 {                                       // XREF: XAnimAddClientNotify/r
@@ -15,7 +16,7 @@ struct XAnimClientNotifyAdder // sizeof=0x0
 
 struct XAnimClientNotifyList // sizeof=0x604
 {                                       // XREF: ?CG_UpdateViewWeaponAnim@@YAXHH@Z/r
-    unsigned __int8 m_clientNotifyMemory[1536];
+    alignas(void *) unsigned __int8 m_clientNotifyMemory[BO1_ARCH_SIZE(1536, 64 * 32)]; // 64 XAnimClientNotify
     int m_numNotifies;
 
     XAnimClientNotifyList();
@@ -44,5 +45,7 @@ struct XAnimClientNotify // sizeof=0x14
     unsigned int GetNotifyType();
     unsigned int GetNotetrackCLName();
 };
+static_assert(sizeof(XAnimClientNotify) == BO1_ARCH_SIZE(24, 32));
+static_assert(sizeof(XAnimClientNotifyList::m_clientNotifyMemory) == 64 * sizeof(XAnimClientNotify));
 
 

@@ -4,6 +4,7 @@
 #include "../tl_system.h"
 #include <universal/q_shared.h>
 #include <qcommon/threads.h>
+#include <platform/arch_size.h>
 
 thread_local jqBatch *jqCurBatch;
 thread_local jqWorker *jqCurWorker;
@@ -741,10 +742,10 @@ void __cdecl jqAttachQueueToWorkers(jqQueue *Queue, unsigned int ProcessorMask)
                 }
                 break; // L57: do not write Queues[8+] (retail would, over WorkTime); skip this worker
             }
-        } while (_InterlockedCompareExchange(
-            reinterpret_cast<volatile LONG *>(&worker->Queues[queueSlot]),
-            reinterpret_cast<LONG>(Queue),
-            0) != 0);
+        } while (_InterlockedCompareExchangePointer(
+            reinterpret_cast<void *volatile *>(&worker->Queues[queueSlot]),
+            Queue,
+            nullptr) != nullptr);
         if (queueSlot >= 8)
             continue;
 
@@ -947,9 +948,9 @@ void __cdecl jqCheckDMALS(const void *addr)
     tlFatal("%s (LS) is NULL.", jqCheckContext);
   if ( ((unsigned __int8)(uintptr_t)addr & 0xF) != 0 )
     tlFatal("%s 0x%x (LS) not 16byte aligned.", jqCheckContext, addr);
-  if ( (unsigned int)addr > 0x40000 )
+  if ( (uintptr_t)addr > 0x40000 )
     tlFatal("%s 0x%x (LS) is > 256k.", jqCheckContext, addr);
-  if ( (unsigned int)addr < 0x4000 )
+  if ( (uintptr_t)addr < 0x4000 )
     tlFatal("%s 0x%x (LS) is in kernel memory.", jqCheckContext, addr);
 }
 
@@ -959,7 +960,7 @@ void __cdecl jqCheckDMAMain(const void *addr)
     tlFatal("%s (Main) is NULL.", jqCheckContext);
   if ( ((unsigned __int8)(uintptr_t)addr & 0xF) != 0 )
     tlFatal("%s 0x%x (Main) not 16byte aligned.", jqCheckContext, addr);
-  if ( (unsigned int)addr < 0x40000 )
+  if ( (uintptr_t)addr < 0x40000 )
     tlFatal("%s 0x%x (Main) is < 256k.", jqCheckContext, addr);
 }
 
@@ -1748,7 +1749,7 @@ void __cdecl jqTempWorkerLoop(jqWorker *Worker, jqBatchGroup *GroupID, bool (__c
         {
 
           block = (jqAtomicQueue<jqBatch, 32>::NodeType *)tlMemAlloc(sizeof(jqAtomicQueue<jqBatch, 32>::NodeType) * 32 + 8, 4u, 0);
-          static_assert(sizeof(jqAtomicQueue<jqBatch, 32>::NodeType) * 32 + 8 == 0x1008);
+          static_assert(sizeof(jqAtomicQueue<jqBatch, 32>::NodeType) * 32 + 8 == BO1_ARCH_SIZE(0x1008, 5128));
 
           //v12 = block;
           //v13 = 31;
@@ -2405,12 +2406,12 @@ void jqAtomicHeap::Init(
   unsigned int HeapSize; // edi
   unsigned int v7; // eax
   int v8; // ebx
-  int *p_NBlocks; // edi
+  jqAtomicHeap::LevelInfo *p_NBlocks; // edi
   int v10; // ecx
   unsigned __int8 *v11; // eax
   unsigned __int8 *LevelData; // ebx
   unsigned __int64 *v13; // edi
-  unsigned __int64 **p_CellAvailable; // ecx
+  jqAtomicHeap::LevelInfo *p_CellAvailable; // ecx
   signed int v15; // kr04_4
   unsigned int *v16; // esi
   int i; // [esp+14h] [ebp+8h]
@@ -2449,15 +2450,15 @@ void jqAtomicHeap::Init(
   i = 0;
   if ( this->NLevels > 0 )
   {
-    p_NBlocks = &this->Levels[0].NBlocks;
+    p_NBlocks = this->Levels;
     do
     {
-      p_NBlocks += 5;
-      *(p_NBlocks - 6) = this->BlockSize << v8;
+      p_NBlocks->BlockSize = this->BlockSize << v8;
       v10 = this->NLevels - v8++ - 1;
-      *(p_NBlocks - 5) = 1 << v10;
-      *(p_NBlocks - 4) = (unsigned int)((1 << v10) + 63) >> 6;
-      i += (int)((*(p_NBlocks - 5) + 1023) & 0xFFFFFC00) / 8;
+      p_NBlocks->NBlocks = 1 << v10;
+      p_NBlocks->NCells = (unsigned int)((1 << v10) + 63) >> 6;
+      i += (int)((p_NBlocks->NBlocks + 1023) & 0xFFFFFC00) / 8;
+      ++p_NBlocks;
     }
     while ( v8 < this->NLevels );
   }
@@ -2469,20 +2470,20 @@ void jqAtomicHeap::Init(
   ia = 0;
   if ( this->NLevels > 0 )
   {
-    p_CellAvailable = &this->Levels[0].CellAvailable;
+    p_CellAvailable = this->Levels;
     do
     {
-      v15 = ((unsigned int)*(p_CellAvailable - 2) + 1023) & 0xFFFFFC00;
-      *p_CellAvailable = (unsigned __int64 *)LevelData;
-      p_CellAvailable[1] = v13;
+      v15 = ((unsigned int)p_CellAvailable->NBlocks + 1023) & 0xFFFFFC00;
+      p_CellAvailable->CellAvailable = (unsigned __int64 *)LevelData;
+      p_CellAvailable->CellAllocated = v13;
       LevelData += v15 / 8;
       v13 = (unsigned __int64 *)((char *)v13 + v15 / 8);
-      p_CellAvailable += 5;
+      ++p_CellAvailable;
       ++ia;
     }
     while ( ia < this->NLevels );
   }
-  v16 = (unsigned int *)*((unsigned int *)&this->TotalBlocks + 5 * this->NLevels);
+  v16 = (unsigned int *)this->Levels[this->NLevels - 1].CellAvailable;
   *v16 = 1;
   v16[1] = 0;
 }

@@ -39,9 +39,10 @@ include(cmake_files.cmake)
 # BO1_OFFLINE builds the solo game without the online services (DemonWare, voice chat) and without the Windows-only
 # binary SDKs (Steam, Bink, NVAPI, libvpx). src/platform/stubs/ answers for them the way they behave on a PC with no
 # Steam client, no NVIDIA driver and no voice sound device, paths the engine already handles. The movie capture
-# (mjpeg, on libvpx), the monkey test harness and Tracy go too. It is always on outside win32; on win32 the
-# win32-msvc-offline preset turns it on so the stubs can be played against the reference build.
-if(BO1_PLATFORM STREQUAL "win32")
+# (mjpeg, on libvpx), the monkey test harness and Tracy go too. It is always on outside 32-bit win32 (the SDKs are
+# 32-bit Windows libraries); there the win32-msvc-offline preset turns it on so the stubs can be played against the
+# reference build.
+if(BO1_PLATFORM STREQUAL "win32" AND NOT BO1_ARCH_64)
     option(BO1_OFFLINE "Build without online services and Windows-only binary SDKs" OFF)
 else()
     set(BO1_OFFLINE ON)

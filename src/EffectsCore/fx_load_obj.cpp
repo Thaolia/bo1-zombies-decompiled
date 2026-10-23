@@ -1401,7 +1401,7 @@ const FxEffectDef *__cdecl FX_Load(const char *name)
     const FxEffectDef *effectDef; // [esp+1Ch] [ebp-8h]
     FxEditorEffectDef *edEffectDef; // [esp+20h] [ebp-4h]
 
-    edEffectDef = (FxEditorEffectDef *)operator new(0x12EE0u);
+    edEffectDef = (FxEditorEffectDef *)operator new(sizeof(FxEditorEffectDef));
     v4 = name;
     v3 = edEffectDef;
     do
@@ -1431,11 +1431,10 @@ const FxEffectDef *__cdecl FX_LoadFailed(const char *name)
     _BYTE *v3; // [esp+8h] [ebp-50h]
     const char *v4; // [esp+Ch] [ebp-4Ch]
     const char *v5; // [esp+2Ch] [ebp-2Ch]
-    unsigned int *v6; // [esp+30h] [ebp-28h]
-    unsigned int *v7; // [esp+34h] [ebp-24h]
+    FxElemDef *elemDef;
     unsigned int baseBytesNeeded; // [esp+40h] [ebp-18h]
     unsigned __int8 *effectDef; // [esp+48h] [ebp-10h]
-    int relocationDistance; // [esp+4Ch] [ebp-Ch]
+    ptrdiff_t relocationDistance; // [esp+4Ch] [ebp-Ch]
     int elemIndex; // [esp+54h] [ebp-4h]
 
     if ( !fx_load.defaultEffect )
@@ -1478,7 +1477,7 @@ const FxEffectDef *__cdecl FX_LoadFailed(const char *name)
     baseBytesNeeded = fx_load.defaultEffect->totalSize - (v5 - fx_load.defaultEffect->name);
     effectDef = FX_AllocMem(fx_load.defaultEffect->totalSize - (v5 - (fx_load.defaultEffect->name + 1)) + strlen(name));
     memcpy(effectDef, (unsigned __int8 *)fx_load.defaultEffect, baseBytesNeeded);
-    *(unsigned int *)effectDef = (unsigned int) & effectDef[baseBytesNeeded];
+    ((FxEffectDef *)effectDef)->name = (const char *)&effectDef[baseBytesNeeded];
     v4 = name;
     v3 = *(_BYTE **)effectDef;
     do
@@ -1488,13 +1487,14 @@ const FxEffectDef *__cdecl FX_LoadFailed(const char *name)
     }
     while ( v2 );
     relocationDistance = effectDef - (unsigned __int8 *)fx_load.defaultEffect;
-    *((unsigned int *)effectDef + 7) += effectDef - (unsigned __int8 *)fx_load.defaultEffect;
-    for ( elemIndex = 0; elemIndex < *((unsigned int *)effectDef + 5) + *((unsigned int *)effectDef + 4); ++elemIndex )
+    ((FxEffectDef *)effectDef)->elemDefs = (const FxElemDef *)((const unsigned __int8 *)((FxEffectDef *)effectDef)->elemDefs + relocationDistance);
+    for ( elemIndex = 0;
+          elemIndex < (unsigned int)((FxEffectDef *)effectDef)->elemDefCountOneShot + (unsigned int)((FxEffectDef *)effectDef)->elemDefCountLooping;
+          ++elemIndex )
     {
-        v7 = (unsigned int *)(*((unsigned int *)effectDef + 7) + 292 * elemIndex + 188);
-        *v7 += relocationDistance;
-        v6 = (unsigned int *)(*((unsigned int *)effectDef + 7) + 292 * elemIndex + 192);
-        *v6 += relocationDistance;
+        elemDef = (FxElemDef *)&((FxEffectDef *)effectDef)->elemDefs[elemIndex];
+        elemDef->velSamples = (const FxElemVelStateSample *)((const unsigned __int8 *)elemDef->velSamples + relocationDistance);
+        elemDef->visSamples = (const FxElemVisStateSample *)((const unsigned __int8 *)elemDef->visSamples + relocationDistance);
     }
     return (const FxEffectDef *)effectDef;
 }

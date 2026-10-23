@@ -5,7 +5,7 @@ libclang parses src/database/db_load.cpp twice, once for the retail 32-bit targe
 Every type the loader streams (the pointee of each `var*` global, plus the zone header types) is flattened into leaf
 fields: a pointer, a union that holds a pointer, or a run of plain bytes. Leaves are matched between the two targets
 by their field path, so each one gets its 32-bit and 64-bit offset. Padding is kept as byte leaves where the 64-bit
-layout has room for it.
+layout has room for it. Integer fields listed in VALUE_FIXUPS also get a value fixup entry (see ff_layout.h).
 
     tools/ffconv/gen/layouts.py --out ff_layouts.gen.h [--target64 x86_64-w64-mingw32] [--dxsdk DIR]
 
@@ -24,6 +24,15 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 EXTRA_ROOTS = ['XAsset', 'XAssetList', 'ScriptStringList']
 
 BYTES, PTR, UNION_PTR, OPAQUE = 'LEAF_BYTES', 'LEAF_PTR', 'LEAF_UNION_PTR', 'LEAF_OPAQUE'
+FIXUP = 'FIXUP'
+
+# (record, field, unit): an int field of `record` that holds a byte distance between two elements of one array of
+# `unit`. Its value depends on the unit's size, so ffconv rescales it. docs/PORTING.md (phase 3) lists the integer
+# fields audited for this and why the others keep their value.
+VALUE_FIXUPS = {
+    # r_bsp_load_obj.cpp: tree->childrenOffset = (char *)&rgl.aabbTrees[first child] - (char *)tree.
+    ('GfxAabbTree', 'childrenOffset'): 'GfxAabbTree',
+}
 POINTER_KINDS = {ci.TypeKind.POINTER, ci.TypeKind.MEMBERPOINTER, ci.TypeKind.BLOCKPOINTER}
 
 
@@ -91,15 +100,33 @@ def has_pointer(t):
     return False
 
 
+def has_fixup(t):
+    t = t.get_canonical()
+    if t.kind == ci.TypeKind.CONSTANTARRAY:
+        return has_fixup(t.element_type)
+    if t.kind == ci.TypeKind.RECORD:
+        name = record_name(t)
+        return any((name, f.spelling) in VALUE_FIXUPS or has_fixup(f.type) for f in t.get_fields())
+    return False
+
+
+def fixup_row(record, field, path, base, out):
+    t = field.type.get_canonical()
+    if t.kind not in (ci.TypeKind.INT, ci.TypeKind.LONG) or t.get_size() != 4:
+        raise LayoutError(f'{record}.{field.spelling}: a value fixup needs a 4-byte signed integer')
+    out.append((path, base, 4, FIXUP, VALUE_FIXUPS[(record, field.spelling)]))
+
+
 def leaves(t, path, base, out):
-    """Append (path, offset, size, kind) for type t at byte offset base."""
+    """Append (path, offset, size, kind) for type t at byte offset base, and (path, offset, 4, FIXUP, unit) for the
+    fields VALUE_FIXUPS lists."""
     t = t.get_canonical()
     size = t.get_size()
     if t.kind in POINTER_KINDS:
         out.append((path, base, size, PTR))
     elif t.kind == ci.TypeKind.CONSTANTARRAY:
         elem = t.element_type.get_canonical()
-        if not has_pointer(elem):
+        if not has_pointer(elem) and not has_fixup(elem):
             out.append((path, base, size, BYTES))
         else:
             for i in range(t.element_count):
@@ -124,7 +151,11 @@ def leaves(t, path, base, out):
                         end = max(end, bitfield_unit(fields[i])[1])
                     out.append((f'{path}.{f.spelling}:bits', base + start, end - start, BYTES))
                 else:
-                    leaves(f.type, f'{path}.{f.spelling or "@" + str(i)}', base + f.get_field_offsetof() // 8, out)
+                    fpath = f'{path}.{f.spelling or "@" + str(i)}'
+                    fbase = base + f.get_field_offsetof() // 8
+                    leaves(f.type, fpath, fbase, out)
+                    if (record_name(t), f.spelling) in VALUE_FIXUPS:
+                        fixup_row(record_name(t), f, fpath, fbase, out)
                 i += 1
     else:
         if size <= 0:
@@ -143,6 +174,8 @@ def bitfield_unit(field):
 def union_leaf(t, path, base, out):
     size = t.get_size()
     members = list(t.get_fields())
+    if any(has_fixup(m.type) for m in members):
+        raise LayoutError(f'{path}: a value fixup inside a union')
     if not any(has_pointer(m.type) for m in members):
         out.append((path, base, size, BYTES))
         return
@@ -203,8 +236,19 @@ def merge(rows):
     return merged
 
 
+def unit_sizes(tu32, tu64, unit):
+    sizes = []
+    for tu in (tu32, tu64):
+        t = find_record(tu.cursor, unit)
+        if t is None:
+            raise LayoutError(f'value fixup unit {unit} not found')
+        sizes.append(t.get_size())
+    return sizes
+
+
 def build(tu32, tu64):
     roots32, roots64 = root_types(tu32), root_types(tu64)
+    units = {unit: unit_sizes(tu32, tu64, unit) for unit in set(VALUE_FIXUPS.values())}
     tables = {}
     for name in sorted(roots32):
         t32, t64 = roots32[name], roots64.get(name)
@@ -213,6 +257,10 @@ def build(tu32, tu64):
         l32, l64 = flatten(t32), flatten(t64)
         if [p for p, *_ in l32] != [p for p, *_ in l64]:
             raise LayoutError(f'{name}: the two targets flatten to different fields')
+        fixups = [(r32[1], r64[1], *units[r32[4]], r32[4], r32[0])
+                  for r32, r64 in zip(l32, l64) if r32[3] == FIXUP]
+        l32 = [r for r in l32 if r[3] != FIXUP]
+        l64 = [r for r in l64 if r[3] != FIXUP]
         rows = []
         for (path, o32, s32, k32), (_, o64, s64, k64) in zip(l32, l64):
             if k32 != k64:
@@ -221,7 +269,11 @@ def build(tu32, tu64):
                 raise LayoutError(f'{name}{path}: {s32} bytes on 32-bit, {s64} on 64-bit')
             rows.append((o32, o64, s32, s64, k32))
         rows = keep_padding(rows, t32.get_size(), t64.get_size())
-        tables[name] = (t32.get_size(), t32.get_align(), t64.get_size(), t64.get_align(), merge(rows))
+        for o32, o64, *_ in fixups:
+            if not any(k == BYTES and r32 <= o32 and o32 + 4 <= r32 + n32 and o64 - o32 == r64 - r32
+                       for r32, r64, n32, _, k in rows):
+                raise LayoutError(f'{name}: a value fixup at {o32} is not inside a byte leaf')
+        tables[name] = (t32.get_size(), t32.get_align(), t64.get_size(), t64.get_align(), merge(rows), fixups)
     return tables
 
 
@@ -240,16 +292,25 @@ def emit(tables, target64, out):
         'namespace ff',
         '{',
     ]
-    for name, (s32, a32, s64, a64, rows) in tables.items():
+    for name, (s32, a32, s64, a64, rows, fixups) in tables.items():
         lid = ident(name)
         body = ', '.join(f'{{{o32}, {o64}, {l32}, {l64}, {k}}}' for o32, o64, l32, l64, k in rows)
+        lines.append(f'static_assert(sizeof({name}) == {s32} && alignof({name}) == {a32}, "{name}: 32-bit layout");')
+        lines.append(f'inline constexpr Leaf kLeaves_{lid}[] = {{{body}}};')
+        fixup_ref = ''
+        if fixups:
+            for o32, _, u32, _, unit, path in fixups:
+                lines.append(f'static_assert(offsetof({name}, {path[1:]}) == {o32} && sizeof({unit}) == {u32}, '
+                             f'"{name}{path}: value fixup");')
+            fbody = ', '.join(f'{{{o32}, {o64}, {u32}, {u64}, "{name}{path}"}}'
+                              for o32, o64, u32, u64, _, path in fixups)
+            lines.append(f'inline constexpr ValueFixup kFixups_{lid}[] = {{{fbody}}};')
+            fixup_ref = f', kFixups_{lid}, {len(fixups)}'
         lines += [
-            f'static_assert(sizeof({name}) == {s32} && alignof({name}) == {a32}, "{name}: 32-bit layout");',
-            f'inline constexpr Leaf kLeaves_{lid}[] = {{{body}}};',
             f'template <> const TypeLayout &Layout<{name}>()',
             '{',
             f'    static constexpr TypeLayout layout{{"{name}", {s32}, {a32}, {s64}, {a64}, kLeaves_{lid}, '
-            f'{len(rows)}}};',
+            f'{len(rows)}{fixup_ref}}};',
             '    return layout;',
             '}',
         ]
@@ -264,14 +325,20 @@ def main():
     parser.add_argument('--target32', default='i686-w64-mingw32')
     parser.add_argument('--target64', default='x86_64-w64-mingw32')
     parser.add_argument('--dxsdk', default='/mnt/c/SDKs/DXSDK_Jun10/DXSDK')
+    parser.add_argument('--depfile', help='write the headers both parses read, for the build to rerun on a change')
     opts = parser.parse_args()
+    tu32, tu64 = parse(opts.target32, opts.dxsdk), parse(opts.target64, opts.dxsdk)
     try:
-        tables = build(parse(opts.target32, opts.dxsdk), parse(opts.target64, opts.dxsdk))
+        tables = build(tu32, tu64)
     except LayoutError as e:
         print(f'layouts.py: {e}', file=sys.stderr)
         return 1
     emit(tables, opts.target64, opts.out)
-    print(f'{len(tables)} types -> {opts.out}')
+    if opts.depfile:
+        headers = sorted({os.path.abspath(i.include.name) for tu in (tu32, tu64) for i in tu.get_includes()})
+        with open(opts.depfile, 'w', encoding='utf-8') as f:
+            f.write(opts.out.replace(' ', '\\ ') + ': ' + ' \\\n  '.join(h.replace(' ', '\\ ') for h in headers) + '\n')
+    print(f'{len(tables)} types, {sum(len(t[5]) for t in tables.values())} value fixups -> {opts.out}')
     return 0
 
 

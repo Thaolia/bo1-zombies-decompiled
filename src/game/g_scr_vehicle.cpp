@@ -3037,7 +3037,7 @@ int __cdecl G_LoadVehicle(char *name)
         pszBuffer = Com_LoadInfoString(string, "vehicle file", "VEHICLEFILE", loadBuffer);
         index = bg_numVehicleInfos;
         dst = (unsigned __int8 *)BG_GetVehicleInfo(bg_numVehicleInfos);
-        memset(dst, 0, 0x1DD8u);
+        memset(dst, 0, sizeof(vehicle_info_t));
         v6 = name;
         v5 = dst;
         HIDWORD(v4) = dst;
@@ -3153,7 +3153,7 @@ int __cdecl G_LoadVehicle(char *name)
 
     vehicle = (unsigned char *)BG_GetVehicleInfo(index);
 
-    memset(vehicle, 0, 0x1DD8);
+    memset(vehicle, 0, sizeof(vehicle_info_t));
 
     /* first field is vehicle name string */
     strcpy((char *)vehicle, name);
@@ -5125,8 +5125,8 @@ void __cdecl VEH_UpdateNitrousPosition(gentity_s *pSelf)
     nitrousVeh = veh->nitrousVehicle;
     memset(zero, 0, sizeof(zero));
     Sys_EnterCriticalSection(CRITSECT_PHYSICS);
-    Phys_ObjGetPosition((int)nitrousVeh->m_phys_user_data, absPos, absAxis);
-    Phys_ObjGetVelocities((int)nitrousVeh->m_phys_user_data, tvel, avel);
+    Phys_ObjGetPosition((intptr_t)nitrousVeh->m_phys_user_data, absPos, absAxis);
+    Phys_ObjGetVelocities((intptr_t)nitrousVeh->m_phys_user_data, tvel, avel);
     notifyFlags = nitrousVeh->m_server_notify_flags;
     nitrousVeh->m_server_notify_flags = 0;
     intensity = nitrousVeh->m_collision_intensity;
@@ -6872,7 +6872,7 @@ void    VEH_UpdatePath(gentity_s *ent)
                 Scr_Notify(ent, scr_const.reached_node, 1u);
             }
         }
-        memcpy(veh, &nextVpp, 0xDCu);
+        memcpy(&veh->pathPos, &nextVpp, sizeof(vehicle_pathpos_t));
         if (veh->manualTime > 0.0)
         {
             if (veh->manualTime >= 1.0
@@ -6887,7 +6887,7 @@ void    VEH_UpdatePath(gentity_s *ent)
             }
             G_VehUpdatePathPos(&nextVpp, -1);
         }
-        if (*(_BYTE *)g_vehicleDrawPath->current.integer && *(_BYTE *)g_vehicleDrawPath->current.integer == 49)
+        if (*g_vehicleDrawPath->current.string && *g_vehicleDrawPath->current.string == 49)
             VP_DrawPath(&nextVpp);
         if (veh->pathPos.endOfPath && (veh->flags & 0x100) == 0)
             veh->speed = 0.0f;
@@ -10036,7 +10036,7 @@ void __cdecl CMD_VEH_GetGunnerTargetVec(scr_entref_t entref)
 
 void __cdecl CMD_VEH_SetGunnerTargetEnt(scr_entref_t entref)
 {
-    int targetOrigin; // edx
+    float *targetOrigin; // edx
     int number; // [esp+0h] [ebp-28h]
     float *v3; // [esp+8h] [ebp-20h]
     scr_vehicle_s *veh; // [esp+Ch] [ebp-1Ch]
@@ -10068,9 +10068,9 @@ void __cdecl CMD_VEH_SetGunnerTargetEnt(scr_entref_t entref)
     v3[1] = targetOffset[1];
     v3[2] = targetOffset[2];
     veh->gunnerTargets[gunnerIndex].targetOrigin[0] = 0.0f;
-    targetOrigin = (int)veh->gunnerTargets[gunnerIndex].targetOrigin;
-    *(unsigned int *)(targetOrigin + 4) = 0;
-    *(unsigned int *)(targetOrigin + 8) = 0;
+    targetOrigin = veh->gunnerTargets[gunnerIndex].targetOrigin;
+    *(unsigned int *)(targetOrigin + 1) = 0;
+    *(unsigned int *)(targetOrigin + 2) = 0;
 }
 
 void __cdecl CMD_VEH_ClearGunnerTarget(scr_entref_t entref)

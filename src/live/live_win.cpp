@@ -612,7 +612,7 @@ int __cdecl Live_GetControllerFromXUID(unsigned __int64 player)
 
 void __cdecl Live_GiveAchievement(int localControllerIndex, const char *achievementName)
 {
-    if ( !fs_gameDirVar || !*(_BYTE *)fs_gameDirVar->current.integer )
+    if ( !fs_gameDirVar || !*fs_gameDirVar->current.string )
         LiveSteam_GiveAchievement(achievementName);
 }
 
@@ -1720,7 +1720,7 @@ void __cdecl Live_PopulateRecentServers(unsigned __int8 *buf, int bufsize)
     {
         v2 = i;
         LODWORD(s_recentServers[v2].serverID) = *(unsigned int *)ptr;
-        *(unsigned int *)(v2 * 16 + 174315068) = *((unsigned int *)ptr + 1);
+        HIDWORD(s_recentServers[v2].serverID) = *((unsigned int *)ptr + 1);
         s_recentServers[i].joinTime = *((unsigned int *)ptr + 2);
         ptr += 12;
     }
@@ -1753,7 +1753,7 @@ void __cdecl Live_AddRecentServer(unsigned __int64 serveruid)
         s_recentServers[29].joinTime = currentTime;
         s_recentServers[29].serverID = serveruid;
     }
-    qsort(s_recentServers, 0x1Eu, 0x10u, (int (__cdecl *)(const void *, const void *))compareRecentServers);
+    qsort(s_recentServers, 0x1Eu, sizeof(*(s_recentServers)), (int (__cdecl *)(const void *, const void *))compareRecentServers);
     Live_SaveRecentServers();
 }
 
@@ -1848,7 +1848,7 @@ void __cdecl Live_AddFavourite(unsigned __int64 serverid, unsigned __int64 serve
         *(_WORD *)&v2->addressblob[4] = WORD2(serverid);
         v3 = i;
         LODWORD(s_favourites[v3].uid) = serveruid;
-        *(unsigned int *)(v3 * 16 + 174313908) = HIDWORD(serveruid);
+        HIDWORD(s_favourites[v3].uid) = HIDWORD(serveruid);
     }
     CL_SetFavourites_f();
 }
@@ -1864,7 +1864,7 @@ void __cdecl Live_DeleteFavourite(unsigned __int64 serverid)
     {
         v1 = i;
         LODWORD(s_favourites[v1].uid) = 0;
-        *(unsigned int *)(v1 * 16 + 174313908) = 0;
+        HIDWORD(s_favourites[v1].uid) = 0;
         CL_SetFavourites_f();
     }
 }
@@ -1882,7 +1882,7 @@ void __cdecl Live_ParseFavsBlobs(unsigned __int8 *addrblob, unsigned __int8 *uid
         *(_WORD *)&v2->addressblob[4] = *((_WORD *)addrblob + 2);
         v3 = i;
         LODWORD(s_favourites[v3].uid) = *(unsigned int *)uidblob;
-        *(unsigned int *)(v3 * 16 + 174313908) = *((unsigned int *)uidblob + 1);
+        HIDWORD(s_favourites[v3].uid) = *((unsigned int *)uidblob + 1);
         addrblob += 6;
         uidblob += 8;
     }

@@ -3,6 +3,7 @@
 #include "cscr_main.h"
 #include "cscr_variable.h"
 #include <cstddef>
+#include <cstdint>
 
 #define SL_MAX_STRING_INDEX 0x10000
 
@@ -33,7 +34,7 @@ struct scr_anim_s // sizeof=0x4
     }
     scr_anim_s(int i)
     {
-        linkPointer = (const char *)i; // BO1HACK
+        linkPointer = (const char *)(intptr_t)i; // BO1HACK
     }
 };
 
@@ -45,7 +46,7 @@ struct scr_animtree_t // sizeof=0x4
     }
     scr_animtree_t(int val)
     {
-        anims = (XAnim_s *)val;
+        anims = (XAnim_s *)(intptr_t)val;
     }
     scr_animtree_t()
     {

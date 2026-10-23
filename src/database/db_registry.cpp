@@ -1,4 +1,5 @@
 #include "db_registry.h"
+#include <csetjmp>
 #include <universal/profile.h>
 #include <clientscript/cscr_parsetree.h>
 #include <gfx_d3d/rb_resource.h>
@@ -192,7 +193,7 @@ XAssetHeader(__cdecl *DB_AllocXAssetHeaderHandler[43])(void *) =
   DB_AllocXAsset<MaterialTechniqueSet>,
   DB_AllocXAsset<GfxImage>,
   DB_AllocXAsset<SndBank>,
-  DB_AllocXAsset<snd_alias_list_t>, //SOUND_PATCH
+  DB_AllocXAsset<SndPatch>, //SOUND_PATCH
   XASSET_SINGLETON, // COL_MAP_SP
   XASSET_SINGLETON, // COL_MAP_MP
   XASSET_SINGLETON, // COM_MAP
@@ -238,7 +239,7 @@ XAssetPool<Material, POOLSIZE_MATERIAL_MOD>                 g_MaterialPool;
 XAssetPool<MaterialTechniqueSet, POOLSIZE_TECHSET_MOD>      g_MaterialTechniqueSetPool;
 XAssetPool<GfxImage, POOLSIZE_IMAGE_MOD>                    g_GfxImagePool;
 XAssetPool<SndBank, POOLSIZE_SOUND_MOD>                     g_SoundPool;
-XAssetPool<snd_alias_list_t, POOLSIZE_SOUND_PATCH>      g_SoundPatchPool;
+XAssetPool<SndPatch, POOLSIZE_SOUND_PATCH>              g_SoundPatchPool;
 XAssetPool<MapEnts, POOLSIZE_MAP_ENTS>                  g_MapEntsPool;
 XAssetPool<GfxLightDef, POOLSIZE_LIGHTDEF_MOD>              g_GfxLightDefPool;
 XAssetPool<Font_s, POOLSIZE_FONT>                       g_FontPool;
@@ -2017,7 +2018,7 @@ XAssetEntry *__cdecl DB_CreateDefaultEntry(XAssetType type, const char *name)
     DB_CloneXAssetInternal(&asset, &newEntry->asset);
     hash = DB_HashForName(name, type);
     newEntry->nextHash = db_hashTable[hash % 0x8000u];
-    db_hashTable[hash % 0x8000u] = ((char *)newEntry - (char *)g_assetEntryPool) >> 4;
+    db_hashTable[hash % 0x8000u] = (XAssetEntryPoolEntry *)newEntry - g_assetEntryPool;
     String = SL_GetString((char*)name, 4u, SCRIPTINSTANCE_SERVER);
     v4 = SL_ConvertToString(String, SCRIPTINSTANCE_SERVER);
     DB_SetXAssetName(&newEntry->asset, v4);
@@ -2053,7 +2054,7 @@ XAssetEntryPoolEntry *__cdecl DB_AllocXAssetEntry(XAssetType type, unsigned __in
     }
     if ( ++XAssetEntryHighCount > XAssetEntryHighWaterMark )
         XAssetEntryHighWaterMark = XAssetEntryHighCount;
-    g_freeAssetEntryHead = (XAssetEntryPoolEntry *)freeHead->entry.asset.type;
+    g_freeAssetEntryHead = freeHead->next;
     freeHead->entry.asset.type = type;
     freeHead->entry.asset.header = DB_AllocXAssetHeader(type);
     freeHead->entry.zoneIndex = zoneIndex;
@@ -2746,7 +2747,7 @@ XAssetEntryPoolEntry *__cdecl DB_LinkXAssetEntry(XAssetEntry *newEntry, int allo
             }
         }
         newEntry->nextHash = db_hashTable[hash % 0x8000];
-        db_hashTable[hash % 0x8000] = ((char *)newEntry - (char *)g_assetEntryPool) >> 4;
+        db_hashTable[hash % 0x8000] = (XAssetEntryPoolEntry *)newEntry - g_assetEntryPool;
         if ( db_xassetdebug->current.enabled )
         {
             if ( db_xassetdebugtype->current.integer == -1
@@ -2817,7 +2818,7 @@ XAssetEntryPoolEntry *__cdecl DB_LinkXAssetEntry(XAssetEntry *newEntry, int allo
                 }
             }
             newEntry->nextOverride = *pOverrideAssetEntryIndex;
-            *pOverrideAssetEntryIndex = ((char *)newEntry - (char *)g_assetEntryPool) >> 4;
+            *pOverrideAssetEntryIndex = (XAssetEntryPoolEntry *)newEntry - g_assetEntryPool;
             return existingEntrya;
         }
         goto LABEL_106;
@@ -2891,7 +2892,7 @@ LABEL_106:
                 }
             }
             newEntry->nextOverride = existingEntrya->entry.nextOverride;
-            existingEntrya->entry.nextOverride = ((char *)newEntry - (char *)g_assetEntryPool) >> 4;
+            existingEntrya->entry.nextOverride = (XAssetEntryPoolEntry *)newEntry - g_assetEntryPool;
             DB_SwapXAsset(&newEntry->asset, &existingEntrya->entry.asset);
             zoneIndex = existingEntrya->entry.zoneIndex;
             existingEntrya->entry.zoneIndex = newEntry->zoneIndex;
@@ -3090,7 +3091,7 @@ void __cdecl DB_GetXAsset(XAssetType type, XAssetHeader header)
     XAssetEntry *assetEntry; // [esp+14h] [ebp-4h]
 
     if ( s_inuseCacheEnabled
-        && s_inuseCache[((unsigned int)header.xmodelPieces >> 2) & 0x1FFF] == HIWORD(header.physPreset) )
+        && s_inuseCache[((uintptr_t)header.xmodelPieces >> 2) & 0x1FFF] == HIWORD(header.physPreset) )
     {
         ++s_inuseCacheHits;
     }
@@ -3109,7 +3110,7 @@ void __cdecl DB_GetXAsset(XAssetType type, XAssetHeader header)
             {
                 assetEntry->inuse = 1;
                 if ( s_inuseCacheEnabled )
-                    s_inuseCache[((unsigned int)header.xmodelPieces >> 2) & 0x1FFF] = HIWORD(header.physPreset);
+                    s_inuseCache[((uintptr_t)header.xmodelPieces >> 2) & 0x1FFF] = HIWORD(header.physPreset);
                 return;
             }
         }
@@ -3672,7 +3673,7 @@ void(__cdecl *DB_InitPoolHeaderHandler[43])(void *, int) =
   DB_InitPool<XAssetPool<MaterialTechniqueSet, POOLSIZE_TECHSET_MOD>>,
   DB_InitPool<XAssetPool<GfxImage, POOLSIZE_IMAGE_MOD>>, // image
   DB_InitPool<XAssetPool<SndBank, POOLSIZE_SOUND_MOD>>, // sound // BO1TODO: HACK 
-  DB_InitPool<XAssetPool<snd_alias_list_t, POOLSIZE_SOUND_PATCH>>, // sound_patch
+  DB_InitPool<XAssetPool<SndPatch, POOLSIZE_SOUND_PATCH>>, // sound_patch
   DB_InitSingleton, // col_map_sp
   DB_InitSingleton,
   DB_InitSingleton,
@@ -4024,7 +4025,7 @@ void __cdecl    DB_Thread(unsigned int threadContext)
     }
     Value = (int*)Sys_GetValue(2);
     //if ( _setjmp3(Value, 0) )
-    if ( _setjmp(Value) )
+    if ( setjmp(*(jmp_buf *)Value) )
         Com_ErrorAbort();
     while ( 1 )
     {
@@ -4499,10 +4500,10 @@ void __cdecl DB_ModXFileHandle(const char *zoneName, void **zoneFile, FF_DIR *zo
     bool v6; // [esp+4h] [ebp-10Ch]
     char filename[260]; // [esp+8h] [ebp-108h] BYREF
 
-    v6 = fs_gameDirVar && *(_BYTE *)fs_gameDirVar->current.integer;
+    v6 = fs_gameDirVar && *fs_gameDirVar->current.string;
     if ( !v6 || I_stricmp(zoneName, "mod") )
     {
-        if ( fs_usermapDir && *(_BYTE *)fs_usermapDir->current.integer )
+        if ( fs_usermapDir && *fs_usermapDir->current.string )
         {
             String = Dvar_GetString("fs_usermapDir");
             v4 = va("%s\\%s", String, zoneName);
@@ -4529,7 +4530,7 @@ void __cdecl DB_BuildOSPath_FromSource(const char *zoneName, FF_DIR source, unsi
     {
         if ( source == FFD_MOD_DIR )
         {
-            v4 = fs_gameDirVar && *(_BYTE *)fs_gameDirVar->current.integer;
+            v4 = fs_gameDirVar && *fs_gameDirVar->current.string;
             if ( !v4
                 && !Assert_MyHandler(
                             "C:\\projects_pc\\cod\\codsrc\\src\\database\\db_registry.cpp",
@@ -5077,10 +5078,10 @@ void DB_FreeUnusedResources()
     DB_EnableInUseCache(data);
     for ( i = 0; i < 0x8000; ++i )
     {
-        for ( j = db_hashTable[i]; j; j = HIWORD(asset[1].type) )
+        for ( j = db_hashTable[i]; j; j = g_assetEntryPool[j].entry.nextHash )
         {
             asset = &g_assetEntryPool[j].entry.asset;
-            if ( LOBYTE(asset[1].type) )
+            if ( g_assetEntryPool[j].entry.zoneIndex )
             {
                 varXAsset = asset;
                 Mark_XAsset();
@@ -5095,21 +5096,21 @@ void DB_FreeUnusedResources()
         {
             j = (unsigned __int16)*v7;
             asset = &g_assetEntryPool[j].entry.asset;
-            if ( LOBYTE(asset[1].type) )
+            if ( g_assetEntryPool[j].entry.zoneIndex )
             {
-                v7 = (_WORD *)&asset[1].type + 1;
+                v7 = &g_assetEntryPool[j].entry.nextHash;
             }
-            else if ( BYTE1(asset[1].type) )
+            else if ( g_assetEntryPool[j].entry.inuse )
             {
                 str = (char *)DB_GetXAssetName(asset);
                 String = SL_GetString(str, 4u, SCRIPTINSTANCE_SERVER);
                 name = SL_ConvertToString(String, SCRIPTINSTANCE_SERVER);
                 DB_SetXAssetName(asset, name);
-                v7 = (_WORD *)&asset[1].type + 1;
+                v7 = &g_assetEntryPool[j].entry.nextHash;
             }
             else
             {
-                if ( LOWORD(asset[1].header.xmodelPieces)
+                if ( g_assetEntryPool[j].entry.nextOverride
                     && !Assert_MyHandler(
                                 "C:\\projects_pc\\cod\\codsrc\\src\\database\\db_registry.cpp",
                                 5847,
@@ -5119,7 +5120,7 @@ void DB_FreeUnusedResources()
                 {
                     __debugbreak();
                 }
-                *v7 = HIWORD(asset[1].type);
+                *v7 = g_assetEntryPool[j].entry.nextHash;
                 if ( !g_defaultAssetCount
                     && !Assert_MyHandler(
                                 "C:\\projects_pc\\cod\\codsrc\\src\\database\\db_registry.cpp",
@@ -5391,7 +5392,7 @@ char __cdecl DB_ModFileExists()
     char filename[256]; // [esp+4h] [ebp-108h] BYREF
     void *zoneFile; // [esp+108h] [ebp-4h]
 
-    if ( !fs_gameDirVar || !*(_BYTE *)fs_gameDirVar->current.integer )
+    if ( !fs_gameDirVar || !*fs_gameDirVar->current.string )
         return 0;
     DB_BuildOSPath_FromSource("mod", FFD_MOD_DIR, 0x100u, filename);
     zoneFile = CreateFileA(filename, 0x80000000, 1u, 0, 3u, 0x60000000u, 0);

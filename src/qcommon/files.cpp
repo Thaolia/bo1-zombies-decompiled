@@ -16,7 +16,7 @@ int __cdecl FS_SV_FileExists(char *file, char *dir)
     FILE *f; // [esp+4h] [ebp-10Ch]
     char testpath[260]; // [esp+8h] [ebp-108h] BYREF
 
-    FS_BuildOSPath((char *)fs_homepath->current.integer, dir, file, testpath);
+    FS_BuildOSPath((char *)fs_homepath->current.string, dir, file, testpath);
     f = FS_FileOpenReadBinary(testpath);
     if ( !f )
         return 0;
@@ -65,7 +65,7 @@ int __cdecl FS_SV_FOpenFileRead(char *filename, char *dir, int *fp)
     fsh[f].handleFiles.file.o = Binary;
     if (!fsh[f].handleFiles.file.o && I_stricmp(fs_homepath->current.string, fs_basepath->current.string))
     {
-        FS_BuildOSPath((char *)fs_basepath->current.integer, dir, filename, ospath);
+        FS_BuildOSPath((char *)fs_basepath->current.string, dir, filename, ospath);
         if (fs_debug->current.integer)
             Com_Printf(10, "FS_SV_FOpenFileRead (fs_basepath): %s\n", ospath);
         v5 = FS_FileOpenReadBinary(ospath);
@@ -73,7 +73,7 @@ int __cdecl FS_SV_FOpenFileRead(char *filename, char *dir, int *fp)
     }
     if (!fsh[f].handleFiles.file.o)
     {
-        FS_BuildOSPath((char *)fs_cdpath->current.integer, dir, filename, ospath);
+        FS_BuildOSPath((char *)fs_cdpath->current.string, dir, filename, ospath);
         if (fs_debug->current.integer)
             Com_Printf(10, "FS_SV_FOpenFileRead (fs_cdpath) : %s\n", ospath);
         v6 = FS_FileOpenReadBinary(ospath);
@@ -432,7 +432,7 @@ FS_SERVER_COMPARE_RESULT __cdecl FS_CompareIwds(char *needediwds, int len, int d
     char *v6; // eax
     const char *v7; // [esp+8h] [ebp-130h]
     const char *string; // [esp+Ch] [ebp-12Ch]
-    unsigned int v9; // [esp+Ch] [ebp-12Ch]
+    const char *v9; // [esp+Ch] [ebp-12Ch]
     const char *dirNameEnd; // [esp+14h] [ebp-124h]
     char dirName[256]; // [esp+18h] [ebp-120h] BYREF
     int gameDirNameLength; // [esp+11Ch] [ebp-1Ch]
@@ -449,9 +449,9 @@ FS_SERVER_COMPARE_RESULT __cdecl FS_CompareIwds(char *needediwds, int len, int d
     userMapDirAdded = 0;
     string = fs_gameDirVar->current.string;
     v7 = string + 1;
-    v9 = (unsigned int)&string[strlen(string) + 1];
-    gameDirNameLength = v9 - (unsigned int)v7;
-    isBaseDir = v9 == (unsigned int)v7;
+    v9 = &string[strlen(string) + 1];
+    gameDirNameLength = v9 - v7;
+    isBaseDir = v9 == v7;
     for ( i = 0; i < fs_numServerReferencedIwds; ++i )
     {
         haveiwd = 0;
@@ -540,10 +540,10 @@ FS_SERVER_COMPARE_RESULT __cdecl FS_CompareFFs(char *neededFFs, int len, int dls
         fileSize = DB_FileSize(ffName, FFD_DEFAULT);
         if ( !fileSize )
         {
-            v5 = fs_usermapDir && *(_BYTE *)fs_usermapDir->current.integer;
+            v5 = fs_usermapDir && *fs_usermapDir->current.string;
             if ( !v5 || I_strnicmp(fs_serverReferencedFFNames[i], "usermaps", 8) )
             {
-                v4 = fs_gameDirVar && *(_BYTE *)fs_gameDirVar->current.integer;
+                v4 = fs_gameDirVar && *fs_gameDirVar->current.string;
                 if ( !v4 || I_strnicmp(fs_serverReferencedFFNames[i], "mods", 4) )
                 {
                     ffName = fs_serverReferencedFFNames[i];
@@ -717,7 +717,7 @@ void __cdecl FS_ReferencedIwds(const char **checksums, const char **names)
         I_strncat(info8, 0x4000, "/");
         I_strncat(info8, 0x4000, iwd->iwdBasename);
     }
-    if ( *(_BYTE *)fs_gameDirVar->current.integer )
+    if ( *fs_gameDirVar->current.string )
     {
         for ( search = fs_searchpaths; search; search = search->next )
         {

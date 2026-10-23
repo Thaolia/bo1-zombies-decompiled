@@ -10,8 +10,18 @@ namespace ff
 {
 // Streams `size` bytes of `type` starting `startOffset` bytes into its first element (Load_Stream's semantics).
 void LoadStream(bool atStreamStart, const TypeLayout &type, uint32_t startOffset, void *ptr, int size);
-// The next DB_AllocStreamPos is for an object of this type.
-void SetPendingAlloc(const TypeLayout &type);
+
+// DB_ConvertOffsetToPointer on `slot`, whose inline branch streams `count` elements of `pointee` (-1: a string).
+// `inlineBranch` runs that branch when the retail target cannot be read as the pointee on 64-bit (ff_stream.cpp).
+void ConvertOffsetToPointer(unsigned int *slot, const TypeLayout &pointee, int count, const char *site,
+                            void (*inlineBranch)(void *), void *context);
+
+template <typename F>
+void ConvertOffsetToPointer(unsigned int *slot, const TypeLayout &pointee, int count, const char *site, F &&branch)
+{
+    ConvertOffsetToPointer(
+        slot, pointee, count, site, [](void *f) { (*static_cast<std::remove_reference_t<F> *>(f))(); }, &branch);
+}
 } // namespace ff
 
 // `var` is the var* global the streamed pointer comes from. When the pointer lies inside the object it points to,
@@ -31,18 +41,4 @@ template <typename V, typename P> void FF_LoadStream(bool atStreamStart, V *var,
         }
     }
     ff::LoadStream(atStreamStart, ff::Layout<P>(), 0, const_cast<void *>(static_cast<const void *>(ptr)), size);
-}
-
-template <typename T> void FF_NextAlloc(T *)
-{
-    ff::SetPendingAlloc(ff::Layout<T>());
-}
-
-// A pointer kept in an integer member (MaterialArgumentDef::codeSampler holds the literal's float[4]): the
-// allocation holds plain data, so the retail alignment is the 64-bit one too.
-template <typename T>
-    requires std::is_integral_v<T>
-void FF_NextAlloc(T)
-{
-    ff::SetPendingAlloc(ff::Layout<unsigned char>());
 }

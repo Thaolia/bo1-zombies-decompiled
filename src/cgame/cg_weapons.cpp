@@ -82,66 +82,66 @@ AnimRateOffset g_animRateOffsets[66] =
   { -1, -1 },
   { -1, -1 },
   { -1, -1 },
-  { 956, -1 },
+  { (int)offsetof(WeaponDef, iHoldFireTime), -1 },
   { -1, -1 },
-  { 948, -1 },
-  { 964, -1 },
-  { 968, -1 },
-  { -1, 36 },
-  { 972, -1 },
-  { -1, 40 },
-  { 1004, -1 },
-  { 1012, -1 },
-  { -1, 44 },
-  { -1, 48 },
-  { 1020, -1 },
-  { 1036, -1 },
-  { 1016, -1 },
-  { -1, 60 },
-  { 1024, -1 },
-  { 1032, -1 },
-  { 1028, -1 },
-  { 1040, -1 },
-  { 1044, -1 },
-  { 1048, -1 },
-  { 1052, -1 },
-  { 1056, -1 },
-  { 1048, -1 },
-  { 1052, -1 },
-  { 1056, -1 },
-  { 1060, -1 },
-  { 1064, -1 },
-  { 1068, -1 },
-  { 1072, -1 },
-  { 1076, -1 },
-  { 1080, -1 },
-  { 1100, -1 },
-  { 1104, -1 },
+  { (int)offsetof(WeaponDef, iRechamberTime), -1 },
+  { (int)offsetof(WeaponDef, iMeleeTime), -1 },
+  { (int)offsetof(WeaponDef, meleeChargeTime), -1 },
+  { -1, (int)offsetof(WeaponVariantDef, iReloadTime) },
+  { (int)offsetof(WeaponDef, iReloadTimeRight), -1 },
+  { -1, (int)offsetof(WeaponVariantDef, iReloadEmptyTime) },
+  { (int)offsetof(WeaponDef, iReloadStartTime), -1 },
+  { (int)offsetof(WeaponDef, iReloadEndTime), -1 },
+  { -1, (int)offsetof(WeaponVariantDef, iReloadQuickTime) },
+  { -1, (int)offsetof(WeaponVariantDef, iReloadQuickEmptyTime) },
+  { (int)offsetof(WeaponDef, iRaiseTime), -1 },
+  { (int)offsetof(WeaponDef, iFirstRaiseTime), -1 },
+  { (int)offsetof(WeaponDef, iDropTime), -1 },
+  { -1, (int)offsetof(WeaponVariantDef, iAltRaiseTime) },
+  { (int)offsetof(WeaponDef, iAltDropTime), -1 },
+  { (int)offsetof(WeaponDef, quickRaiseTime), -1 },
+  { (int)offsetof(WeaponDef, quickDropTime), -1 },
+  { (int)offsetof(WeaponDef, iEmptyRaiseTime), -1 },
+  { (int)offsetof(WeaponDef, iEmptyDropTime), -1 },
+  { (int)offsetof(WeaponDef, sprintInTime), -1 },
+  { (int)offsetof(WeaponDef, sprintLoopTime), -1 },
+  { (int)offsetof(WeaponDef, sprintOutTime), -1 },
+  { (int)offsetof(WeaponDef, sprintInTime), -1 },
+  { (int)offsetof(WeaponDef, sprintLoopTime), -1 },
+  { (int)offsetof(WeaponDef, sprintOutTime), -1 },
+  { (int)offsetof(WeaponDef, lowReadyInTime), -1 },
+  { (int)offsetof(WeaponDef, lowReadyLoopTime), -1 },
+  { (int)offsetof(WeaponDef, lowReadyOutTime), -1 },
+  { (int)offsetof(WeaponDef, contFireInTime), -1 },
+  { (int)offsetof(WeaponDef, contFireLoopTime), -1 },
+  { (int)offsetof(WeaponDef, contFireOutTime), -1 },
+  { (int)offsetof(WeaponDef, deployTime), -1 },
+  { (int)offsetof(WeaponDef, breakdownTime), -1 },
   { -1, -1 },
-  { 1108, -1 },
-  { 1120, -1 },
-  { -1, -1 },
-  { -1, -1 },
-  { -1, -1 },
-  { 1084, -1 },
-  { 1088, -1 },
-  { 1092, -1 },
-  { 1084, -1 },
-  { 1088, -1 },
-  { 1092, -1 },
-  { 1096, -1 },
-  { -1, -1 },
-  { 1052, -1 },
-  { 1084, -1 },
-  { 1088, -1 },
-  { 1092, -1 },
+  { (int)offsetof(WeaponDef, nightVisionWearTime), -1 },
+  { (int)offsetof(WeaponDef, nightVisionRemoveTime), -1 },
   { -1, -1 },
   { -1, -1 },
   { -1, -1 },
+  { (int)offsetof(WeaponDef, dtpInTime), -1 },
+  { (int)offsetof(WeaponDef, dtpLoopTime), -1 },
+  { (int)offsetof(WeaponDef, dtpOutTime), -1 },
+  { (int)offsetof(WeaponDef, dtpInTime), -1 },
+  { (int)offsetof(WeaponDef, dtpLoopTime), -1 },
+  { (int)offsetof(WeaponDef, dtpOutTime), -1 },
+  { (int)offsetof(WeaponDef, slideInTime), -1 },
+  { -1, -1 },
+  { (int)offsetof(WeaponDef, sprintLoopTime), -1 },
+  { (int)offsetof(WeaponDef, dtpInTime), -1 },
+  { (int)offsetof(WeaponDef, dtpLoopTime), -1 },
+  { (int)offsetof(WeaponDef, dtpOutTime), -1 },
   { -1, -1 },
   { -1, -1 },
-  { -1, 40 },
-  { -1, 36 },
+  { -1, -1 },
+  { -1, -1 },
+  { -1, -1 },
+  { -1, (int)offsetof(WeaponVariantDef, iReloadEmptyTime) },
+  { -1, (int)offsetof(WeaponVariantDef, iReloadTime) },
   { -1, -1 },
   { -1, -1 }
 };
@@ -615,7 +615,7 @@ void __cdecl CG_FreeWeapons(int localClientNum)
             XAnimFreeTree(viewModelInfo->tree, 0, SCRIPTINSTANCE_SERVER);
         viewModelInfo->tree = 0;
     }
-    memset((unsigned __int8 *)cg_weaponsArray[localClientNum], 0, 0x12000u);
+    memset((unsigned __int8 *)cg_weaponsArray[localClientNum], 0, 2048 * sizeof(weaponInfo_s));
 }
 
 // zombies: SP builds the view-weapon anim tree with 0x0063E450 = Hunk_AllocLowAlign(size, 4) (push at SP 0x00796C6B,
@@ -1106,9 +1106,9 @@ void __cdecl CG_CreateWeaponViewModelXAnim(ViewModelInfo *viewModelInfo, const W
         }
     }
     if ( **((_BYTE **)weapVariantDef->szXAnims + 64) && XAnimIsLooped(pAnimsa, 0x40u) )
-        Com_Error(ERR_DROP, "CG_RegisterWeapon: ADS anim [%s] cannot be looping", *((unsigned int *)weapVariantDef->szXAnims + 64));
+        Com_Error(ERR_DROP, "CG_RegisterWeapon: ADS anim [%s] cannot be looping", *((uintptr_t *)weapVariantDef->szXAnims + 64));
     if ( **((_BYTE **)weapVariantDef->szXAnims + 65) && XAnimIsLooped(pAnimsa, 0x41u) )
-        Com_Error(ERR_DROP, "CG_RegisterWeapon: ADS anim [%s] cannot be looping", *((unsigned int *)weapVariantDef->szXAnims + 65));
+        Com_Error(ERR_DROP, "CG_RegisterWeapon: ADS anim [%s] cannot be looping", *((uintptr_t *)weapVariantDef->szXAnims + 65));
     for ( animIndexa = 53; animIndexa <= 57; ++animIndexa )
     {
         if ( *weapVariantDef->szXAnims[animIndexa] )
@@ -1135,7 +1135,7 @@ void __cdecl CG_CreateWeaponViewModelXAnim(ViewModelInfo *viewModelInfo, const W
 
 bool __cdecl CG_NonDualWieldAnimsValid(const WeaponVariantDef *weapVariantDef)
 {
-    return *((unsigned int *)weapVariantDef->szXAnims + 1) && **((_BYTE **)weapVariantDef->szXAnims + 1);
+    return *((uintptr_t *)weapVariantDef->szXAnims + 1) && **((_BYTE **)weapVariantDef->szXAnims + 1);
 }
 
 void __cdecl CG_UpdateHandViewmodels(int localClientNum)
@@ -2468,7 +2468,7 @@ void __cdecl CG_AddPlayerWeapon(
                     {
                         if ( ps->weaponstate == 6
                             || ps->weaponstate == 31
-                            || ps->weaponstate == 41 && ((*((unsigned int *)cent + 201) >> 2) & 1) != 0 )
+                            || ps->weaponstate == 41 && ((cent->flagWord >> 2) & 1) != 0 )
                         {
                             fLeanDist = scr_const.tag_flash;
                             v5 = CG_WeaponDObjHandle(localClientNum);
@@ -2476,7 +2476,7 @@ void __cdecl CG_AddPlayerWeapon(
                         }
                         if ( ps->weaponstateLeft == 6
                             || ps->weaponstateLeft == 31
-                            || ps->weaponstateLeft == 41 && ((*((unsigned int *)cent + 201) >> 3) & 1) != 0 )
+                            || ps->weaponstateLeft == 41 && ((cent->flagWord >> 3) & 1) != 0 )
                         {
                             fLeanDista = scr_const.tag_flash1;
                             v6 = CG_WeaponDObjHandle(localClientNum);
@@ -2499,20 +2499,20 @@ void __cdecl CG_AddPlayerWeapon(
                         if ( obj )
                             CG_DObjGetWorldTagPos(&cgameGlob->predictedPlayerEntity.pose, obj, scr_const.tag_flash, pos);
                     }
-                    if ( weapDef->bDualWield && ((*((unsigned int *)cent + 201) >> 3) & 1) != 0 )
+                    if ( weapDef->bDualWield && ((cent->flagWord >> 3) & 1) != 0 )
                         WeaponFlash(localClientNum, cent->nextState.number, weaponNum, 0, scr_const.tag_flash1);
-                    if ( ((*((unsigned int *)cent + 201) >> 2) & 1) != 0 && weapDef->bUseAltTagFlash )
+                    if ( ((cent->flagWord >> 2) & 1) != 0 && weapDef->bUseAltTagFlash )
                     {
                         WeaponFlash(localClientNum, cent->nextState.number, weaponNum, 0, scr_const.tag_flash_alt);
                     }
-                    else if ( ((*((unsigned int *)cent + 201) >> 2) & 1) != 0 )
+                    else if ( ((cent->flagWord >> 2) & 1) != 0 )
                     {
                         WeaponFlash(localClientNum, cent->nextState.number, weaponNum, 0, scr_const.tag_flash);
                     }
                 }
             }
-            *((unsigned int *)cent + 201) &= ~4u;
-            *((unsigned int *)cent + 201) &= ~8u;
+            cent->flagWord &= ~4u;
+            cent->flagWord &= ~8u;
         }
         Weapon_DrawTagAxis(localClientNum, cent->nextState.number, weaponNum, bViewModel);
         if ( !bViewModel )
@@ -2618,7 +2618,7 @@ bool __cdecl CG_ShowMuzzleFlash(cg_s *cgameGlob, centity_s *cent, int bViewModel
     }
     if ( !cent && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\cgame\\cg_weapons.cpp", 3800, 0, "%s", "cent") )
         __debugbreak();
-    if ( ((*((unsigned int *)cent + 201) >> 2) & 1) == 0 && ((*((unsigned int *)cent + 201) >> 3) & 1) == 0 )
+    if ( ((cent->flagWord >> 2) & 1) == 0 && ((cent->flagWord >> 3) & 1) == 0 )
         return 0;
     if ( bViewModel )
         return 1;
@@ -3586,7 +3586,7 @@ void __cdecl ProcessWeaponNoteTracks(int localClientNum, const playerState_s *pr
             for ( i = 0; i < noteListSize; ++i )
             {
                 //notify = (XAnimClientNotify *)((char *)XAnimClientNotifyList::GetNotifyList(pNotifyList) + 24 * i);
-                notify = (XAnimClientNotify *)((char *)pNotifyList->GetNotifyList() + 24 * i);
+                notify = (XAnimClientNotify *)((char *)pNotifyList->GetNotifyList() + sizeof(XAnimClientNotify) * i);
                 //NotifyStringName = XAnimClientNotify::GetNotifyStringName(notify);
                 NotifyStringName = notify->GetNotifyStringName();
                 if ( I_stricmp(NotifyStringName, "end") )
@@ -4931,7 +4931,7 @@ void __cdecl CG_VehicleJolt(centity_s *cent, float *origin, float *dir)
         {
             __debugbreak();
         }
-        Phys_ObjAddForce((int)cent->nitrousVeh->m_phys_user_data, origin, dir, 0);
+        Phys_ObjAddForce((intptr_t)cent->nitrousVeh->m_phys_user_data, origin, dir, 0);
     }
 }
 
@@ -5098,10 +5098,10 @@ void __cdecl CG_FireWeapon(
             __debugbreak();
         }
         if ( leftGun )
-            v7 = *((unsigned int *)cent + 201) | 8;
+            v7 = cent->flagWord | 8;
         else
-            v7 = *((unsigned int *)cent + 201) | 4;
-        *((unsigned int *)cent + 201) = v7;
+            v7 = cent->flagWord | 4;
+        cent->flagWord = v7;
         cgameGlob = CG_GetLocalClientGlobals((int)localClientNum);
         isLocalPlayer = 0;
         nextSnap = cgameGlob->nextSnap;
@@ -5172,7 +5172,7 @@ void __cdecl CG_FireWeapon(
             AnglesToAxis(cent->pose.angles, entMatrix);
             R_FoliageNofityWeaponFiring(
                 (int)localClientNum,
-                (unsigned int)cent,
+                (uintptr_t)cent,
                 fireOrigin,
                 entMatrix[0],
                 weaponDef->weapClass == WEAPCLASS_GAS);
@@ -5945,7 +5945,7 @@ void __cdecl CG_SndWeaponFakeFire(snd_weapon_shot *shot, const WeaponDef *weapon
     shotDirection[1] = cgameGlob->refdef.vieworg[1] - endPosition[1];
     shotDirection[2] = cgameGlob->refdef.vieworg[2] - endPosition[2];
     Vec3NormalizeFast(shotDirection);
-    if ( ((*((unsigned int *)shot_ent + 201) >> 1) & 1) != 0 )
+    if ( ((shot_ent->flagWord >> 1) & 1) != 0 )
     {
         shooter_index = shot_ent->nextState.otherEntityNum;
         CG_CompassAddFakeFirePingInfo(
@@ -5973,7 +5973,7 @@ void __cdecl CG_SndWeaponFakeFireNotify(int localClientNum, unsigned int entNum,
 {
     unsigned __int16 t; // [esp+4h] [ebp-4h]
 
-    if ( ((*((unsigned int *)shot_ent + 201) >> 1) & 1) != 0 && shot_ent->nextState.eType < 21 )
+    if ( ((shot_ent->flagWord >> 1) & 1) != 0 && shot_ent->nextState.eType < 21 )
     {
         CScr_NotifyNum(localClientNum, entNum, 0, cscr_const.fake_fire, 0);
     }
@@ -6873,7 +6873,7 @@ void __cdecl CG_BulletHitEvent_Internal(
     if ( (hitContents & 0x800) == 0 )
     {
         weapDef = BG_GetWeaponDef(weaponIndex);
-        if ( ((*((unsigned int *)attackee + 201) >> 1) & 1) != 0 && attackee->nextState.eType == 17
+        if ( ((attackee->flagWord >> 1) & 1) != 0 && attackee->nextState.eType == 17
             || attackee->nextState.eType == 1 )
         {
             Scr_AddConstString(cscr_const.face_pain, SCRIPTINSTANCE_CLIENT);
@@ -6885,11 +6885,11 @@ void __cdecl CG_BulletHitEvent_Internal(
     if ( fx && surfType == 7 )
     {
         cent = CG_GetEntity(localClientNum, targetEntityNum);
-        if ( ((*((unsigned int *)cent + 201) >> 6) & 1) != 0 )
+        if ( ((cent->flagWord >> 6) & 1) != 0 )
         {
             fx = 0;
         }
-        else if ( ((*((unsigned int *)cent + 201) >> 7) & 1) != 0 )
+        else if ( ((cent->flagWord >> 7) & 1) != 0 )
         {
             fx = cgMedia.fxDtpArmSlide2;
         }
@@ -6914,11 +6914,11 @@ void __cdecl CG_BulletHitEvent_Internal(
                 if ( (nextSnap->ps.otherFlags & 6) == 0 || sourceEntityNum != nextSnap->ps.clientNum )
                     targetEntityNum = 1023;
             }
-            if ( ((*((unsigned int *)attackee + 201) >> 1) & 1) != 0 && boneIndex != 254 && surfType == 7 )
+            if ( ((attackee->flagWord >> 1) & 1) != 0 && boneIndex != 254 && surfType == 7 )
             {
                 FX_PlayBoltedEffect(localClientNum, fx, cgameGlob->time, targetEntityNum, boneIndex, position, axis);
             }
-            else if ( ((*((unsigned int *)attackee + 201) >> 1) & 1) != 0
+            else if ( ((attackee->flagWord >> 1) & 1) != 0
                          && (attackee->nextState.eType == 1 || attackee->nextState.eType == 2)
                          && boneIndex != 254
                          && surfType == 13 )
@@ -7636,7 +7636,7 @@ unsigned int __cdecl CG_GetClientWeapon(unsigned int clientNum, int localClientN
         veh = CG_GetEntity(localClientNum, cgameGlob->bgs.clientinfo[clientNum].attachedVehEntNum);
         if ( veh )
         {
-            if ( ((*((unsigned int *)veh + 201) >> 1) & 1) != 0 )
+            if ( ((veh->flagWord >> 1) & 1) != 0 )
             {
                 vehInfo = CG_GetVehicleInfo(veh->nextState.vehicleState.vehicleInfoIndex);
                 if ( !vehInfo

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "bdLinkedList.h"
+#include <platform/arch_size.h>
 
 /*
 ===============================================================================
@@ -56,4 +57,4 @@ struct bdQueue
     }
 };
 
-static_assert(sizeof(bdQueue<void *>) == 0x0C, "bdQueue size mismatch");
+static_assert(sizeof(bdQueue<void *>) == BO1_ARCH_SIZE(0x0C, 24), "bdQueue size mismatch");

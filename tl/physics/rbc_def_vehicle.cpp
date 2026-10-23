@@ -437,6 +437,7 @@ void rigid_body_constraint_wheel::setup_constraint(pulse_sum_constraint_solver *
     phys_vec3 b1_r; // [esp+BCh] [ebp-7Ch] BYREF
     phys_vec3 hitn; // [esp+CCh] [ebp-6Ch] BYREF
     pulse_sum_wheel *ps_wheel; // [esp+E8h] [ebp-50h]
+    unsigned int wheel_flags; // [esp+E8h] [ebp-50h]
     phys_vec3 desired_speed; // [esp+ECh] [ebp-4Ch] BYREF
     float k_; // [esp+108h] [ebp-30h]
     phys_vec3 fwd; // [esp+10Ch] [ebp-2Ch] BYREF
@@ -451,8 +452,8 @@ void rigid_body_constraint_wheel::setup_constraint(pulse_sum_constraint_solver *
     this->m_ps_suspension = 0;
     this->m_ps_side_fric = 0;
     this->m_ps_fwd_fric = 0;
-    ps_wheel = (pulse_sum_wheel *)this->m_wheel_flags;
-    if (((unsigned __int8)(uintptr_t)ps_wheel & 1) != 0)
+    wheel_flags = this->m_wheel_flags;
+    if ((wheel_flags & 1) != 0)
     {
         b1 = this->b1;
         phys_multiply(&b1_suspension_dir, &this->b1->m_mat, &this->m_b1_suspension_dir_loc);
@@ -488,9 +489,9 @@ void rigid_body_constraint_wheel::setup_constraint(pulse_sum_constraint_solver *
         v13 = k_;
         k_ = this->m_hard_limit_dist - 3.400000095367432;
         if (k_ > v13)
-            v14 = (unsigned int)ps_wheel & 0xFFFFFFFD;
+            v14 = wheel_flags & 0xFFFFFFFD;
         else
-            v14 = (unsigned int)ps_wheel | 2;
+            v14 = wheel_flags | 2;
         this->m_wheel_flags = v14;
         hitn.x = v7->m_mat.w.x + b2_r.x;
         hitn.y = y + v7->m_mat.w.y;
@@ -592,7 +593,7 @@ void rigid_body_constraint_wheel::setup_constraint(pulse_sum_constraint_solver *
         //v28 = (pulse_sum_normal *)phys_transient_allocator::allocate(
         v28 = (pulse_sum_normal *)
             psys->m_solver_memory_allocator.allocate(
-            160,
+            sizeof(pulse_sum_normal),
             16,
             0,
             SOLVER_MEMORY_ALLOCATOR_ERROR_MSG);
@@ -762,7 +763,7 @@ pulse_sum_normal *__thiscall pulse_sum_constraint_solver::create_pulse_sum_wheel
   result = (pulse_sum_normal *)//phys_transient_allocator::allocate(
                                  //&this->m_solver_memory_allocator,
                                  this->m_solver_memory_allocator.allocate(
-                                 160,
+                                 sizeof(pulse_sum_normal),
                                  16,
                                  0,
                                  SOLVER_MEMORY_ALLOCATOR_ERROR_MSG);

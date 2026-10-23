@@ -824,9 +824,9 @@ void __cdecl    SV_SpawnServer(int controllerIndex, char *server, int mapIsPrelo
 
 }
 
-const int ikStateSize = 3680;
+const int ikStateSize = IK_STATE_ALLOC_SIZE;
 unsigned __int8 *sv_ikBuf;
-char *__cdecl SV_AllocateClientMemory_SizeRequired(int maxLocalClients, int maxClients)
+int __cdecl SV_AllocateClientMemory_SizeRequired(int maxLocalClients, int maxClients)
 {
     int v3; // [esp+0h] [ebp-Ch]
     int v4; // [esp+4h] [ebp-8h]
@@ -840,15 +840,17 @@ char *__cdecl SV_AllocateClientMemory_SizeRequired(int maxLocalClients, int maxC
     else
         v3 = 2;
 
-    return (char *)((sizeof(client_t) - 544000) * maxClients
-        + 0x118D00 * maxClients
-        + 0x1A00 * maxClients * maxClients
-        + 0x4880
-        + (maxClients << 7)
-        + 0x5000 * maxClients
-        + 0x80
-        + 0x2780 * v3 * v4
-        + 0x1002580
+    // The sum of SV_AllocateClientMemory's blocks; the two 128s are the alignment slack of the 128-aligned ones.
+    return (int)(sizeof(client_t) * maxClients
+        + 32 * sizeof(MatchState) * maxClients
+        + 2688 * sizeof(entityState_s) * maxClients
+        + 32 * sizeof(clientState_s) * maxClients * maxClients
+        + 512 * sizeof(cachedSnapshot_t) + 128
+        + sizeof(MatchState) * maxClients
+        + 80 * sizeof(archivedEntity_s) * maxClients
+        + 128
+        + sizeof(cachedClient_s) * v3 * v4
+        + 0x1000000 + 1200 * sizeof(archivedSnapshot_s)
         + 0x20 * ikStateSize);
 }
 
@@ -865,13 +867,13 @@ void __cdecl SV_AllocateClientMemory(HunkUser *hunk, int maxLocalClients, int ma
     svs.snapshotMatchStates = (MatchState *)Hunk_UserAlloc(hunk, maxClients << 12, 4, "svs.snapshotMatchStates");
     memset((unsigned __int8 *)svs.snapshotMatchStates, 0, svs.numSnapshotMatchStates << 7);
     svs.numSnapshotEntities = 2688 * maxClients;
-    svs.snapshotEntities = (entityState_s *)Hunk_UserAlloc(hunk, 602112 * maxClients, 4, "svs.snapshotEntities");
+    svs.snapshotEntities = (entityState_s *)Hunk_UserAlloc(hunk, 2688 * sizeof(entityState_s) * maxClients, 4, "svs.snapshotEntities");
     memset((unsigned __int8 *)svs.snapshotEntities, 0, 224 * svs.numSnapshotEntities);
     svs.numSnapshotClients = 32 * maxClients * maxClients;
-    svs.snapshotClients = (clientState_s *)Hunk_UserAlloc(hunk, 6656 * maxClients * maxClients, 4, "svs.snapshotClients");
+    svs.snapshotClients = (clientState_s *)Hunk_UserAlloc(hunk, 32 * sizeof(clientState_s) * maxClients * maxClients, 4, "svs.snapshotClients");
     memset((unsigned __int8 *)svs.snapshotClients, 0, 208 * svs.numSnapshotClients);
-    svs.cachedSnapshotFrames = (cachedSnapshot_t *)Hunk_UserAlloc(hunk, 18432, 128, "svs.cachedSnapshotFrames");
-    memset((unsigned __int8 *)svs.cachedSnapshotFrames, 0, 0x4800u);
+    svs.cachedSnapshotFrames = (cachedSnapshot_t *)Hunk_UserAlloc(hunk, 512 * sizeof(cachedSnapshot_t), 128, "svs.cachedSnapshotFrames");
+    memset((unsigned __int8 *)svs.cachedSnapshotFrames, 0, 512 * sizeof(cachedSnapshot_t));
     svs.numCachedSnapshotMatchStates = maxClients;
     svs.cachedSnapshotMatchStates = (MatchState *)Hunk_UserAlloc(
                                                                                                     hunk,
@@ -895,10 +897,10 @@ void __cdecl SV_AllocateClientMemory(HunkUser *hunk, int maxLocalClients, int ma
     else
         v3 = 2;
     svs.numCachedSnapshotClients = v3 * v4;
-    svs.cachedSnapshotClients = (cachedClient_s *)Hunk_UserAlloc(hunk, 10112 * v3 * v4, 4, "svs.cachedSnapshotClients");
-    memset((unsigned __int8 *)svs.cachedSnapshotClients, 0, 10112 * svs.numCachedSnapshotClients);
-    svs.archivedSnapshotFrames = (archivedSnapshot_s *)Hunk_UserAlloc(hunk, 9600, 4, "svs.archivedSnapshotFrames");
-    memset((unsigned __int8 *)svs.archivedSnapshotFrames, 0, 0x2580u);
+    svs.cachedSnapshotClients = (cachedClient_s *)Hunk_UserAlloc(hunk, sizeof(cachedClient_s) * v3 * v4, alignof(void *), "svs.cachedSnapshotClients");
+    memset((unsigned __int8 *)svs.cachedSnapshotClients, 0, sizeof(cachedClient_s) * svs.numCachedSnapshotClients);
+    svs.archivedSnapshotFrames = (archivedSnapshot_s *)Hunk_UserAlloc(hunk, 1200 * sizeof(archivedSnapshot_s), 4, "svs.archivedSnapshotFrames");
+    memset((unsigned __int8 *)svs.archivedSnapshotFrames, 0, 1200 * sizeof(archivedSnapshot_s));
     svs.archivedSnapshotBuffer = (unsigned __int8 *)Hunk_UserAlloc(hunk, 0x1000000, 4, "svs.archivedSnapshotBuffer");
     memset(svs.archivedSnapshotBuffer, 0, 0x1000000);
     sv_ikBuf = (unsigned __int8 *)Hunk_UserAlloc(hunk, 32 * ikStateSize, 16, "sv_ikStatesArray");

@@ -74,7 +74,7 @@ PhysPreset *__cdecl PhysPresetLoadFile(const char *name, void *(__cdecl *Alloc)(
                         physAlloc = Alloc;
                         if ( ParseConfigStringToStruct(dst, physPresetFields, 19, buffer, 0, 0, PhysPreset_Strcpy) )
                         {
-                            v14 = (float *)Alloc(84);
+                            v14 = (float *)Alloc(sizeof(PhysPreset));
                             if ( !v14
                                 && !Assert_MyHandler(
                                             "C:\\projects_pc\\cod\\codsrc\\src\\physics\\physpreset_load_obj.cpp",
@@ -186,11 +186,11 @@ void __cdecl PhysPreset_Strcpy(unsigned __int8 *member, const char *keyValue)
             *v3++ = *v4++;
         }
         while ( v2 );
-        *(unsigned int *)member = (unsigned int)buf;
+        *(char **)member = buf;
     }
     else
     {
-        *(unsigned int *)member = (unsigned int)"";
+        *(const char **)member = "";
     }
 }
 

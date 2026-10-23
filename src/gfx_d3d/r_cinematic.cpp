@@ -447,7 +447,7 @@ void __cdecl R_Cinematic_Init()
     iassert(!cinematicGlob.memPool);
     iassert(!g_cinematicInitialized);
 
-    memset((unsigned __int8 *)&cinematicGlob, 0, 0x9F4u);
+    memset((unsigned __int8 *)&cinematicGlob, 0, sizeof(cinematicGlob));
     cinematicGlob.activeImageFrame = -1;
     R_Cinematic_ReserveMemory();
 
@@ -1077,7 +1077,7 @@ char __cdecl R_Cinematic_StartPlayback_Now(const char *filename, unsigned int pl
     BinkSetMemory(R_Cinematic_Bink_Alloc, R_Cinematic_Bink_Free);
     R_Cinematic_CheckBinkError();
     if (g_cinematicDS)
-        BinkSetSoundSystem(BinkOpenDirectSound, (unsigned int)g_cinematicDS);
+        BinkSetSoundSystem(BinkOpenDirectSound, (UINTa)g_cinematicDS);
     R_Cinematic_CheckBinkError();
     R_Cinematic_CheckBinkError();
     if ( Sys_IsHeadless() ) // zombies: headless - no sound tracks, so Bink opens no sound device of its own
@@ -1114,7 +1114,7 @@ char __cdecl R_Cinematic_StartPlayback_Now(const char *filename, unsigned int pl
             __debugbreak();
         }
         R_Cinematic_InitBinkVolumes();
-        memset((unsigned __int8 *)&cinematicGlob.binkTextureSet, 0, 0xD8u);
+        memset((unsigned __int8 *)&cinematicGlob.binkTextureSet, 0, sizeof(cinematicGlob.binkTextureSet));
         BinkGetFrameBuffersInfo(cinematicGlob.bink, &cinematicGlob.binkTextureSet.bink_buffers);
         R_Cinematic_CheckBinkError();
         R_Cinematic_InitBinkTextures();
@@ -1203,13 +1203,13 @@ void __cdecl R_Cinematic_HunksAllocate(int activeTexture, char playbackFlags)
         newResidentBufferSize = 0x1680000;
         newBinkBufferSize = 0x180000;
     }
-    binkBufferBase = (char *)CinematicHunk_Alloc(&cinematicGlob.masterHunk, newBinkBufferSize);
-    residentBufferBase = (char *)CinematicHunk_Alloc(&cinematicGlob.masterHunk, newResidentBufferSize);
+    binkBufferBase = CinematicHunk_Alloc(&cinematicGlob.masterHunk, newBinkBufferSize);
+    residentBufferBase = CinematicHunk_Alloc(&cinematicGlob.masterHunk, newResidentBufferSize);
     CinematicHunk_Open(&cinematicGlob.binkHunk, binkBufferBase, newBinkBufferSize);
     CinematicHunk_Open(&cinematicGlob.residentHunk, residentBufferBase, newResidentBufferSize);
 }
 
-int __cdecl CinematicHunk_Alloc(CinematicHunk *hunk, int size)
+char *__cdecl CinematicHunk_Alloc(CinematicHunk *hunk, int size)
 {
     const char *v2; // eax
     char *alloced; // [esp+0h] [ebp-4h]
@@ -1259,14 +1259,14 @@ int __cdecl CinematicHunk_Alloc(CinematicHunk *hunk, int size)
             __debugbreak();
         }
         hunk->lastAllocPtr = alloced;
-        return (int)alloced;
+        return alloced;
     }
     else
     {
         v2 = va("CinematicHunk_Alloc failed: 0x%08x 0x%08x 0x%08x\n", hunk->atFront, size, hunk->atBack);
         if ( !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_cinematic.cpp", 603, 0, v2) )
             __debugbreak();
-        return -1;
+        return (char *)-1;
     }
 }
 

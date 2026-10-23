@@ -370,7 +370,7 @@ bool __cdecl LB_NeedToReadLeaderBoard()
 
 void __cdecl LB_ForceRefresh()
 {
-    g_lbGlob.feederText[15520 * lb_type->current.integer - 232996] = 1;
+    g_lbGlob.leaderboards[lb_type->current.integer].forceRefresh = 1;
 }
 
 void __cdecl LB_InitStructure(LbStructure *const structure, int type)
@@ -921,10 +921,10 @@ LeaderBoardResult<LeaderBoardRow<10>,100> *__cdecl LB_UpdateLeaderboard(int loca
     unsigned int ms; // [esp+24h] [ebp-8h]
     bool notSamePrestigeMode; // [esp+2Ah] [ebp-2h]
 
-    lb = (Leaderboard *)&g_lbGlob.feederText[15520 * lbType - 248320];
+    lb = &g_lbGlob.leaderboards[lbType];
     controllerIndex = Com_LocalClient_GetControllerIndex(localClientNum);
     if ( lb->isUpdating )
-        return (LeaderBoardResult<LeaderBoardRow<10>,100> *)&g_lbGlob.feederText[15520 * lbType - 248320];
+        return &g_lbGlob.leaderboards[lbType].userStats;
     ms = Sys_Milliseconds();
     notSameResetPeriod = lb->lbTypeByResetPeriod != lb_typeByResetPeriod->current.integer;
     notSameFilter = lb->filter != lb_filter->current.integer;
@@ -952,7 +952,7 @@ LeaderBoardResult<LeaderBoardRow<10>,100> *__cdecl LB_UpdateLeaderboard(int loca
         if ( (int)(ms - lb->lastUpdate) < 30000 && !v6 )
         {
             UI_CloseMenu(localClientNum, "popup_gettinglb");
-            return (LeaderBoardResult<LeaderBoardRow<10>,100> *)&g_lbGlob.feederText[15520 * lbType - 248320];
+            return &g_lbGlob.leaderboards[lbType].userStats;
         }
         filter = lb->filter;
         if ( filter )
@@ -967,7 +967,7 @@ LeaderBoardResult<LeaderBoardRow<10>,100> *__cdecl LB_UpdateLeaderboard(int loca
             }
             else
             {
-                v4 = va("Unknown filter type: %i\n", *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 232984]);
+                v4 = va("Unknown filter type: %i\n", g_lbGlob.leaderboards[lbType].filter);
                 if ( !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\live\\live_leaderboard.cpp", 541, 0, v4) )
                     __debugbreak();
             }
@@ -992,7 +992,7 @@ LeaderBoardResult<LeaderBoardRow<10>,100> *__cdecl LB_UpdateLeaderboard(int loca
             UI_CloseMenu(localClientNum, "popup_gettinglb");
         }
     }
-    return (LeaderBoardResult<LeaderBoardRow<10>,100> *)&g_lbGlob.feederText[15520 * lbType - 248320];
+    return &g_lbGlob.leaderboards[lbType].userStats;
 }
 
 int __cdecl LB_FeederCount(int localClientNum)
@@ -1004,8 +1004,8 @@ int __cdecl LB_FeederCount(int localClientNum)
     Com_LocalClient_GetControllerIndex(localClientNum);
     if ( !LB_NeedToReadLeaderBoard() )
         return 0;
-    LB_UpdateLeaderboard(localClientNum, lbType, *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 233004]);
-    lb = (Leaderboard *)&g_lbGlob.feederText[15520 * lbType - 248320];
+    LB_UpdateLeaderboard(localClientNum, lbType, g_lbGlob.leaderboards[lbType].offset);
+    lb = &g_lbGlob.leaderboards[lbType];
     if ( lb->isUpdating )
         return 0;
     if ( lb->filter == 1 || lb->filter == 2 )
@@ -1015,7 +1015,7 @@ int __cdecl LB_FeederCount(int localClientNum)
 
 void __cdecl LB_FeederSelection(int index)
 {
-    *(unsigned int *)&g_lbGlob.feederText[15520 * lb_type->current.integer - 233000] = index;
+    g_lbGlob.leaderboards[lb_type->current.integer].curIdx = index;
 }
 
 void __cdecl LB_OnSelect(int localClientNum)
@@ -1024,9 +1024,9 @@ void __cdecl LB_OnSelect(int localClientNum)
     LeaderBoardRow<10> *row; // [esp+8h] [ebp-8h]
 
     lbType = (LbType)lb_type->current.integer;
-    if ( !g_lbGlob.feederText[15520 * lbType - 232995] )
+    if ( !g_lbGlob.leaderboards[lbType].isUpdating )
     {
-        row = &LB_UpdateLeaderboard(localClientNum, lbType, *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 233000])->m_leaderBoardEntries[*(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 233000] - *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 233004]];
+        row = &LB_UpdateLeaderboard(localClientNum, lbType, g_lbGlob.leaderboards[lbType].curIdx)->m_leaderBoardEntries[g_lbGlob.leaderboards[lbType].curIdx - g_lbGlob.leaderboards[lbType].offset];
         Live_ShowPlayerProfile(localClientNum, row->m_entityID, row->m_entityName);
     }
 }
@@ -1037,9 +1037,9 @@ void __cdecl LB_GetSelectedPlayerInfo(int localClientNum, LBSelectedPlayerInfo *
     LbType lbType; // [esp+4h] [ebp-Ch]
 
     lbType = (LbType)lb_type->current.integer;
-    if ( !g_lbGlob.feederText[15520 * lbType - 232995] )
+    if ( !g_lbGlob.leaderboards[lbType].isUpdating )
     {
-        v2 = &LB_UpdateLeaderboard(localClientNum, lbType, *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 233000])->m_leaderBoardEntries[*(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 233000] - *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 233004]];
+        v2 = &LB_UpdateLeaderboard(localClientNum, lbType, g_lbGlob.leaderboards[lbType].curIdx)->m_leaderBoardEntries[g_lbGlob.leaderboards[lbType].curIdx - g_lbGlob.leaderboards[lbType].offset];
         info->playerXuid = v2->m_entityID;
         I_strncpyz(info->gamerTag, v2->m_entityName, 64);
     }
@@ -1080,7 +1080,7 @@ void __cdecl LB_OverrideCursorPos(int viewmax, int *cursorPos, int *startPos)
     {
         __debugbreak();
     }
-    lb = (Leaderboard *)&g_lbGlob.feederText[15520 * lb_type->current.integer - 248320];
+    lb = &g_lbGlob.leaderboards[lb_type->current.integer];
     if ( !lb->isUpdating )
     {
         *cursorPos = lb->curIdx;
@@ -1230,7 +1230,7 @@ void __cdecl LB_SortXUserStatsByRank(Leaderboard *lb)
     qsort(
         lb->userStats.m_leaderBoardEntries,
         lb->numResults,
-        0x98u,
+        sizeof(*lb->userStats.m_leaderBoardEntries),
         (int (__cdecl *)(const void *, const void *))LB_CompareXUserStatsRowRanks);
     for ( count = 0; count < lb->numResults && lb->userStats.m_leaderBoardEntries[count].m_rank; ++count )
         ;
@@ -2545,21 +2545,21 @@ char *__cdecl LB_FeederItemText(int localClientNum, unsigned int index, int colu
     if ( !LB_NeedToReadLeaderBoard() )
         return 0;
     stats = LB_UpdateLeaderboard(localClientNum, lbType, index);
-    if ( g_lbGlob.feederText[15520 * lbType - 232995] )
+    if ( g_lbGlob.leaderboards[lbType].isUpdating )
         return 0;
-    if ( index >= *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 232968]
+    if ( index >= (unsigned int)g_lbGlob.leaderboards[lbType].totalResults
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\live\\live_leaderboard.cpp",
                     1915,
                     0,
                     "index doesn't index g_lbGlob.leaderboards[ lbType ].totalResults\n\t%i not in [0, %i)",
                     index,
-                    *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 232968]) )
+                    (unsigned int)g_lbGlob.leaderboards[lbType].totalResults) )
     {
         __debugbreak();
     }
     g_lbGlob.feederText[0] = 0;
-    if ( (int)(index - *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 233004]) < 0
+    if ( (int)(index - (unsigned int)g_lbGlob.leaderboards[lbType].offset) < 0
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\live\\live_leaderboard.cpp",
                     1919,
@@ -2569,7 +2569,7 @@ char *__cdecl LB_FeederItemText(int localClientNum, unsigned int index, int colu
     {
         __debugbreak();
     }
-    row = &stats->m_leaderBoardEntries[index - *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 233004]];
+    row = &stats->m_leaderBoardEntries[index - g_lbGlob.leaderboards[lbType].offset];
     switch ( column )
     {
         case 0:
@@ -2577,7 +2577,7 @@ char *__cdecl LB_FeederItemText(int localClientNum, unsigned int index, int colu
                 g_lbGlob.feederText,
                 0x20u,
                 "%lld",
-                stats->m_leaderBoardEntries[index - *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 233004]].m_rank);
+                stats->m_leaderBoardEntries[index - g_lbGlob.leaderboards[lbType].offset].m_rank);
             result = g_lbGlob.feederText;
             break;
         case 1:
@@ -2592,7 +2592,7 @@ char *__cdecl LB_FeederItemText(int localClientNum, unsigned int index, int colu
             result = g_lbGlob.feederText;
             break;
         case 3:
-            result = stats->m_leaderBoardEntries[index - *(unsigned int *)&g_lbGlob.feederText[15520 * lbType - 233004]].m_entityName;
+            result = stats->m_leaderBoardEntries[index - g_lbGlob.leaderboards[lbType].offset].m_entityName;
             break;
         case 4:
             v7 = (float)((float)LB_GetXUserCol(&g_LbLookup, row, lbType, LB_STAT_SCORE_PER_MINUTE) / 1000.0);
@@ -2773,13 +2773,13 @@ void __cdecl LB_Init()
         LB_ClearPlayerStats(gpad);
     for ( lbIdx = 0; lbIdx < 16; ++lbIdx )
     {
-        *(unsigned int *)&g_lbGlob.feederText[15520 * lbIdx - 232988] = 0;
-        *(unsigned int *)&g_lbGlob.feederText[15520 * lbIdx - 232984] = 3;
-        *(unsigned int *)&g_lbGlob.feederText[15520 * lbIdx - 232980] = 3;
-        *(unsigned int *)&g_lbGlob.feederText[15520 * lbIdx - 233008] = lbIdx;
-        *(unsigned int *)&g_lbGlob.feederText[15520 * lbIdx - 233004] = 0;
-        *(unsigned int *)&g_lbGlob.feederText[15520 * lbIdx - 233000] = 0;
-        g_lbGlob.feederText[15520 * lbIdx - 232996] = 1;
+        g_lbGlob.leaderboards[lbIdx].lastUpdate = 0;
+        g_lbGlob.leaderboards[lbIdx].filter = 3;
+        g_lbGlob.leaderboards[lbIdx].lbTypeByResetPeriod = 3;
+        g_lbGlob.leaderboards[lbIdx].type = (LbType)lbIdx;
+        g_lbGlob.leaderboards[lbIdx].offset = 0;
+        g_lbGlob.leaderboards[lbIdx].curIdx = 0;
+        g_lbGlob.leaderboards[lbIdx].forceRefresh = 1;
     }
     g_lbGlob.currentLbType = LB_COUNT;
     lb_minrefresh = _Dvar_RegisterInt(

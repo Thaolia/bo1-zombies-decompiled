@@ -209,7 +209,7 @@ void __cdecl R_AddAllStaticModelSurfacesCamera(
     bool dist; // [esp+8h] [ebp-117Ch]
     float v15; // [esp+Ch] [ebp-1178h]
     unsigned int dynamicSModelCount; // [esp+28h] [ebp-115Ch]
-    unsigned int v17[2]; // [esp+64h] [ebp-1120h]
+    const float *v17[2]; // [esp+64h] [ebp-1120h]
     float v18; // [esp+6Ch] [ebp-1118h]
     float v19; // [esp+70h] [ebp-1114h]
     float v20; // [esp+74h] [ebp-1110h]
@@ -342,11 +342,11 @@ void __cdecl R_AddAllStaticModelSurfacesCamera(
                     }
                 }
             }
-            v17[0] = (unsigned int)mins;
-            v17[1] = (unsigned int)(mins + 3);
-            v18 = *(float *)v17[v51];
-            v19 = *(float *)(v17[v52] + 4);
-            v20 = *(float *)(v17[v56] + 8);
+            v17[0] = mins;
+            v17[1] = mins + 3;
+            v18 = v17[v51][0];
+            v19 = v17[v52][1];
+            v20 = v17[v56][2];
             v65 = (float)((float)((float)((float)(v18 * p_sunShadow->viewDir[0]) + (float)(v19 * p_sunShadow->viewDir[1]))
                                                     + (float)(v20 * p_sunShadow->viewDir[2]))
                                     - p_sunShadow->viewDirDist) > p_sunShadow->sunShadowDrawDist;
@@ -1006,7 +1006,7 @@ void __cdecl R_StaticModelWriteInfo(int fileHandle, const GfxStaticModelDrawInst
     {
         __debugbreak();
     }
-    v9 = *((float *)&model->localBoneNames + 8 * model->numLods);
+    v9 = model->lodInfo[model->numLods - 1].dist;
     if ( v9 <= 0.0
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_add_staticmodel.cpp",

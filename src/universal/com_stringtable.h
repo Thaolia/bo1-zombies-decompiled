@@ -1,4 +1,5 @@
 #pragma once
+#include <platform/arch_size.h>
 
 struct StringTableCell // sizeof=0x8
 {
@@ -14,7 +15,7 @@ struct StringTable // sizeof=0x14
     StringTableCell *values;
     __int16 *cellIndex;
 };
-static_assert(sizeof(StringTable) == 20);
+static_assert(sizeof(StringTable) == BO1_ARCH_SIZE(20, 32));
 
 union XAssetHeader;
 

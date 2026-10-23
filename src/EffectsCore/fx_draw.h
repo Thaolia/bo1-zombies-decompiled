@@ -1,6 +1,7 @@
 #pragma once
 
 #include <gfx_d3d/fxprimitives.h>
+#include <platform/arch_size.h>
 
 struct __declspec(align(4)) FxGenerateVertsCmd // sizeof=0x50
 {                                       // XREF: ?R_DrawEffects@@YAXPAUFxCmd@@@Z/r
@@ -21,7 +22,7 @@ struct __declspec(align(4)) FxGenerateVertsCmd // sizeof=0x50
     // padding byte
     // padding byte
 };
-static_assert(sizeof(FxGenerateVertsCmd) == 80);
+static_assert(sizeof(FxGenerateVertsCmd) == BO1_ARCH_SIZE(80, 96));
 
 struct FxReflectParams // sizeof=0xC
 {                                       // XREF: FxDrawState/r

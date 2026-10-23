@@ -242,9 +242,9 @@ void __cdecl Sys_UpdateHotkeyBlock()
     Sys_SetBlockSystemHotkeys(block);
 }
 
-int __stdcall MainWndProc(HWND__ *hWnd, UINT uMsg, signed int wParam, LPARAM lParam)
+LRESULT __stdcall MainWndProc(HWND__ *hWnd, UINT uMsg, signed int wParam, LPARAM lParam)
 {
-    int result; // eax
+    LRESULT result; // eax
     HANDLE v5; // eax
     HANDLE CurrentProcess; // eax
     int buttons; // [esp+4h] [ebp-60h]

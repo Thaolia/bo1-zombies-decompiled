@@ -1,5 +1,7 @@
 #include "physconstraints_load_obj.h"
 #include <cstring>
+#include <cstddef>
+#include <platform/arch_size.h>
 #include <universal/q_shared.h>
 #include <universal/com_files.h>
 #include <qcommon/common.h>
@@ -115,7 +117,7 @@ PhysConstraints *__cdecl PhysConstraintsLoadFile(const char *name, void *(__cdec
                     FS_FCloseFile(f);
                     if ( Info_Validate(buffer) )
                     {
-                        dst = (unsigned __int8 *)Alloc(2696);
+                        dst = (unsigned __int8 *)Alloc(sizeof(PhysConstraints));
                         if ( !dst
                             && !Assert_MyHandler(
                                         "C:\\projects_pc\\cod\\codsrc\\src\\physics\\physconstraints_load_obj.cpp",
@@ -126,13 +128,13 @@ PhysConstraints *__cdecl PhysConstraintsLoadFile(const char *name, void *(__cdec
                         {
                             __debugbreak();
                         }
-                        memset(dst, 0, 0xA88u);
+                        memset(dst, 0, sizeof(PhysConstraints));
                         for ( i = 0; i < 16; ++i )
                         {
-                            *(unsigned int *)&dst[168 * i + 28] = (unsigned int)"";
-                            *(unsigned int *)&dst[168 * i + 16] = 3;
-                            *(unsigned int *)&dst[168 * i + 44] = (unsigned int)"";
-                            *(unsigned int *)&dst[168 * i + 32] = 3;
+                            ((PhysConstraints *)dst)->data[i].target_bone1 = "";
+                            ((PhysConstraints *)dst)->data[i].attach_point_type1 = ATTACH_POINT_BONE;
+                            ((PhysConstraints *)dst)->data[i].target_bone2 = "";
+                            ((PhysConstraints *)dst)->data[i].attach_point_type2 = ATTACH_POINT_BONE;
                         }
                         if ( ParseConfigStringToStruct(
                                      dst,
@@ -184,6 +186,13 @@ PhysConstraints *__cdecl PhysConstraintsLoadFile(const char *name, void *(__cdec
     }
 }
 
+static_assert(offsetof(PhysConstraints, data) == BO1_ARCH_SIZE(8, offsetof(PhysConstraints, data)));
+static_assert(offsetof(PhysConstraint, attach_point_type1) == BO1_ARCH_SIZE(8, offsetof(PhysConstraint, attach_point_type1)));
+static_assert(offsetof(PhysConstraint, target_bone1) == BO1_ARCH_SIZE(20, offsetof(PhysConstraint, target_bone1)));
+static_assert(offsetof(PhysConstraint, attach_point_type2) == BO1_ARCH_SIZE(24, offsetof(PhysConstraint, attach_point_type2)));
+static_assert(offsetof(PhysConstraint, target_bone2) == BO1_ARCH_SIZE(36, offsetof(PhysConstraint, target_bone2)));
+static_assert(sizeof(PhysConstraint) == BO1_ARCH_SIZE(168, sizeof(PhysConstraint)));
+
 void __cdecl PhysConstraints_Strcpy(unsigned __int8 *member, const char *keyValue)
 {
     char v2; // [esp+3h] [ebp-25h]
@@ -202,11 +211,11 @@ void __cdecl PhysConstraints_Strcpy(unsigned __int8 *member, const char *keyValu
             *v3++ = *v4++;
         }
         while ( v2 );
-        *(unsigned int *)member = (unsigned int)buf;
+        *(unsigned __int8 **)member = buf;
     }
     else
     {
-        *(unsigned int *)member = (unsigned int)"";
+        *(const char **)member = "";
     }
 }
 

@@ -39,7 +39,7 @@ struct FxUpdateElem // sizeof=0x7C
     // padding byte
     // padding byte
     // padding byte
-    int physObjId;                      // XREF: FX_UpdateElement+147/w
+    intptr_t physObjId;                 // XREF: FX_UpdateElement+147/w
                                         // FX_UpdateTrailElement+DA/w
 };
 

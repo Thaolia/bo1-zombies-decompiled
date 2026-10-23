@@ -62,8 +62,7 @@ void __cdecl FFT(complex_s *data_inout, unsigned int log2_count, int *bitSwap, c
     float *v28; // eax
     unsigned int v29; // [esp+44h] [ebp-10C8h]
     unsigned int j; // [esp+48h] [ebp-10C4h]
-    unsigned int v31[2]; // [esp+4Ch] [ebp-10C0h] BYREF
-    float v32[510]; // [esp+54h] [ebp-10B8h] BYREF
+    float v31[512]; // [esp+4Ch] [ebp-10C0h] BYREF
     unsigned int v33; // [esp+84Ch] [ebp-8C0h]
     unsigned int v34; // [esp+850h] [ebp-8BCh]
     float v35[512]; // [esp+854h] [ebp-8B8h] BYREF
@@ -119,13 +118,13 @@ void __cdecl FFT(complex_s *data_inout, unsigned int log2_count, int *bitSwap, c
     {
         v4 = bitSwap[i] >> v62;
         imag = data_inout[i].imag;
-        v31[2 * v4] = LODWORD(data_inout[i].real);
-        *(float *)&v31[2 * v4 + 1] = imag;
+        *(unsigned int *)&v31[2 * v4] = LODWORD(data_inout[i].real);
+        v31[2 * v4 + 1] = imag;
     }
-    v44 = v31;
-    v6 = (float *)v31;
+    v44 = (unsigned int *)v31;
+    v6 = v31;
     v7 = v80 >> 2;
-    v8 = v32;
+    v8 = &v31[2];
     do
     {
         v9 = v6[1];
@@ -156,14 +155,14 @@ void __cdecl FFT(complex_s *data_inout, unsigned int log2_count, int *bitSwap, c
     for ( i = 0; i < v80; i += 4 )
     {
         v33 = i >> 2;
-        v35[8 * (i >> 2)] = *(float *)&v31[2 * i];
-        v35[8 * v33 + 1] = v32[2 * i];
-        v35[8 * v33 + 2] = v32[2 * i + 2];
-        v35[8 * v33 + 3] = v32[2 * i + 4];
-        v35[8 * v33 + 4] = *(float *)&v31[2 * i + 1];
-        v35[8 * v33 + 5] = v32[2 * i + 1];
-        v35[8 * v33 + 6] = v32[2 * i + 3];
-        v35[8 * v33 + 7] = v32[2 * i + 5];
+        v35[8 * (i >> 2)] = v31[2 * i];
+        v35[8 * v33 + 1] = v31[2 * i + 2];
+        v35[8 * v33 + 2] = v31[2 * i + 4];
+        v35[8 * v33 + 3] = v31[2 * i + 6];
+        v35[8 * v33 + 4] = v31[2 * i + 1];
+        v35[8 * v33 + 5] = v31[2 * i + 3];
+        v35[8 * v33 + 6] = v31[2 * i + 5];
+        v35[8 * v33 + 7] = v31[2 * i + 7];
     }
     v34 = 4;
     v62 = 5;

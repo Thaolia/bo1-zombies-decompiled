@@ -76,11 +76,12 @@ GlassRenderer::GlassRenderer(const Glasses *glasses)
     p_smallAllocator = &this->smallAllocator;
     this->smallAllocator.memory = 0;
     smallAllocatorBlocks = glasses->smallAllocatorBlocks;
+    // A block holds one std::list node of a pointer (two links and the value), rounded up.
     v2 = GlassesClient::Allocate(
-                 16 * smallAllocatorBlocks,
+                 4 * sizeof(void *) * smallAllocatorBlocks,
                  "C:\\projects_pc\\cod\\codsrc\\src\\glass\\glass_renderer.cpp",
                  70);
-    this->smallAllocator.Init(v2, 0x10u, smallAllocatorBlocks);
+    this->smallAllocator.Init(v2, 4 * sizeof(void *), smallAllocatorBlocks);
 
 
     //v23 = GlassesClient::Allocate(28, "C:\\projects_pc\\cod\\codsrc\\src\\glass\\glass_renderer.cpp", 72);

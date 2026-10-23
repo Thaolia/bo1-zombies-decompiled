@@ -12,7 +12,7 @@ Glasses *__cdecl GetGlasses_LoadObj()
     {
         glassesInited = 1;
         memset((unsigned __int8 *)&glasses, 0, sizeof(glasses));
-        glasses.glasses = (Glass *)operator new[](0x1E460u);
+        glasses.glasses = (Glass *)operator new[](sizeof(Glass) * 1000);
         glasses.numGlasses = 0;
         glasses.name = 0;
     }
@@ -33,10 +33,10 @@ Glasses *__cdecl GetGlasses()
 {
     bool v1; // [esp+4h] [ebp-8h]
 
-    v1 = fs_gameDirVar && *(_BYTE *)fs_gameDirVar->current.integer;
+    v1 = fs_gameDirVar && *fs_gameDirVar->current.string;
     if ( v1 || !useFastFile->current.enabled )
-        return (Glasses *)((int (__cdecl *)(Glasses *(__cdecl *)()))GetGlasses_LoadObj)(GetGlasses_LoadObj);
+        return (Glasses *)((intptr_t (__cdecl *)(Glasses *(__cdecl *)()))GetGlasses_LoadObj)(GetGlasses_LoadObj);
     else
-        return (Glasses *)((int (__cdecl *)(Glasses *(__cdecl *)()))GetGlasses_FastFile)(GetGlasses_FastFile);
+        return (Glasses *)((intptr_t (__cdecl *)(Glasses *(__cdecl *)()))GetGlasses_FastFile)(GetGlasses_FastFile);
 }
 

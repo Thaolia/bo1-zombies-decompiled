@@ -9,7 +9,7 @@ struct XDollBone // sizeof=0x10
     // padding byte
     // padding byte
     unsigned int name_hash;
-    int rigidBody;
+    intptr_t rigidBody;
     struct PhysPreset *physPreset;
 };
 
@@ -47,7 +47,7 @@ struct XDollBody // sizeof=0x118
     XDollBone bones[4];
     XDollBoneOrientation boneOrientations[4];
     XDoll_ConstraintInfo constraintInfos[4];
-    int userBody;
+    intptr_t userBody;
     unsigned int userBodyBoneHash;
     int stableTime;
 };

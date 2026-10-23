@@ -3,6 +3,7 @@
 #include <cstring>
 #include <qcommon/common.h>
 #include <physics/phys_local.h>
+#include <platform/arch_size.h>
 
 adjacencyWinding_t *__cdecl BuildBrushdAdjacencyWindingForSide(
                 const char *name,
@@ -913,6 +914,15 @@ char __cdecl IntAlreadyInList(const int *list, int listCount, int value)
     return 0;
 }
 
+struct FindCycleBFS_node // sizeof=0x10
+{
+    const SimplePlaneIntersection *pt;
+    int plane;
+    int depth;
+    FindCycleBFS_node *parent;
+};
+static_assert(sizeof(FindCycleBFS_node) == BO1_ARCH_SIZE(16, 24));
+
 char __cdecl FindCycleBFS(
                 int basePlane,
                 SimplePlaneIntersection **pts,
@@ -923,14 +933,11 @@ char __cdecl FindCycleBFS(
                 const SimplePlaneIntersection **resultCycle,
                 int *resultCycleCount)
 {
-    const SimplePlaneIntersection **v9; // [esp+0h] [ebp-4028h]
+    FindCycleBFS_node *v9; // [esp+0h] [ebp-4028h]
     const SimplePlaneIntersection **enda; // [esp+4h] [ebp-4024h]
-    const SimplePlaneIntersection *v11; // [esp+8h] [ebp-4020h] BYREF
-    int planeIndex; // [esp+Ch] [ebp-401Ch]
-    int v13; // [esp+10h] [ebp-4018h]
-    unsigned int v14[4094]; // [esp+14h] [ebp-4014h]
+    FindCycleBFS_node queue[1024]; // [esp+8h] [ebp-4020h] BYREF
     int v15; // [esp+400Ch] [ebp-1Ch]
-    const SimplePlaneIntersection *v16; // [esp+4010h] [ebp-18h]
+    int v16; // [esp+4010h] [ebp-18h]
     const SimplePlaneIntersection **i; // [esp+4014h] [ebp-14h]
     signed int j; // [esp+4018h] [ebp-10h]
     int v19; // [esp+401Ch] [ebp-Ch]
@@ -957,10 +964,10 @@ char __cdecl FindCycleBFS(
     {
         __debugbreak();
     }
-    v11 = start;
-    planeIndex = ThirdPlane(start, basePlane, connectingPlane);
-    v13 = 1;
-    v14[0] = 0;
+    queue[0].pt = start;
+    queue[0].plane = ThirdPlane(start, basePlane, connectingPlane);
+    queue[0].depth = 1;
+    queue[0].parent = 0;
     v20 = 0;
     v21 = 1;
     v19 = ThirdPlane(end, basePlane, connectingPlane);
@@ -973,19 +980,19 @@ LABEL_8:
     else
     {
         enda = (const SimplePlaneIntersection **)&pts[ptsCount];
-        for ( i = NextPointFormedByThisPlane(*(&planeIndex + 4 * v20), (const SimplePlaneIntersection **)pts, enda);
+        for ( i = NextPointFormedByThisPlane(queue[v20].plane, (const SimplePlaneIntersection **)pts, enda);
                     ;
-                    i = NextPointFormedByThisPlane(*(&planeIndex + 4 * v20), i + 1, enda) )
+                    i = NextPointFormedByThisPlane(queue[v20].plane, i + 1, enda) )
         {
             if ( i == enda )
             {
                 ++v20;
                 goto LABEL_8;
             }
-            v15 = ThirdPlane(*i, basePlane, *(&planeIndex + 4 * v20));
+            v15 = ThirdPlane(*i, basePlane, queue[v20].plane);
             if ( v15 != connectingPlane )
             {
-                for ( j = 0; j < v21 && *(&planeIndex + 4 * j) != v15; ++j )
+                for ( j = 0; j < v21 && queue[j].plane != v15; ++j )
                     ;
                 if ( j >= v21 )
                 {
@@ -1000,17 +1007,17 @@ LABEL_8:
                     {
                         __debugbreak();
                     }
-                    *(&v11 + 4 * v21) = *i;
-                    *(&planeIndex + 4 * v21) = v15;
-                    v14[4 * v21 - 1] = v14[4 * v20 - 1] + 1;
-                    v14[4 * v21++] = (unsigned int)&v11 + 4 * v20;
+                    queue[v21].pt = *i;
+                    queue[v21].plane = v15;
+                    queue[v21].depth = queue[v20].depth + 1;
+                    queue[v21++].parent = &queue[v20];
                     if ( v15 == v19 )
                         break;
                 }
             }
         }
-        v9 = &v11 + 4 * v21 - 4;
-        if ( v9[1] != (const SimplePlaneIntersection *)v19
+        v9 = &queue[v21 - 1];
+        if ( v9->plane != v19
             && !Assert_MyHandler(
                         "c:\\projects_pc\\cod\\codsrc\\src\\qcommon\\../../common/brush_edges.cpp",
                         314,
@@ -1020,13 +1027,13 @@ LABEL_8:
         {
             __debugbreak();
         }
-        *resultCycleCount = (int)v9[2]->xyz + 1;
-        v16 = v9[2];
+        *resultCycleCount = v9->depth + 1;
+        v16 = v9->depth;
         while ( v9 )
         {
-            resultCycle[(unsigned int)v16] = *v9;
-            v16 = (const SimplePlaneIntersection *)((char *)v16 - 1);
-            v9 = (const SimplePlaneIntersection **)v9[3];
+            resultCycle[(unsigned int)v16] = v9->pt;
+            v16 = v16 - 1;
+            v9 = v9->parent;
         }
         if ( v16 )
         {
@@ -1295,7 +1302,7 @@ int __cdecl Remove(const SimplePlaneIntersection **pts, int ptsCount, const Simp
 
 int __cdecl NumberOfUniquePoints(const SimplePlaneIntersection **pts, int ptsCount)
 {
-    unsigned int v3[1025]; // [esp+10h] [ebp-1010h]
+    const SimplePlaneIntersection *v3[1025]; // [esp+10h] [ebp-1010h]
     int v4; // [esp+1014h] [ebp-Ch]
     int j; // [esp+1018h] [ebp-8h]
     int i; // [esp+101Ch] [ebp-4h]
@@ -1323,10 +1330,10 @@ int __cdecl NumberOfUniquePoints(const SimplePlaneIntersection **pts, int ptsCou
     v4 = 0;
     for ( i = 0; i < ptsCount; ++i )
     {
-        for ( j = 0; j < v4 && !VecNCompareCustomEpsilon(pts[i]->xyz, (const float *)v3[j], 0.0099999998, 3); ++j )
+        for ( j = 0; j < v4 && !VecNCompareCustomEpsilon(pts[i]->xyz, v3[j]->xyz, 0.0099999998, 3); ++j )
             ;
         if ( j == v4 )
-            v3[v4++] = (unsigned int)pts[i];
+            v3[v4++] = pts[i];
     }
     return v4;
 }

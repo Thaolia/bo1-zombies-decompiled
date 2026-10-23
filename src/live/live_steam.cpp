@@ -150,7 +150,7 @@ unsigned int __stdcall ShellExecuteThredProc(const char *lpParam)
     char currentDirectory[268]; // [esp+0h] [ebp-110h] BYREF
 
     GetCurrentDirectoryA(0x104u, currentDirectory);
-    g_ShellExecuteErr = (int)ShellExecuteA(0, "open", lpParam, 0, 0, 1);
+    g_ShellExecuteErr = (int)(intptr_t)ShellExecuteA(0, "open", lpParam, 0, 0, 1);
     _InterlockedExchange(&g_ShellExecuteInProgress, 0);
     return 0;
 }
@@ -287,7 +287,7 @@ _iobuf *LiveSteam_CreateSteamAppIdFile()
         if ( result )
         {
             fprintf(result, "42710");
-            return (_iobuf *)fclose(f);
+            return (_iobuf *)(intptr_t)fclose(f);
         }
     }
     return result;

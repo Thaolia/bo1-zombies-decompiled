@@ -70,7 +70,7 @@ char *__cdecl Com_GetBspLump(LumpType type, unsigned int elemSize, unsigned int 
         *count = 0;
         return 0;
     }
-    else if ( type < (unsigned int)Com_GetBspLumpCountForVersion(comBspGlob.header->version) )
+    else if ( type < (uintptr_t)Com_GetBspLumpCountForVersion(comBspGlob.header->version) )
     {
         return Com_ValidateBspLumpData(
                          type,
@@ -219,7 +219,7 @@ unsigned __int8 *__cdecl Com_ReadLumpOutOfBsp(int h, LumpType type, unsigned int
             return 0;
         }
     }
-    else if ( type < (unsigned int)Com_GetBspLumpCountForVersion(version) )
+    else if ( type < (uintptr_t)Com_GetBspLumpCountForVersion(version) )
     {
         readSize = 8 * type;
         FS_Seek(h, 8 * type, 0);
@@ -349,7 +349,7 @@ char __cdecl Com_CheckVersionLumpCountError(int version)
         if ( comBspGlob.fileSize < 8 * comBspGlob.header->chunkCount + 12 )
             return 1;
     }
-    else if ( comBspGlob.fileSize < 8 * (int)Com_GetBspLumpCountForVersion(version) + 8 )
+    else if ( comBspGlob.fileSize < 8 * (int)(intptr_t)Com_GetBspLumpCountForVersion(version) + 8 )
     {
         return 1;
     }
@@ -757,7 +757,7 @@ void __cdecl Com_LoadBurnableData()
             comWorld.burnableHeader = *(ComBurnableHeader *)diskHeader;
             in = Com_GetBspLump(LUMP_BURNABLECELLS, 0x10u, &count);
             comWorld.numBurnableCells = count;
-            comWorld.burnableCells = (ComBurnableCell *)Hunk_Alloc(12 * count, "CMod_LoadBurnableData", 14);
+            comWorld.burnableCells = (ComBurnableCell *)Hunk_Alloc(sizeof(ComBurnableCell) * count, "CMod_LoadBurnableData", 14);
             blocks = (const DiskBurnableBlock *)Com_GetBspLump(LUMP_BURNABLECELLDATA, 0x20u, &blockCount);
             for ( n = 0; n < count; ++n )
             {
@@ -783,7 +783,7 @@ void __cdecl Com_LoadBurnableData()
             qsort(
                 comWorld.burnableCells,
                 comWorld.numBurnableCells,
-                0xCu,
+                sizeof(ComBurnableCell),
                 (int (__cdecl *)(const void *, const void *))Com_BurnableCellSort);
         }
         else
@@ -865,7 +865,7 @@ ComPrimaryLight *Com_LoadPrimaryLights()
     if ( diskLightCount <= 1 )
         Com_Error(ERR_DROP, "no primary lights in bsp\n");
     comWorld.primaryLightCount = diskLightCount;
-    comWorld.primaryLights = (ComPrimaryLight *)Hunk_Alloc(220 * diskLightCount, "Com_LoadPrimaryLights", 14);
+    comWorld.primaryLights = (ComPrimaryLight *)Hunk_Alloc(sizeof(ComPrimaryLight) * diskLightCount, "Com_LoadPrimaryLights", 14);
     in = (DiskPrimaryLight*)diskLights;
     result = comWorld.primaryLights;
     out = comWorld.primaryLights;
@@ -986,7 +986,7 @@ ComPrimaryLight *Com_LoadPrimaryLights_Version14()
     ComPrimaryLight *result; // eax
 
     comWorld.primaryLightCount = 2;
-    result = (ComPrimaryLight *)Hunk_Alloc(0x1B8u, "Com_LoadPrimaryLights", 14);
+    result = (ComPrimaryLight *)Hunk_Alloc(2 * sizeof(ComPrimaryLight), "Com_LoadPrimaryLights", 14);
     comWorld.primaryLights = result;
     if ( result->type )
     {
@@ -1019,7 +1019,7 @@ const DiskPrimaryLight_Version16 *Com_LoadPrimaryLights_Version16()
     if ( diskLightCount <= 1 )
         Com_Error(ERR_DROP, "no primary lights in bsp\n");
     comWorld.primaryLightCount = diskLightCount;
-    comWorld.primaryLights = (ComPrimaryLight *)Hunk_Alloc(220 * diskLightCount, "Com_LoadPrimaryLights", 14);
+    comWorld.primaryLights = (ComPrimaryLight *)Hunk_Alloc(sizeof(ComPrimaryLight) * diskLightCount, "Com_LoadPrimaryLights", 14);
     result = diskLights;
     in = (DiskPrimaryLight_Version16 *)diskLights;
     out = comWorld.primaryLights;

@@ -456,7 +456,7 @@ void __cdecl R_AddDObjToScene(
                 sceneModel->entnum = entnum;
                 scene.dpvs.sceneXModelIndex[entnum] = sceneEntIndex;
                 //sceneModel->cachedLightingHandle = (unsigned __int16 *)Ragdoll_HandleBody((int)pose);
-                sceneModel->cachedLightingHandle = (unsigned __int16 *)((int)pose);
+                sceneModel->cachedLightingHandle = (unsigned __int16 *)pose;
                 sceneModel->lightingOriginToleranceSq = lightingOriginToleranceSq;
                 radius = XModelGetRadius(model);
                 CG_GetPoseOrigin(pose, sceneModel->placement.base.origin);
@@ -1208,7 +1208,7 @@ void __cdecl R_AddBModelSurfacesCamera(
         ++count;
         ++surfIndex;
         ++modelSurf;
-        surfId += 5;
+        surfId += sizeof(BModelSurface) / 4;
     }
 }
 
@@ -1271,7 +1271,7 @@ GfxDrawSurf *__cdecl R_AddBModelSurfaces(
         ++count;
         ++surfIndex;
         ++modelSurf;
-        surfId += 5;
+        surfId += sizeof(BModelSurface) / 4;
     }
     return drawSurf;
 }
@@ -1401,7 +1401,7 @@ void R_AddXModelSurfacesCamera(
             region = (*material)->cameraRegion;
             if (region == 3)
             {
-                surfId += 14;
+                surfId += sizeof(GfxModelRigidSurface) / 4;
                 ++modelSurf;
             }
             else
@@ -1487,7 +1487,7 @@ void R_AddXModelSurfacesCamera(
                     XSurface = R_GetXSurface((unsigned int *)modelSurf, surfType);
                     totalVertCount += XSurfaceGetNumVerts(XSurface);
                 }
-                surfId += 14;
+                surfId += sizeof(GfxModelRigidSurface) / 4;
                 ++modelSurf;
             }
         }
@@ -1528,7 +1528,7 @@ const XSurface *__cdecl R_GetXSurface(unsigned int *modelSurf, surfaceType_t sur
     {
         __debugbreak();
     }
-    return (const XSurface *)modelSurf[1];
+    return ((const GfxModelSkinnedSurface *)modelSurf)->xsurf;
 }
 
 GfxDrawSurf *__cdecl R_AddXModelSurfaces(
@@ -1626,12 +1626,12 @@ GfxDrawSurf *__cdecl R_AddXModelSurfaces(
                 LODWORD(newDrawSurf) = (unsigned __int16)surfId | *(unsigned int *)&(*material)->info.drawSurf.fields & 0xFFFF0000;
                 drawSurf->packed = newDrawSurf;
                 ++drawSurf;
-                surfId += 14;
+                surfId += sizeof(GfxModelRigidSurface) / 4;
                 ++modelSurf;
             }
             else
             {
-                surfId += 14;
+                surfId += sizeof(GfxModelRigidSurface) / 4;
                 ++modelSurf;
             }
         }
@@ -1783,7 +1783,7 @@ void __cdecl R_AddDObjSurfacesCamera(
                     if ( skinnedCachedOffset == -2 )
                     {
                         surfType = SF_BEGIN_XMODEL;
-                        surfSize = 56;
+                        surfSize = sizeof(GfxModelRigidSurface);
                     }
                     else
                     {
@@ -1793,7 +1793,7 @@ void __cdecl R_AddDObjSurfacesCamera(
                             goto LABEL_34;
                         }
                         surfType = SF_XMODEL_SKINNED;
-                        surfSize = 24;
+                        surfSize = sizeof(GfxModelSkinnedSurface);
                     }
                     if ( !*material
                         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_scene.cpp", 1547, 0, "%s", "*material") )
@@ -1986,7 +1986,7 @@ LABEL_25:
             if ( skinnedCachedOffset == -2 )
             {
                 surfType = SF_BEGIN_XMODEL;
-                surfSize = 56;
+                surfSize = sizeof(GfxModelRigidSurface);
             }
             else
             {
@@ -2000,7 +2000,7 @@ LABEL_24:
                     goto LABEL_25;
                 }
                 surfType = SF_XMODEL_SKINNED;
-                surfSize = 24;
+                surfSize = sizeof(GfxModelSkinnedSurface);
             }
             if ( !*material
                 && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_scene.cpp", 1749, 0, "%s", "*material") )
@@ -2816,10 +2816,10 @@ void __cdecl R_ClearScene(int localClientNum)
         __debugbreak();
     }
     scene.dpvs.localClientNum = localClientNum;
-    Com_Memset((unsigned int *)scene.sceneDObj, 0, 132 * scene.sceneDObjCount);
-    Com_Memset((unsigned int *)&scene.sceneModel[0].info, 0, 76 * scene.sceneModelCount);
-    Com_Memset((unsigned int *)&scene.sceneBrush[0].info.surfId, 0, 44 * scene.sceneBrushCount);
-    Com_Memset((unsigned int *)scene.glassBrush, 0, 40 * scene.glassBrushCount);
+    Com_Memset((unsigned int *)scene.sceneDObj, 0, sizeof(GfxSceneEntity) * scene.sceneDObjCount);
+    Com_Memset((unsigned int *)&scene.sceneModel[0].info, 0, sizeof(GfxSceneModel) * scene.sceneModelCount);
+    Com_Memset((unsigned int *)&scene.sceneBrush[0].info.surfId, 0, sizeof(GfxSceneBrush) * scene.sceneBrushCount);
+    Com_Memset((unsigned int *)scene.glassBrush, 0, sizeof(GfxSceneGlassBrush) * scene.glassBrushCount);
     scene.addedLightCount = 0;
     memset((unsigned __int8 *)scene.drawSurfCount, 0, sizeof(scene.drawSurfCount));
     for ( viewIndex = 0; viewIndex < 7; ++viewIndex )

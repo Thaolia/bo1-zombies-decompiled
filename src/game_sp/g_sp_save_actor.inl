@@ -48,10 +48,10 @@ static const SPEntitySaveField s_actorExtFields[] = {
 // sightTraceHitNum tail (SP +0x31F8); KB's image stops at the same member.
 static const unsigned SP_ACTOR_IMAGE_SIZE = offsetof(actor_s, pPotentialCoverNode);
 static const unsigned SP_ACTOR_EXT_IMAGE_SIZE = offsetof(actor_sp_ext_t, sightTraceHitNum);
-static_assert(sizeof(actor_s) == 0x27B0, "DERIVED actor image (KB: 16-byte aligned Physics, actor_fields.cpp)");
-static_assert(ARRAY_COUNT(((actor_s *)0)->sentientInfo.inl) == 48 && ARRAY_COUNT(((actor_s *)0)->pPotentialCoverNode) == 1000,
+BO1_SAVE_IMAGE_ASSERT(sizeof(actor_s) == 0x27B0, "DERIVED actor image (KB: 16-byte aligned Physics, actor_fields.cpp)");
+BO1_SAVE_IMAGE_ASSERT(ARRAY_COUNT(((actor_s *)0)->sentientInfo.inl) == 48 && ARRAY_COUNT(((actor_s *)0)->pPotentialCoverNode) == 1000,
     "DERIVED actor arrays");
-static_assert(sizeof(scr_animscript_t) == 8, "SP 8-byte animscript entries");
+BO1_SAVE_IMAGE_ASSERT(sizeof(scr_animscript_t) == 8, "SP 8-byte animscript entries");
 
 #define SF(member, type) { offsetof(sentient_s, member), sizeof(((sentient_s *)0)->member), type }
 static const SPEntitySaveField s_sentientFields[] = {
@@ -63,8 +63,8 @@ static const SPEntitySaveField s_sentientFields[] = {
     SF(scriptOwner, 3), SF(scriptTargetTag, 1)
 };
 #undef SF
-static_assert(sizeof(sentient_s) == 0x90 && offsetof(sentient_s, inuse) == 0x84, "DERIVED sentient image");
-static_assert(ARRAY_COUNT(g_sentients) == MAX_SENTIENTS_CAP, "DERIVED sentient count");
+BO1_SAVE_IMAGE_ASSERT(sizeof(sentient_s) == 0x90 && offsetof(sentient_s, inuse) == 0x84, "DERIVED sentient image");
+BO1_SAVE_IMAGE_ASSERT(ARRAY_COUNT(g_sentients) == MAX_SENTIENTS_CAP, "DERIVED sentient count");
 
 static void G_WriteActor(const actor_s *actor, const actor_sp_ext_t *ext, MemoryFile *memFile)
 {

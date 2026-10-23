@@ -1591,7 +1591,7 @@ GfxCmdBufSourceState *RB_DebugShaderDrawCommandsCommon()
     for ( viewInfoIndex = 0; viewInfoIndex < data->viewInfoCount; ++viewInfoIndex )
     {
         RB_DebugShaderRenderCommands(&data->viewInfo[viewInfoIndex]);
-        result = (GfxCmdBufSourceState *)(viewInfoIndex + 1);
+        result = (GfxCmdBufSourceState *)(uintptr_t)(viewInfoIndex + 1);
     }
     return result;
 }

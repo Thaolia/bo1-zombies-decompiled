@@ -189,7 +189,7 @@ void __cdecl DoLengthNotify(unsigned int msec, const char *lengthNotifyData, snd
 
     if ( id == SND_LENGTH_NOTIFY_SCRIPT )
     {
-        SND_LengthNotify((unsigned int)lengthNotifyData, msec);
+        SND_LengthNotify((unsigned int)(uintptr_t)lengthNotifyData, msec);
     }
     else if ( id == SND_LENGTH_NOTIFY_SUBTITLE )
     {
@@ -1751,7 +1751,7 @@ snd_alias_t *__cdecl SND_PickSoundAliasFromList(snd_alias_list_t *aliasList, int
         randomIndex = -1;
         if ( (((selectionArray[0]->flags & 0xE0000000) >> 29) & 4) != 0 )
         {
-            seed = (int)aliasList + objectId;
+            seed = (int)(uintptr_t)aliasList + objectId;
             v3 = RandWithSeed(&seed);
             randomIndex = v3 % actualCount;
         }
@@ -1857,7 +1857,7 @@ unsigned int __cdecl SND_PlaySoundAlias(
     SND_LogPlayedAliasId(aliasList->id);
     if ( snd_assert_on_play
         && snd_assert_on_play->current.integer
-        && *(_BYTE *)snd_assert_on_play->current.integer
+        && *snd_assert_on_play->current.string
         && !_stricmp(snd_assert_on_play->current.string, aliasList->name)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\sound\\snd.cpp",
@@ -2243,7 +2243,7 @@ bool __cdecl SND_IsAliasVoice(const snd_alias_t *alias)
 
 int __cdecl SND_GetCurrentReverb()
 {
-    if ( snd_reverb_override->current.integer && *(_BYTE *)snd_reverb_override->current.integer )
+    if ( snd_reverb_override->current.integer && *snd_reverb_override->current.string )
         return SND_HashName(snd_reverb_override->current.string);
     if ( g_snd.effect && g_snd.effect->reverbId )
         return g_snd.effect->reverbId;
@@ -2256,7 +2256,7 @@ void __cdecl SND_UpdateDebugAlias()
     float soundDir[3]; // [esp+24h] [ebp-10h] BYREF
     unsigned int i; // [esp+30h] [ebp-4h]
 
-    if ( snd_stop_alias && snd_stop_alias->current.integer && *(_BYTE *)snd_stop_alias->current.integer )
+    if ( snd_stop_alias && snd_stop_alias->current.integer && *snd_stop_alias->current.string )
     {
         for ( i = 0; i < SND_MAX_VOICES; ++i )
         {
@@ -2268,13 +2268,13 @@ void __cdecl SND_UpdateDebugAlias()
         }
         Dvar_SetString((dvar_s *)snd_stop_alias, "");
     }
-    if ( snd_start_alias && snd_start_alias->current.integer && *(_BYTE *)snd_start_alias->current.integer )
+    if ( snd_start_alias && snd_start_alias->current.integer && *snd_start_alias->current.string )
     {
         soundDir[0] = 1.0f;
         soundDir[1] = 0.0f;
         soundDir[2] = 0.0f;
         entHandle.field = SND_EntHandle(0, 4094, 0, 0, 1, TEAM_FREE).field;
-        SND_Play((char *)snd_start_alias->current.integer, 0, 1.0, entHandle, g_snd.listeners[0].orient.origin, soundDir, 0);
+        SND_Play((char *)snd_start_alias->current.string, 0, 1.0, entHandle, g_snd.listeners[0].orient.origin, soundDir, 0);
         Dvar_SetString((dvar_s *)snd_start_alias, "");
     }
 }
@@ -2706,7 +2706,7 @@ void __cdecl SND_StopVoice(int voiceIndex)
         if (g_snd.voice[voiceIndex].alias
             && snd_assert_on_stop
             && snd_assert_on_stop->current.integer
-            && *(_BYTE *)snd_assert_on_stop->current.integer
+            && *snd_assert_on_stop->current.string
             && !_stricmp(snd_assert_on_stop->current.string, g_snd.voice[voiceIndex].alias->name)
             && !Assert_MyHandler(
                 "C:\\projects_pc\\cod\\codsrc\\src\\sound\\snd.cpp",
@@ -2914,7 +2914,7 @@ void __cdecl SND_UpdateSnapshot(float dt)
     float voiceOcclusions[64]; // [esp+29Ch] [ebp-100h]
 
     defaultCurve = g_snd.defaultCurve;
-    if (snd_debug_snapshot && snd_debug_snapshot->current.integer && *(_BYTE *)snd_debug_snapshot->current.integer)
+    if (snd_debug_snapshot && snd_debug_snapshot->current.integer && *snd_debug_snapshot->current.string)
     {
         v2 = SND_HashName(snd_debug_snapshot->current.string);
         SNDL_SetSnapshot(SND_SNAPSHOT_DEBUG, v2, 0.0, 1.0);
@@ -3164,7 +3164,7 @@ double __cdecl SND_GetBaseLevel(const snd_voice_t *voice)
         __debugbreak();
     if (snd_solo_alias_substring->current.integer)
     {
-        if (*(_BYTE *)snd_solo_alias_substring->current.integer)
+        if (*snd_solo_alias_substring->current.string)
         {
             v2 = strstr(alias->name, snd_solo_alias_substring->current.string);
             if (!v2)
@@ -3173,7 +3173,7 @@ double __cdecl SND_GetBaseLevel(const snd_voice_t *voice)
     }
     if (snd_mute_alias_substring->current.integer)
     {
-        if (*(_BYTE *)snd_mute_alias_substring->current.integer)
+        if (*snd_mute_alias_substring->current.string)
         {
             v4 = strstr(alias->name, snd_mute_alias_substring->current.string);
             if (v4)

@@ -3,6 +3,7 @@
 
 #include <cfloat>
 #include <math.h>
+#include <string.h>
 #include "com_pack.h"
 
 #define EQUAL_EPSILON 0.001f
@@ -49,6 +50,20 @@ union alignas(16) float4
         unsigned int u[4];
         PackedUnitVec unitVec[4];
 };
+
+// float4 is alignas(16), so `*(float4 *)p` lets the compiler use aligned SSE moves; the decompiled code views
+// float[4] storage of any alignment that way (8-aligned on 64-bit). These copy it without assuming alignment.
+inline float4 Float4Load(const void *p)
+{
+    float4 v;
+    memcpy(&v, p, sizeof(v));
+    return v;
+}
+
+inline void Float4Store(void *p, const float4 &v)
+{
+    memcpy(p, &v, sizeof(v));
+}
 
 union float4x3 {
     union {

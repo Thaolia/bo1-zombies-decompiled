@@ -2108,7 +2108,7 @@ bgsAnim_s *__cdecl BG_GetAnimationForIndex(int client, unsigned int index)
 {
     if (index >= bgs->animData->animScriptData.numAnimations)
         Com_Error(ERR_DROP, "BG_GetAnimationForIndex: index out of bounds");
-    return (bgsAnim_s *)((char *)bgs->animData + 120 * index);
+    return (bgsAnim_s *)((char *)bgs->animData + sizeof(animation_s) * index);
 }
 
 int __cdecl BG_GetPlayerStateWeaponIndex(const pmove_t *pm)

@@ -2,6 +2,7 @@
 #include <physics/physics_system_internal.h>
 #include <physics/phys_assert.h>
 #include <physics/phys_constraint_solver_multithreaded.h>
+#include <platform/arch_size.h>
 
 phys_assert_info pai_create_pulse_sum_contact = { 0, 2, true };
 
@@ -22,9 +23,9 @@ void __thiscall rigid_body_constraint_contact::verify_constraint(
     g_physics_system->validate_member(b2_);
 
     using TI = phys_free_list<rigid_body_constraint_contact>::T_internal;
-    static_assert(sizeof(TI) == 0x38, "size mismatch");
+    static_assert(sizeof(TI) == BO1_ARCH_SIZE(0x38, 112), "size mismatch");
     TI *ti = (TI *)((char *)this - offsetof(TI, m_data));
-    PMM_VALIDATE((char *)ti, sizeof(TI), 4u);
+    PMM_VALIDATE((char *)ti, sizeof(TI), phys_free_list<rigid_body_constraint_contact>::T_internal_alignment());
 }
 
 void __thiscall rigid_body_constraint_contact::setup_constraint(pulse_sum_constraint_solver *psys, float delta_t)
@@ -78,7 +79,11 @@ pulse_sum_contact *__thiscall pulse_sum_constraint_solver::create_pulse_sum_cont
   int savedregs; // [esp+10h] [ebp+0h] BYREF
 
   //result = (pulse_sum_contact *)phys_transient_allocator::allocate(&this->m_solver_memory_allocator, 208 * cpi->m_point_pair_count + 96, 16, 1, SOLVER_MEMORY_ALLOCATOR_ERROR_MSG);
-  result = (pulse_sum_contact *)this->m_solver_memory_allocator.allocate(208 * cpi->m_point_pair_count + 96, 16, 1, SOLVER_MEMORY_ALLOCATOR_ERROR_MSG);
+  result = (pulse_sum_contact *)this->m_solver_memory_allocator.allocate(
+      sizeof(pulse_sum_contact_point) * cpi->m_point_pair_count + sizeof(pulse_sum_contact),
+      alignof(pulse_sum_contact),
+      1,
+      SOLVER_MEMORY_ALLOCATOR_ERROR_MSG);
   v7 = result;
   if ( result )
   {

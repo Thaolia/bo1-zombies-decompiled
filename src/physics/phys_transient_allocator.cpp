@@ -1,5 +1,8 @@
 #include "phys_transient_allocator.h"
 #include "phys_mem_new.h"
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 void phys_transient_allocator::reset()
 {
@@ -59,30 +62,31 @@ void __thiscall phys_transient_allocator::resize()
     v3 = PSP_ALLOC(m_slot_pool);
     if ( v3 )
     {
-        *(unsigned int *)v3 = 0x4000;
-        *((unsigned int *)v3 + 1) = 4;
-        *((unsigned int *)v3 + 2) = (unsigned int)this->m_first_block;
-        this->m_first_block = (phys_transient_allocator::block_header *)v3;
+        phys_transient_allocator::block_header *header = (phys_transient_allocator::block_header *)v3;
+        header->m_block_size = 0x4000;
+        header->m_block_alignment = 4;
+        header->m_next_block = this->m_first_block;
+        this->m_first_block = header;
         this->m_total_memory_allocated += 0x4000;
-        this->m_cur = v3 + 12;
+        this->m_cur = v3 + sizeof(phys_transient_allocator::block_header);
         this->m_end = v3 + 0x4000;
     }
 }
 
-int phys_transient_allocator::mt_allocate_internal(int size, int alignment)
+uintptr_t phys_transient_allocator::mt_allocate_internal(int size, int alignment)
 {
     char *cur; // [esp+Ch] [ebp-4h]
 
     do
     {
         cur = this->m_cur;
-        if ((char *)(size + (~(alignment - 1) & (unsigned int)&cur[alignment - 1])) > this->m_end)
+        if ((char *)(size + (~(uintptr_t)(alignment - 1) & (uintptr_t)&cur[alignment - 1])) > this->m_end)
             return 0;
-    } while ((char *)_InterlockedCompareExchange(
-        (volatile unsigned __int32 *)&this->m_cur,
-        size + (~(alignment - 1) & (unsigned int)&cur[alignment - 1]),
-        (signed __int32)cur) != cur);
-    return ~(alignment - 1) & (unsigned int)&cur[alignment - 1];
+    } while ((char *)_InterlockedCompareExchangePointer(
+        (void *volatile *)&this->m_cur,
+        (void *)(size + (~(uintptr_t)(alignment - 1) & (uintptr_t)&cur[alignment - 1])),
+        cur) != cur);
+    return ~(uintptr_t)(alignment - 1) & (uintptr_t)&cur[alignment - 1];
 }
 
 void *__thiscall phys_transient_allocator::allocate(
@@ -91,12 +95,12 @@ void *__thiscall phys_transient_allocator::allocate(
     int no_error,
     const char *error_msg)
 {
-    int v7; // [esp+4h] [ebp-14h]
-    int v8; // [esp+Ch] [ebp-Ch]
+    uintptr_t v7; // [esp+4h] [ebp-14h]
+    uintptr_t v8; // [esp+Ch] [ebp-Ch]
     void *ptr; // [esp+14h] [ebp-4h]
 
     transient_allocator_update_largest_size();
-    v8 = ~(alignment - 1) & (int)&this->m_cur[alignment - 1];
+    v8 = ~(uintptr_t)(alignment - 1) & (uintptr_t)&this->m_cur[alignment - 1];
     if ((char *)(size + v8) <= this->m_end)
     {
         this->m_cur = (char *)(size + v8);
@@ -110,7 +114,7 @@ void *__thiscall phys_transient_allocator::allocate(
     {
         //phys_transient_allocator::resize();
         this->resize();
-        v7 = ~(alignment - 1) & (int)&this->m_cur[alignment - 1];
+        v7 = ~(uintptr_t)(alignment - 1) & (uintptr_t)&this->m_cur[alignment - 1];
         if ((char *)(size + v7) <= this->m_end)
         {
             this->m_cur = (char *)(size + v7);
@@ -149,8 +153,8 @@ void *__thiscall phys_transient_allocator::mt_allocate(
     int no_error,
     const char *error_msg)
 {
-    int v7; // [esp+Ch] [ebp-40h]
-    int v8; // [esp+14h] [ebp-38h]
+    uintptr_t v7; // [esp+Ch] [ebp-40h]
+    uintptr_t v8; // [esp+14h] [ebp-38h]
     void *ptr; // [esp+48h] [ebp-4h]
 
     transient_allocator_update_largest_size();
@@ -163,7 +167,7 @@ void *__thiscall phys_transient_allocator::mt_allocate(
     {
         //minspec_read_write_mutex::WriteLock(&this->m_mutex);
         this->m_mutex.WriteLock();
-        v8 = ~(alignment - 1) & (int)&this->m_cur[alignment - 1];
+        v8 = ~(uintptr_t)(alignment - 1) & (uintptr_t)&this->m_cur[alignment - 1];
         if ((char *)(size + v8) <= this->m_end)
         {
             this->m_cur = (char *)(size + v8);
@@ -176,7 +180,7 @@ void *__thiscall phys_transient_allocator::mt_allocate(
         if (!ptr)
         {
             phys_transient_allocator::resize();
-            v7 = ~(alignment - 1) & (int)&this->m_cur[alignment - 1];
+            v7 = ~(uintptr_t)(alignment - 1) & (uintptr_t)&this->m_cur[alignment - 1];
             if ((char *)(size + v7) <= this->m_end)
             {
                 this->m_cur = (char *)(size + v7);

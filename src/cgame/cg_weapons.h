@@ -1,6 +1,7 @@
 #pragma once
 #include <sound/snd.h>
 #include <bgame/bg_weapons_def.h>
+#include <platform/arch_size.h>
 
 struct gentity_s;
 struct XModel;
@@ -34,7 +35,7 @@ struct weaponInfo_s // sizeof=0x24
     const char *translatedModename;
     const char *translatedAIOverlayDescription;
 };
-static_assert(sizeof(weaponInfo_s) == 0x24);
+static_assert(sizeof(weaponInfo_s) == BO1_ARCH_SIZE(0x24, 64));
 
 struct weaponState_t // sizeof=0x90
 {                                       // XREF: ?ClientThink_real@@YAXPAUgentity_s@@PAUusercmd_s@@@Z/r

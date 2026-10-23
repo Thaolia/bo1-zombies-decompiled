@@ -599,8 +599,6 @@ void __cdecl Live_FileShareSearch_GetRatings(bdVoteRankStatsInfo **ratings, int 
 
 void __cdecl Live_FileShareSearch_MarkItemCorrupt(int controllerIndex, int itemIndex)
 {
-    int v2; // eax
-    int v3; // ecx
     int i; // [esp+4h] [ebp-4h]
 
     for ( i = 0; i < 3; ++i )
@@ -609,10 +607,7 @@ void __cdecl Live_FileShareSearch_MarkItemCorrupt(int controllerIndex, int itemI
             && s_fshSearch.pages[i].startIndex <= itemIndex
             && itemIndex < s_fshSearch.pages[i].numDescriptors + s_fshSearch.pages[i].startIndex )
         {
-            v2 = 21056 * i;
-            v3 = 2104 * (itemIndex - s_fshSearch.pages[i].startIndex);
-            *(unsigned int *)(v2 + v3 + 172815704) = 0;
-            *(unsigned int *)(v2 + v3 + 172815708) = 0;
+            s_fshSearch.pages[i].descriptors[itemIndex - s_fshSearch.pages[i].startIndex].m_fileID = 0;
             return;
         }
     }

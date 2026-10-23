@@ -346,7 +346,7 @@ char __cdecl CG_Player_ApplyVehicleAnimOffsets(
     if ( (es->lerp.eFlags & 0x10000) == 0 )
         return 1;
     pVehicleCEnt = CG_GetEntity(localClientNum, cent->nextState.otherEntityNum);
-    if ( ((*((unsigned int *)pVehicleCEnt + 201) >> 1) & 1) == 0 )
+    if ( ((pVehicleCEnt->flagWord >> 1) & 1) == 0 )
         return 0;
     vehicleObj = Com_GetClientDObj(pVehicleCEnt->nextState.number, localClientNum);
     if ( !vehicleObj )
@@ -474,7 +474,7 @@ void __cdecl CG_HighlightPlayer(int localClientNum, centity_s *cent, ShaderConst
     R_UnmapShaderConstantSet(constantSet, 0);
     R_UnmapShaderConstantSet(constantSet, 1u);
     R_UnmapShaderConstantSet(constantSet, 2u);
-    if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 )
+    if ( ((cent->flagWord >> 1) & 1) != 0 )
     {
         clientNum = cent->nextState.clientNum;
         client = &cgameGlob->bgs.clientinfo[clientNum];
@@ -687,9 +687,9 @@ void __cdecl CG_Player(int localClientNum, centity_s *cent)
                     if (cent->tree)
                     {
                         v8 = cg_loadScripts && cg_loadScripts->current.enabled;
-                        if (v8 && ((*((unsigned int *)cent + 201) >> 8) & 1) == 0)
+                        if (v8 && ((cent->flagWord >> 8) & 1) == 0)
                         {
-                            *((unsigned int *)cent + 201) |= 0x100u;
+                            cent->flagWord |= 0x100u;
                             Scr_AddInt(localClientNum, SCRIPTINSTANCE_CLIENT);
                             t = CScr_ExecEntThread(cent, cg_scr_data.playerspawned, 1u);
                             Scr_FreeThread(t, SCRIPTINSTANCE_CLIENT);
@@ -785,7 +785,7 @@ void __cdecl CG_Player(int localClientNum, centity_s *cent)
                         {
                             lightingOrigin[2] = lightingOrigin[2] + 32.0;
                         }
-                        if ( (p_nextState->lerp.eFlags2 & 0x200000) != 0 || ((*((unsigned int *)cent + 201) >> 5) & 1) != 0 )
+                        if ( (p_nextState->lerp.eFlags2 & 0x200000) != 0 || ((cent->flagWord >> 5) & 1) != 0 )
                         {
                             if ( !cent->pose.startBurnTime )
                                 cent->pose.startBurnTime = CG_GetLocalClientGlobals(localClientNum)->time;
@@ -991,7 +991,7 @@ void __cdecl CG_PlayerTurretPositionAndBlend(int localClientNum, centity_s *cent
                     if ( (pLerpAnim->animation->flags & 4) != 0 )
                     {
                         pTurretCEnt = CG_GetEntity(localClientNum, cent->nextState.otherEntityNum);
-                        if ( ((*((unsigned int *)pTurretCEnt + 201) >> 1) & 1) != 0 )
+                        if ( ((pTurretCEnt->flagWord >> 1) & 1) != 0 )
                         {
                             turretObj = Com_GetClientDObj(pTurretCEnt->nextState.number, localClientNum);
                             if ( turretObj )
@@ -1329,7 +1329,7 @@ void __cdecl CG_PlayerUpdateUserRigidBody(int localClientNum, centity_s *cent)
     if ( use_rigid_body )
     {
         if ( !cent->pose.physUserBody )
-            cent->pose.physUserBody = (int)Phys_CreateUserBody(cent->pose.origin, cent->nextState.number, PHYS_GEOM_CYLINDER);
+            cent->pose.physUserBody = (intptr_t)Phys_CreateUserBody(cent->pose.origin, cent->nextState.number, PHYS_GEOM_CYLINDER);
         if ( cent->pose.physUserBody )
             Phys_SetUserBody(cent->pose.physUserBody, cent->pose.origin);
         if ( (p_nextState->lerp.eFlags & 8) != 0 )
@@ -1367,7 +1367,7 @@ void __cdecl CG_PlayerUpdateUserRigidBody(int localClientNum, centity_s *cent)
         proneFeetPos[1] = (float)(proneFeetDist * dir[1]) + cent->pose.origin[1];
         proneFeetPos[2] = (float)(proneFeetDist * dir[2]) + cent->pose.origin[2];
         if ( !cent->pose.physUserBodyProneFeet )
-            cent->pose.physUserBodyProneFeet = (int)Phys_CreateUserBody(proneFeetPos, cent->nextState.number + 0x10000, PHYS_GEOM_CYLINDER_LARGE);
+            cent->pose.physUserBodyProneFeet = (intptr_t)Phys_CreateUserBody(proneFeetPos, cent->nextState.number + 0x10000, PHYS_GEOM_CYLINDER_LARGE);
         if ( cent->pose.physUserBodyProneFeet )
             Phys_SetUserBody(cent->pose.physUserBodyProneFeet, proneFeetPos);
     }
@@ -1417,11 +1417,11 @@ void __cdecl CG_Corpse(int localClientNum, centity_s *cent)
     {
         __debugbreak();
     }
-    if ( (p_nextState->lerp.eFlags & 0x20) == 0 && ((*((unsigned int *)cent + 201) >> 21) & 1) == 0 )
+    if ( (p_nextState->lerp.eFlags & 0x20) == 0 && ((cent->flagWord >> 21) & 1) == 0 )
     {
         if ( CG_EntityNeedsScriptThread(localClientNum, cent) )
         {
-            *((unsigned int *)cent + 201) |= 0x100u;
+            cent->flagWord |= 0x100u;
             Scr_AddInt(localClientNum, SCRIPTINSTANCE_CLIENT);
             t = CScr_ExecEntThread(cent, cg_scr_data.entityspawned, 1u);
             Scr_FreeThread(t, SCRIPTINSTANCE_CLIENT);
@@ -1462,7 +1462,7 @@ void __cdecl CG_Corpse(int localClientNum, centity_s *cent)
             {
                 lightingOrigin[2] = lightingOrigin[2] + 32.0;
             }
-            if ( (p_nextState->lerp.eFlags2 & 0x200000) != 0 || ((*((unsigned int *)cent + 201) >> 5) & 1) != 0 )
+            if ( (p_nextState->lerp.eFlags2 & 0x200000) != 0 || ((cent->flagWord >> 5) & 1) != 0 )
             {
                 if ( !cent->pose.startBurnTime )
                     cent->pose.startBurnTime = CG_GetLocalClientGlobals(localClientNum)->time;
@@ -1524,7 +1524,7 @@ void __cdecl CG_UpdatePlayerDObj(int localClientNum, centity_s *cent)
     cg_s *cgameGlob; // [esp+4h] [ebp-110h]
     FxMarkDObjUpdateContext markUpdateContext; // [esp+Ch] [ebp-108h] BYREF
 
-    if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 )
+    if ( ((cent->flagWord >> 1) & 1) != 0 )
     {
         if ( cent->nextState.clientNum != cent->nextState.number
             && !Assert_MyHandler(

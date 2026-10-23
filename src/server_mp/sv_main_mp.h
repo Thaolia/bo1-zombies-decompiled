@@ -2,6 +2,7 @@
 #include <qcommon/msg_mp.h>
 #include <server/server.h>
 #include <client_mp/client_mp.h>
+#include <platform/arch_size.h>
 
 enum serverState_t : __int32
 {                                       // XREF: server_t/r
@@ -448,7 +449,7 @@ struct __declspec(align(4)) server_t // sizeof=0x5C28C
     // padding byte
     // padding byte
 };
-static_assert(sizeof(server_t) == 377548 + (MAX_GENTITIES_SV - MAX_GENTITIES) * sizeof(svEntity_s)); // mod (L25)
+static_assert(sizeof(server_t) == BO1_ARCH_SIZE(377548, 379624) + (MAX_GENTITIES_SV - MAX_GENTITIES) * sizeof(svEntity_s)); // mod (L25)
 
 struct bdSecurityID;
 

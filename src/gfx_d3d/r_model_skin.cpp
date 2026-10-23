@@ -523,11 +523,13 @@ void R_SkinXModelCmd(SkinXModelCmd *data)
                 if ((skinCmd->surfacePartBits[j >> 5] & (0x80000000 >> (j & 0x1F))) == 0)
                     continue;
 
+#if R_SKIN_MMX
                 if (sseStateUsed)
                 {
                     sseStateUsed = 0;
                     _m_empty();
                 }
+#endif
 
                 DObjSkelMat mat0, mat1;
 
@@ -548,7 +550,7 @@ void R_SkinXModelCmd(SkinXModelCmd *data)
 
         if (skinnedSurf->skinnedCachedOffset == -2)
         {
-            surfPos = (GfxModelSkinnedSurface *)((char *)surfPos + 56);
+            surfPos = (GfxModelSkinnedSurface *)((char *)surfPos + sizeof(GfxModelRigidSurface));
             continue;
         }
 
@@ -570,6 +572,7 @@ void R_SkinXModelCmd(SkinXModelCmd *data)
             skinVerticesOut = (GfxPackedVertex *)&gfxBuf.skinnedCacheLockAddr[skinnedSurf->skinnedCachedOffset];
         }
 
+#if R_SKIN_MMX
         if (useSSE_)
         {
             if (!sseStateUsed)
@@ -589,13 +592,16 @@ void R_SkinXModelCmd(SkinXModelCmd *data)
             R_SkinXSurfaceSkinnedSse(xsurf, &boneSkelMats[boneIndex], normalIn, normalOut, skinVerticesOut);
         }
         else
+#endif
         {
             R_SkinXSurfaceSkinned(xsurf, &boneSkelMats[boneIndex], skinVerticesOut);
         }
     }
 
+#if R_SKIN_MMX
     if (sseStateUsed)
         _m_empty();
+#endif
 }
 
 void __cdecl R_MultiplySkelMat(const DObjSkelMat *mat0, const DObjSkelMat *mat1, DObjSkelMat *out)

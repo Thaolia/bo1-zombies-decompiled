@@ -348,7 +348,7 @@ char *__cdecl UI_FeederItemText_Servers(int localClientNum, int contextIndex, in
     {
         LAN_GetServerInfo(
             ui_netSource->current.integer,
-            *(_DWORD *)&sharedUiInfo.serverStatusAddress[4 * index - 81328],
+            sharedUiInfo.serverStatus.displayServers[index],
             info,
             1024);
         lastColumn = column;
@@ -2397,7 +2397,7 @@ void __cdecl UI_OverrideCursorPos_Servers(int localClientNum, int contextIndex, 
     {
         if (sharedUiInfo.serverStatus.currentServer >= 0)
         {
-            maxScroll = (int)Item_ListBox_MaxScroll(localClientNum, contextIndex, item);
+            maxScroll = Item_ListBox_MaxScroll(localClientNum, contextIndex, item);
             if ( listPtr->startPos[contextIndex] > maxScroll )
                 listPtr->startPos[contextIndex] = maxScroll;
             if ( listPtr->cursorPos[contextIndex] >= listPtr->startPos[contextIndex]
@@ -2570,7 +2570,7 @@ void __cdecl UI_FeederSelection_Servers(int contextIndex, float feederID, int in
         sharedUiInfo.serverStatus.currentServer = index;
     LAN_GetServerInfo(
         ui_netSource->current.integer,
-        *(_DWORD *)&sharedUiInfo.serverStatusAddress[4 * index - 81328],
+        sharedUiInfo.serverStatus.displayServers[index],
         info_1,
         1024);
     v4 = Info_ValueForKey(info_1, "mapname");

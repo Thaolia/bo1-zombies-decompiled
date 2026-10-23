@@ -2603,7 +2603,7 @@ LABEL_92:
     MSG_WriteBit0(msg);
     v11 = MSG_GetUsedBitCount(msg);
     SV_PacketAnalyze_TrackPS_AmmoClipBits(v11);
-    if ( !memcmp(from->objective, to->objective, 0x600u) )
+    if ( !memcmp(from->objective, to->objective, sizeof(from->objective)) )
     {
         MSG_WriteBit0(msg);
     }

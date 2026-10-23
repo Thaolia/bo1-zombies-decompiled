@@ -236,6 +236,11 @@ int G_SP_SaveGame(const char *filename, const char *description, const char *scr
         Com_Printf(15, "savegame request ignored\n");
         return SP_SAVE_RELOADING;
     }
+#if !(defined(_M_IX86) || defined(__i386__))
+    // The save image is the 32-bit layout (BO1_SAVE_IMAGE_ASSERT); skipped like the horde mod's saves.
+    Com_Printf(15, "savegame skipped (no 64-bit save format)\n");
+    return SP_SAVE_MOD_SKIPPED;
+#endif
     extern int g_numEntitiesHi;
     if (g_numEntitiesHi) // mod (L25): the save format holds entity numbers below 1024 only; the horde mod does not save
     {
@@ -517,11 +522,11 @@ struct SPPathSaveField
 static constexpr SPPathSaveField s_pathSaveFields[] = {
     { offsetof(pathnode_dynamic_t, pOwner), sizeof(SentientHandle), 7 }
 };
-static_assert(sizeof(pathnode_dynamic_t) == 0x20, "DERIVED path dynamic save layout");
-static_assert(sizeof(pathnode_t) == 0x80 && sizeof(pathlink_s) == 0xC, "DERIVED path save layout");
-static_assert(sizeof(SentientHandle) == 4 && offsetof(SentientHandle, number) == 0,
+BO1_SAVE_IMAGE_ASSERT(sizeof(pathnode_dynamic_t) == 0x20, "DERIVED path dynamic save layout");
+BO1_SAVE_IMAGE_ASSERT(sizeof(pathnode_t) == 0x80 && sizeof(pathlink_s) == 0xC, "DERIVED path save layout");
+BO1_SAVE_IMAGE_ASSERT(sizeof(SentientHandle) == 4 && offsetof(SentientHandle, number) == 0,
     "DERIVED sentient handle save layout");
-static_assert(s_pathSaveFields[0].offset == 0 && s_pathSaveFields[0].size == 4
+BO1_SAVE_IMAGE_ASSERT(s_pathSaveFields[0].offset == 0 && s_pathSaveFields[0].size == 4
     && s_pathSaveFields[0].offset + s_pathSaveFields[0].size <= sizeof(pathnode_dynamic_t),
     "DERIVED path field table bounds/order");
 

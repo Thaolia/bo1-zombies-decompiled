@@ -145,7 +145,7 @@ void __cdecl CM_Shutdown()
     const char *savedName; // [esp+0h] [ebp-4h]
 
     savedName = cm.name;
-    Com_Memset((unsigned int *)&cm, 0, 332);
+    Com_Memset((unsigned int *)&cm, 0, sizeof(cm));
     cm.name = savedName;
     if ( cm.isInUse )
     {
@@ -219,7 +219,7 @@ void __cdecl CM_Hunk_CheckTempMemoryHighClear()
     Hunk_CheckTempMemoryHighClear();
 }
 
-unsigned int __cdecl CM_Hunk_AllocateTempMemoryHigh(int size, const char *name)
+uintptr_t __cdecl CM_Hunk_AllocateTempMemoryHigh(int size, const char *name)
 {
     return Hunk_AllocateTempMemoryHigh(size, name);
 }

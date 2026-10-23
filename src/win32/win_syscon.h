@@ -23,7 +23,7 @@ struct WinConData // sizeof=0x620
                                         // ConWndProc+ED/w
     int windowHeight;                   // XREF: Sys_CreateConsole(HINSTANCE__ *)+1B5/w
                                         // ConWndProc+F6/w
-    int (__stdcall *SysInputLineWndProc)(HWND__ *, unsigned int, unsigned int, int);
+    WNDPROC SysInputLineWndProc;
                                         // XREF: InputLineWndProc(HWND__ *,uint,uint,long)+178/r
                                         // Sys_CreateConsole(HINSTANCE__ *)+3B6/w
 };
@@ -31,7 +31,7 @@ struct WinConData // sizeof=0x620
 LRESULT __stdcall InputLineWndProc(HWND__ *hWnd, UINT uMsg, HWND__ *wParam, LPARAM lParam);
 void __cdecl Sys_CreateConsole(HINSTANCE__ *hInstance);
 LRESULT __stdcall ConWndProc(HWND__ *hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-char *__cdecl Conbuf_CleanText(const char *source, char *target, int sizeofTarget);
+int __cdecl Conbuf_CleanText(const char *source, char *target, int sizeofTarget);
 void __cdecl Sys_DestroyConsole();
 void __cdecl Sys_ShowConsole();
 char *__cdecl Sys_ConsoleInput();

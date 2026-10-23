@@ -17,13 +17,19 @@ void __cdecl Sys_WorkerCmdInit()
     g_WorkerCmdInit = 1;
 }
 
+// A worker cmd batch keeps the jqWorkerCmd pointer in ParamData[0] (two slots on 64-bit), then the fence, then the
+// inline data; a larger payload goes to jqAllocBatchData
+#define WORKERCMD_FENCE_SLOT (sizeof(jqWorkerCmd *) / sizeof(unsigned int))
+#define WORKERCMD_DATA_SLOT (WORKERCMD_FENCE_SLOT + 1)
+#define WORKERCMD_INLINE_SIZE (sizeof(jqBatch::ParamData) - WORKERCMD_DATA_SLOT * sizeof(unsigned int))
+
 unsigned __int8 *__cdecl jqCommitMemory(jqBatch *batch, unsigned __int8 *input, unsigned int dataSize)
 {
     unsigned __int8 *dest; // [esp+0h] [ebp-4h]
 
     if ( !dataSize )
         return input;
-    if ( dataSize > 0x54 )
+    if ( dataSize > WORKERCMD_INLINE_SIZE )
     {
         dest = jqAllocBatchData(dataSize);
         if ( !dest
@@ -35,8 +41,8 @@ unsigned __int8 *__cdecl jqCommitMemory(jqBatch *batch, unsigned __int8 *input, 
     }
     else
     {
-        dest = (unsigned __int8 *)&batch->ParamData[2];
-        memcpy((unsigned __int8 *)&batch->ParamData[2], input, dataSize);
+        dest = (unsigned __int8 *)&batch->ParamData[WORKERCMD_DATA_SLOT];
+        memcpy((unsigned __int8 *)&batch->ParamData[WORKERCMD_DATA_SLOT], input, dataSize);
     }
     return dest;
 }
@@ -54,9 +60,9 @@ jqWorkerCmd *jqGetWorkercmdParam(jqBatch *batch)
 void *__cdecl jqLockData(jqBatch *batch)
 {
     jqWorkerCmd *workerCmd = jqGetWorkercmdParam(batch);
-    if (workerCmd->dataSize <= 84)
+    if (workerCmd->dataSize <= (int)WORKERCMD_INLINE_SIZE)
     {
-        return &batch->ParamData[2];
+        return &batch->ParamData[WORKERCMD_DATA_SLOT];
     }
     iassert((batch->Input));
     return batch->Input;
@@ -65,7 +71,7 @@ void *__cdecl jqLockData(jqBatch *batch)
 void __cdecl jqUnlockData(jqBatch *batch)
 {
     jqWorkerCmd *workerCmd = jqGetWorkercmdParam(batch);
-    if (workerCmd->dataSize > 84)
+    if (workerCmd->dataSize > (int)WORKERCMD_INLINE_SIZE)
     {
         jqFreeBatchData((jqAtomicHeap::LevelInfo*)batch->Input);
     }
@@ -83,8 +89,8 @@ void __cdecl Sys_AddWorkerCmdInternal(jqWorkerCmd *name, unsigned __int8 *data, 
         batch.ConditionalAddress = cond->address;
         batch.ConditionalValue = cond->value;
     }
-    batch.ParamData[0] = (unsigned int)name;
-    batch.ParamData[1] = _InterlockedExchangeAdd(&name->ppu_fence, 1u);
+    *reinterpret_cast<jqWorkerCmd **>(batch.ParamData) = name;
+    batch.ParamData[WORKERCMD_FENCE_SLOT] = _InterlockedExchangeAdd(&name->ppu_fence, 1u);
     jqAddBatch(&batch, name->queue);
 }
 

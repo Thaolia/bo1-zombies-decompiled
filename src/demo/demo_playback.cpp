@@ -65,7 +65,7 @@ void __cdecl Demo_AllocatePlaybackMemory(unsigned int location)
     {
         PMem_BeginAlloc("SnapshotDemoPlaybackBuffer", location, TRACK_MISC);
         demo.playback = (demoPlayback *)_PMem_AllocNamed(
-                                                                            0x12DEE0u,
+                                                                            sizeof(demoPlayback),
                                                                             4u,
                                                                             4,
                                                                             location,
@@ -394,7 +394,7 @@ void __cdecl Demo_TagPlayers(int localClientNum, demoTagPlayers *players)
         for ( i = 0; i < demo.header.maxClients; ++i )
         {
             cent = CG_GetEntity(localClientNum, i);
-            if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 && i != cgameGlob->clientNum )
+            if ( ((cent->flagWord >> 1) & 1) != 0 && i != cgameGlob->clientNum )
             {
                 if ( CG_CanSeeFriendlyHead(localClientNum, cent) )
                 {
@@ -734,7 +734,7 @@ char __cdecl Demo_SwitchPlayer(int localClientNum, bool reverse, int forceClient
             {
                 if ( forceToLivePlayer )
                 {
-                    if ( ((*((unsigned int *)CG_GetEntity(localClientNum, clientNum) + 201) >> 1) & 1) != 0
+                    if ( ((CG_GetEntity(localClientNum, clientNum)->flagWord >> 1) & 1) != 0
                         && Demo_HasClientSpawnedIn(clientNum)
                         && oldClientNum != clientNum )
                     {
@@ -1906,7 +1906,7 @@ void __cdecl Demo_RunFirstFrameEvents(int localClientNum)
             Dvar_SetInt((dvar_s *)r_clipSize, 0);
             Dvar_SetInt((dvar_s *)r_clipCodec, 0);
             Dvar_SetInt((dvar_s *)r_clipFPS, 24);
-            FS_BuildOSPath((char *)fs_homepath->current.integer, (char*)"movies", (char *)"", ospath);
+            FS_BuildOSPath((char *)fs_homepath->current.string, (char*)"movies", (char *)"", ospath);
             FS_CreatePath(ospath);
             v1 = va("movie_start \"%s%s.avi\"\n", ospath, demo.demoName);
             Cbuf_AddText(localClientNum, v1);
@@ -2051,7 +2051,7 @@ void __cdecl Demo_ParseSnapshot(int localClientNum, msg_t *msg)
     int Bit; // eax
     const char *v9; // eax
     playerState_s result; // [esp+0h] [ebp-4D68h] BYREF
-    unsigned __int8 dst[9892]; // [esp+26ACh] [ebp-26BCh] BYREF
+    unsigned __int8 dst[sizeof(playerState_s)]; // [esp+26ACh] [ebp-26BCh] BYREF
     clientActive_t *LocalClientGlobals; // [esp+4D50h] [ebp-18h]
     int v13; // [esp+4D54h] [ebp-14h]
     clientConnection_t *LocalClientConnection; // [esp+4D58h] [ebp-10h]

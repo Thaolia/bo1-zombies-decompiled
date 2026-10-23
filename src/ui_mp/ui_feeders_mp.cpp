@@ -266,7 +266,7 @@ int __cdecl UI_GetBasicTrainingGameTypeCount()
     count = 0;
     for ( index = 0; index < sharedUiInfo.numCustomMatchGameTypes; ++index )
     {
-        if ( sharedUiInfo.gameTypeMapCount[29 * index - 901] )
+        if ( sharedUiInfo.customMatchGameTypes[index].splitscreen )
             ++count;
     }
     return count;
@@ -443,7 +443,7 @@ int __cdecl UI_GetBasicTrainingGametypeIdForNum(int num)
     count = 0;
     for ( index = 0; index < sharedUiInfo.numCustomMatchGameTypes; ++index )
     {
-        if ( sharedUiInfo.gameTypeMapCount[29 * index - 901] )
+        if ( sharedUiInfo.customMatchGameTypes[index].splitscreen )
         {
             if ( count == num )
                 return index;
@@ -3421,7 +3421,7 @@ int __cdecl UI_GetBasicTrainingGametypeNumFromId(int id)
     count = 0;
     for ( index = 0; index < sharedUiInfo.numCustomMatchGameTypes; ++index )
     {
-        if ( sharedUiInfo.gameTypeMapCount[29 * index - 901] )
+        if ( sharedUiInfo.customMatchGameTypes[index].splitscreen )
         {
             if ( index == id )
                 return count;

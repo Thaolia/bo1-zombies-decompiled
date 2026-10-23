@@ -111,7 +111,7 @@ void __cdecl clear_debug_brushes_and_patches()
     debugCollisionAabbTreeCount = 0;
     if ( !debug_brush_info )
     {
-        R_DebugAlloc((void **)&debug_brush_info, 490012, "(debug_brush_info)");
+        R_DebugAlloc((void **)&debug_brush_info, sizeof(debug_brush_info_t), "(debug_brush_info)");
         if ( !debug_brush_info )
         {
             Com_Printf(0, "Could not allocate memory for debug_brush_info\n");
@@ -124,7 +124,7 @@ void __cdecl clear_debug_brushes_and_patches()
     debug_brush_info->num_indices = 0;
     if ( !debug_patch_info )
     {
-        R_DebugAlloc((void **)&debug_patch_info, 460008, "(debug_patch_info)");
+        R_DebugAlloc((void **)&debug_patch_info, sizeof(debug_patch_info_t), "(debug_patch_info)");
         if ( !debug_patch_info )
         {
             Com_Printf(0, "Could not allocate memory for debug_patch_info\n");
@@ -379,7 +379,7 @@ void __cdecl render_debug_brushes()
 {
     float *v0; // [esp+4h] [ebp-B8h]
     float *v1; // [esp+Ch] [ebp-B0h]
-    int v2; // [esp+10h] [ebp-ACh]
+    float *v2; // [esp+10h] [ebp-ACh]
     unsigned __int16 i; // [esp+14h] [ebp-A8h]
     int ii; // [esp+1Ch] [ebp-A0h]
     unsigned __int16 ibase; // [esp+20h] [ebp-9Ch]
@@ -428,9 +428,9 @@ void __cdecl render_debug_brushes()
                 if ( num_indices >= 3 )
                 {
                     RB_CheckTessOverflow(num_indices, 3 * (num_indices - 2));
-                    v2 = (int)brush->verts[debug_brush_info->indices[first_vertex_index]];
+                    v2 = brush->verts[debug_brush_info->indices[first_vertex_index]];
                     *(_QWORD *)&verts[0][0] = *(_QWORD *)v2;
-                    verts[0][2] = *(float *)(v2 + 8);
+                    verts[0][2] = v2[2];
                     v1 = brush->verts[debug_brush_info->indices[first_vertex_index + 1]];
                     verts[1][0] = *v1;
                     verts[1][1] = v1[1];
@@ -543,10 +543,10 @@ void __cdecl render_debug_patches_full()
         {
             debug_patch = &debug_patch_info->patches[i];
             tree = debug_patch->tree;
-            faceColor[0] = (float)(0.5 * (float)((float)((((unsigned int)debug_patch->tree >> 4) & 0xF00) >> 4) / 256.0))
+            faceColor[0] = (float)(0.5 * (float)((float)((((uintptr_t)debug_patch->tree >> 4) & 0xF00) >> 4) / 256.0))
                                      + 0.5;
-            faceColor[1] = (float)(0.5 * (float)((float)(((unsigned int)tree >> 4) & 0xF0) / 256.0)) + 0.5;
-            faceColor[2] = (float)(0.5 * (float)((float)(unsigned __int8)(16 * (((unsigned int)tree >> 4) & 0xF)) / 256.0))
+            faceColor[1] = (float)(0.5 * (float)((float)(((uintptr_t)tree >> 4) & 0xF0) / 256.0)) + 0.5;
+            faceColor[2] = (float)(0.5 * (float)((float)(unsigned __int8)(16 * (((uintptr_t)tree >> 4) & 0xF)) / 256.0))
                                      + 0.5;
             if ( tree->u.firstChildIndex == g_debug_partition )
             {
@@ -736,7 +736,7 @@ void    render_brush(
     }
 }
 
-void __cdecl calc_color(unsigned int id, float alpha, float *color)
+void __cdecl calc_color(uintptr_t id, float alpha, float *color)
 {
     *color = 0.1f;
     color[1] = 0.85f;
@@ -756,7 +756,7 @@ void __cdecl render_convex_partition(const CollisionAabbTree *tree)
     float polygonVerts[3][3]; // [esp+20h] [ebp-34h] BYREF
     float faceColor[4]; // [esp+44h] [ebp-10h] BYREF
 
-    calc_color((unsigned int)tree, alpha, faceColor);
+    calc_color((uintptr_t)tree, alpha, faceColor);
     memset(edgeColor, 0, 12);
     edgeColor[3] = 1.0f;
     chull = get_partition_chull(tree);
@@ -824,7 +824,7 @@ void    render_chull(const chull_t *first, const phys_mat44 *xform, const float 
     }
 }
 
-void __cdecl render_xmodel_chull(const XModel *model, unsigned int key, const phys_mat44 *xform, const float *color)
+void __cdecl render_xmodel_chull(const XModel *model, uintptr_t key, const phys_mat44 *xform, const float *color)
 {
     chull_t *chull; // [esp+0h] [ebp-8h]
     PhysGeomList *geomList; // [esp+4h] [ebp-4h]
@@ -843,7 +843,7 @@ void __cdecl render_xmodel_chull(const XModel *model, unsigned int key, const ph
 
 void __cdecl render_brushmodel_chull(
                 unsigned int brushmodel,
-                unsigned int key,
+                uintptr_t key,
                 const phys_mat44 *xform,
                 const float *color)
 {
@@ -974,7 +974,7 @@ void    render_gjk_geom(gjk_base_t *geom, const phys_mat44 *cg2w)
 
     if (geom->get_brush())
     {
-        calc_color((unsigned int)geom->get_brush(), alpha_1, faceColor);
+        calc_color((uintptr_t)geom->get_brush(), alpha_1, faceColor);
         render_brush(geom->get_brush(), cg2w, faceColor, 0, 0, 0, 1, edgeColor);
     }
     else
@@ -987,7 +987,7 @@ void    render_gjk_geom(gjk_base_t *geom, const phys_mat44 *cg2w)
             render_box(geom->get_aabb_mn(), geom->get_aabb_mx(), cg2w, colorMdRed, 0);
             break;
         case GJK_BRUSH:
-            calc_color((unsigned int)geom->get_brush(), alpha_0, &color);
+            calc_color((uintptr_t)geom->get_brush(), alpha_0, &color);
             memset(edgeColor, 0, 12);
             edgeColor[3] = 1.0f;
             render_brush(geom->get_brush(), cg2w, &color, 0, 0, 0, 1, edgeColor);
@@ -1510,17 +1510,15 @@ void    Phys_RenderBase(const phys_mat44 *mat, float scale)
     float v32; // [esp-18h] [ebp-28h]
     float v33; // [esp-14h] [ebp-24h]
     float v34; // [esp-10h] [ebp-20h]
-    float x; // [esp-Ch] [ebp-1Ch] BYREF
-    float y; // [esp-8h] [ebp-18h]
-    float z; // [esp-4h] [ebp-14h]
+    phys_vec3 origin; // [esp-Ch] [ebp-1Ch] BYREF
     //phys_vec3 trans; // [esp+0h] [ebp-10h]
     //float retaddr; // [esp+10h] [ebp+0h]
     //
     //trans.y = a1;
     //trans.z = retaddr;
-    x = mat->w.x;
-    y = mat->w.y;
-    z = mat->w.z;
+    origin.x = mat->w.x;
+    origin.y = mat->w.y;
+    origin.z = mat->w.z;
     //trans.x = mat->w.w;
     v34 = scale * mat->x.x;
     v33 = scale * mat->x.y;
@@ -1528,13 +1526,13 @@ void    Phys_RenderBase(const phys_mat44 *mat, float scale)
     v29 = v34;
     v30 = v33;
     v31 = v32;
-    v28 = x + v34;
-    v27 = y + v33;
-    v26 = z + v32;
-    v25.x = x + v34;
-    v25.y = y + v33;
-    v25.z = z + v32;
-    render_line((const phys_vec3 *)&x, &v25, colorMdRed, 0, 0);
+    v28 = origin.x + v34;
+    v27 = origin.y + v33;
+    v26 = origin.z + v32;
+    v25.x = origin.x + v34;
+    v25.y = origin.y + v33;
+    v25.z = origin.z + v32;
+    render_line(&origin, &v25, colorMdRed, 0, 0);
     p_y = &mat->y;
     v23 = scale * mat->y.x;
     v22 = scale * mat->y.y;
@@ -1542,13 +1540,13 @@ void    Phys_RenderBase(const phys_mat44 *mat, float scale)
     v18 = v23;
     v19 = v22;
     v20 = v21;
-    v17 = x + v23;
-    v16 = y + v22;
-    v15 = z + v21;
-    v14.x = x + v23;
-    v14.y = y + v22;
-    v14.z = z + v21;
-    render_line((const phys_vec3 *)&x, &v14, colorMdGreen, 0, 0);
+    v17 = origin.x + v23;
+    v16 = origin.y + v22;
+    v15 = origin.z + v21;
+    v14.x = origin.x + v23;
+    v14.y = origin.y + v22;
+    v14.z = origin.z + v21;
+    render_line(&origin, &v14, colorMdGreen, 0, 0);
     p_z = &mat->z;
     v12 = scale * mat->z.x;
     v11 = scale * mat->z.y;
@@ -1556,16 +1554,16 @@ void    Phys_RenderBase(const phys_mat44 *mat, float scale)
     v7 = v12;
     v8 = v11;
     v9 = v10;
-    v6 = x + v12;
-    v5 = y + v11;
-    v4 = z + v10;
-    v3.x = x + v12;
-    v3.y = y + v11;
-    v3.z = z + v10;
-    render_line((const phys_vec3 *)&x, &v3, colorMdBlue, 0, 0);
+    v6 = origin.x + v12;
+    v5 = origin.y + v11;
+    v4 = origin.z + v10;
+    v3.x = origin.x + v12;
+    v3.y = origin.y + v11;
+    v3.z = origin.z + v10;
+    render_line(&origin, &v3, colorMdBlue, 0, 0);
 }
 
-void    Phys_JointDebugRender(int id)
+void    Phys_JointDebugRender(intptr_t id)
 {
     // BO1TODO: arg doesnt make sense, needs rework
 #if 0

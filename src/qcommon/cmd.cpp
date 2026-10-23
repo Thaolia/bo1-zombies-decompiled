@@ -22,6 +22,7 @@
 #include <database/db_file_load.h>
 #include <client_mp/cl_main_mp.h>
 #include <server/sv_game.h>
+#include <platform/arch_size.h>
 
 int cmd_wait;
 CmdText cmd_textArray[1];
@@ -783,7 +784,9 @@ void __cdecl Cmd_EvaluateExpression(const char **text_in, CmdArgs *argsPriv)
     itemDef_s *v2; // eax
     int v3; // [esp+0h] [ebp-C24h]
     int v4; // [esp+4h] [ebp-C20h]
-    char compileBuffer[3072]; // [esp+1Ch] [ebp-C08h] BYREF
+    // The compiled expressionEntry/expressionRpn records hold pointers and double in size on 64-bit.
+    constexpr int compileBufferSize = BO1_ARCH_SIZE(3072, 6144);
+    char compileBuffer[compileBufferSize]; // [esp+1Ch] [ebp-C08h] BYREF
     const char *result; // [esp+C20h] [ebp-4h]
 
     if ( !text_in && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\qcommon\\cmd.cpp", 1084, 0, "%s", "text_in") )
@@ -791,7 +794,7 @@ void __cdecl Cmd_EvaluateExpression(const char **text_in, CmdArgs *argsPriv)
     if ( !*text_in && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\qcommon\\cmd.cpp", 1085, 0, "%s", "*text_in") )
         __debugbreak();
     v2 = Cmd_ItemDef();
-    for ( result = GetExpressionResultStringCompile(0, v2, text_in, compileBuffer, 3072); *result; ++result )
+    for ( result = GetExpressionResultStringCompile(0, v2, text_in, compileBuffer, compileBufferSize); *result; ++result )
     {
         argsPriv->textPool[argsPriv->totalUsedTextPool] = *result;
         if ( argsPriv->totalUsedTextPool + 1 < 8190 )

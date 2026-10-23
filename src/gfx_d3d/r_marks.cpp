@@ -67,7 +67,7 @@ void __cdecl R_BoxSurfaces_r(
                 unsigned int listCount,
                 unsigned __int8 *cellBits)
 {
-    const cplane_s *side; // [esp+0h] [ebp-10h]
+    int side; // [esp+0h] [ebp-10h]
     int cellIndex; // [esp+4h] [ebp-Ch]
     int cellCount; // [esp+8h] [ebp-8h]
 
@@ -77,17 +77,17 @@ void __cdecl R_BoxSurfaces_r(
         cellIndex = node->cellIndex;
         if ( cellIndex - cellCount < 0 )
             break;
-        side = (const cplane_s *)BoxOnPlaneSide(
+        side = BoxOnPlaneSide(
                                                              mins,
                                                              maxs,
                                                              &rgp.world->dpvsPlanes.planes[cellIndex - cellCount]);
-        if ( side == (const cplane_s *)1 )
+        if ( side == 1 )
         {
             ++node;
         }
         else
         {
-            if ( side != (const cplane_s *)2 )
+            if ( side != 2 )
                 R_BoxSurfaces_r(
                     node + 1,
                     mins,
@@ -495,7 +495,7 @@ void __cdecl R_BoxStaticModels_r(
                 int *smodelCount,
                 unsigned __int8 *cellBits)
 {
-    const cplane_s *side; // [esp+0h] [ebp-10h]
+    int side; // [esp+0h] [ebp-10h]
     int cellIndex; // [esp+4h] [ebp-Ch]
     int cellCount; // [esp+8h] [ebp-8h]
 
@@ -505,17 +505,17 @@ void __cdecl R_BoxStaticModels_r(
         cellIndex = node->cellIndex;
         if ( cellIndex - cellCount < 0 )
             break;
-        side = (const cplane_s *)BoxOnPlaneSide(
+        side = BoxOnPlaneSide(
                                                              mins,
                                                              maxs,
                                                              &rgp.world->dpvsPlanes.planes[cellIndex - cellCount]);
-        if ( side == (const cplane_s *)1 )
+        if ( side == 1 )
         {
             ++node;
         }
         else
         {
-            if ( side != (const cplane_s *)2 )
+            if ( side != 2 )
                 R_BoxStaticModels_r(node + 1, mins, maxs, allowSModel, smodelList, smodelListSize, smodelCount, cellBits);
             node = (mnode_t *)((char *)node + 2 * node->rightChildOffset);
         }

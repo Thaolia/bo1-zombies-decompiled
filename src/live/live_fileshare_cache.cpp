@@ -29,9 +29,9 @@ bool __cdecl Live_FileShare_CacheInit()
     {
         __debugbreak();
     }
-    s_fshCache = (fshCacheFileDetails_t *)Hunk_Alloc(0x9AB00u, "fileShareCache", 36);
+    s_fshCache = (fshCacheFileDetails_t *)Hunk_Alloc(sizeof(fshCacheFileDetails_t) * 300, "fileShareCache", 36);
     s_fshCacheFileCount = 0;
-    s_fshRatingCache = (fshCacheRatingDetails_t *)Hunk_Alloc(0xFD20u, "fileShareCache", 36);
+    s_fshRatingCache = (fshCacheRatingDetails_t *)Hunk_Alloc(sizeof(fshCacheRatingDetails_t) * 300, "fileShareCache", 36);
     s_fshCacheRatingCount = 0;
     return s_fshCache && s_fshRatingCache;
 }
@@ -78,7 +78,7 @@ void __cdecl Live_FileShareCache_AddDescriptor(
     {
         v3 = Live_FileShare_Hash(fileID, location);
         s_fshCache[v3].location = location;
-        memcpy(&s_fshCache[v3], descriptor, 0x838u);
+        memcpy(&s_fshCache[v3], descriptor, sizeof(bdFileMetaData));
     }
 }
 

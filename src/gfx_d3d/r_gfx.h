@@ -1,4 +1,5 @@
 #pragma once
+#include <platform/arch_size.h>
 #include <universal/com_math.h>
 
 #include <cstddef>
@@ -504,7 +505,9 @@ struct srfTriangles_t // sizeof=0x30
     int stream2ByteOffset;
 };
 
-struct GfxSurface // sizeof=0x50
+// The streaming code (MultiplePointDistSqFromBounds) loads tris.mins/maxs with aligned SSE: the 32-bit size 0x50 keeps
+// every array element 16-aligned, the 64-bit one (0x58) would not.
+struct alignas(BO1_ARCH_SIZE(4, 16)) GfxSurface // sizeof=0x50
 {                                       // XREF: ??$_Insertion_sort1@PAUGfxSurface@@P6A_NABU1@0@ZU1@@std@@YAXPAUGfxSurface@@0P6A_NABU1@1@Z0@Z/r
                                         // ??$_Adjust_heap@PAUGfxSurface@@HU1@P6A_NABU1@0@Z@std@@YAXPAUGfxSurface@@HHU1@P6A_NABU1@2@Z@Z/r ...
     srfTriangles_t tris;
@@ -515,6 +518,7 @@ struct GfxSurface // sizeof=0x50
     unsigned __int8 flags;
     float bounds[2][3];
 };
+static_assert(sizeof(GfxSurface) == BO1_ARCH_SIZE(0x50, 96));
 
 struct GfxLightmapArray // sizeof=0xC
 {

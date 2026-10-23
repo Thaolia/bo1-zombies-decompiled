@@ -538,7 +538,7 @@ int __cdecl PC_CndStackAddConditionsToScript(GenericEventScript **baseScript, ch
     GenericEventScript *eventScriptRunner; // [esp+2Ch] [ebp-8h]
     GenericEventScript *newEventScript; // [esp+30h] [ebp-4h]
 
-    newEventScript = (GenericEventScript *)UI_Alloc(0x2Cu, 4);
+    newEventScript = (GenericEventScript *)UI_Alloc(sizeof(GenericEventScript), sizeof(void *));
     if ( accumulatedScriptCommands && *accumulatedScriptCommands )
     {
         newEventScript->action = (const char *)UI_Alloc(strlen(accumulatedScriptCommands) + 1, 4);
@@ -553,7 +553,7 @@ int __cdecl PC_CndStackAddConditionsToScript(GenericEventScript **baseScript, ch
     {
         if ( g_conditionStack.members[i].type != 3 )
         {
-            newScriptCondition = (ScriptCondition *)UI_Alloc(0x10u, 4);
+            newScriptCondition = (ScriptCondition *)UI_Alloc(sizeof(ScriptCondition), sizeof(void *));
             newScriptCondition->fireOnTrue = g_conditionStack.members[i].fireOnTrue;
             newScriptCondition->constructID = g_conditionStack.members[i].constructID;
             newScriptCondition->blockID = g_conditionStack.members[i].blockID;
@@ -1062,7 +1062,7 @@ int __cdecl MenuParse_onFocus(menuDef_t *menu, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("onFocus");
     eventHandler->next = menu->onEvent;
     menu->onEvent = eventHandler;
@@ -1255,7 +1255,7 @@ int __cdecl MenuParse_leaveFocus(menuDef_t *menu, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("leaveFocus");
     eventHandler->next = menu->onEvent;
     menu->onEvent = eventHandler;
@@ -1266,7 +1266,7 @@ int __cdecl MenuParse_onOpen(menuDef_t *menu, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("onOpen");
     eventHandler->next = menu->onEvent;
     menu->onEvent = eventHandler;
@@ -1277,7 +1277,7 @@ int __cdecl MenuParse_onClose(menuDef_t *menu, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("onClose");
     eventHandler->next = menu->onEvent;
     menu->onEvent = eventHandler;
@@ -1288,7 +1288,7 @@ int __cdecl MenuParse_onESC(menuDef_t *menu, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("onESC");
     eventHandler->next = menu->onEvent;
     menu->onEvent = eventHandler;
@@ -1489,7 +1489,7 @@ int __cdecl MenuParse_itemDef(menuDef_t *menu, int handle)
     }
     else
     {
-        item = (itemDef_s *)UI_Alloc(0x110u, 4);
+        item = (itemDef_s *)UI_Alloc(sizeof(itemDef_s), sizeof(void *));
         Item_Init(item, menu->imageTrack);
         Item_ValidateTypeData(item, handle);
         if ( !Item_Parse(handle, item) )
@@ -1572,8 +1572,8 @@ void __cdecl Item_PostParse(itemDef_s *item)
         __debugbreak();
     if ( item->animInfo )
     {
-        size = 4 * item->animInfo->animStateCount;
-        item->animInfo->animStates = (animParamsDef_t **)UI_Alloc(size, 4);
+        size = sizeof(animParamsDef_t *) * item->animInfo->animStateCount;
+        item->animInfo->animStates = (animParamsDef_t **)UI_Alloc(size, sizeof(void *));
         memcpy((unsigned __int8 *)item->animInfo->animStates, (unsigned __int8 *)g_load_0.animStates, size);
     }
 }
@@ -1596,7 +1596,6 @@ void __cdecl Item_InitControls(itemDef_s *item)
 
 void __cdecl Item_ValidateTypeData(itemDef_s *item, int handle)
 {
-    unsigned int *textDef; // ecx
     editFieldDef_s *editDef; // [esp+0h] [ebp-4h]
 
     if ( item->typeData.textDef )
@@ -1623,9 +1622,9 @@ void __cdecl Item_ValidateTypeData(itemDef_s *item, int handle)
             case 0x1E:
             case 8:
             case 0x16:
-                item->typeData.textDef = (textDef_s *)UI_Alloc(0x44u, 4);
-                item->typeData.textDef->textTypeData.focusItemDef = (focusItemDef_s *)UI_Alloc(0x18u, 4);
-                item->typeData.textDef->textTypeData.focusItemDef->focusTypeData.listBox = (listBoxDef_s *)UI_Alloc(0x24u, 4);
+                item->typeData.textDef = (textDef_s *)UI_Alloc(sizeof(textDef_s), sizeof(void *));
+                item->typeData.textDef->textTypeData.focusItemDef = (focusItemDef_s *)UI_Alloc(sizeof(focusItemDef_s), sizeof(void *));
+                item->typeData.textDef->textTypeData.focusItemDef->focusTypeData.listBox = (listBoxDef_s *)UI_Alloc(sizeof(editFieldDef_s), sizeof(void *));
                 item->typeData.textDef->textscale = 0.55f;
                 if ( item->type == 5
                     || item->type == 13
@@ -1645,49 +1644,45 @@ void __cdecl Item_ValidateTypeData(itemDef_s *item, int handle)
                 }
                 break;
             case 0xB:
-                item->typeData.textDef = (textDef_s *)UI_Alloc(0x44u, 4);
-                item->typeData.textDef->textTypeData.focusItemDef = (focusItemDef_s *)UI_Alloc(0x18u, 4);
-                item->typeData.textDef->textTypeData.focusItemDef->focusTypeData.listBox = (listBoxDef_s *)UI_Alloc(4u, 4);
+                item->typeData.textDef = (textDef_s *)UI_Alloc(sizeof(textDef_s), sizeof(void *));
+                item->typeData.textDef->textTypeData.focusItemDef = (focusItemDef_s *)UI_Alloc(sizeof(focusItemDef_s), sizeof(void *));
+                item->typeData.textDef->textTypeData.focusItemDef->focusTypeData.listBox = (listBoxDef_s *)UI_Alloc(sizeof(enumDvarDef_s), sizeof(void *));
                 item->typeData.textDef->textscale = 0.55f;
                 break;
             case 0xA:
-                item->typeData.textDef = (textDef_s *)UI_Alloc(0x44u, 4);
-                item->typeData.textDef->textTypeData.focusItemDef = (focusItemDef_s *)UI_Alloc(0x18u, 4);
-                item->typeData.textDef->textTypeData.focusItemDef->focusTypeData.listBox = (listBoxDef_s *)UI_Alloc(0x18Cu, 4);
+                item->typeData.textDef = (textDef_s *)UI_Alloc(sizeof(textDef_s), sizeof(void *));
+                item->typeData.textDef->textTypeData.focusItemDef = (focusItemDef_s *)UI_Alloc(sizeof(focusItemDef_s), sizeof(void *));
+                item->typeData.textDef->textTypeData.focusItemDef->focusTypeData.listBox = (listBoxDef_s *)UI_Alloc(sizeof(multiDef_s), sizeof(void *));
                 item->typeData.textDef->textscale = 0.55f;
                 break;
             case 2:
             case 6:
-                item->typeData.textDef = (textDef_s *)UI_Alloc(0x10u, 4);
-                textDef = (unsigned int*)item->typeData.textDef;
-                *textDef = 0;
-                textDef[1] = 0;
-                textDef[2] = 0;
-                textDef[3] = 0;
+                item->typeData.textDef = (textDef_s *)UI_Alloc(sizeof(ExpressionStatement), sizeof(void *));
+                memset(item->typeData.data, 0, sizeof(ExpressionStatement));
                 break;
             case 1:
             case 0x12:
-                item->typeData.textDef = (textDef_s *)UI_Alloc(0x44u, 4);
+                item->typeData.textDef = (textDef_s *)UI_Alloc(sizeof(textDef_s), sizeof(void *));
                 item->typeData.textDef->textscale = 0.55f;
                 break;
             case 3:
             case 0x14:
-                item->typeData.textDef = (textDef_s *)UI_Alloc(0x44u, 4);
-                item->typeData.textDef->textTypeData.focusItemDef = (focusItemDef_s *)UI_Alloc(0x18u, 4);
+                item->typeData.textDef = (textDef_s *)UI_Alloc(sizeof(textDef_s), sizeof(void *));
+                item->typeData.textDef->textTypeData.focusItemDef = (focusItemDef_s *)UI_Alloc(sizeof(focusItemDef_s), sizeof(void *));
                 item->typeData.textDef->textscale = 0.55f;
                 break;
             case 0x15:
             case 0x13:
-                item->typeData.textDef = (textDef_s *)UI_Alloc(0x18u, 4);
+                item->typeData.textDef = (textDef_s *)UI_Alloc(sizeof(focusItemDef_s), sizeof(void *));
                 break;
             case 4:
-                item->typeData.textDef = (textDef_s *)UI_Alloc(0x44u, 4);
-                item->typeData.textDef->textTypeData.focusItemDef = (focusItemDef_s *)UI_Alloc(0x18u, 4);
-                item->typeData.textDef->textTypeData.focusItemDef->focusTypeData.listBox = (listBoxDef_s *)UI_Alloc(0x29Cu, 4);
+                item->typeData.textDef = (textDef_s *)UI_Alloc(sizeof(textDef_s), sizeof(void *));
+                item->typeData.textDef->textTypeData.focusItemDef = (focusItemDef_s *)UI_Alloc(sizeof(focusItemDef_s), sizeof(void *));
+                item->typeData.textDef->textTypeData.focusItemDef->focusTypeData.listBox = (listBoxDef_s *)UI_Alloc(sizeof(listBoxDef_s), sizeof(void *));
                 item->typeData.textDef->textscale = 0.55f;
                 break;
             case 0xF:
-                item->typeData.textDef = (textDef_s *)UI_Alloc(0x44u, 4);
+                item->typeData.textDef = (textDef_s *)UI_Alloc(sizeof(textDef_s), sizeof(void *));
                 item->typeData.textDef->textTypeData.focusItemDef = (focusItemDef_s *)UI_Alloc(8u, 4);
                 item->typeData.textDef->textscale = 0.55f;
                 break;
@@ -1704,7 +1699,7 @@ int __cdecl MenuParse_execKey(menuDef_t *menu, int handle)
     if ( !PC_Char_Parse(handle, &keyname) )
         return 0;
     keyindex = (unsigned __int8)keyname;
-    handler = (ItemKeyHandler *)UI_Alloc(0xCu, 4);
+    handler = (ItemKeyHandler *)UI_Alloc(sizeof(ItemKeyHandler), sizeof(void *));
     handler->key = keyindex;
     if ( !PC_EventScript_Parse(handle, &handler->keyScript) )
         return 0;
@@ -1730,7 +1725,7 @@ int    MenuParse_execKeyInt(menuDef_t *menu, int handle)
 
     if ( !PC_Int_Parse(handle, &keyname) )
         return 0;
-    handler = (ItemKeyHandler *)UI_Alloc(0xCu, 4);
+    handler = (ItemKeyHandler *)UI_Alloc(sizeof(ItemKeyHandler), sizeof(void *));
     handler->key = keyname;
     if ( !PC_EventScript_Parse(handle, &handler->keyScript) )
         return 0;
@@ -1753,7 +1748,7 @@ int    MenuParse_blurWorld(menuDef_t *menu, int handle)
 
 int __cdecl MenuParse_legacySplitScreenScale(menuDef_t *menu, int handle)
 {
-    return SetItemStaticFlag(menu, handle, (int)&objBuf[1758][2]);
+    return SetItemStaticFlag(menu, handle, (int)(uintptr_t)((unsigned int *)objBuf + 1758 * 31 + 2));
 }
 
 int __cdecl SetItemStaticFlag(menuDef_t *menu, int handle, int flag)
@@ -1988,7 +1983,7 @@ int __cdecl ItemParse_focusSound(itemDef_s *item, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("focusSound");
     eventHandler->next = item->onEvent;
     item->onEvent = eventHandler;
@@ -2307,7 +2302,7 @@ int    ItemParse_menuItemsDef(itemDef_s *item, int handle)
             {
                 listPtr->rowCount = 0;
                 listPtr->numColumns = 0;
-                listPtr->rows = (MenuRow *)UI_Alloc(24 * listPtr->maxRows, 4);
+                listPtr->rows = (MenuRow *)UI_Alloc(sizeof(MenuRow) * listPtr->maxRows, sizeof(void *));
                 if ( !PC_String_Parse(handle, &nextKey) )
                     return 1;
                 while ( !I_stricmp(nextKey, "menuColDef") && cellCount < 16 )
@@ -2326,7 +2321,7 @@ int    ItemParse_menuItemsDef(itemDef_s *item, int handle)
                 }
                 for ( i = 0; i < listPtr->maxRows; ++i )
                 {
-                    listPtr->rows[i].cells = (MenuCell *)UI_Alloc(12 * cellCount, 4);
+                    listPtr->rows[i].cells = (MenuCell *)UI_Alloc(sizeof(MenuCell) * cellCount, sizeof(void *));
                     listPtr->rows[i].eventName = (char *)UI_Alloc(0x20u, 4);
                     listPtr->rows[i].onFocusEventName = (char *)UI_Alloc(0x20u, 4);
                     for ( j = 0; j < cellCount; ++j )
@@ -2456,9 +2451,9 @@ int    ItemParse_menuarea(itemDef_s *item, int handle)
     if ( PC_Int_Parse(handle, &listPtr->maxRows) && PC_Int_Parse(handle, &listPtr->numColumns) )
     {
         listPtr->rowCount = 0;
-        listPtr->rows = (MenuRow *)UI_Alloc(24 * listPtr->maxRows, 4);
+        listPtr->rows = (MenuRow *)UI_Alloc(sizeof(MenuRow) * listPtr->maxRows, sizeof(void *));
         for ( i = 0; i < listPtr->maxRows; ++i )
-            listPtr->rows[i].cells = (MenuCell *)UI_Alloc(12 * listPtr->numColumns, 4);
+            listPtr->rows[i].cells = (MenuCell *)UI_Alloc(sizeof(MenuCell) * listPtr->numColumns, sizeof(void *));
         for ( k = 0; k < listPtr->numColumns; ++k )
         {
             if ( !PC_Float_Parse(handle, &listPtr->columnInfo[k].rect.x)
@@ -2834,7 +2829,7 @@ int __cdecl ItemParse_doubleClick(itemDef_s *item, int handle)
         return 0;
     if ( !Item_GetListBoxDef(item) )
         return 0;
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("doubleClick");
     eventHandler->next = item->onEvent;
     item->onEvent = eventHandler;
@@ -2850,7 +2845,7 @@ int __cdecl ItemParse_rightClick(itemDef_s *item, int handle)
         return 0;
     if ( !Item_GetListBoxDef(item) )
         return 0;
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("RightClick");
     eventHandler->next = item->onEvent;
     item->onEvent = eventHandler;
@@ -2861,7 +2856,7 @@ int __cdecl ItemParse_onEnter(itemDef_s *item, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("onEnter");
     eventHandler->next = item->animInfo->animStates[item->animInfo->animStateCount]->onEvent;
     item->animInfo->animStates[item->animInfo->animStateCount]->onEvent = eventHandler;
@@ -2872,7 +2867,7 @@ int __cdecl ItemParse_onFocus(itemDef_s *item, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("onFocus");
     eventHandler->next = item->onEvent;
     item->onEvent = eventHandler;
@@ -2883,7 +2878,7 @@ int __cdecl ItemParse_leaveFocus(itemDef_s *item, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("leaveFocus");
     eventHandler->next = item->onEvent;
     item->onEvent = eventHandler;
@@ -2968,7 +2963,7 @@ int __cdecl ItemParse_action(itemDef_s *item, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("action");
     eventHandler->next = item->onEvent;
     item->onEvent = eventHandler;
@@ -2979,7 +2974,7 @@ int __cdecl ItemParse_accept(itemDef_s *item, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("onAccept");
     eventHandler->next = item->onEvent;
     item->onEvent = eventHandler;
@@ -3252,7 +3247,7 @@ int __cdecl ItemParse_onEvent(itemDef_s *item, int handle)
 {
     GenericEventHandler *eventHandler; // [esp+0h] [ebp-4h]
 
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     if ( !PC_String_Parse(handle, &eventHandler->name) )
         return 0;
     eventHandler->next = item->onEvent;
@@ -3271,7 +3266,7 @@ int __cdecl ItemParse_execKey(itemDef_s *item, int handle)
         return 0;
     keyindex = (unsigned __int8)keyname;
     focusPtr = Item_GetFocusItemDef(item);
-    handler = (ItemKeyHandler *)UI_Alloc(0xCu, 4);
+    handler = (ItemKeyHandler *)UI_Alloc(sizeof(ItemKeyHandler), sizeof(void *));
     handler->key = keyindex;
     if ( !PC_EventScript_Parse(handle, &handler->keyScript) )
         return 0;
@@ -3289,7 +3284,7 @@ int    ItemParse_execKeyInt(itemDef_s *item, int handle)
     if ( !PC_Int_Parse(handle, &keyname) )
         return 0;
     focusPtr = Item_GetFocusItemDef(item);
-    handler = (ItemKeyHandler *)UI_Alloc(0xCu, 4);
+    handler = (ItemKeyHandler *)UI_Alloc(sizeof(ItemKeyHandler), sizeof(void *));
     handler->key = keyname;
     if ( !PC_EventScript_Parse(handle, &handler->keyScript) )
         return 0;
@@ -3348,7 +3343,7 @@ int __cdecl ItemParse_execExp(itemDef_s *item, int handle)
                         return 0;
                     }
                     if ( !item->rectExpData )
-                        item->rectExpData = (rectData_s *)UI_Alloc(0x40u, 4);
+                        item->rectExpData = (rectData_s *)UI_Alloc(sizeof(rectData_s), sizeof(void *));
                     if ( I_stricmp(expressionType, "X") )
                     {
                         if ( !I_stricmp(expressionType, "Y") && Expression_Read(handle, &item->rectExpData->rectYExp) )
@@ -3389,7 +3384,7 @@ int __cdecl ItemParse_execExp(itemDef_s *item, int handle)
         {
             textDefPtr = Item_GetTextDef(item);
             if ( !textDefPtr->textExpData )
-                textDefPtr->textExpData = (textExp_s *)UI_Alloc(0x10u, 4);
+                textDefPtr->textExpData = (textExp_s *)UI_Alloc(sizeof(textExp_s), sizeof(void *));
             if ( Expression_Read(handle, &textDefPtr->textExpData->textExp) )
                 return 1;
         }
@@ -3408,14 +3403,14 @@ int    ItemParse_gameMsgWindowIndex(itemDef_s *item, int handle)
 {
     if ( !item && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\ui\\ui_shared_obj.cpp", 3922, 0, "%s", "item") )
         __debugbreak();
-    return PC_Int_Parse(handle, (int *)item->typeData.textDef->textTypeData.focusItemDef);
+    return PC_Int_Parse(handle, &item->typeData.textDef->textTypeData.gameMsgDef->gameMsgWindowIndex);
 }
 
 int    ItemParse_gameMsgWindowMode(itemDef_s *item, int handle)
 {
     if ( !item && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\ui\\ui_shared_obj.cpp", 3929, 0, "%s", "item") )
         __debugbreak();
-    return PC_Int_Parse(handle, (int *)&item->typeData.textDef->textTypeData.focusItemDef->mouseExitText);
+    return PC_Int_Parse(handle, &item->typeData.textDef->textTypeData.gameMsgDef->gameMsgWindowMode);
 }
 
 int    ItemParse_selectBorder(itemDef_s *item, int handle)
@@ -3536,7 +3531,7 @@ int __cdecl ItemParse_onListboxSelectionChange(itemDef_s *item, int handle)
     Item_ValidateTypeData(item, handle);
     if ( !Item_GetListBoxDef(item) )
         return 0;
-    eventHandler = (GenericEventHandler *)UI_Alloc(0xCu, 4);
+    eventHandler = (GenericEventHandler *)UI_Alloc(sizeof(GenericEventHandler), sizeof(void *));
     eventHandler->name = String_Alloc("onListboxSelectionChange");
     eventHandler->next = item->onEvent;
     item->onEvent = eventHandler;
@@ -3556,14 +3551,14 @@ int __cdecl ItemParse_state(itemDef_s *item, int handle)
 
     if ( !item->animInfo )
     {
-        item->animInfo = (UIAnimInfo *)UI_Alloc(0xECu, 4);
+        item->animInfo = (UIAnimInfo *)UI_Alloc(sizeof(UIAnimInfo), sizeof(void *));
         item->animInfo->animStates = g_load_0.animStates;
-        *item->animInfo->animStates = (animParamsDef_t *)UI_Alloc(0x6Cu, 4);
+        *item->animInfo->animStates = (animParamsDef_t *)UI_Alloc(sizeof(animParamsDef_t), sizeof(void *));
         Item_PropertiesToAnimState(item, *item->animInfo->animStates);
-        **(unsigned int **)item->animInfo->animStates = (unsigned int)String_Alloc("Default");
+        **(uintptr_t **)item->animInfo->animStates = (uintptr_t)String_Alloc("Default");
         ++item->animInfo->animStateCount;
     }
-    animParams = (animParamsDef_t *)UI_Alloc(0x6Cu, 4);
+    animParams = (animParamsDef_t *)UI_Alloc(sizeof(animParamsDef_t), sizeof(void *));
     item->animInfo->animStates[item->animInfo->animStateCount] = animParams;
     Item_PropertiesToAnimState(item, item->animInfo->animStates[item->animInfo->animStateCount]);
     success = Item_Parse(handle, item);
@@ -3602,9 +3597,9 @@ void __cdecl Item_SetupKeywordHash()
 MenuList *__cdecl UI_LoadMenu(const char *menuFile, int imageTrack)
 {
     if ( useFastFile->current.enabled )
-        return (MenuList *)((int (__cdecl *)(const char *, int))UI_LoadMenus_FastFile)(menuFile, imageTrack);
+        return ((MenuList *(__cdecl *)(const char *, int))UI_LoadMenus_FastFile)(menuFile, imageTrack);
     else
-        return (MenuList *)((int (__cdecl *)(const char *, int))UI_LoadMenu_LoadObj)(menuFile, imageTrack);
+        return ((MenuList *(__cdecl *)(const char *, int))UI_LoadMenu_LoadObj)(menuFile, imageTrack);
 }
 
 MenuList * UI_LoadMenu_LoadObj(char *menuFile, int imageTrack)
@@ -3723,7 +3718,7 @@ char __cdecl Menu_New(int handle, int imageTrack)
 {
     menuDef_t *menu; // [esp+0h] [ebp-4h]
 
-    menu = (menuDef_t *)UI_Alloc(0x190u, 4);
+    menu = (menuDef_t *)UI_Alloc(sizeof(menuDef_t), sizeof(void *));
     Menu_Init(menu, imageTrack);
     if ( Menu_Parse(handle, menu) )
     {
@@ -3817,8 +3812,8 @@ void __cdecl Menu_PostParse(menuDef_t *menu)
 
     if ( !menu && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\ui\\ui_shared_obj.cpp", 4324, 0, "%s", "menu") )
         __debugbreak();
-    size = 4 * menu->itemCount;
-    menu->items = (itemDef_s **)UI_Alloc(size, 4);
+    size = sizeof(itemDef_s *) * menu->itemCount;
+    menu->items = (itemDef_s **)UI_Alloc(size, sizeof(void *));
     memcpy((unsigned __int8 *)menu->items, (unsigned __int8 *)g_load_0.items, size);
     if ( menu->fullScreen )
     {
@@ -3835,8 +3830,8 @@ MenuList *__cdecl UI_LoadMenus(const char *menuFile, int imageTrack)
     if ( G_ExitAfterToolComplete() )
         return 0;
     if ( useFastFile->current.enabled )
-        return (MenuList *)((int (__cdecl *)(const char *, int))UI_LoadMenus_FastFile)(menuFile, imageTrack);
-    return (MenuList *)((int (__cdecl *)(const char *, int))UI_LoadMenus_LoadObj)(menuFile, imageTrack);
+        return ((MenuList *(__cdecl *)(const char *, int))UI_LoadMenus_FastFile)(menuFile, imageTrack);
+    return ((MenuList *(__cdecl *)(const char *, int))UI_LoadMenus_LoadObj)(menuFile, imageTrack);
 }
 
 char menuBuf[32768];

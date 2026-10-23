@@ -1272,7 +1272,7 @@ void     SV_ServerThread(unsigned int threadContext)
 
     do
         Value = Sys_GetValue(2);
-    while ( _setjmp(*(jmp_buf *)Value) );
+    while ( setjmp(*(jmp_buf *)Value) );
     //while ( _setjmp3(Value, 0) );
 
     SV_InitThreadVariables();

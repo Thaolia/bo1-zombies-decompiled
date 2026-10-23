@@ -1274,7 +1274,7 @@ MessageWindow *__cdecl Con_GetDestWindow(int localClientNum, print_msg_dest_t de
     {
         __debugbreak();
     }
-    return (MessageWindow *)&con.messageBuffer[localClientNum].gamemsgText[2][52 * dest + 1892];
+    return &con.messageBuffer[localClientNum].gamemsgWindows[dest - CON_DEST_GAME_FIRST];
 }
 
 void __cdecl Con_UpdateNotifyLine(int localClientNum, unsigned int channel, bool lineFeed, int flags)
@@ -3437,7 +3437,7 @@ void __cdecl ConDrawInput_AutoCompleteArg(const char **stringList, int stringCou
         }
         if ( matchCount )
         {
-            qsort(matches, matchCount, 4u, (int (__cdecl *)(const void *, const void *))ConDrawInput_CompareStrings);
+            qsort(matches, matchCount, sizeof(*(matches)), (int (__cdecl *)(const void *, const void *))ConDrawInput_CompareStrings);
             consoleFont = cls.consoleFont;
             ArgChar = ConDrawInput_TextFieldFirstArgChar();
             x = (float)((float)R_TextWidth(g_consoleField.buffer, ArgChar, consoleFont) + conDrawInputGlob.leftX) - 6.0;

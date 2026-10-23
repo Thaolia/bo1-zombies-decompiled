@@ -74,7 +74,7 @@ void __cdecl XModelSurfsSetData(const char *name, XModelSurfs *modelSurfs, void 
 XModel *__cdecl XModelPrecache(char *name, void *(__cdecl *Alloc)(int), void *(__cdecl *AllocColl)(int))
 {
     if ( useFastFile->current.enabled )
-        return (XModel *)((int (__cdecl *)(char *, void *(__cdecl *)(int), void *(__cdecl *)(int)))XModelPrecache_FastFile)(
+        return ((XModel *(__cdecl *)(char *, void *(__cdecl *)(int), void *(__cdecl *)(int)))XModelPrecache_FastFile)(
                                              name,
                                              Alloc,
                                              AllocColl);
@@ -780,17 +780,17 @@ void __cdecl XSurfaceVisitTrianglesInAabb_ConvertAabb(
 
 void __cdecl PrefetchArrayIndexed(char *mem, unsigned int elementCount, unsigned int index, unsigned int elementSize)
 {
-    unsigned int umem; // [esp+4h] [ebp-Ch]
+    uintptr_t umem; // [esp+4h] [ebp-Ch]
     const unsigned __int8 *memIter; // [esp+8h] [ebp-8h]
 
-    umem = (unsigned int)&mem[elementSize * index];
+    umem = (uintptr_t)&mem[elementSize * index];
     if ( !elementCount
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\xanim\\xmodel.cpp", 1095, 0, "%s", "elementCount") )
     {
         __debugbreak();
     }
-    for ( memIter = (const unsigned __int8 *)(umem & 0xFFFFFF80);
-                (unsigned int)memIter <= ((umem + elementSize * elementCount - 1) & 0xFFFFFF80);
+    for ( memIter = (const unsigned __int8 *)(umem & ~(uintptr_t)0x7F);
+                (uintptr_t)memIter <= ((umem + elementSize * elementCount - 1) & ~(uintptr_t)0x7F);
                 memIter += 128 )
     {
         _mm_prefetch((const char *)memIter, _MM_HINT_T0);

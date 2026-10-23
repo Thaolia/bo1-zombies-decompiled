@@ -20,7 +20,13 @@ void __cdecl FX_ProfileSingleEffect(FxSystem *system, const FxEffect *effect, Fx
 int __cdecl FX_CompareProfileEntries(const FxProfileEntry *e0, const FxProfileEntry *e1);
 double __cdecl FX_GetProfileEntryCost(const FxProfileEntry *entry);
 void __cdecl FX_DrawPriorityDebug(int clientIndex, void (__cdecl *drawFunc)(char *), float *profilePos);
-int __cdecl FX_ComparePriorityDebugEntries(unsigned int *e0, unsigned int *e1);
+struct FxPriorityDebugEntry
+{
+    const FxEffectDef *def;
+    unsigned int count;
+};
+
+int __cdecl FX_ComparePriorityDebugEntries(const FxPriorityDebugEntry *e0, const FxPriorityDebugEntry *e1);
 void __cdecl FX_DrawMarkProfile(unsigned int clientIndex, void (__cdecl *drawFunc)(char *), float *profilePos);
 void __cdecl FX_DrawMarkProfile_MarkPrint(
                 FxMarksSystem *marksSystem,

@@ -683,7 +683,7 @@ void __cdecl R_LoadLightmaps(GfxBspLoad *load)
                 src[i] = 1.0f;
         }
         imageFlags = 56;
-        s_world.draw.lightmaps = (GfxLightmapArray *)Hunk_Alloc(0xCCu, "R_LoadLightmaps", 21);
+        s_world.draw.lightmaps = (GfxLightmapArray *)Hunk_Alloc(sizeof(GfxLightmapArray) * 17, "R_LoadLightmaps", 21);
         newLmapIndex = 0;
         oldLmapBaseIndex = 0;
         while ( oldLmapBaseIndex < oldLmapCount )
@@ -700,7 +700,7 @@ void __cdecl R_LoadLightmaps(GfxBspLoad *load)
                 __debugbreak();
             }
             if ( newLmapIndex
-                && groupInfo[newLmapIndex].highCount > (int)(&buf_p)[2 * newLmapIndex]
+                && groupInfo[newLmapIndex].highCount > groupInfo[newLmapIndex - 1].highCount
                 && !Assert_MyHandler(
                             "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_bsp_load_obj.cpp",
                             1015,
@@ -2014,8 +2014,8 @@ unsigned __int8 *R_LoadLightGridEntries()
 void R_CreateDefaultProbes()
 {
     s_world.draw.reflectionProbeCount = 1;
-    s_world.draw.reflectionProbes = (GfxReflectionProbe *)Hunk_Alloc(0x18u, "R_CreateDefaultProbe", 21);
-    s_world.draw.reflectionProbeTextures = (GfxTexture *)Hunk_Alloc(4u, "R_CreateDefaultProbe", 21);
+    s_world.draw.reflectionProbes = (GfxReflectionProbe *)Hunk_Alloc(sizeof(GfxReflectionProbe), "R_CreateDefaultProbe", 21);
+    s_world.draw.reflectionProbeTextures = (GfxTexture *)Hunk_Alloc(sizeof(GfxTexture), "R_CreateDefaultProbe", 21);
     R_CreateDefaultProbe();
     rgl.reflectionProbesLoaded = 1;
 }
@@ -2050,7 +2050,7 @@ void __cdecl R_LoadReflectionProbes(unsigned int bspVersion)
                                                                                                                              &s_world.draw.reflectionProbeCount);
         ++s_world.draw.reflectionProbeCount;
         s_world.draw.reflectionProbes = (GfxReflectionProbe *)Hunk_Alloc(
-                                                                                                                        24 * s_world.draw.reflectionProbeCount,
+                                                                                                                        sizeof(GfxReflectionProbe) * s_world.draw.reflectionProbeCount,
                                                                                                                         "R_LoadReflectionProbes",
                                                                                                                         21);
         s_world.draw.reflectionProbeTextures = (GfxTexture *)Hunk_Alloc(
@@ -2070,7 +2070,7 @@ void __cdecl R_LoadReflectionProbes(unsigned int bspVersion)
         reflectionProbeRawData11 = Com_GetBspLump(LUMP_REFLECTION_PROBES, 0x4005Cu, &s_world.draw.reflectionProbeCount);
         ++s_world.draw.reflectionProbeCount;
         s_world.draw.reflectionProbes = (GfxReflectionProbe *)Hunk_Alloc(
-                                                                                                                        24 * s_world.draw.reflectionProbeCount,
+                                                                                                                        sizeof(GfxReflectionProbe) * s_world.draw.reflectionProbeCount,
                                                                                                                         "R_LoadReflectionProbes",
                                                                                                                         21);
         s_world.draw.reflectionProbeTextures = (GfxTexture *)Hunk_Alloc(
@@ -2517,18 +2517,18 @@ unsigned __int8 *R_LoadWorldLodData()
         s_world.worldLodChains[i].lastDist = *((float *)v2 + 3);
         s_world.worldLodChains[i].firstLodInfo = *((unsigned int *)v2 + 4);
         s_world.worldLodChains[i].lodInfoCount = *((_WORD *)v2 + 10);
-        result = (unsigned __int8 *)(i + 1);
+        result = (unsigned __int8 *)(uintptr_t)(i + 1);
     }
     for ( j = 0; j < s_world.worldLodInfoCount; ++j )
     {
         s_world.worldLodInfos[j].dist = *(float *)&lodInfos[12 * j];
         s_world.worldLodInfos[j].firstSurf = *(unsigned int *)&lodInfos[12 * j + 4];
         s_world.worldLodInfos[j].surfCount = *(_WORD *)&lodInfos[12 * j + 8];
-        result = (unsigned __int8 *)(j + 1);
+        result = (unsigned __int8 *)(uintptr_t)(j + 1);
     }
     for ( k = 0; k < s_world.worldLodSurfaceCount; ++k )
     {
-        result = (unsigned __int8 *)k;
+        result = (unsigned __int8 *)(uintptr_t)k;
         s_world.worldLodSurfaces[k] = *(unsigned int *)&lodSurfs[4 * k];
     }
     return result;
@@ -3026,7 +3026,7 @@ void __cdecl R_LoadSurfaces(GfxBspLoad *load)
         __debugbreak();
     }
     s_world.surfaceCount = surfCount;
-    s_world.dpvs.surfaces = (GfxSurface *)Hunk_Alloc(80 * surfCount, "R_LoadSurfaces", 21);
+    s_world.dpvs.surfaces = (GfxSurface *)Hunk_Alloc(sizeof(GfxSurface) * surfCount, "R_LoadSurfaces", 21);
     s_world.draw.indexCount = 0;
     for ( surfIndex = 0; surfIndex < surfCount; ++surfIndex )
     {
@@ -3601,7 +3601,7 @@ void __cdecl R_CalculateWorldBounds(float *mins, float *maxs)
 
 void __cdecl R_MaterialUsage(Material *material, unsigned int firstVertex, int vertexCount, int surfPlusIndexSize)
 {
-    unsigned int *v4; // eax
+    VertUsage *v4; // eax
     VertUsage *vertUsage; // [esp+0h] [ebp-8h]
     MaterialUsage *materialUsage; // [esp+4h] [ebp-4h]
 
@@ -3614,10 +3614,10 @@ void __cdecl R_MaterialUsage(Material *material, unsigned int firstVertex, int v
             if ( firstVertex == vertUsage->index )
                 return;
         }
-        v4 = Z_Malloc(8, "R_MaterialUsage", 0);
-        *v4 = firstVertex;
-        v4[1] = (unsigned int)materialUsage->verts;
-        materialUsage->verts = (VertUsage *)v4;
+        v4 = (VertUsage *)Z_Malloc(sizeof(VertUsage), "R_MaterialUsage", 0);
+        v4->index = firstVertex;
+        v4->next = materialUsage->verts;
+        materialUsage->verts = v4;
         materialUsage->memory += 44 * vertexCount;
     }
 }
@@ -3687,7 +3687,7 @@ GfxBrushModel *R_LoadSubmodels()
     in = (const DiskBrushModel *)Com_GetBspLump(LUMP_MODELS, 0x2Cu, &modelCount);
     out = (GfxBrushModel *)Hunk_Alloc(60 * modelCount, "R_LoadSubmodels", 21);
     s_world.models = out;
-    result = (GfxBrushModel *)modelCount;
+    result = (GfxBrushModel *)(uintptr_t)modelCount;
     s_world.modelCount = modelCount;
     for ( modelIndex = 0; modelIndex < modelCount; ++modelIndex )
     {
@@ -3760,14 +3760,14 @@ void R_LoadLightRegions()
     const DiskLightRegion *diskRegions; // [esp+34h] [ebp-8h]
     unsigned int regionIter; // [esp+38h] [ebp-4h]
 
-    s_world.lightRegion = (GfxLightRegion *)Hunk_Alloc(8 * s_world.primaryLightCount, "R_LoadLightRegions", 21);
+    s_world.lightRegion = (GfxLightRegion *)Hunk_Alloc(sizeof(GfxLightRegion) * s_world.primaryLightCount, "R_LoadLightRegions", 21);
     diskRegions = (const DiskLightRegion *)Com_GetBspLump(LUMP_LIGHTREGIONS, 1u, &regionCount);
     s_world.lightGrid.hasLightRegions = diskRegions != 0;
     if ( diskRegions )
     {
         diskHulls = Com_GetBspLump(LUMP_LIGHTREGION_HULLS, 0x4Cu, &hullCount);
         diskAxes = (unsigned __int8 *)Com_GetBspLump(LUMP_LIGHTREGION_AXES, 0x14u, &axisCount);
-        hulls = (GfxLightRegionHull *)Hunk_Alloc(80 * hullCount, "R_LoadLightRegionHulls", 21);
+        hulls = (GfxLightRegionHull *)Hunk_Alloc(sizeof(GfxLightRegionHull) * hullCount, "R_LoadLightRegionHulls", 21);
         axes = Hunk_Alloc(20 * axisCount, "R_LoadLightRegionAxes", 21);
         if ( regionCount != s_world.primaryLightCount
             && !Assert_MyHandler(
@@ -3861,11 +3861,11 @@ int R_PostLoadEntities()
     {
         __debugbreak();
     }
-    smodelCombinedInsts = (GfxStaticModelCombinedInst *)Z_Malloc(120 * s_world.dpvs.smodelCount, "R_PostLoadEntities", 22);
+    smodelCombinedInsts = (GfxStaticModelCombinedInst *)Z_Malloc(sizeof(GfxStaticModelCombinedInst) * s_world.dpvs.smodelCount, "R_PostLoadEntities", 22);
     dynModelCount = 0;
     for ( smodelIndex = 0; smodelIndex < s_world.dpvs.smodelCount; ++smodelIndex )
     {
-        memcpy(&smodelCombinedInsts[smodelIndex], &s_world.dpvs.smodelDrawInsts[smodelIndex], 0x4Cu);
+        memcpy(&smodelCombinedInsts[smodelIndex], &s_world.dpvs.smodelDrawInsts[smodelIndex], sizeof(GfxStaticModelDrawInst));
         memcpy(
             &smodelCombinedInsts[smodelIndex].smodelInst,
             &s_world.dpvs.smodelInsts[smodelIndex],
@@ -4000,7 +4000,7 @@ void __cdecl R_FixupGfxAabbTrees(GfxCell *cell)
         __debugbreak();
     }
     cell->aabbTreeCount = R_AabbTreeChildrenCount_r(tree);
-    newTree = (GfxAabbTree *)Hunk_AllocAlign(40 * cell->aabbTreeCount, 4, "R_FixupGfxAabbTrees", 22);
+    newTree = (GfxAabbTree *)Hunk_AllocAlign(sizeof(GfxAabbTree) * cell->aabbTreeCount, 4, "R_FixupGfxAabbTrees", 22);
     if ( R_AabbTreeMove_r(tree, newTree, newTree + 1) - newTree != cell->aabbTreeCount
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_bsp_load_obj.cpp",
@@ -4203,7 +4203,7 @@ void __cdecl R_LoadEntities()
         if ( !I_stricmp(spawnVars[0][1], "misc_model") )
             ++smodelCount;
     }
-    s_world.dpvs.smodelDrawInsts = (GfxStaticModelDrawInst *)Hunk_Alloc(76 * smodelCount, "R_LoadEntities", 22);
+    s_world.dpvs.smodelDrawInsts = (GfxStaticModelDrawInst *)Hunk_Alloc(sizeof(GfxStaticModelDrawInst) * smodelCount, "R_LoadEntities", 22);
     s_world.dpvs.smodelInsts = (GfxStaticModelInst *)Hunk_Alloc(40 * smodelCount, "R_LoadEntities", 22);
     s_world.dpvs.smodelCount = 0;
     s_world.dpvs.dynamicSModelCount = 0;
@@ -4664,7 +4664,7 @@ unsigned int R_LoadAabbTrees()
     const DiskGfxAabbTree *in; // [esp+14h] [ebp-4h]
 
     in = (const DiskGfxAabbTree *)Com_GetBspLump(LUMP_AABBTREES, 0xCu, &aabbTreeCount);
-    out = (GfxAabbTree *)Hunk_Alloc(40 * aabbTreeCount, "R_LoadAabbTrees", 23);
+    out = (GfxAabbTree *)Hunk_Alloc(sizeof(GfxAabbTree) * aabbTreeCount, "R_LoadAabbTrees", 23);
     rgl.aabbTrees = out;
     rgl.aabbTreeCount = aabbTreeCount;
     for ( aabbTreeIndex = 0; aabbTreeIndex < aabbTreeCount; ++aabbTreeIndex )
@@ -4800,7 +4800,7 @@ void __cdecl R_LoadCells(unsigned int bspVersion)
     {
         in = Com_GetBspLump(LUMP_CELLS, 0x34u, &cellCount);
     }
-    out = (GfxCell *)Hunk_Alloc(56 * cellCount, "R_LoadCells", 23);
+    out = (GfxCell *)Hunk_Alloc(sizeof(GfxCell) * cellCount, "R_LoadCells", 23);
     s_world.cells = out;
     s_world.dpvsPlanes.cellCount = cellCount;
     s_world.cellBitsCount = 16 * ((cellCount + 127) >> 7);
@@ -4813,7 +4813,7 @@ void __cdecl R_LoadCells(unsigned int bspVersion)
         out->maxs[1] = *((float *)in + 4);
         out->maxs[2] = *((float *)in + 5);
         out->aabbTree = &rgl.aabbTrees[*((unsigned __int16 *)in + 12)];
-        out->portals = (GfxPortal *)(68 * *((unsigned int *)in + 7));
+        out->portals = (GfxPortal *)(uintptr_t)(sizeof(GfxPortal) * *((unsigned int *)in + 7));
         out->portalCount = *((unsigned int *)in + 8);
         cullGroupCount = *((unsigned int *)in + 10);
         if ( cullGroupCount )
@@ -4878,7 +4878,7 @@ int R_LoadPortals()
     unsigned int portalCount; // [esp+24h] [ebp-4h] BYREF
 
     in = (const DiskGfxPortal *)Com_GetBspLump(LUMP_PORTALS, 0x10u, &portalCount);
-    out = (GfxPortal *)Hunk_Alloc(68 * portalCount, "R_LoadPortals", 23);
+    out = (GfxPortal *)Hunk_Alloc(sizeof(GfxPortal) * portalCount, "R_LoadPortals", 23);
     if ( !s_world.cells
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_bsp_load_obj.cpp",
@@ -4941,7 +4941,7 @@ int R_LoadPortals()
         if ( cellIndex >= s_world.dpvsPlanes.cellCount )
             break;
         if ( s_world.cells[cellIndex].portalCount )
-            v1 = &out[(int)s_world.cells[cellIndex].portals / 68];
+            v1 = &out[(intptr_t)s_world.cells[cellIndex].portals / (intptr_t)sizeof(GfxPortal)];
         else
             v1 = 0;
         s_world.cells[cellIndex].portals = v1;

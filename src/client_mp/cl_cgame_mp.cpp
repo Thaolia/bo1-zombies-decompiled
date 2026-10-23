@@ -1242,7 +1242,7 @@ void __cdecl CL_RestartCGame(int localClientNum)
     for ( entnum = 0; entnum < (1 << g_entNumBits); entnum = EntNum_NextNet(entnum) ) // mod (L43): networked numbers (retail < 1024)
     {
         cent = CG_GetEntity(localClientNum, entnum);
-        *((unsigned int *)cent + 201) &= ~2u;
+        cent->flagWord &= ~2u;
         CG_ShutdownEntity(localClientNum, cent, 1);
     }
     CG_ShutdownEntity(localClientNum, &cgameGlob->predictedPlayerEntity, 1);
@@ -1279,7 +1279,7 @@ void __cdecl CL_FirstSnapshot(int localClientNum)
         if ( zombiemode && zombiemode->current.enabled )
             CG_SP_ScreenFadeIn(localClientNum, clc->serverAddress.type == NA_LOOPBACK ? 500 : 1000, 750);
         Con_TimeJumped(localClientNum, LocalClientGlobals->serverTime);
-        if ( *(_BYTE *)cl_activeAction->current.integer )
+        if ( *cl_activeAction->current.string )
         {
             Cbuf_AddText(localClientNum, cl_activeAction->current.string);
             Cbuf_AddText(localClientNum, "\n");

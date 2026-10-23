@@ -89,6 +89,9 @@ param(
     # with -RunDir: take BO1Zombies.exe and .pdb from this build output instead of build\Release, e.g.
     # build\win32-offline\Release (the BO1_OFFLINE build); the game files still come from build\Release
     [string]$ExeDir = '',
+    # with -RunDir: the zone\ folder the run folder links to instead of build\Release\zone, e.g. build\iwffs-full\zone
+    # (the IWffs zones ffconv writes for a 64-bit exe). A run folder keeps its first link: use a new -RunDir to change it
+    [string]$ZoneDir = '',
     # machine-wide cap on headless runs (slots 0..MaxSlots-1)
     [ValidateRange(1, 16)][int]$MaxSlots = 6,
     # when this run folder or every slot is busy, retry for up to this many seconds before refusing (exit 10)
@@ -112,6 +115,7 @@ if ($ExeDir) {
     if (-not $RunDir) { Write-Output 'REFUSED: -ExeDir needs -RunDir (build\Release keeps its own exe)'; exit 11 }
     $E = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($ExeDir)) { $ExeDir } else { Join-Path $repo $ExeDir })).TrimEnd('\')
 }
+if ($ZoneDir -and -not $RunDir) { Write-Output 'REFUSED: -ZoneDir needs -RunDir (build\Release keeps the retail zones)'; exit 11 }
 $exe = Join-Path $H 'BO1Zombies.exe'
 # The filesystem opens console_mp.log under fs_game. Match the last command-line assignment,
 # including a quoted mod path; stock runs keep main. This also drives freshness checks and -SaveLog.
@@ -124,7 +128,9 @@ if ($gameArgs.Count) {
 }
 $log = Join-Path (Join-Path $H $logGame) 'console_mp.log'
 $steamGame = 'C:\Program Files (x86)\Steam\steamapps\common\Call of Duty Black Ops'   # READ ONLY: only listed
-$symbolizer = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x86\llvm-symbolizer.exe'
+# The newest MSVC toolset's symbolizer; the x64-hosted one reads both PE32 and PE32+ images.
+$symbolizer = Get-ChildItem 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\llvm-symbolizer.exe' -ErrorAction SilentlyContinue |
+    Sort-Object FullName | Select-Object -Last 1 -ExpandProperty FullName
 
 if (-not (Test-Path (Join-Path $E 'BO1Zombies.exe'))) { throw "not built: $(Join-Path $E 'BO1Zombies.exe')" }
 # One run per run folder (its main\ log and players\ config are shared) and at most -MaxSlots runs machine-wide. Named
@@ -162,10 +168,18 @@ if ($H -ne $R) {
     foreach ($d in 'main', 'players') { New-Item -ItemType Directory -Force (Join-Path $H $d) | Out-Null }
     foreach ($j in 'zone', 'mods', 'main\video') {
         $t = Join-Path $R $j; $l = Join-Path $H $j
+        if ($j -eq 'zone' -and $ZoneDir) {
+            $t = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($ZoneDir)) { $ZoneDir } else { Join-Path $repo $ZoneDir }))
+        }
         if ((Test-Path $t) -and -not (Test-Path $l)) { New-Item -ItemType Junction -Path $l -Target $t | Out-Null }
     }
     # the same root files a build\Release run sees (setup.ps1 put them there), the exe and pdb refreshed after a rebuild
-    @(Get-ChildItem $R -File | Where-Object { $_.Extension -in '.dll', '.txt', '.bmp' }) +
+    # build\Release's DLLs are 32-bit: a 64-bit exe would load them from its folder and fail, so it takes the system's
+    $exeBytes = [IO.File]::ReadAllBytes((Join-Path $E 'BO1Zombies.exe'))
+    $is64 = [BitConverter]::ToUInt16($exeBytes, [BitConverter]::ToInt32($exeBytes, 0x3C) + 4) -eq 0x8664
+    $rootExt = if ($is64) { @('.txt', '.bmp') } else { @('.dll', '.txt', '.bmp') }
+    if ($is64) { Get-ChildItem $H -File -Filter '*.dll' | Remove-Item -Force }
+    @(Get-ChildItem $R -File | Where-Object { $_.Extension -in $rootExt }) +
     @(Get-ChildItem $E -File | Where-Object { $_.Name -in 'BO1Zombies.exe', 'BO1Zombies.pdb' }) | ForEach-Object {
         $c = Join-Path $H $_.Name
         $old = Get-Item $c -ErrorAction SilentlyContinue
@@ -526,7 +540,7 @@ foreach ($e in $events) {
     $e.Message -split "`r?`n" | Where-Object { $_ -match 'Faulting module name|Exception code|Fault offset' } | ForEach-Object { "    $_" }
     if ($e.Message -match 'Faulting module name: ([^,\r\n]+)' -and $Matches[1] -match 'BO1Zombies' -and $e.Message -match 'Fault offset: (0x[0-9a-fA-F]+)') {
         $off = $Matches[1]
-        if (Test-Path $symbolizer) {
+        if ($symbolizer) {
             Write-Output "    symbolized ($off):"
             & $symbolizer "--obj=$exe" --relative-address $off 2>&1 | ForEach-Object { "      $_" }
         }
@@ -538,7 +552,7 @@ if ((Test-Path $emergency) -and (Get-Item $emergency).LastWriteTime -ge $t0) {
     Write-Output "  $emergency"
     foreach ($line in [System.IO.File]::ReadAllLines($emergency)) {
         Write-Output ("    {0}" -f ($(if ($line.Length -gt 300) { $line.Substring(0, 300) + ' ...' } else { $line })))
-        if ($line -match '^BO1_HEADLESS (STACK|FRAMES):' -and (Test-Path $symbolizer)) {
+        if ($line -match '^BO1_HEADLESS (STACK|FRAMES):' -and $symbolizer) {
             $offs = @([regex]::Matches($line, '\+0x[0-9A-Fa-f]+') | ForEach-Object { $_.Value.Substring(1) } | Select-Object -First $ThreadDumpFrames)
             $sym = @($offs | & $symbolizer "--obj=$exe" --relative-address --no-inlines 2>&1)
             for ($i = 0; $i -lt $sym.Count; $i += 3) { Write-Output ('      {0}' -f $sym[$i]) }
@@ -550,7 +564,7 @@ if ((Test-Path $log) -and (Get-Item $log).LastWriteTime -ge $t0) {
     foreach ($m in (Select-String -Path $log -Pattern 'BO1_HEADLESS CRASH: .*\(BO1Zombies\.exe\+(0x[0-9A-Fa-f]+)\)')) {
         $off = $m.Matches[0].Groups[1].Value
         Write-Output "  exe crash line offset ${off}:"
-        & $symbolizer "--obj=$exe" --relative-address $off 2>&1 | ForEach-Object { "      $_" }
+        if ($symbolizer) { & $symbolizer "--obj=$exe" --relative-address $off 2>&1 | ForEach-Object { "      $_" } }
     }
     # -ThreadDumpMs: every thread's EIP and stack return addresses (stack scan: stale words can appear), symbolized
     $threadLog = Join-Path $H 'main\bo1_threads.log'
@@ -563,7 +577,7 @@ if ((Test-Path $log) -and (Get-Item $log).LastWriteTime -ge $t0) {
         $maxFrames = $(if ($line -match '^BO1_HEADLESS THREAD(FRAMES|WALK)') { 64 } else { $ThreadDumpFrames })
         $offs = @([regex]::Matches($line, '\+0x[0-9A-Fa-f]+') | ForEach-Object { $_.Value.Substring(1) } | Select-Object -First $maxFrames)
         Write-Output ("  {0}" -f ($line -replace ' (stack|ebp|walk) .*', ''))
-        if ($offs.Count -and (Test-Path $symbolizer)) {
+        if ($offs.Count -and $symbolizer) {
             $sym = @($offs | & $symbolizer "--obj=$exe" --relative-address --no-inlines 2>&1)
             $names = @(); for ($i = 0; $i -lt $sym.Count; $i += 3) { $names += ('{0} ({1})' -f $sym[$i], (($sym[$i + 1] -split '\\')[-1])) }
             $names | ForEach-Object { "      $_" }

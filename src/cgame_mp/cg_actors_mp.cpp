@@ -43,7 +43,7 @@ void __cdecl CG_ActorProcessSnapshot(int localClientNum, centity_s *cent)
     if ( CL_LocalClient_IsFirstActive(localClientNum) )
     {
         if ( cent )
-            v2 = ((*((unsigned int *)cent + 201) >> 8) & 1) != 0;
+            v2 = ((cent->flagWord >> 8) & 1) != 0;
         else
             v2 = 0;
     }
@@ -189,7 +189,7 @@ void __cdecl CG_UpdateActorDObj(int localClientNum, centity_s *cent, actorInfo_t
     DObjModel_s dobjModels[32]; // [esp+130h] [ebp-100h] BYREF
     unsigned short numModels = 1;
 
-    if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 )
+    if ( ((cent->flagWord >> 1) & 1) != 0 )
     {
         p_nextState = &cent->nextState;
         cgameGlob = CG_GetLocalClientGlobals(localClientNum);
@@ -537,7 +537,7 @@ bool __cdecl CG_EntityNeedsScriptThread(int localClientNum, centity_s *cent)
     if ( !CL_LocalClient_IsFirstActive(localClientNum) )
         return 0;
     if ( cent )
-        return ((*((unsigned int *)cent + 201) >> 8) & 1) == 0;
+        return ((cent->flagWord >> 8) & 1) == 0;
     return 0;
 }
 

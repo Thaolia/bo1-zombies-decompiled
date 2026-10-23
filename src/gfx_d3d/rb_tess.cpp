@@ -1305,7 +1305,7 @@ unsigned int __cdecl R_TessXModelSkinnedDrawSurfList(
                     break;
                 v4 = 4 * LOWORD(drawSurf.packed);
                 modelSurf = (const GfxModelSkinnedSurface *)&data->surfsBuffer[v4];
-            } while (*(unsigned __int16 *)&data->surfsBuffer[v4 + 14] == baseGfxEntIndex
+            } while (*(unsigned __int16 *)&data->surfsBuffer[v4 + offsetof(GfxModelSkinnedSurface, info.gfxEntIndex)] == baseGfxEntIndex
                 || !R_DrawXModelSurfCheckBreak(
                     modelSurf->info.gfxEntIndex,
                     data,
@@ -1361,7 +1361,7 @@ unsigned int __cdecl R_TessXModelSkinnedDrawSurfList(
                     break;
                 v6 = 4 * LOWORD(drawSurf.packed);
                 modelSurf = (const GfxModelSkinnedSurface *)&data->surfsBuffer[v6];
-            } while (*(unsigned __int16 *)&data->surfsBuffer[v6 + 14] == baseGfxEntIndex
+            } while (*(unsigned __int16 *)&data->surfsBuffer[v6 + offsetof(GfxModelSkinnedSurface, info.gfxEntIndex)] == baseGfxEntIndex
                 || !R_DrawXModelSurfCheckBreak(
                     modelSurf->info.gfxEntIndex,
                     data,

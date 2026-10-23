@@ -118,7 +118,6 @@ void __cdecl ProfLoad_Activate()
 
 void __cdecl ProfLoad_Deactivate()
 {
-    MapProfileEntry *v0; // eax
     LARGE_INTEGER PerformanceCount; // [esp+0h] [ebp-8h] BYREF
 
     if ( !mapLoadProfile.isLoading
@@ -131,7 +130,7 @@ void __cdecl ProfLoad_Deactivate()
     {
         __debugbreak();
     }
-    v0 = (MapProfileEntry *)QueryPerformanceCounter(&PerformanceCount);
+    QueryPerformanceCounter(&PerformanceCount);
     mapLoadProfile.ticksFinish = PerformanceCount.QuadPart;
     mapLoadProfile.isLoading = 0;
     ProfLoad_Print();

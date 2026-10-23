@@ -71,7 +71,7 @@ static const centity_s *CG_SP_FeelNearestActor(int localClientNum, const cg_s *c
     {
         const centity_s *cent = CG_GetEntity(localClientNum, cgameGlob->nextSnap->entities[i].number);
         if (cent->nextState.eType != ET_ACTOR || (cent->nextState.lerp.eFlags & 0x40000) != 0
-            || ((*((const unsigned int *)cent + 201) >> 1) & 1) == 0)
+            || ((cent->flagWord >> 1) & 1) == 0)
             continue;
         const float dx = cent->pose.origin[0] - cgameGlob->predictedPlayerState.origin[0];
         const float dy = cent->pose.origin[1] - cgameGlob->predictedPlayerState.origin[1];

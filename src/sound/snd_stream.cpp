@@ -78,7 +78,7 @@ void __cdecl Snd_StreamInit()
             "C:\\projects_pc\\cod\\codsrc\\src\\sound\\snd_stream.cpp",
             247);
         g_snd_streams = (snd_stream *)_PMem_Alloc(
-            0xFA0u,
+            sizeof(snd_stream) * 10,
             0x80u,
             4u,
             1u,
@@ -86,7 +86,7 @@ void __cdecl Snd_StreamInit()
             "C:\\projects_pc\\cod\\codsrc\\src\\sound\\snd_stream.cpp",
             254);
         g_snd_buffers = (snd_buffer *)_PMem_Alloc(
-            0x15E0u,
+            sizeof(snd_buffer) * 20,
             0x80u,
             4u,
             1u,
@@ -927,9 +927,9 @@ void __cdecl Snd_StreamReleaseWindow(unsigned int index, char *data)
     }
     for ( i = 0; i < 3; ++i )
     {
-        if ( !_InterlockedCompareExchange(
-                        (volatile unsigned __int32 *)&g_snd_streams[index].window_return[i],
-                        (signed __int32)data,
+        if ( !_InterlockedCompareExchangePointer(
+                        (void *volatile *)&g_snd_streams[index].window_return[i],
+                        data,
                         0) )
         {
             Sys_WakeStream();
@@ -1093,7 +1093,18 @@ void __cdecl Snd_StreamLoadHeader(snd_stream *s, char *data, const char *filenam
     {
         __debugbreak();
     }
-    memcpy(&s->header, data, sizeof(s->header));
+    // The file starts with the 32-bit snd_asset (4-byte pointers; the seek table follows at 56): on 64-bit the fields
+    // after seek_table_count are read at their file offsets (seek_table 44, data_size 48, data 52).
+    if constexpr (sizeof(void *) == 8)
+    {
+        memcpy(&s->header, data, offsetof(snd_asset, seek_table_count) + sizeof(s->header.seek_table_count));
+        memcpy(&s->header.data_size, data + 48, sizeof(s->header.data_size));
+        s->header.data = 0;
+    }
+    else
+    {
+        memcpy(&s->header, data, sizeof(s->header));
+    }
     s->header.seek_table = (unsigned int *)(data + 56);
     s->have_header = 1;
     if ( s->looping == ((s->header.flags & 1) != 0) )

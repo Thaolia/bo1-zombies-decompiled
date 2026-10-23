@@ -39,7 +39,7 @@ char __cdecl ProcessStringEdCmds()
         }
         else
         {
-            newEntrya = (LocalizeEntry *)Com_LiveAllocate(8u);
+            newEntrya = (LocalizeEntry *)Com_LiveAllocate(sizeof(LocalizeEntry));
             newEntrya->name = (const char *)Com_LiveAllocate(strlen(Reference) + 1);
             I_strncpyz((char *)newEntrya->name, Reference, strlen(Reference) + 1);
             newEntrya->value = (const char *)Com_LiveAllocate(strlen(Value) + 1);

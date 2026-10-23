@@ -2725,8 +2725,8 @@ unsigned int __cdecl MSG_CompressWithZLib(
     stream.avail_in = inSizeBytes;
     stream.next_out = to;
     stream.avail_out = outSizeBytes;
-    memset(&stream.zalloc, 0, 16);
-    err = deflateInit2_(&stream, 9, 8, -13, 1, 0, "1.2.3", 52);
+    memset(&stream.zalloc, 0, offsetof(z_stream_s, adler) - offsetof(z_stream_s, zalloc));
+    err = deflateInit2_(&stream, 9, 8, -13, 1, 0, "1.2.3", sizeof(stream));
     if ( !err )
     {
         erra = deflate(&stream, 4u);
@@ -2815,8 +2815,8 @@ unsigned int __cdecl MSG_DecompressWithZLib(
     stream.avail_in = inSizeBytes;
     stream.next_out = to;
     stream.avail_out = outSizeBytes;
-    memset(&stream.zalloc, 0, 16);
-    err = inflateInit2_(&stream, -13, "1.2.3", 52);
+    memset(&stream.zalloc, 0, offsetof(z_stream_s, adler) - offsetof(z_stream_s, zalloc));
+    err = inflateInit2_(&stream, -13, "1.2.3", sizeof(stream));
     if ( !err )
     {
         erra = inflate(&stream, 4);
@@ -4811,7 +4811,7 @@ void __cdecl MSG_ReadDeltaPlayerstate(
     int lc; // [esp+54h] [ebp-26CCh]
     NetField *array; // [esp+58h] [ebp-26C8h]
     float *v47; // [esp+5Ch] [ebp-26C4h]
-    unsigned __int8 dst[9896]; // [esp+60h] [ebp-26C0h] BYREF
+    unsigned __int8 dst[sizeof(playerState_s)]; // [esp+60h] [ebp-26C0h] BYREF
     int Bits; // [esp+2708h] [ebp-18h]
     float *v50; // [esp+270Ch] [ebp-14h]
     BOOL v51; // [esp+2710h] [ebp-10h]

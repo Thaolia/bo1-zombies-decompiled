@@ -29,7 +29,7 @@ jqModule fx_add_markModule =
     .Type = JQ_WORKER_GENERIC,
     .Code = fx_add_markCallback
 };
-jqWorkerCmd fx_add_markWorkerCmd = { &fx_add_markModule, 44u, 0, 0, &fx_add_markLimit, NULL, 0u };
+jqWorkerCmd fx_add_markWorkerCmd = { &fx_add_markModule, sizeof(FxAddMarkCmd), 0, 0, &fx_add_markLimit, NULL, 0u };
 
 FxMarkPoint g_fxMarkPoints[3060];
 FxMarksSystem *fx_marksSystemPool;
@@ -506,6 +506,15 @@ void __cdecl FX_ImpactMark(
     }
 }
 
+struct FxImpactMarkCallbackContext
+{
+    unsigned int localClientNum;
+    Material *material;
+    float radius;
+    const unsigned __int8 *nativeColor;
+    const FxMarkAlphaFade *markAlpha;
+};
+
 void __cdecl FX_ImpactMark_Generate(
                 int localClientNum,
                 MarkFragmentsAgainstEnum markAgainst,
@@ -523,7 +532,7 @@ void __cdecl FX_ImpactMark_Generate(
     FxMarkTri tris[256]; // [esp+230h] [ebp-10C8h] BYREF
     MarkInfo markInfo; // [esp+E28h] [ebp-4D0h] BYREF
     float *viewOffset; // [esp+12E0h] [ebp-18h]
-    unsigned int callbackContext[5]; // [esp+12E4h] [ebp-14h] BYREF
+    FxImpactMarkCallbackContext callbackContext; // [esp+12E4h] [ebp-14h] BYREF
 
     PROF_SCOPED("FX_ImpactMark_Generate");
 
@@ -534,11 +543,11 @@ void __cdecl FX_ImpactMark_Generate(
     }
     else
     {
-        callbackContext[0] = localClientNum;
-        callbackContext[1] = (unsigned int)material;
-        *(float *)&callbackContext[2] = radius;
-        callbackContext[3] = (unsigned int)nativeColor;
-        callbackContext[4] = (unsigned int)markAlpha;
+        callbackContext.localClientNum = localClientNum;
+        callbackContext.material = material;
+        callbackContext.radius = radius;
+        callbackContext.nativeColor = nativeColor;
+        callbackContext.markAlpha = markAlpha;
         markInfo.isSeeThruDecal = isSeeThruDecal;
         if ( fx_marks->current.enabled
             && (markAgainst != MARK_FRAGMENTS_AGAINST_MODELS
@@ -568,7 +577,7 @@ void __cdecl FX_ImpactMark_Generate(
             R_MarkFragments_Go(
                 &markInfo,
                 FX_ImpactMark_Generate_Callback,
-                callbackContext,
+                &callbackContext,
                 255,
                 tris,
                 765,
@@ -624,7 +633,7 @@ void __cdecl FX_ImpactMark_Generate_AddEntityBrush(
         // (a bullet or blood FX next to a closed kit door) asserted in R_GetBrushModel: a crash 2026-09-27 "699 not in
         // [0, 690)" (stack R_GetBrushModel <- FX_ImpactMark_Generate_AddEntityBrush, mapkit-fix-4a). Their faces are world
         // verts (R_Mapkit_GenerateVerts); the entity gets no mark.
-        if (((*((_DWORD *)ent + 201) >> 1) & 1) != 0 && ent->nextState.solid == 0xFFFFFF
+        if (((ent->flagWord >> 1) & 1) != 0 && ent->nextState.solid == 0xFFFFFF
             && !CM_Mapkit_IsSubmodel(ent->nextState.index.brushmodel))
         {
             brushModel = R_GetBrushModel(ent->nextState.index.brushmodel);
@@ -747,7 +756,7 @@ void __cdecl FX_ImpactMark_Generate_AddEntityModel(
     if ( entityIndex != 1023 && entityIndex < ENTNUM_CSC_END ) // mod (L49): retail != 1023; no marks on networked 1537+
     {
         ent = CG_GetEntity(localClientNum, entityIndex);
-        if ( ((*((unsigned int *)ent + 201) >> 1) & 1) != 0 )
+        if ( ((ent->flagWord >> 1) & 1) != 0 )
         {
             dObj = Com_GetClientDObj(ent->nextState.number, localClientNum);
             if ( dObj )
@@ -786,18 +795,18 @@ void __cdecl FX_ImpactMark_Generate_Callback(
                 bool isSeeThruDecal)
 {
     FX_AllocAndConstructMark(
-        *(unsigned int *)context,
+        ((const FxImpactMarkCallbackContext *)context)->localClientNum,
         triCount,
         pointCount,
-        *((Material **)context + 1),
+        ((const FxImpactMarkCallbackContext *)context)->material,
         tris,
         points,
         markOrigin,
         markHitNormal,
-        *((float *)context + 2),
+        ((const FxImpactMarkCallbackContext *)context)->radius,
         markTexCoordAxis,
-        *((const unsigned __int8 **)context + 3),
-        *((const FxMarkAlphaFade **)context + 4),
+        ((const FxImpactMarkCallbackContext *)context)->nativeColor,
+        ((const FxImpactMarkCallbackContext *)context)->markAlpha,
         isSeeThruDecal);
 }
 

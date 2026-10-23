@@ -188,7 +188,7 @@ char __cdecl LiveGroups_GetGroupID(char *path, int *offset, GroupSet **gs)
     v3 = strchr(path, 0x2Fu);
     if ( v3 )
     {
-        setLen = (unsigned int)v3 - (unsigned int)path;
+        setLen = v3 - path;
         groupName = (const char *)(v3 + 1);
         if ( !*(_BYTE *)(v3 + 1) )
             groupName = 0;

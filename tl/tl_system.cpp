@@ -226,7 +226,7 @@ unsigned int __cdecl tlGetFreeMemory()
   GetCurrentProcess();
   CurrentProcessId = GetCurrentProcessId();
   v3 = OpenProcess(0x410u, 0, CurrentProcessId);
-  if ( GetProcessMemoryInfo(v3, &pmc, 40) )
+  if ( GetProcessMemoryInfo(v3, &pmc, sizeof(pmc)) )
     v0 = dwTotalPhys - pmc.PeakWorkingSetSize;
   CloseHandle(v3);
   return v0;

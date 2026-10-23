@@ -190,7 +190,7 @@ void __cdecl R_WorldLod_Init()
     memset(s_lodVals, 0xFFu, rgp.world->surfaceCount);
     for ( clientIdx = 0; clientIdx < 1; ++clientIdx )
     {
-        s_lodState[clientIdx] = (LodChainState *)Hunk_Alloc(12 * rgp.world->worldLodChainCount, "R_WorldLod_Init", 23);
+        s_lodState[clientIdx] = (LodChainState *)Hunk_Alloc(sizeof(LodChainState) * rgp.world->worldLodChainCount, "R_WorldLod_Init", 23);
         for (i = 0; i < rgp.world->worldLodChainCount; ++i)
         {
             //LodChainState::Init(&s_lodState[clientIdx][i], &rgp.world->worldLodChains[i], clientIdx);
@@ -228,10 +228,7 @@ void    UpdateChain(int index, const float *inputCamPos, float dt, int localClie
     int v5; // [esp+Ch] [ebp-A8h]
     bool v6; // [esp+13h] [ebp-A1h]
     float lodInfos; // [esp+14h] [ebp-A0h]
-    int curLevel; // [esp+18h] [ebp-9Ch] BYREF
-    float v9; // [esp+1Ch] [ebp-98h] OVERLAPPED
-    float camDist; // [esp+20h] [ebp-94h]
-    float v11; // [esp+24h] [ebp-90h]
+    math::Dir3 delta; // [esp+18h] [ebp-9Ch] BYREF
     float v12; // [esp+28h] [ebp-8Ch]
     float v13; // [esp+2Ch] [ebp-88h]
     float v14; // [esp+30h] [ebp-84h]
@@ -288,11 +285,11 @@ void    UpdateChain(int index, const float *inputCamPos, float dt, int localClie
     v13 = v30 - v22;
     v14 = v29 - v21;
     v15 = 0.0 - 0.0;
-    *(float *)&curLevel = v31 - v23;
-    v9 = v30 - v22;
-    camDist = v29 - v21;
-    v11 = 0.0 - 0.0;
-    lodInfos = math::Abs((const math::Dir3 *)&curLevel);
+    delta.v.x = v31 - v23;
+    delta.v.y = v30 - v22;
+    delta.v.z = v29 - v21;
+    delta.v.w = 0.0 - 0.0;
+    lodInfos = math::Abs(&delta);
     v6 = !r_reflectionProbeGenerate->current.enabled && r_worldLod->current.enabled;
     v5 = 0;
     if ( v6 )

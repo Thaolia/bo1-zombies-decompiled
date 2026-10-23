@@ -928,7 +928,7 @@ char __cdecl Live_FileShare_Theater_SetFile(unsigned __int64 fileID, bool isUser
             result = Live_FileShare_FindFileInPrivateData(fileID, FILESHARE_BUFFER_SECONDARY);
     }
     if ( !result )
-        result = (bdFileMetaData *)RETURN_ZERO32();
+        result = (bdFileMetaData *)(intptr_t)RETURN_ZERO32();
     if ( result )
     {
         memcpy(&s_theaterFileMetaData, result, sizeof(s_theaterFileMetaData));

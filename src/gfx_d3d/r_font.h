@@ -1,4 +1,5 @@
 #pragma once
+#include <platform/arch_size.h>
 
 struct Glyph // sizeof=0x18
 {
@@ -25,7 +26,7 @@ struct Font_s // sizeof=0x18
     struct Material *glowMaterial;
     Glyph *glyphs;
 };
-static_assert(sizeof(Font_s) == 24);
+static_assert(sizeof(Font_s) == BO1_ARCH_SIZE(24, 40));
 
 const Glyph *__cdecl R_GetCharacterGlyph(Font_s *font, unsigned int letter);
 unsigned int __cdecl R_FontGetRandomLetter(Font_s *font, int seed);

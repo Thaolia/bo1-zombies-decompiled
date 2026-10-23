@@ -535,7 +535,7 @@ int __cdecl R_AllowBspSpotLightShadows(int surfIndex, void *__formal)
 
 int __cdecl R_AllowBspSpotLight(int surfIndex, void *bspLightCallbackAsVoid)
 {
-    if (*(_BYTE *)(*(_DWORD *)bspLightCallbackAsVoid + surfIndex))
+    if (((const BspSpotLightCallback *)bspLightCallbackAsVoid)->surfaceVisData[surfIndex])
         return BoxInPlanes(
             scene.dynamicSpotLightPlanes,
             6u,

@@ -13,13 +13,13 @@ extern TurretInfo turretInfoStore[32];
 extern int g_listenerCount;
 extern AIEventListener g_AIEVlisteners[32];
 
-static_assert(sizeof(cCurve) == 0xE58, "SP curve record");
-static_assert(sizeof(TurretInfo) == 0xE0 && offsetof(TurretInfo, detachSentient) == 0x68, "SP turret record");
-static_assert(sizeof(threat_bias_t) == 0x424, "SP threat bias record");
-static_assert(sizeof(AIEventListener) == 8, "SP event listener record");
-static_assert(sizeof(trigger_info_t) == 0xC, "SP trigger record");
-static_assert(sizeof(AttractorRepulsor_t) == 0x1C, "SP attractor record");
-static_assert(ARRAY_COUNT(((vehicle_info_t *)0)->sndIndices) == 19, "SP vehicle info sound indices");
+BO1_SAVE_IMAGE_ASSERT(sizeof(cCurve) == 0xE58, "SP curve record");
+BO1_SAVE_IMAGE_ASSERT(sizeof(TurretInfo) == 0xE0 && offsetof(TurretInfo, detachSentient) == 0x68, "SP turret record");
+BO1_SAVE_IMAGE_ASSERT(sizeof(threat_bias_t) == 0x424, "SP threat bias record");
+BO1_SAVE_IMAGE_ASSERT(sizeof(AIEventListener) == 8, "SP event listener record");
+BO1_SAVE_IMAGE_ASSERT(sizeof(trigger_info_t) == 0xC, "SP trigger record");
+BO1_SAVE_IMAGE_ASSERT(sizeof(AttractorRepulsor_t) == 0x1C, "SP attractor record");
+BO1_SAVE_IMAGE_ASSERT(ARRAY_COUNT(((vehicle_info_t *)0)->sndIndices) == 19, "SP vehicle info sound indices");
 
 static void G_SaveCurves(MemoryFile *memFile)
 {
@@ -121,7 +121,7 @@ static const SPEntitySaveField s_threatBiasFields[] = {
     { 0x0C, 2, 1 }, { 0x0E, 2, 1 }, { 0x10, 2, 1 }, { 0x12, 2, 1 }, { 0x14, 2, 1 }, { 0x16, 2, 1 },
     { 0x18, 2, 1 }, { 0x1A, 2, 1 }, { 0x1C, 2, 1 }, { 0x1E, 2, 1 }
 };
-static_assert(offsetof(threat_bias_t, groupName) == 0 && sizeof(((threat_bias_t *)0)->groupName) == 0x20, "SP threat bias names");
+BO1_SAVE_IMAGE_ASSERT(offsetof(threat_bias_t, groupName) == 0 && sizeof(((threat_bias_t *)0)->groupName) == 0x20, "SP threat bias names");
 
 static void G_WriteThreatBias(const threat_bias_t *bias, MemoryFile *memFile)
 {

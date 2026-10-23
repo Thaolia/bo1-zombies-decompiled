@@ -13,7 +13,7 @@ int g_hiddenCount;
 bool g_inStackTrace;
 AddressInfo_s g_assertAddress[32];
 int g_assertAddressCount;
-unsigned __int8 *lineBufferEndPos;
+int lineBufferEndPos;
 int lineBufferStartPos;
 char lineBuffer[4096];
 char message[1024];
@@ -194,7 +194,7 @@ void __cdecl LoadMapFilesForDir(const char *dir)
     _WIN32_FIND_DATAA FindFileData; // [esp+20h] [ebp-1158h] BYREF
     char file; // [esp+160h] [ebp-1018h] BYREF
     _BYTE v9[3]; // [esp+161h] [ebp-1017h] BYREF
-    unsigned int baseAddress; // [esp+964h] [ebp-814h]
+    uintptr_t baseAddress; // [esp+964h] [ebp-814h]
     _iobuf *fp; // [esp+968h] [ebp-810h]
     HANDLE hFindFile; // [esp+96Ch] [ebp-80Ch]
     char string[2052]; // [esp+970h] [ebp-808h] BYREF
@@ -214,7 +214,7 @@ void __cdecl LoadMapFilesForDir(const char *dir)
     {
         do
         {
-            baseAddress = (unsigned int)GetModuleBase(FindFileData.cFileName);
+            baseAddress = (uintptr_t)GetModuleBase(FindFileData.cFileName);
             if ( baseAddress )
             {
                 v3 = Sys_DefaultInstallPath();
@@ -241,7 +241,7 @@ void __cdecl LoadMapFilesForDir(const char *dir)
     }
 }
 
-char __cdecl ParseMapFile(_iobuf *fp, unsigned int baseAddress, const char *mapName)
+char __cdecl ParseMapFile(_iobuf *fp, uintptr_t baseAddress, const char *mapName)
 {
     const char *v4; // eax
     const char *v5; // eax
@@ -261,11 +261,11 @@ char __cdecl ParseMapFile(_iobuf *fp, unsigned int baseAddress, const char *mapN
     unsigned int address; // [esp+2Ch] [ebp-860h] BYREF
     const char *filename; // [esp+30h] [ebp-85Ch]
     AddressInfo_s *addressInfo; // [esp+34h] [ebp-858h]
-    unsigned int relAddress; // [esp+38h] [ebp-854h]
+    uintptr_t relAddress; // [esp+38h] [ebp-854h]
     unsigned int lineOffset[4]; // [esp+3Ch] [ebp-850h] BYREF
     char filenameBuffer[1024]; // [esp+4Ch] [ebp-840h] BYREF
     unsigned int offset; // [esp+44Ch] [ebp-440h] BYREF
-    unsigned int baseEndAddress; // [esp+450h] [ebp-43Ch]
+    uintptr_t baseEndAddress; // [esp+450h] [ebp-43Ch]
     unsigned int group; // [esp+454h] [ebp-438h] BYREF
     const char *funcName; // [esp+458h] [ebp-434h]
     unsigned int lineGroup[4]; // [esp+45Ch] [ebp-430h] BYREF
@@ -434,7 +434,7 @@ LABEL_91:
             return 0;
         }
         strncpy(filenameBuffer, pszNameStart + 1, v12 - pszNameStart - 1);
-        *((_BYTE *)&lineOffset[3] + (int)pszNameStop - (int)pszNameStart + 3) = 0;
+        filenameBuffer[pszNameStop - pszNameStart - 1] = 0;
         filenameSubStr = filenameBuffer;
         if ( !SkipLines(1, fp) )
             return 0;
@@ -504,7 +504,7 @@ char __cdecl ReadLine(_iobuf *fp)
 
 LABEL_1:
     lineBufferEndPos -= lineBufferStartPos;
-    if ( (int)lineBufferEndPos < 0
+    if ( lineBufferEndPos < 0
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\universal\\assertive.cpp",
                     306,
@@ -521,7 +521,7 @@ LABEL_1:
     lineBufferStartPos = 0;
     for ( i = 0; ; ++i )
     {
-        if ( i >= (int)lineBufferEndPos )
+        if ( i >= lineBufferEndPos )
         {
 LABEL_13:
             readSize = 4096 - (unsigned int)lineBufferEndPos - 1;
@@ -542,7 +542,7 @@ LABEL_13:
             {
                 if ( !lineBufferEndPos )
                     return 0;
-                lineBufferStartPos = (int)lineBufferEndPos;
+                lineBufferStartPos = lineBufferEndPos;
                 return 1;
             }
             goto LABEL_1;
@@ -550,7 +550,7 @@ LABEL_13:
         if ( lineBuffer[i] == 10 )
             break;
     }
-    if ( (unsigned __int8 *)(i + 1) == lineBufferEndPos )
+    if ( i + 1 == lineBufferEndPos )
         goto LABEL_13;
     lineBuffer[i] = 0;
     if (lineBuffer[i + 1] == 13)

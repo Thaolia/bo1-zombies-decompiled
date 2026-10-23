@@ -383,7 +383,7 @@ void __cdecl GScr_SetScriptsForPathNode(scriptInstance_t inst, pathnode_t *loadN
                 {
                     __debugbreak();
                 }
-                loadNode->constant.animscriptfunc = (int)Hunk_FindDataForFile(1, animscript);
+                loadNode->constant.animscriptfunc = (int)(intptr_t)Hunk_FindDataForFile(1, animscript);
                 if ( !loadNode->constant.animscriptfunc )
                 {
                     // zombies: SP's traverses are animscripts/traverse/<name> (SP 0x007EEC60)
@@ -392,7 +392,7 @@ void __cdecl GScr_SetScriptsForPathNode(scriptInstance_t inst, pathnode_t *loadN
                     Hunk_SetDataForFile(
                         1,
                         animscript,
-                        (void *)loadNode->constant.animscriptfunc,
+                        (void *)(intptr_t)loadNode->constant.animscriptfunc,
                         (void *(__cdecl *)(int))GScr_AnimscriptAlloc);
                 }
                 if ( !loadNode->constant.animscriptfunc )
@@ -1128,7 +1128,7 @@ int __cdecl Scr_GetArrayValues_Vector(
                 return 0;
             }
             v8 = &(*vector_array)[3 * vector_array_index];
-            next = (float *)entry_value->u.next;
+            next = (float *)entry_value->u.u.vectorValue;
             *v8 = *next;
             v8[1] = next[1];
             v8[2] = next[2];
@@ -1571,7 +1571,7 @@ void Scr_GetWeaponStowedModel()
     weapDef = BG_GetWeaponDef(iWeaponIndex);
     if ( iWeaponIndex )
     {
-        if ( *((unsigned int *)weapDef->worldModel + 1)
+        if ( weapDef->worldModel[1]
             && weapDef->weapClass != WEAPCLASS_GRENADE
             && weapDef->weapClass != WEAPCLASS_KILLSTREAK_ALT_STORED_WEAPON )
         {
@@ -5433,7 +5433,7 @@ void Scr_Objective_OnEntity()
     ClearObjective_OnEntity(&level.objectives[objNum]);
     Entity = Scr_GetEntity(1u);
     Entity->r.svFlags |= 0x10u;
-    level.objectivesClientMask[6 * objNum - 189][0] = Entity->s.number;
+    level.objectives[objNum].entNum = Entity->s.number;
 }
 
 void Scr_Objective_Current()
@@ -5615,7 +5615,7 @@ void Scr_Objective_SetColor()
     color[3] = 1.0f;
     if ( Scr_GetNumParam(SCRIPTINSTANCE_SERVER) == 5 )
         color[3] = Scr_GetFloat(4u, SCRIPTINSTANCE_SERVER);
-    Byte4PackRgba(color, (unsigned __int8 *)level.objectivesClientMask[6 * objectiveIndex - 187]);
+    Byte4PackRgba(color, (unsigned __int8 *)&level.objectives[objectiveIndex].color);
 }
 
 void GScr_Objective_Team()
@@ -16224,18 +16224,18 @@ void GScr_PregameStartGame()
 
 void print_0()
 {
-    const dvar_s *result; // eax
+    int result; // eax
     char *DebugString; // eax
     int num; // [esp+0h] [ebp-8h]
-    const dvar_s *i; // [esp+4h] [ebp-4h]
+    int i; // [esp+4h] [ebp-4h]
 
     if (!g_NoScriptSpam->current.enabled)
     {
         num = Scr_GetNumParam(SCRIPTINSTANCE_SERVER);
-        for (i = 0; ; i = (const dvar_s *)((char *)i + 1))
+        for (i = 0; ; ++i)
         {
             result = i;
-            if ((int)i >= num)
+            if (i >= num)
                 break;
             DebugString = Scr_GetDebugString((unsigned int)i, SCRIPTINSTANCE_SERVER);
             Com_Printf(level.scriptPrintChannel, "%s", DebugString);

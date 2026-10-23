@@ -819,7 +819,7 @@ void NitrousVehicleController::UpdateControlsDefault(
     phys_vec3 *velocity; // [esp+30h] [ebp-60h]
     int v6; // [esp+34h] [ebp-5Ch] BYREF
     float *v7; // [esp+4Ch] [ebp-44h]
-    int p_m_mat; // [esp+50h] [ebp-40h]
+    phys_mat44 *p_m_mat; // [esp+50h] [ebp-40h]
     PhysObjUserData *m_phys_user_data; // [esp+54h] [ebp-3Ch]
     bool v10; // [esp+5Bh] [ebp-35h]
     float AnalogButtonValue; // [esp+5Ch] [ebp-34h]
@@ -893,8 +893,8 @@ void NitrousVehicleController::UpdateControlsDefault(
         if ( v10 )
         {
             m_phys_user_data = rbveh->m_phys_user_data;
-            p_m_mat = (int)&m_phys_user_data->body->m_mat;
-            v7 = (float *)(p_m_mat + 16);
+            p_m_mat = &m_phys_user_data->body->m_mat;
+            v7 = &p_m_mat->y.x;
             //velocity = NitrousVehicle::get_velocity(rbveh, (phys_vec3 *)&v6);
             phys_vec3 tmp;
             //velocity = rbveh->get_velocity((phys_vec3 *)&v6);
@@ -1130,8 +1130,7 @@ void NitrousVehicleController::UpdateApplyBoatAccel(
     float v15; // [esp+44h] [ebp-330h]
     float turn_throttle; // [esp+48h] [ebp-32Ch]
     phys_vec3 end; // [esp+4Ch] [ebp-328h] BYREF
-    float v18; // [esp+5Ch] [ebp-318h]
-    float v19; // [esp+60h] [ebp-314h]
+    phys_vec3 v18; // [esp+58h] [ebp-31Ch] BYREF
     float v20; // [esp+6Ch] [ebp-308h]
     float v21; // [esp+70h] [ebp-304h]
     float v22; // [esp+74h] [ebp-300h]
@@ -1172,11 +1171,9 @@ void NitrousVehicleController::UpdateApplyBoatAccel(
     float v57; // [esp+1A4h] [ebp-1D0h]
     float v58; // [esp+1A8h] [ebp-1CCh]
     phys_vec3 v59; // [esp+1ACh] [ebp-1C8h] BYREF
-    float v60; // [esp+1BCh] [ebp-1B8h]
-    float v61; // [esp+1C0h] [ebp-1B4h]
+    phys_vec3 v60; // [esp+1B8h] [ebp-1BCh] BYREF
     phys_vec3 v62; // [esp+1CCh] [ebp-1A8h] BYREF
-    float v63; // [esp+1DCh] [ebp-198h]
-    float v64; // [esp+1E0h] [ebp-194h]
+    phys_vec3 v63; // [esp+1D8h] [ebp-19Ch] BYREF
     float v65; // [esp+1ECh] [ebp-188h]
     float v66; // [esp+1F0h] [ebp-184h]
     float v67; // [esp+1F4h] [ebp-180h]
@@ -1343,19 +1340,19 @@ void NitrousVehicleController::UpdateApplyBoatAccel(
             v67 = center.x + v71;
             v66 = center.y + v70;
             v65 = center.z + v69;
-            v62.w = center.x + v71;
-            v63 = center.y + v70;
-            v64 = center.z + v69;
+            v63.x = center.x + v71;
+            v63.y = center.y + v70;
+            v63.z = center.z + v69;
             //rigid_body::add_force(body, &leftForce, (phys_vec3 *)&v62.w, 1.0);
-            body->add_force(&leftForce, (phys_vec3 *)&v62.w, 1.0);
+            body->add_force(&leftForce, &v63, 1.0);
             v62.z = center.x - centerOffset.x;
             v62.y = center.y - centerOffset.y;
             v62.x = center.z - centerOffset.z;
-            v59.w = center.x - centerOffset.x;
-            v60 = center.y - centerOffset.y;
-            v61 = center.z - centerOffset.z;
+            v60.x = center.x - centerOffset.x;
+            v60.y = center.y - centerOffset.y;
+            v60.z = center.z - centerOffset.z;
             //rigid_body::add_force(body, &rightForce, (phys_vec3 *)&v59.w, 1.0);
-            body->add_force(&rightForce, (phys_vec3 *)&v59.w, 1.0);
+            body->add_force(&rightForce, &v60, 1.0);
         }
         else
         {
@@ -1408,10 +1405,10 @@ void NitrousVehicleController::UpdateApplyBoatAccel(
                 v22 = motor_position.x - (float)(50.0 * accel.x);
                 v21 = motor_position.y - (float)(50.0 * accel.y);
                 v20 = motor_position.z - (float)(50.0 * accel.z);
-                end.w = v22;
-                v18 = v21;
-                v19 = v20;
-                Phys_NitrousVecToVec3((phys_vec3 *)&end.w, &end.x);
+                v18.x = v22;
+                v18.y = v21;
+                v18.z = v20;
+                Phys_NitrousVecToVec3(&v18, &end.x);
                 CL_AddDebugLine(start, &end.x, colorWhite, 0, 1);
             }
             turn_throttle = throttle;

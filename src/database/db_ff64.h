@@ -17,6 +17,15 @@ enum DBFF64Abi : uint32_t
     DB_FF64_ABI_AARCH64 = 2, // AAPCS64 / LP64: the Switch
 };
 
+// The ABI of this build; 0 on a target with no IWffs layout tables yet.
+#if defined(_WIN64)
+inline constexpr uint32_t DB_FF64_BUILD_ABI = DB_FF64_ABI_WIN64;
+#elif defined(__aarch64__)
+inline constexpr uint32_t DB_FF64_BUILD_ABI = DB_FF64_ABI_AARCH64;
+#else
+inline constexpr uint32_t DB_FF64_BUILD_ABI = 0;
+#endif
+
 // Pointer slots are 8 bytes. 0 is NULL; the two markers mean "the data follows in the stream" (and, for the second,
 // "allocate an insert pointer for it"); any other value is ((block << 32) | offset) + 1 into the 64-bit blocks.
 inline constexpr uint64_t DB_FF64_FOLLOWS = ~0ull;
@@ -37,19 +46,18 @@ inline uint32_t DB_FF64_OffsetInBlock(uint64_t encoded)
     return static_cast<uint32_t>(encoded - 1);
 }
 
-// An AllocLoad_* aligns to its retail alignment or to the 64-bit alignment of the type it allocates, whichever is
-// larger (retail aligns pointer arrays to 4 bytes).
-inline uint32_t DB_FF64_Alignment(uint32_t retailAlignment, uint32_t align64)
-{
-    return retailAlignment > align64 ? retailAlignment : align64;
-}
+// Every stream allocation (DB_AllocStreamPos, so every AllocLoad_* and insert pointer) is aligned to its retail
+// alignment or to 8, whichever is larger. Retail aligns pointer arrays to 4; no streamed type needs more than 8
+// without already asking for it in retail, so the loader needs no type to align.
+inline constexpr uint32_t DB_FF64_MIN_ALIGNMENT = 8;
 
 // Other rules ffconv applies that the 64-bit Load_* code must mirror:
 // - stream positions are aligned as offsets from the block start, so each block must start on a 4096-byte boundary
 //   (as VirtualAlloc gives the retail loader, whose alignments are on absolute addresses, up to 2048 bytes);
-// - an insert pointer (DB_InsertPointer) is an 8-byte slot aligned to 8;
+// - an insert pointer (DB_InsertPointer) is an 8-byte slot;
 // - a Load_Stream that copies the first bytes of a record, up to a field the loader streams on its own (for example
 //   XAnimDeltaPartQuat up to `u`), copies up to that field's 64-bit offset;
 // - a pointer the retail stream stores as 0xFFFFFFFF or 0xFFFFFFFE becomes DB_FF64_FOLLOWS or
 //   DB_FF64_FOLLOWS_INSERT; any other value the loader never converts is zero-extended (the loader only tests it
-//   against 0).
+//   against 0). A union of a pointer and 4-byte data (MaterialArgumentDef) is widened the same way: its data members
+//   read the low 4 bytes, so the loader must test such a union through its pointer member.

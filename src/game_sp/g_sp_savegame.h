@@ -2,6 +2,7 @@
 #include <universal/memfile.h>
 #include <universal/q_shared.h>
 #include <cstddef>
+#include <platform/arch_size.h>
 
 // zombies: SP save-request queue (G_SaveGame 0x0043C850) and its per-server-loop consumer
 // (0x004BC500, called by Com_ServerLoop at 0x0087E4D7), the writer 0x004CB930, the serializer
@@ -16,7 +17,7 @@ enum SPSaveGameResult
     SP_SAVE_TOO_FREQUENT = -3,    // less than 3000 ms since the last request
     SP_SAVE_QUEUE_FULL = -4,      // three requests pending
     SP_SAVE_FRONTEND = -5,        // frontend map
-    SP_SAVE_MOD_SKIPPED = -6,     // mod (L25): entities 1024+ in use, no save made; not a restart, so no script error
+    SP_SAVE_MOD_SKIPPED = -6,     // mod (L25): entities 1024+ in use, or a 64-bit build; no save made, no script error
 };
 
 int G_SP_SaveGame(const char *filename, const char *description, const char *screenshot, int saveType,
@@ -46,7 +47,7 @@ struct SPMemorySaveHeader
     int bodySize;               // +0x490, bytes used in the game state file (SP 0x0049C750)
     int pad;                    // +0x494, not written
 };
-static_assert(sizeof(SPMemorySaveHeader) == 0x498, "SP save header size");
+BO1_SAVE_IMAGE_ASSERT(sizeof(SPMemorySaveHeader) == 0x498, "SP save header size");
 
 // SP SaveGame (0x104F4 bytes; two of them at 0x01D04BA8 / 0x01D1509C, SP 0x008190B0).
 enum SPSaveState
@@ -71,11 +72,11 @@ struct SPSaveGame
     bool suppressPrint;             // +0x104F0: no 'S' server command on commit
     bool callbackNow;               // +0x104F1: 0x0068BE40 calls the callback at once
 };
-static_assert(sizeof(MemoryFile) == 0x8024, "SP MemoryFile size");
-static_assert(offsetof(SPSaveGame, state) == 0x10048, "SP SaveGame layout");
-static_assert(offsetof(SPSaveGame, header) == 0x1004C, "SP SaveGame layout");
-static_assert(offsetof(SPSaveGame, isUsingGlobalBuffer) == 0x104EC, "SP SaveGame layout");
-static_assert(sizeof(SPSaveGame) == 0x104F4, "SP SaveGame size");
+BO1_SAVE_IMAGE_ASSERT(sizeof(MemoryFile) == 0x8024, "SP MemoryFile size");
+BO1_SAVE_IMAGE_ASSERT(offsetof(SPSaveGame, state) == 0x10048, "SP SaveGame layout");
+BO1_SAVE_IMAGE_ASSERT(offsetof(SPSaveGame, header) == 0x1004C, "SP SaveGame layout");
+BO1_SAVE_IMAGE_ASSERT(offsetof(SPSaveGame, isUsingGlobalBuffer) == 0x104EC, "SP SaveGame layout");
+BO1_SAVE_IMAGE_ASSERT(sizeof(SPSaveGame) == 0x104F4, "SP SaveGame size");
 
 // The committed memory save's header ([0x01D04BA0] + 0x1004C, SP 0x00599F10). SP reads it without a
 // state check; an empty filename means nothing was ever committed.

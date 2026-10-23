@@ -2223,7 +2223,7 @@ yy_buffer_state *__cdecl yy_create_buffer(_iobuf *file, unsigned int size)
 {
     yy_buffer_state *b; // [esp+0h] [ebp-4h]
 
-    b = (yy_buffer_state *)yy_flex_alloc(0x28u);
+    b = (yy_buffer_state *)yy_flex_alloc(sizeof(yy_buffer_state));
     if ( !b )
         yy_fatal_error("out of dynamic memory in yy_create_buffer()");
     b->yy_buf_size = size;

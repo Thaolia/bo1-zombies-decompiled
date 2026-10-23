@@ -106,7 +106,7 @@ struct Bone // sizeof=0x1C
     unsigned __int8 animBones[2];
     // padding byte
     // padding byte
-    int rigidBody;
+    intptr_t rigidBody;
     float length;
     float center[3];
 };
@@ -130,8 +130,8 @@ struct __declspec(align(4)) LerpBone // sizeof=0x8
 struct Joint // sizeof=0x8
 {                                       // XREF: RagdollBody/r
                                         // Ragdoll_DebugRender/r
-    int joint;
-    int joint2;                         // XREF: Ragdoll_DebugRender+10/w
+    intptr_t joint;
+    intptr_t joint2;                         // XREF: Ragdoll_DebugRender+10/w
 };
 
 struct RagdollBody // sizeof=0xA28
@@ -184,7 +184,7 @@ DObj *__cdecl Ragdoll_BodyDObj(RagdollBody *body);
 const cpose_t *__cdecl Ragdoll_BodyPose(RagdollBody *body);
 void __cdecl Ragdoll_BodyRootOrigin(RagdollBody *body, float *origin);
 bool __cdecl Ragdoll_BodyPoseValid(RagdollBody *body);
-void __cdecl Ragdoll_GetRootOrigin(int ragdollHandle, float *origin);
+void __cdecl Ragdoll_GetRootOrigin(intptr_t ragdollHandle, float *origin);
 int __cdecl Ragdoll_CountPhysicsBodies();
 bool __cdecl Ragdoll_BodyHasPhysics(RagdollBody *body);
 const RagdollBody *__cdecl Ragdoll_CreateRagdollForDObj(
@@ -198,14 +198,14 @@ void __cdecl Ragdoll_InitBody(RagdollBody *body);
 RagdollBody *__cdecl Ragdoll_ReferenceDObjBody(int dobj);
 char __cdecl Ragdoll_BindDef(unsigned int ragdollDef);
 bool __cdecl Ragdoll_ValidateDef(unsigned int ragdollDef);
-void __cdecl Ragdoll_Remove(int ragdoll);
-void __cdecl Ragdoll_FreeBody(int ragdollBody);
+void __cdecl Ragdoll_Remove(intptr_t ragdoll);
+void __cdecl Ragdoll_FreeBody(intptr_t ragdollBody);
 void __cdecl Ragdoll_InitDvars();
 void __cdecl Ragdoll_Register();
 void __cdecl Ragdoll_Init();
 void __cdecl Ragdoll_Shutdown();
 
-inline RagdollBody *__cdecl Ragdoll_HandleBody(int handle)
+inline RagdollBody *__cdecl Ragdoll_HandleBody(intptr_t handle)
 {
     return (RagdollBody *)handle;
 }

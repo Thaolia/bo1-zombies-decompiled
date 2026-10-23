@@ -68,8 +68,8 @@ FxImpactTable *__cdecl CG_RegisterImpactEffects_LoadObj(const char *mapname)
         Com_sprintf(mapdir, 0x40u, "fx/maps/%s", mapname);
         CG_RegisterImpactEffectsForDir(mapdir, &effectFile, listbuf);
     }
-    fx = (FxImpactTable *)Hunk_AllocAlign(8u, 4, "CG_RegisterImpactEffects", 8);
-    v1 = Hunk_AllocAlign(0xB7Cu, 4, "CG_RegisterImpactEffects", 8);
+    fx = (FxImpactTable *)Hunk_AllocAlign(sizeof(FxImpactTable), alignof(FxImpactTable), "CG_RegisterImpactEffects", 8);
+    v1 = Hunk_AllocAlign(21 * sizeof(FxImpactEntry), alignof(FxImpactEntry), "CG_RegisterImpactEffects", 8);
     fx->table = (FxImpactEntry *)v1;
     iBadCount = 0;
     for ( i = 0; i < 0x15; ++i )
@@ -80,7 +80,7 @@ FxImpactTable *__cdecl CG_RegisterImpactEffects_LoadObj(const char *mapname)
                      effectFile.flesh[i],
                      g_TypeName[i],
                      fx->table[i].flesh,
-                     (char *)effectFile.flesh[-161][31 * i]);
+                     (char *)effectFile.nonflesh[i][7]);
         iBadCount += v3;
     }
     if ( iBadCount )
@@ -240,7 +240,7 @@ void __cdecl CG_RegisterImpactEffectsForDir(char *dir, EffectFile *effectFile, c
             base[i] = qpath;
             qpath += strlen(qpath) + 1;
         }
-        qsort(base, num, 4u, (int (__cdecl *)(const void *, const void *))compare_impact_files);
+        qsort(base, num, sizeof(*(base)), (int (__cdecl *)(const void *, const void *))compare_impact_files);
         for ( i = 0; i < num; ++i )
         {
             qpath = va("%s/%s", dir, (const char *)base[i]);

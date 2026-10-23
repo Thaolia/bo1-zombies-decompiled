@@ -5,6 +5,7 @@
 #include "cscr_memorytree.h"
 #include "cscr_debugger.h"
 #include <universal/memfile.h>
+#include <platform/arch_size.h>
 #include <qcommon/common.h>
 #include <cstddef>
 #include <cstring>
@@ -15,9 +16,9 @@
 // mod: follows bo1_mod_scriptvars (server instance; saves are server-script only)
 #define SAVE_OBJECT_LIMIT VARIABLELIST_PARENT_SIZE(SCRIPTINSTANCE_SERVER)
 #define SAVE_CHILD_BEGIN VARIABLELIST_CHILD_BEGIN(SCRIPTINSTANCE_SERVER)
-static_assert(sizeof(VariableValueInternal) == 0x1C, "review save traversal for changed VM layout");
-static_assert(sizeof(VariableUnion) == 4, "save stacks contain four-byte values");
-static_assert(offsetof(VariableStackBuffer, buf) == 13, "KB save stack payload offset (SP 11)");
+BO1_SAVE_IMAGE_ASSERT(sizeof(VariableValueInternal) == 0x1C, "review save traversal for changed VM layout");
+BO1_SAVE_IMAGE_ASSERT(sizeof(VariableUnion) == 4, "save stacks contain four-byte values");
+BO1_SAVE_IMAGE_ASSERT(offsetof(VariableStackBuffer, buf) == 13, "KB save stack payload offset (SP 11)");
 
 static void Scr_SaveId(scriptInstance_t inst, unsigned int id)
 {
@@ -478,7 +479,7 @@ static VariableStackBuffer *Scr_LoadStack(ScrSaveContext *ctx)
 {
     // zombies: SP 0x005FD3F0. DERIVED: KB uses a uint localId and a 13-byte stack header.
     const unsigned short size = Scr_LoadShort(ctx);
-    const unsigned int length = offsetof(VariableStackBuffer, buf) + 5 * size;
+    const unsigned int length = offsetof(VariableStackBuffer, buf) + (sizeof(VariableUnion) + 1) * size;
     iassert(length <= 0xFFFF);
     VariableStackBuffer *stack = (VariableStackBuffer *)MT_Alloc(length, 1, ctx->inst);
     stack->size = size;

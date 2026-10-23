@@ -1350,4 +1350,4 @@ inline cgs_t *CG_GetLocalClientStaticGlobals(int32_t localClientNum)
 constexpr float factor[2] = { -1.0, 1.0 };
 // zombies: the client physics-gravity table (SetPhysicsGravity / ClearPhysicsGravity, cgame/cg_scr_sp_client.cpp)
 void CG_SP_ClearPhysicsGravityTable();
-void CG_SP_ApplyPhysicsGravity(centity_s *cent, int ragdollHandle);
+void CG_SP_ApplyPhysicsGravity(centity_s *cent, intptr_t ragdollHandle);

@@ -53,13 +53,18 @@ void    R_SkinXModelCmd(struct SkinXModelCmd *data);
 void __cdecl R_MultiplySkelMat(const DObjSkelMat *mat0, const DObjSkelMat *mat1, DObjSkelMat *out);
 
 
-
+// The SSE skinning path packs vertices with MMX (__m64), which only 32-bit x86 has; other targets skin in C.
+#if defined(_M_IX86) || defined(__i386__)
+#define R_SKIN_MMX 1
 void __cdecl R_SkinXSurfaceSkinnedSse(
                 const XSurface *xsurf,
                 const DObjSkelMat *boneMatrix,
                 GfxPackedVertexNormal *skinVertNormalIn,
                 GfxPackedVertexNormal *skinVertNormalOut,
                 GfxPackedVertex *skinVerticesOut);
+#else
+#define R_SKIN_MMX 0
+#endif
 
 
 //__m128 * _mm_cvtpu8_ps@<eax>(int a1@<ebp>);

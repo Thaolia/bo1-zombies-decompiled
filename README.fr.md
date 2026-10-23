@@ -35,3 +35,8 @@ Les instructions upstream (Windows, MSVC x86, D3D9) sont dans `README.md`, `setu
 La build hors-ligne du port, sans Steam, Bink, NVAPI, DemonWare ni chat vocal, se joue déjà sur Windows avec les
 fichiers copiés par `setup.ps1` : `cmake --preset win32-msvc-offline`, `cmake --build --preset
 win32-msvc-offline-release`, puis `Play.bat offline`.
+
+## Build 64 bits (en cours)
+Kino der Toten se charge et se joue une minute ; les parties plus longues ne sont pas encore testées. Cette build lit
+des zones converties : `ffconv --verify --game <install> --out build\zones64`, puis `cmake --preset win64-msvc`,
+`cmake --build --preset win64-msvc-release` et `Play.bat x64`.

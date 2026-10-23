@@ -4,7 +4,7 @@
 
 chull_t *chull_list;
 phys_convex_hull g_hull;
-phys_inplace_avl_tree<unsigned int, generic_avl_map_node_t, generic_avl_map_node_t> entities_map;
+generic_avl_map_t entities_map;
 
 void phys_convex_hull::compute_convex_hull(
     int max_verts,
@@ -783,14 +783,14 @@ void __cdecl free_chull(chull_t *first)
     while (first)
     {
         next = first->next;
-        PMM_FREE((unsigned __int8 *)first->verts, 16 * first->nverts, 0x10u);
+        PMM_FREE((unsigned __int8 *)first->verts, sizeof(phys_vec3) * first->nverts, 0x10u);
         PMM_FREE((unsigned __int8 *)first->inds, (2 * first->ninds + 3) & 0xFFFFFFFC, 4u);
-        PMM_FREE((unsigned __int8 *)first, 0x20u, 4u);
+        PMM_FREE((unsigned __int8 *)first, sizeof(chull_t), 4u);
         first = next;
     }
 }
 
-void __cdecl chull_list_add(chull_t *chull, unsigned int key)
+void __cdecl chull_list_add(chull_t *chull, uintptr_t key)
 {
     generic_avl_map_add(&entities_map, chull, key);
     chull->key = key;
@@ -952,7 +952,7 @@ chull_t *__cdecl generate_collmap_chull(PhysGeomList *geomList)
     return first;
 }
 
-chull_t *__cdecl get_collmap_chull(PhysGeomList *geomList, unsigned int key)
+chull_t *__cdecl get_collmap_chull(PhysGeomList *geomList, uintptr_t key)
 {
     generic_avl_map_node_t *m_tree_root; // [esp+0h] [ebp-Ch]
     chull_t *chull; // [esp+8h] [ebp-4h]
@@ -982,7 +982,7 @@ chull_t *__cdecl get_collmap_chull(PhysGeomList *geomList, unsigned int key)
     return chull;
 }
 
-chull_t *__cdecl get_brushmodel_chull(unsigned int brushmodel, unsigned int key)
+chull_t *__cdecl get_brushmodel_chull(unsigned int brushmodel, uintptr_t key)
 {
     generic_avl_map_node_t *m_tree_root; // [esp+0h] [ebp-Ch]
     chull_t *chull; // [esp+8h] [ebp-4h]
@@ -1021,7 +1021,7 @@ chull_t *__cdecl get_brush_chull(const cbrush_t *brush)
     m_tree_root = entities_map.m_tree_root;
     while (m_tree_root && brush != (const cbrush_t *)m_tree_root->m_avl_key)
     {
-        if ((unsigned int)brush >= m_tree_root->m_avl_key)
+        if ((uintptr_t)brush >= m_tree_root->m_avl_key)
             m_tree_root = m_tree_root->m_avl_tree_node.m_right;
         else
             m_tree_root = m_tree_root->m_avl_tree_node.m_left;
@@ -1035,7 +1035,7 @@ chull_t *__cdecl get_brush_chull(const cbrush_t *brush)
         chull = generate_brush_chull(brush);
         if (!chull)
             return 0;
-        chull_list_add(chull, (unsigned int)brush);
+        chull_list_add(chull, (uintptr_t)brush);
     }
     if (!chull && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\physics\\phys_main.cpp", 1832, 0, "%s", "chull"))
         __debugbreak();
@@ -1052,7 +1052,7 @@ chull_t *__cdecl get_partition_chull(const CollisionAabbTree *tree)
     m_tree_root = entities_map.m_tree_root;
     while (m_tree_root && tree != (const CollisionAabbTree *)m_tree_root->m_avl_key)
     {
-        if ((unsigned int)tree >= m_tree_root->m_avl_key)
+        if ((uintptr_t)tree >= m_tree_root->m_avl_key)
             m_tree_root = m_tree_root->m_avl_tree_node.m_right;
         else
             m_tree_root = m_tree_root->m_avl_tree_node.m_left;
@@ -1066,7 +1066,7 @@ chull_t *__cdecl get_partition_chull(const CollisionAabbTree *tree)
         chull = generate_partition_chull(tree);
         if (!chull)
             return 0;
-        chull_list_add(chull, (unsigned int)tree);
+        chull_list_add(chull, (uintptr_t)tree);
     }
     if (!chull && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\physics\\phys_main.cpp", 1854, 0, "%s", "chull"))
         __debugbreak();

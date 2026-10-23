@@ -5,6 +5,7 @@
 #include <qcommon/cm_trace.h>
 #include <qcommon/statmonitor.h>
 #include <tl/tl_system.h>
+#include <platform/arch_size.h>
 
 #define SURF_TYPECOUNT 31
 
@@ -253,7 +254,7 @@ struct __declspec(align(16)) gjk_aabb_t : gjk_base_t // sizeof=0x80
         virtual bool is_walkable(const phys_vec3 *hit_point, const phys_vec3 *up) override;
         virtual const cbrush_t *get_brush() const override;
 };
-static_assert(sizeof(gjk_aabb_t) == 128);
+static_assert(sizeof(gjk_aabb_t) == BO1_ARCH_SIZE(128, 144));
 
 struct BrushWrapper // sizeof=0x60
 {
@@ -338,7 +339,7 @@ struct gjk_obb_t : gjk_base_t // sizeof=0xA0
         // is_walkable() - gjk_base_t
         // get_brush() - gjk_base_t
 };
-static_assert(sizeof(gjk_obb_t) == 160);
+static_assert(sizeof(gjk_obb_t) == BO1_ARCH_SIZE(160, 176));
 
 struct __declspec(align(8)) gjk_brush_t : gjk_base_t // sizeof=0x60
 {
@@ -397,7 +398,7 @@ struct __declspec(align(8)) gjk_brush_t : gjk_base_t // sizeof=0x60
         virtual bool is_walkable(const phys_vec3 *hit_point, const phys_vec3 *up) override;
         virtual const cbrush_t *get_brush() const override;
 };
-static_assert(sizeof(gjk_brush_t) == 96);
+static_assert(sizeof(gjk_brush_t) == BO1_ABI_SIZE(96, 128, 96, 112));
 
 struct CollisionBorder // sizeof=0x1C
 {
@@ -492,11 +493,9 @@ struct __declspec(align(16)) gjk_partition_t : gjk_base_t // sizeof=0x70
         virtual bool is_walkable(const phys_vec3 *hit_point, const phys_vec3 *up) override;
         // get_brush() - gjk_base_t
 };
-#if defined(_MSC_VER)
-// The Itanium C++ ABI (GCC, clang) packs ninds into gjk_base_t's tail padding (offset 0x48, sizeof 0x60). The engine
-// only ever allocates it with sizeof, so only the MSVC layout is pinned to the exe.
-static_assert(sizeof(gjk_partition_t) == 112);
-#endif
+// The Itanium C++ ABI packs ninds into gjk_base_t's tail padding (offset 0x48 on 32-bit). The engine only ever
+// allocates it with sizeof.
+static_assert(sizeof(gjk_partition_t) == BO1_ABI_SIZE(112, 144, 96, 128));
 
 struct gjk_double_sphere_t : gjk_base_t // sizeof=0x90
 {
@@ -554,7 +553,7 @@ struct gjk_double_sphere_t : gjk_base_t // sizeof=0x90
         // is_walkable() - gjk_base_t
         // get_brush() - gjk_base_t
 };
-static_assert(sizeof(gjk_double_sphere_t) == 144);
+static_assert(sizeof(gjk_double_sphere_t) == BO1_ARCH_SIZE(144, 160));
 
 struct gjk_cylinder_t : gjk_base_t // sizeof=0xA0
 {
@@ -617,7 +616,7 @@ struct gjk_cylinder_t : gjk_base_t // sizeof=0xA0
 
         const phys_vec3 * get_dims(phys_vec3 *result) const;
 };
-static_assert(sizeof(gjk_cylinder_t) == 160);
+static_assert(sizeof(gjk_cylinder_t) == BO1_ARCH_SIZE(160, 176));
 
 struct __declspec(align(8)) gjk_polygon_cylinder_t : gjk_base_t // sizeof=0x80
 {                                                                             // XREF: ?render_gjkcc_collision@@YAXAAY02$$CBM00@Z/r
@@ -739,7 +738,7 @@ struct __declspec(align(8)) gjk_polygon_cylinder_t : gjk_base_t // sizeof=0x80
 
         //gjk_polygon_cylinder_t::poly_verts gjk_polygon_cylinder_t::s_poly_verts
 };
-static_assert(sizeof(gjk_polygon_cylinder_t) == 128);
+static_assert(sizeof(gjk_polygon_cylinder_t) == BO1_ARCH_SIZE(128, 144));
 
 struct gjk_geom_list_t // sizeof=0x8
 {

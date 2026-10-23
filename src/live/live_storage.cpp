@@ -3769,7 +3769,7 @@ int __cdecl LiveStorage_FileShare_VoteRankComparator(unsigned int *arg0, unsigne
         __debugbreak();
     if ( !arg1 && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\live\\live_storage.cpp", 3915, 0, "%s", "arg1") )
         __debugbreak();
-    return arg1[2] - arg0[2];
+    return (unsigned int)((const bdVoteRankStatsInfo *)arg1)->m_entityID - (unsigned int)((const bdVoteRankStatsInfo *)arg0)->m_entityID;
 }
 
 void __cdecl LiveStorage_FileShare_ReadRatingSuccessAction(dwFileShareGetRatingTask *ratingTask)
@@ -3784,7 +3784,7 @@ void __cdecl LiveStorage_FileShare_ReadRatingSuccessAction(dwFileShareGetRatingT
     qsort(
         ratingTask->outStatsInfo,
         *ratingTask->outNumRatingsReceived,
-        0xC8u,
+        sizeof(bdVoteRankStatsInfo),
         (int (__cdecl *)(const void *, const void *))LiveStorage_FileShare_VoteRankComparator);
     if ( ratingTask->successCallback )
         ratingTask->successCallback();

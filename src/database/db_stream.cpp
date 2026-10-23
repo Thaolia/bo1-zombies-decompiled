@@ -1,4 +1,5 @@
 #include "db_stream.h"
+#include "db_ff64.h"
 #include <universal/assertive.h>
 
 XBlock *g_streamBlocks;
@@ -84,7 +85,12 @@ unsigned __int8 *__cdecl DB_AllocStreamPos(int alignment)
     {
         __debugbreak();
     }
-    g_streamPos = (unsigned __int8 *)(~alignment & (unsigned int)&g_streamPos[alignment]);
+    if constexpr (sizeof(void *) == 8)
+    {
+        if ( alignment < (int)DB_FF64_MIN_ALIGNMENT - 1 )
+            alignment = DB_FF64_MIN_ALIGNMENT - 1;
+    }
+    g_streamPos = (unsigned __int8 *)(~(uintptr_t)alignment & (uintptr_t)&g_streamPos[alignment]);
     return g_streamPos;
 }
 
@@ -110,8 +116,8 @@ const void **__cdecl DB_InsertPointer()
     const void **pData; // [esp+0h] [ebp-4h]
 
     DB_PushStreamPos(4u);
-    pData = (const void **)DB_AllocStreamPos(3);
-    DB_IncStreamPos(4);
+    pData = (const void **)DB_AllocStreamPos(sizeof(void *) - 1);
+    DB_IncStreamPos(sizeof(void *));
     DB_PopStreamPos();
     return pData;
 }

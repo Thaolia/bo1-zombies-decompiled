@@ -812,7 +812,7 @@ void __thiscall Scr_ScriptWindow::EnterCallInternal(scriptInstance_t inst)
                 Sys_EndWriteDebugSocket();
         }
         v3 = *(const char **)++codePos;
-        codePos += 4;
+        codePos += sizeof(uintptr_t);
         destCodePos = v3;
         Scr_GetSourcePosOfType(inst, v3 - 1, 4, &pos);
         if ( Sys_IsRemoteDebugServer() )
@@ -951,9 +951,9 @@ void __thiscall Scr_ScriptList::Init(scriptInstance_t inst)
     qsort(
         &scriptWindowsNames[1],
         this->numLines - 1,
-        4u,
+        sizeof(scriptWindowsNames[0]),
         (int (__cdecl *)(const void *, const void *))ConDrawInput_CompareStrings);
-    this->scriptWindows = (Scr_ScriptWindow **)Scr_AllocDebugMem(inst, 4 * this->numLines, "Scr_ScriptList::Init2");
+    this->scriptWindows = (Scr_ScriptWindow **)Scr_AllocDebugMem(inst, sizeof(Scr_ScriptWindow *) * this->numLines, "Scr_ScriptList::Init2");
     memset(&info, 0, sizeof(info));
     Hunk_CheckTempMemoryHighClear();
     Scr_AddSourceBuffer(inst, 0, (char*)"scriptdebugger/help.txt", 0, 0);
@@ -1645,17 +1645,17 @@ void __thiscall Scr_ScriptWatch::EvaluateWatchChildren(
                 compare = v12;
             }
             gDebuggerInstance = inst;
-            qsort(&names[hardcodedCount], count - hardcodedCount, 4u, compare);
+            qsort(&names[hardcodedCount], count - hardcodedCount, sizeof(*(&names[hardcodedCount])), compare);
             oldElements = parentElement->childArrayHead;
             oldChildCount = parentElement->childCount;
             newElements = (Scr_WatchElement_s *)Scr_AllocDebugMem(
                 inst,
-                100 * count,
+                sizeof(Scr_WatchElement_s) * count,
                 "Scr_ScriptWatch::EvaluateWatchChildren3");
-            memset((unsigned __int8 *)&newElements->expr.parseData, 0, 100 * count);
+            memset((unsigned __int8 *)&newElements->expr.parseData, 0, sizeof(Scr_WatchElement_s) * count);
             newElementOldRef = (Scr_WatchElement_s **)Scr_AllocDebugMem(
                 inst,
-                4 * count,
+                sizeof(Scr_WatchElement_s *) * count,
                 "Scr_ScriptWatch::EvaluateWatchChildren");
             v11 = oldElements && parentElement->objectType == oldObjectType;
             sameType = v11;
@@ -2305,11 +2305,11 @@ void __cdecl Scr_ConnectElementChildren(Scr_WatchElement_s *parentElement)
 
 void __cdecl Scr_SortElementChildren(scriptInstance_t inst, Scr_WatchElement_s *parentElement)
 {
-    unsigned int v2; // [esp+0h] [ebp-14h]
+    Scr_WatchElement_s *v2; // [esp+0h] [ebp-14h]
     int newIndex; // [esp+4h] [ebp-10h]
     int newIndexa; // [esp+4h] [ebp-10h]
     Scr_WatchElement_s *newElements; // [esp+8h] [ebp-Ch]
-    unsigned int *elementList; // [esp+Ch] [ebp-8h]
+    Scr_WatchElement_s **elementList; // [esp+Ch] [ebp-8h]
     int count; // [esp+10h] [ebp-4h]
 
     if ( !gScrDebuggerGlob[inst].debugger_inited_system
@@ -2334,12 +2334,12 @@ void __cdecl Scr_SortElementChildren(scriptInstance_t inst, Scr_WatchElement_s *
     }
     count = parentElement->childCount;
     newElements = parentElement->childArrayHead;
-    elementList = Scr_AllocDebugMem(inst, 4 * count, "Scr_SortElementChildren");
+    elementList = (Scr_WatchElement_s **)Scr_AllocDebugMem(inst, sizeof(Scr_WatchElement_s *) * count, "Scr_SortElementChildren");
     for ( newIndex = 0; newIndex < count; ++newIndex )
-        elementList[newIndex] = (unsigned int)&newElements[newIndex];
+        elementList[newIndex] = &newElements[newIndex];
     Sys_EnterCriticalSection(CRITSECT_SCRIPT_DEBUGGER_SORT);
     sortInst = inst;
-    qsort(elementList, count, 4u, (int (__cdecl *)(const void *, const void *))CompareThreadElements);
+    qsort(elementList, count, sizeof(Scr_WatchElement_s *), (int (__cdecl *)(const void *, const void *))CompareThreadElements);
     Sys_LeaveCriticalSection(CRITSECT_SCRIPT_DEBUGGER_SORT);
     for ( newIndexa = 0; newIndexa < count; ++newIndexa )
     {
@@ -2347,25 +2347,25 @@ void __cdecl Scr_SortElementChildren(scriptInstance_t inst, Scr_WatchElement_s *
             v2 = 0;
         else
             v2 = elementList[newIndexa + 1];
-        *(unsigned int *)(elementList[newIndexa] + 96) = v2;
+        elementList[newIndexa]->next = v2;
     }
-    parentElement->childHead = (Scr_WatchElement_s *)*elementList;
+    parentElement->childHead = *elementList;
     Scr_FreeDebugMem(inst, (char *)elementList);
 }
 
-int __cdecl CompareThreadElements(int *arg1, int *arg2)
+int __cdecl CompareThreadElements(Scr_WatchElement_s **arg1, Scr_WatchElement_s **arg2)
 {
-    int elements; // [esp+8h] [ebp-8h]
-    int elements_4; // [esp+Ch] [ebp-4h]
+    Scr_WatchElement_s *elements; // [esp+8h] [ebp-8h]
+    Scr_WatchElement_s *elements_4; // [esp+Ch] [ebp-4h]
 
     elements = *arg1;
     elements_4 = *arg2;
-    if ( gScrParserPub[sortInst].sourceBufferLookup[*(unsigned int *)(*arg1 + 72)].sortedIndex != gScrParserPub[sortInst].sourceBufferLookup[*(unsigned int *)(*arg2 + 72)].sortedIndex )
-        return gScrParserPub[sortInst].sourceBufferLookup[*(unsigned int *)(*arg1 + 72)].sortedIndex
-                 - gScrParserPub[sortInst].sourceBufferLookup[*(unsigned int *)(*arg2 + 72)].sortedIndex;
-    if ( *(unsigned int *)(elements + 76) == *(unsigned int *)(elements_4 + 76) )
-        return *(unsigned int *)(elements + 48) - *(unsigned int *)(elements_4 + 48);
-    return *(unsigned int *)(elements + 76) - *(unsigned int *)(elements_4 + 76);
+    if ( gScrParserPub[sortInst].sourceBufferLookup[(*arg1)->bufferIndex].sortedIndex != gScrParserPub[sortInst].sourceBufferLookup[(*arg2)->bufferIndex].sortedIndex )
+        return gScrParserPub[sortInst].sourceBufferLookup[(*arg1)->bufferIndex].sortedIndex
+                 - gScrParserPub[sortInst].sourceBufferLookup[(*arg2)->bufferIndex].sortedIndex;
+    if ( elements->sourcePos == elements_4->sourcePos )
+        return elements->fieldName - elements_4->fieldName;
+    return elements->sourcePos - elements_4->sourcePos;
 }
 
 char __thiscall Scr_ScriptWatch::PostEvaluateWatchElement(
@@ -2612,7 +2612,7 @@ Scr_WatchElement_s *__cdecl Scr_CreateWatchElement(
 {
     Scr_WatchElement_s *element; // [esp+0h] [ebp-4h]
 
-    element = (Scr_WatchElement_s *)Scr_AllocDebugMem(inst, 100, name);
+    element = (Scr_WatchElement_s *)Scr_AllocDebugMem(inst, sizeof(Scr_WatchElement_s), name);
     memset((unsigned __int8 *)&element->expr.parseData, 0, sizeof(Scr_WatchElement_s));
     element->valueText = CopyString((char *)"", "Scr_CreateWatchElement", 0, inst);
     element->refText = CopyString(text, "Scr_CreateWatchElement", 0, inst);
@@ -2639,8 +2639,8 @@ void __thiscall Scr_ScriptWatch::AddElement(
     {
         scriptExpr.exprHead = 0;
         Scr_CompileText(inst, text, &scriptExpr);
-        v4 = *(_BYTE *)scriptExpr.parseData.stringValue;
-        if (*(_BYTE *)scriptExpr.parseData.stringValue == 85)
+        v4 = *(_BYTE *)scriptExpr.parseData.node;
+        if (*(_BYTE *)scriptExpr.parseData.node == 85)
         {
             if (!gScrVarPub[inst].evaluate
                 && !Assert_MyHandler(
@@ -2653,7 +2653,7 @@ void __thiscall Scr_ScriptWatch::AddElement(
                 __debugbreak();
             }
             gScrVarPub[inst].evaluate = 0;
-            Scr_ExecCode(inst, *(char **)(scriptExpr.parseData.stringValue + 4), this->localId);
+            Scr_ExecCode(inst, (char *)scriptExpr.parseData.node[1].codePosValue, this->localId);
             gScrVarPub[inst].evaluate = 1;
             SL_ShutdownSystem(inst, 2u);
             Scr_FreeDebugExpr(inst, &scriptExpr);
@@ -3003,7 +3003,7 @@ bool __cdecl Scr_RefToVariable(scriptInstance_t inst, unsigned int id, int isObj
     Scr_WatchElementNode_s **pElementNode; // [esp+Ch] [ebp-1Ch]
     Scr_WatchElementNode_s *elementNodeNext; // [esp+10h] [ebp-18h]
     Scr_WatchElementDoubleNode_t *breakpoints; // [esp+14h] [ebp-14h]
-    unsigned int *elementNodec; // [esp+18h] [ebp-10h]
+    Scr_WatchElementNode_s *elementNodec; // [esp+18h] [ebp-10h]
     Scr_WatchElementNode_s *elementNode; // [esp+18h] [ebp-10h]
     Scr_WatchElementNode_s *elementNodea; // [esp+18h] [ebp-10h]
     Scr_WatchElementNode_s *elementNodeb; // [esp+18h] [ebp-10h]
@@ -3044,7 +3044,7 @@ bool __cdecl Scr_RefToVariable(scriptInstance_t inst, unsigned int id, int isObj
     {
         if (!gScrDebuggerGlob[inst].add)
             return 0;
-        breakpoints = (Scr_WatchElementDoubleNode_t *)Scr_AllocDebugMem(inst, 8, "Scr_RefToVariable1");
+        breakpoints = (Scr_WatchElementDoubleNode_t *)Scr_AllocDebugMem(inst, sizeof(Scr_WatchElementDoubleNode_t), "Scr_RefToVariable1");
         breakpoints->list = 0;
         breakpoints->removedList = 0;
         gScrDebuggerGlob[inst].variableBreakpoints[ida] = breakpoints;
@@ -3061,10 +3061,10 @@ bool __cdecl Scr_RefToVariable(scriptInstance_t inst, unsigned int id, int isObj
     {
         if (*pElementNode)
             return 0;
-        elementNodec = Scr_AllocDebugMem(inst, 8, "Scr_RefToVariable2");
-        *elementNodec = (unsigned int)gScrDebuggerGlob[inst].currentElement;
-        elementNodec[1] = (unsigned int)breakpoints->list;
-        breakpoints->list = (Scr_WatchElementNode_s *)elementNodec;
+        elementNodec = (Scr_WatchElementNode_s *)Scr_AllocDebugMem(inst, sizeof(Scr_WatchElementNode_s), "Scr_RefToVariable2");
+        elementNodec->element = gScrDebuggerGlob[inst].currentElement;
+        elementNodec->next = breakpoints->list;
+        breakpoints->list = elementNodec;
     }
     else
     {
@@ -3423,19 +3423,19 @@ void __cdecl Scr_InitDebuggerMain(scriptInstance_t inst)
         if ( g_scrVarChildSize[inst] != 0x3FFFE )
         {
             gScrDebuggerGlob[inst].variableBreakpoints = (Scr_WatchElementDoubleNode_t **)Z_VirtualAlloc(
-                4 * VARIABLELIST_SIZE(inst), "gScrDebuggerGlob[inst].variableBreakpoints", 0);
+                sizeof(Scr_WatchElementDoubleNode_t *) * VARIABLELIST_SIZE(inst), "gScrDebuggerGlob[inst].variableBreakpoints", 0);
             if ( !gScrDebuggerGlob[inst].variableBreakpoints )
-                Com_Error(ERR_FATAL, "mod: out of memory for the script debugger breakpoints (%u bytes)", 4 * VARIABLELIST_SIZE(inst));
-            memset((unsigned __int8 *)gScrDebuggerGlob[inst].variableBreakpoints, 0, 4 * VARIABLELIST_SIZE(inst));
+                Com_Error(ERR_FATAL, "mod: out of memory for the script debugger breakpoints (%u bytes)", (unsigned int)(sizeof(Scr_WatchElementDoubleNode_t *) * VARIABLELIST_SIZE(inst)));
+            memset((unsigned __int8 *)gScrDebuggerGlob[inst].variableBreakpoints, 0, sizeof(Scr_WatchElementDoubleNode_t *) * VARIABLELIST_SIZE(inst));
         }
         else
         {
             gScrDebuggerGlob[inst].variableBreakpoints = (Scr_WatchElementDoubleNode_t **)Hunk_UserAlloc(
                                                                                                                                                                             g_DebugHunkUser,
-                                                                                                                                                                            4 * VARIABLELIST_SIZE(inst) /* retail 1179640 */,
-                                                                                                                                                                            4,
+                                                                                                                                                                            sizeof(Scr_WatchElementDoubleNode_t *) * VARIABLELIST_SIZE(inst) /* retail 1179640 */,
+                                                                                                                                                                            alignof(Scr_WatchElementDoubleNode_t *),
                                                                                                                                                                             "gScrDebuggerGlob[inst].variableBreakpoints");
-            memset((unsigned __int8 *)gScrDebuggerGlob[inst].variableBreakpoints, 0, 4 * VARIABLELIST_SIZE(inst));
+            memset((unsigned __int8 *)gScrDebuggerGlob[inst].variableBreakpoints, 0, sizeof(Scr_WatchElementDoubleNode_t *) * VARIABLELIST_SIZE(inst));
         }
         gScrDebuggerGlob[inst].assignHead = 0;
         gScrDebuggerGlob[inst].assignHeadCodePos = 0;
@@ -3672,7 +3672,7 @@ void __cdecl Scr_AddAssignmentPos(scriptInstance_t inst, char *codePos)
     if (gScrCompilePub[inst].developer_statement != 2 && gScrDebuggerGlob[inst].assignHeadCodePos != codePos)
     {
         gScrDebuggerGlob[inst].assignHeadCodePos = codePos;
-        opcodeElement = (Scr_OpcodeList_s *)Hunk_UserAlloc(g_DebugHunkUser, 8, 4, "Scr_AddAssignmentPos");
+        opcodeElement = (Scr_OpcodeList_s *)Hunk_UserAlloc(g_DebugHunkUser, sizeof(Scr_OpcodeList_s), alignof(Scr_OpcodeList_s), "Scr_AddAssignmentPos");
         opcodeElement->codePos = codePos;
         opcodeElement->next = gScrDebuggerGlob[inst].assignHead;
         gScrDebuggerGlob[inst].assignHead = opcodeElement;

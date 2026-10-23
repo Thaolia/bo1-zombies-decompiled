@@ -358,17 +358,17 @@ BuiltinFunctionDef client_functions[154] =
 
 const cent_field_s cent_fields[25] =
 {
-  { "origin", 48, { 12 }, F_VECTOR, &CScr_SetOrigin, NULL },
-  { "angles", 60, { 12 }, F_VECTOR, &CScr_SetAngles, NULL },
-  { "weapon", 690, { 2 }, F_STRING, &CScr_ReadOnly, &CScr_GetWeaponName },
-  { "targetname", 694, { 2 }, F_STRING, NULL, NULL },
-  { "species", 576, { 4 }, F_STRING, &CScr_ReadOnly, &CScr_GetSpecies },
-  { "isdog", 576, { 4 }, F_INT, &CScr_ReadOnly, &CScr_GetIsDog },
-  { "type", 678, { 2 }, F_STRING, &CScr_ReadOnly, &CScr_GetType },
-  { "model", 678, { 2 }, F_STRING, &CScr_ReadOnly, &CScr_GetModel },
+  { "origin", offsetof(centity_s, pose.origin), { 12 }, F_VECTOR, &CScr_SetOrigin, NULL },
+  { "angles", offsetof(centity_s, pose.angles), { 12 }, F_VECTOR, &CScr_SetAngles, NULL },
+  { "weapon", offsetof(centity_s, nextState.weapon), { 2 }, F_STRING, &CScr_ReadOnly, &CScr_GetWeaponName },
+  { "targetname", offsetof(centity_s, nextState.targetname), { 2 }, F_STRING, NULL, NULL },
+  { "species", offsetof(centity_s, nextState.lerp.u.actor.species), { 4 }, F_STRING, &CScr_ReadOnly, &CScr_GetSpecies },
+  { "isdog", offsetof(centity_s, nextState.lerp.u.actor.species), { 4 }, F_INT, &CScr_ReadOnly, &CScr_GetIsDog },
+  { "type", offsetof(centity_s, nextState.eType), { 2 }, F_STRING, &CScr_ReadOnly, &CScr_GetType },
+  { "model", offsetof(centity_s, nextState.eType), { 2 }, F_STRING, &CScr_ReadOnly, &CScr_GetModel },
   {
     "vehicletype",
-    0,
+    offsetof(vehicle_info_t, name),
     { 64 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -376,7 +376,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "vehicleclass",
-    624,
+    offsetof(centity_s, nextState.vehicleState.vehicleInfoIndex),
     { 1 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -384,7 +384,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "treadfxname",
-    624,
+    offsetof(centity_s, nextState.vehicleState.vehicleInfoIndex),
     { 1 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -392,7 +392,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "treadfxnamearray",
-    624,
+    offsetof(centity_s, nextState.vehicleState.vehicleInfoIndex),
     { 1 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -400,7 +400,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "exhaustfxname",
-    3984,
+    offsetof(vehicle_info_t, exhaustFx),
     { 64 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -408,7 +408,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "oneexhaust",
-    4048,
+    offsetof(vehicle_info_t, oneExhaust),
     { 4 },
     F_INT,
     &CScr_ReadOnly,
@@ -416,7 +416,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "rotormainidlefxname",
-    4052,
+    offsetof(vehicle_info_t, rotorMainIdleFx),
     { 64 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -424,7 +424,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "rotormainstartfxname",
-    4116,
+    offsetof(vehicle_info_t, rotorMainStartFx),
     { 64 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -432,7 +432,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "rotormainrunningfxname",
-    4180,
+    offsetof(vehicle_info_t, rotorMainRunningFx),
     { 64 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -440,7 +440,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "rotormainstopfxname",
-    4244,
+    offsetof(vehicle_info_t, rotorMainStopFx),
     { 64 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -448,7 +448,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "rotortailidlefxname",
-    4308,
+    offsetof(vehicle_info_t, rotorTailIdleFx),
     { 64 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -456,7 +456,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "rotortailstartfxname",
-    4372,
+    offsetof(vehicle_info_t, rotorTailStartFx),
     { 64 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -464,7 +464,7 @@ const cent_field_s cent_fields[25] =
   },
   {
     "rotortailrunningfxname",
-    4436,
+    offsetof(vehicle_info_t, rotorTailRunningFx),
     { 64 },
     F_LSTRING,
     &CScr_ReadOnly,
@@ -472,14 +472,14 @@ const cent_field_s cent_fields[25] =
   },
   {
     "rotortailstopfxname",
-    4500,
+    offsetof(vehicle_info_t, rotorTailStopFx),
     { 64 },
     F_LSTRING,
     &CScr_ReadOnly,
     &VehicleCScr_GetVehicleInfoField
   },
-  { "enemy", 584, { 4 }, F_ENTITY, &CScr_ReadOnly, &CScr_GetEntityByIndex },
-  { "team", 703, { 1 }, F_STRING, &CScr_ReadOnly, &CScr_GetTeamName },
+  { "enemy", offsetof(centity_s, nextState.lerp.u.actor.enemy), { 4 }, F_ENTITY, &CScr_ReadOnly, &CScr_GetEntityByIndex },
+  { "team", offsetof(centity_s, nextState.faction), { 1 }, F_STRING, &CScr_ReadOnly, &CScr_GetTeamName },
   { NULL, 0, { 0 }, F_INT, NULL, NULL }
 };
 
@@ -946,7 +946,7 @@ unsigned int __cdecl CScr_GetFakeEntity(unsigned int localClientNum)
             CG_SetFakeEntInUse(localClientNum, cent);
             cent->cent.nextState.number = i + 1024;
             cent->cent.pose.localClientNum = localClientNum;
-            *((unsigned int *)&cent->cent + 201) |= 2u;
+            cent->cent.flagWord |= 2u;
             return i;
         }
     }
@@ -3782,7 +3782,7 @@ void CScr_SpawnPlane()
                     __debugbreak();
                 }
                 ent->nextState.index.brushmodel = modelIndexa;
-                *((unsigned int *)ent + 201) |= 2u;
+                ent->flagWord |= 2u;
             }
         }
         if ( !strcmp(team, "free") )
@@ -3798,7 +3798,7 @@ void CScr_SpawnPlane()
             teamEnum = TEAM_ALLIES;
         }
         AssignToSmallerType<unsigned char>(&ent->nextState.faction.iHeadIconTeam, teamEnum | (4 * owner));
-        *((unsigned int *)ent + 201) |= 0x40000u;
+        ent->flagWord |= 0x40000u;
         v0 = Material_Register((char *)compassMaterialName, 7);
         ent->compassMaterial = v0;
         CScr_AddEntity(ent, localClientNum);
@@ -5355,7 +5355,7 @@ void __cdecl CScr_GetGenericEnt(int localClientNum, unsigned int offset, const c
     for ( i = 0; i < EntNum_ClEnd(); i = EntNum_NextCl(i) ) // mod (L49): retail i < 1536; networked 1537+
     {
         ent = CG_GetEntity(localClientNum, i);
-        if ( ((*((unsigned int *)ent + 201) >> 1) & 1) != 0 )
+        if ( ((ent->flagWord >> 1) & 1) != 0 )
         {
             ofs = cent_fields[offset].ofs;
             if ( *(unsigned __int16 *)((char *)&ent->pose.lightingHandle + ofs) )
@@ -5437,7 +5437,7 @@ void __cdecl CScr_GetEntNum()
     localClientNum = CScr_GetLocalClientNum(0);
     centNum.intValue = Scr_GetInt(1u, SCRIPTINSTANCE_CLIENT);
     cent = CG_GetEntity(localClientNum, centNum.intValue);
-    if ( ((*((unsigned int *)cent + 201) >> 1) & 1) == 0 )
+    if ( ((cent->flagWord >> 1) & 1) == 0 )
         Scr_Error(SCRIPTINSTANCE_CLIENT, "GetEntNum used on nonexistant ent.", 0);
     CScr_AddEntity(cent, localClientNum);
 }
@@ -5464,7 +5464,7 @@ void __cdecl CScr_GetEntArray()
         for ( i = 0; i < EntNum_ClEnd(); i = EntNum_NextCl(i) ) // mod (L49): retail i < 1536; networked 1537+
         {
             cent = CG_GetEntity(localClientNum, i);
-            if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 )
+            if ( ((cent->flagWord >> 1) & 1) != 0 )
             {
                 CScr_AddEntity(cent, localClientNum);
                 Scr_AddArray(SCRIPTINSTANCE_CLIENT);
@@ -5496,7 +5496,7 @@ void __cdecl CScr_GetEntArray()
                 for ( ia = 0; ia < EntNum_ClEnd(); ia = EntNum_NextCl(ia) ) // mod (L49): retail ia < 1536; networked 1537+
                 {
                     centa = CG_GetEntity(localClientNum, ia);
-                    if ( ((*((unsigned int *)centa + 201) >> 1) & 1) != 0 )
+                    if ( ((centa->flagWord >> 1) & 1) != 0 )
                     {
                         ofs = cent_fields[offset].ofs;
                         if ( *(unsigned __int16 *)((char *)&centa->pose.lightingHandle + ofs) )
@@ -5539,7 +5539,7 @@ void __cdecl CScr_GetLocalPlayers()
             cGameGlob = CG_GetLocalClientGlobals(i);
             if ( cGameGlob->nextSnap )
             {
-                if ( ((*((unsigned int *)&cGameGlob->predictedPlayerEntity + 201) >> 1) & 1) != 0 )
+                if ( ((cGameGlob->predictedPlayerEntity.flagWord >> 1) & 1) != 0 )
                 {
                     CScr_AddEntity(&cGameGlob->predictedPlayerEntity, i);
                     Scr_AddArray(SCRIPTINSTANCE_CLIENT);
@@ -6110,11 +6110,11 @@ void __cdecl CScrCmd_Delete(scr_entref_t entref)
     CScr_NotifyNum(entref.client, entref.entnum, 0, cscr_const.death, 0);
     CScr_Notify(entref.client, &fcent->cent, cscr_const.entityshutdown, 0);
     if ( CL_LocalClient_IsFirstActive(entref.client) )
-        v1 = fcent != (fake_centity_s *)-4 && ((*((unsigned int *)&fcent->cent + 201) >> 8) & 1) != 0;
+        v1 = fcent != (fake_centity_s *)-(intptr_t)offsetof(fake_centity_s, cent) && ((fcent->cent.flagWord >> 8) & 1) != 0;
     else
         v1 = 0;
     if ( v1 )
-        *((unsigned int *)&fcent->cent + 201) &= ~0x100u;
+        fcent->cent.flagWord &= ~0x100u;
     CScr_FreeEntity(&fcent->cent, entref.client);
     fcent->flags |= 4u;
 }
@@ -6154,11 +6154,11 @@ void __cdecl CScrCmd_ForceDelete(scr_entref_t entref)
     CScr_NotifyNum(entref.client, entref.entnum, 0, cscr_const.death, 0);
     CScr_Notify(entref.client, &fcent->cent, cscr_const.entityshutdown, 0);
     if ( CL_LocalClient_IsFirstActive(entref.client) )
-        v1 = fcent != (fake_centity_s *)-4 && ((*((unsigned int *)&fcent->cent + 201) >> 8) & 1) != 0;
+        v1 = fcent != (fake_centity_s *)-(intptr_t)offsetof(fake_centity_s, cent) && ((fcent->cent.flagWord >> 8) & 1) != 0;
     else
         v1 = 0;
     if ( v1 )
-        *((unsigned int *)&fcent->cent + 201) &= ~0x100u;
+        fcent->cent.flagWord &= ~0x100u;
     CG_Free(entref.client, entref.entnum);
 }
 
@@ -6223,7 +6223,7 @@ void __cdecl CScrCmd_SetModel(scr_entref_t entref)
                 __debugbreak();
             }
             cent->nextState.index.brushmodel = modelIndexa;
-            *((unsigned int *)cent + 201) |= 2u;
+            cent->flagWord |= 2u;
         }
         CG_ScriptMover_GetDObj(entref.client, cent);
     }
@@ -9318,7 +9318,7 @@ void __cdecl CScr_SetCompassIcon(scr_entref_t entref)
             CG_GetFakeEntity(entref.client, entref.entnum);
     }
     String = Scr_GetString(0, SCRIPTINSTANCE_CLIENT);
-    *((unsigned int *)pSelf + 201) |= 0x40000u;
+    pSelf->flagWord |= 0x40000u;
     pSelf->compassMaterial = Material_Register(String, 7);
 }
 
@@ -9380,7 +9380,7 @@ void __cdecl CScrCmd_IsTouching(scr_entref_t entref)
 
     ent = CG_GetEntity(entref.client, entref.entnum);
     if (ent->nextState.solid == 0xFFFFFF
-        || ((*((unsigned int *)ent + 201) >> 15) & 1) != 0 && (*((unsigned int *)ent + 201) & 0x10000) != 0 )
+        || ((ent->flagWord >> 15) & 1) != 0 && (ent->flagWord & 0x10000) != 0 )
     {
         pTemp = ent;
         tempEntref.client = entref.client;
@@ -9391,7 +9391,7 @@ void __cdecl CScrCmd_IsTouching(scr_entref_t entref)
         otherEntref = v7;
         ent = CG_GetEntity(v7.client, v7.entnum);
         if (ent->nextState.solid == 0xFFFFFF
-            || ((*((unsigned int *)ent + 201) >> 15) & 1) != 0 && (*((unsigned int *)ent + 201) & 0x10000) != 0 )
+            || ((ent->flagWord >> 15) & 1) != 0 && (ent->flagWord & 0x10000) != 0 )
         {
             Scr_Error(SCRIPTINSTANCE_CLIENT, "istouching cannot be called on 2 brush/cylinder entities", 0);
         }
@@ -10465,9 +10465,9 @@ bool __cdecl CG_EntityContact(const float *mins, const float *maxs, const centit
     trace_t trace; // [esp+1Ch] [ebp-44h] BYREF
     float center[2]; // [esp+58h] [ebp-8h]
 
-    if ( ((*((unsigned int *)cent + 201) >> 15) & 1) == 0 )
+    if ( ((cent->flagWord >> 15) & 1) == 0 )
         return 0;
-    if ( (*((unsigned int *)cent + 201) & 0x10000) != 0 )
+    if ( (cent->flagWord & 0x10000) != 0 )
     {
         if ( cent->pose.actor.height != 0.0
             && !Assert_MyHandler(
@@ -10613,7 +10613,7 @@ void __cdecl CG_DoTouchTriggers(centity_s *ent, int localClientNum)
         for ( i = 0; i < v23; ++i )
         {
             other = CG_GetEntity(localClientNum, entityList[i]);
-            if ( ((*((unsigned int *)other + 201) >> 15) & 1) != 0
+            if ( ((other->flagWord >> 15) & 1) != 0
                 && (contentMask & other->pose.fx.triggerTime) != 0
                 && CG_EntityContact(areaMins, areaMaxs, other) )
             {
@@ -10647,11 +10647,11 @@ void __cdecl CScr_GetEntityField(unsigned int entnum, int clientNum, unsigned in
     {
         __debugbreak();
     }
-    if ( ((*((unsigned int *)&cgArray[clientNum].predictedPlayerEntity + 201) >> 1) & 1) != 0
+    if ( ((cgArray[clientNum].predictedPlayerEntity.flagWord >> 1) & 1) != 0
         && cgArray[clientNum].predictedPlayerEntity.nextState.number == entnum )
     {
         ent = &cgArray[clientNum].predictedPlayerEntity;
-        if ( ((*((unsigned int *)&cgArray[clientNum].predictedPlayerEntity + 201) >> 1) & 1) == 0 )
+        if ( ((cgArray[clientNum].predictedPlayerEntity.flagWord >> 1) & 1) == 0 )
         {
             error = SEH_SafeTranslateString("EXE_ENTITY_BEFORE_SNAPSHOT");
             Scr_Error(SCRIPTINSTANCE_CLIENT, error, 1);

@@ -5,6 +5,7 @@
 #include <gfx_d3d/fxprimitives.h>
 #include <gfx_d3d/r_dpvs.h>
 #include <gfx_d3d/r_model_lighting.h>
+#include <platform/arch_size.h>
 
 struct GfxPackedVertex;
 
@@ -102,7 +103,7 @@ struct ShardGroup // sizeof=0x54
         int mod);
     int __thiscall TracePoint(float *p0, const float *p1);
 };
-static_assert(sizeof(ShardGroup) == 84);
+static_assert(sizeof(ShardGroup) == BO1_ARCH_SIZE(84, 104));
 
 struct GlassShardMeshVertex // sizeof=0x2
 {
@@ -256,7 +257,7 @@ struct GlassShard // sizeof=0x90
     GlassShard::Mesh mesh;
     float axis[3][3];
     float origin[3];
-    int physObjId;
+    intptr_t physObjId;
     GlassPhysics *glassPhysics;
     float timeUntilAction;
     float worldBBoxMin[3];
@@ -357,7 +358,7 @@ struct GlassShard // sizeof=0x90
     static int lastFreeMemorySize;
     static int removeReasonsCount[BO1_TOTAL];
 };
-static_assert(sizeof(GlassShard) == 144);
+static_assert(sizeof(GlassShard) == BO1_ARCH_SIZE(144, 192));
 
 void GlassShard_Defrag(void *ptr); // changed from static member func
 

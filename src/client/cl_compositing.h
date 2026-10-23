@@ -39,7 +39,7 @@ struct __declspec(align(4)) CompositeJob // sizeof=0x19C
     // padding byte
 };
 
-void __cdecl CL_CompositeSetupImageCallback(unsigned int *param);
+void __cdecl CL_CompositeSetupImageCallback(GfxImage **param);
 GfxImage *__cdecl CL_CompositeSetupImage();
 void __cdecl CL_CompositeReleaseImage(GfxImage *image);
 bool __cdecl CL_CompositeValidateImage(GfxImage *image);

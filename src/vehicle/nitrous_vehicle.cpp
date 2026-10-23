@@ -522,7 +522,7 @@ void __thiscall NitrousVehicle::pause_physics(bool shutdown)
         }
         NitrousVehicle::cleanup_path();
         this->m_flags |= 1u;
-        Phys_ObjDestroy(0, (int)this->m_phys_user_data);
+        Phys_ObjDestroy(0, (intptr_t)this->m_phys_user_data);
         this->m_phys_user_data = 0;
         Sys_LeaveCriticalSection(CRITSECT_PHYSICS_UPDATE);
     }
@@ -2076,6 +2076,10 @@ void __cdecl NitrousVehicle::frame_epilog_all_systems(float delta_t)
     }
 }
 
+static_assert(offsetof(phys_free_list<NitrousVehicle>::T_internal, m_data) == BO1_ARCH_SIZE(16, offsetof(phys_free_list<NitrousVehicle>::T_internal, m_data)));
+static_assert(offsetof(NitrousVehicle, id) == BO1_ARCH_SIZE(976, offsetof(NitrousVehicle, id)));
+static_assert(offsetof(NitrousVehicle, refcount) == BO1_ARCH_SIZE(980, offsetof(NitrousVehicle, refcount)));
+
 NitrousVehicle *__cdecl NitrousVehicle::add_vehicle(int id)
 {
     phys_free_list<NitrousVehicle> *i; // [esp+24h] [ebp-8h]
@@ -2087,10 +2091,12 @@ NitrousVehicle *__cdecl NitrousVehicle::add_vehicle(int id)
             &g_rb_vehicle_list != i;
             i = (phys_free_list<NitrousVehicle> *)i->m_dummy_head.m_next_T_internal)
         {
-            if (i->m_ptr_list[244] == (NitrousVehicle *)id)
+            vehicle = &((phys_free_list<NitrousVehicle>::T_internal *)i)->m_data;
+            if (vehicle->id == id)
             {
-                ++i->m_ptr_list[245];
-                return (NitrousVehicle*)i->m_ptr_list;
+                // The decompiled form bumped refcount through a NitrousVehicle pointer, i.e. by the retail size.
+                vehicle->refcount += 0x440;
+                return vehicle;
             }
         }
     }
@@ -2317,10 +2323,8 @@ void    NitrousVehicle::debug_render()
     float v90; // [esp+50Ch] [ebp-144h]
     float v91; // [esp+510h] [ebp-140h]
     phys_vec3 v92; // [esp+514h] [ebp-13Ch] BYREF
-    float v93; // [esp+524h] [ebp-12Ch] BYREF
-    phys_vec3 v94; // [esp+528h] [ebp-128h] BYREF
-    float v95; // [esp+538h] [ebp-118h]
-    float v96; // [esp+53Ch] [ebp-114h]
+    phys_vec3 v93; // [esp+524h] [ebp-12Ch] BYREF
+    phys_vec3 v94; // [esp+534h] [ebp-11Ch] BYREF
     float v97; // [esp+548h] [ebp-108h]
     float v98; // [esp+54Ch] [ebp-104h]
     float v99; // [esp+550h] [ebp-100h]
@@ -2390,30 +2394,30 @@ void    NitrousVehicle::debug_render()
             v99 = 0.5 * dim.x;
             v98 = 0.5 * dim.y;
             v97 = 0.5 * dim.z;
-            v94.w = 0.5 * dim.x;
-            v95 = 0.5 * dim.y;
-            v96 = 0.5 * dim.z;
-            Phys_DebugBox(&transform, (phys_vec3 *)&v94.w, colorGreen);
+            v94.x = 0.5 * dim.x;
+            v94.y = 0.5 * dim.y;
+            v94.z = 0.5 * dim.z;
+            Phys_DebugBox(&transform, &v94, colorGreen);
         }
         if (thisa->m_parameter->m_buoyancybox_min[0] != 0.0)
         {
-            Phys_Vec3ToNitrousVec(thisa->m_parameter->m_buoyancybox_min, (phys_vec3 *)&v93);
+            Phys_Vec3ToNitrousVec(thisa->m_parameter->m_buoyancybox_min, &v93);
             Phys_Vec3ToNitrousVec(thisa->m_parameter->m_buoyancybox_max, &v92);
-            v91 = v92.x - v93;
-            v90 = v92.y - v94.x;
-            v89 = v92.z - v94.y;
-            v86 = v92.x - v93;
-            v87 = v92.y - v94.x;
-            v88 = v92.z - v94.y;
-            v85 = v92.x + v93;
-            v84 = v92.y + v94.x;
-            v83 = v92.z + v94.y;
-            v80 = v92.x + v93;
-            v81 = v92.y + v94.x;
-            v82 = v92.z + v94.y;
-            v79 = 0.5 * (float)(v92.x + v93);
-            v78 = 0.5 * (float)(v92.y + v94.x);
-            v77 = 0.5 * (float)(v92.z + v94.y);
+            v91 = v92.x - v93.x;
+            v90 = v92.y - v93.y;
+            v89 = v92.z - v93.z;
+            v86 = v92.x - v93.x;
+            v87 = v92.y - v93.y;
+            v88 = v92.z - v93.z;
+            v85 = v92.x + v93.x;
+            v84 = v92.y + v93.y;
+            v83 = v92.z + v93.z;
+            v80 = v92.x + v93.x;
+            v81 = v92.y + v93.y;
+            v82 = v92.z + v93.z;
+            v79 = 0.5 * (float)(v92.x + v93.x);
+            v78 = 0.5 * (float)(v92.y + v93.y);
+            v77 = 0.5 * (float)(v92.z + v93.z);
             v76.x = v79;
             v76.y = v78;
             v76.z = v77;
@@ -3412,7 +3416,7 @@ void __thiscall NitrousVehicle::GetEntityPose(
     {
         if ( isDriver )
         {
-            Phys_ObjGetInterpolatedState((int)this->m_phys_user_data, rbPosition, rbRotation);
+            Phys_ObjGetInterpolatedState((intptr_t)this->m_phys_user_data, rbPosition, rbRotation);
             UnitQuatToAngles(rbRotation, rbAngles);
             *origin = rbPosition[0];
             origin[1] = rbPosition[1];
@@ -3456,7 +3460,7 @@ void __thiscall NitrousVehicle::GetEntityPose(
                 AnglesSubtract(this->m_networkErrorAngles, reduction, this->m_networkErrorAngles);
             }
             this->m_lastErrorReductionTime = curTime;
-            Phys_ObjGetInterpolatedState((int)this->m_phys_user_data, rbPosition, rbRotation);
+            Phys_ObjGetInterpolatedState((intptr_t)this->m_phys_user_data, rbPosition, rbRotation);
             UnitQuatToAngles(rbRotation, rbAngles);
             rbPosition[0] = rbPosition[0] + this->m_networkErrorOrigin[0];
             rbPosition[1] = rbPosition[1] + this->m_networkErrorOrigin[1];
@@ -3597,11 +3601,12 @@ void __cdecl G_ClearVehicleInputs()
                     &g_rb_vehicle_list != (phys_free_list<NitrousVehicle> *)i;
                     i = i->m_next_T_internal )
         {
-            if ( i[70].m_next_T_internal
-                && i[70].m_next_T_internal[43].m_prev_T_internal
-                && VEH_GetSeatOccupantEntNum((gentity_s *)i[70].m_next_T_internal, 0) == 1023 )
+            NitrousVehicle *veh = phys_free_list<NitrousVehicle>::data_of(i);
+            if ( veh->m_owner
+                && veh->m_owner->scr_vehicle
+                && VEH_GetSeatOccupantEntNum(veh->m_owner, 0) == 1023 )
             {
-                memset((unsigned __int8 *)&i[100], 0, 0x34u);
+                memset(&veh->mVehicleController.m_cmd, 0, sizeof(veh->mVehicleController.m_cmd));
             }
         }
         Sys_LeaveCriticalSection(CRITSECT_PHYSICS);
@@ -3638,7 +3643,7 @@ void __cdecl Vehicle_Launch(int localClientNum, centity_s *cent, float *hitp, co
             scaledForce[0] = value * *force;
             scaledForce[1] = value * force[1];
             scaledForce[2] = value * force[2];
-            Phys_ObjAddForce((int)cent->nitrousVeh->m_phys_user_data, hitp, scaledForce, relative);
+            Phys_ObjAddForce((intptr_t)cent->nitrousVeh->m_phys_user_data, hitp, scaledForce, relative);
         }
     }
 }

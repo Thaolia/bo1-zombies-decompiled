@@ -201,7 +201,7 @@ XModel *__cdecl XModelLoadFile(
                 if ( !XModelLoadConfigFile(name, (float **)&pos, &config) )
                     goto LABEL_28;
                 v40 = 252;
-                model = (XModel *)Alloc(252);
+                model = (XModel *)Alloc(sizeof(XModel));
                 model->memUsage = v40;
                 model->flags = config.flags;
                 XModelLoadCollData((const unsigned __int8 **)&pos, model, AllocColl, name);
@@ -235,7 +235,7 @@ XModel *__cdecl XModelLoadFile(
                             pos += strlen((const char *)pos) + 1;
                         }
                     }
-                    v38->dist = config.mins[257 * i - 772];
+                    v38->dist = config.entries[i].dist;
                 }
                 if ( !model->numLods
                     && !Assert_MyHandler(
@@ -314,8 +314,8 @@ XModel *__cdecl XModelLoadFile(
                         {
                             __debugbreak();
                         }
-                        model->surfs = (XSurface *)Alloc(68 * v49);
-                        model->materialHandles = (Material **)Alloc(4 * v49);
+                        model->surfs = (XSurface *)Alloc(sizeof(XSurface) * v49);
+                        model->materialHandles = (Material **)Alloc(sizeof(Material *) * v49);
                         v34 = 0;
                         for ( i = 0; i < 4; ++i )
                         {
@@ -416,8 +416,8 @@ XModel *__cdecl XModelLoadFile(
                             model->flags |= 0x80000u;
                             if ( i )
                             {
-                                if ( (float)(v22 - *((float *)&model->localBoneNames + 8 * i)) < 0.0 )
-                                    v10 = *((float *)&model->localBoneNames + 8 * i);
+                                if ( (float)(v22 - v38[-1].dist) < 0.0 )
+                                    v10 = v38[-1].dist;
                                 else
                                     v10 = v22;
                                 v38->dist = v10;
@@ -660,7 +660,7 @@ void __cdecl XModelLoadCollData(
     model->numCollSurfs = v29;
     if ( model->numCollSurfs )
     {
-        model->collSurfs = (XModelCollSurf_s *)AllocColl(44 * model->numCollSurfs);
+        model->collSurfs = (XModelCollSurf_s *)AllocColl(sizeof(XModelCollSurf_s) * model->numCollSurfs);
         for ( i = 0; i < model->numCollSurfs; ++i )
         {
             surf = &model->collSurfs[i];
@@ -895,7 +895,7 @@ XModelPartsLoad *__cdecl XModelPartsLoadFile(
                         parentList = v7;
                         model->memUsage += size;
                         size = 28;
-                        modelParts = (XModelPartsLoad *)Alloc(28);
+                        modelParts = (XModelPartsLoad *)Alloc(sizeof(XModelPartsLoad));
                         model->memUsage += size;
                         modelParts->parentList = parentList;
                         modelParts->boneNames = boneNames;
@@ -1642,7 +1642,7 @@ XModelPieces *__cdecl XModelPiecesLoadFile(const char *name, void *(__cdecl *All
                 version = *(__int16 *)buf;
                 if ( version == 1 )
                 {
-                    xmodelPieces = (XModelPieces *)Alloc(12);
+                    xmodelPieces = (XModelPieces *)Alloc(sizeof(XModelPieces));
                     if ( !xmodelPieces
                         && !Assert_MyHandler(
                                     "C:\\projects_pc\\cod\\codsrc\\src\\xanim\\xmodel_load_obj.cpp",
@@ -1656,7 +1656,7 @@ XModelPieces *__cdecl XModelPiecesLoadFile(const char *name, void *(__cdecl *All
                     v9 = *(_WORD *)pos;
                     posa = pos + 2;
                     xmodelPieces->numpieces = v9;
-                    xmodelPieces->pieces = (XModelPiece *)Alloc(16 * xmodelPieces->numpieces);
+                    xmodelPieces->pieces = (XModelPiece *)Alloc(sizeof(XModelPiece) * xmodelPieces->numpieces);
                     for ( pieceIndex = 0; pieceIndex < xmodelPieces->numpieces; ++pieceIndex )
                     {
                         piece = &xmodelPieces->pieces[pieceIndex];

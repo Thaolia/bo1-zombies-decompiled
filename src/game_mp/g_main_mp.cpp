@@ -87,6 +87,7 @@
 #include <game/actor_spawner.h>
 #include "pregame.h"
 #include <game_sp/g_sp_playtrace.h>
+#include <platform/arch_size.h>
 
 const char *g_entcountNames[8] =
 {
@@ -652,7 +653,7 @@ bool __cdecl G_ExitOnComError(int code)
 {
     if ( g_connectpaths && g_connectpaths->current.integer == 3 && !code )
         return 1;
-    if ( g_connectpaths->current.integer >= 2 && code == 1 )
+    if ( g_connectpaths && g_connectpaths->current.integer >= 2 && code == 1 )
         return 1;
     return r_reflectionProbeGenerate && r_reflectionProbeGenerate->current.enabled;
 }
@@ -907,12 +908,12 @@ void __cdecl    G_InitGame(int levelTime, int randomSeed, int restart, int regis
         Com_Printf(15, "loadgame: G_InitGame loaded saved weapons\n");
     }
 
-    if (*(_BYTE *)g_log->current.integer)
+    if (*g_log->current.string)
     {
         if (g_logSync->current.enabled)
-            FS_FOpenFileByMode((char *)g_log->current.integer, &level.logFile, FS_APPEND_SYNC);
+            FS_FOpenFileByMode((char *)g_log->current.string, &level.logFile, FS_APPEND_SYNC);
         else
-            FS_FOpenFileByMode((char *)g_log->current.integer, &level.logFile, FS_APPEND);
+            FS_FOpenFileByMode((char *)g_log->current.string, &level.logFile, FS_APPEND);
         if (level.logFile)
         {
             char serverinfo[1024];
@@ -980,7 +981,7 @@ void __cdecl    G_InitGame(int levelTime, int randomSeed, int restart, int regis
     if (!restart)
     {
         memset(&bgs->animData->animScriptData, 0, sizeof(animScriptData_t)/*0x8D388u*/);
-        static_assert(sizeof(animScriptData_t) == 0x8D388);
+        static_assert(sizeof(animScriptData_t) == BO1_ARCH_SIZE(0x8D388, 820992));
 
         bgs->animData->animScriptData.soundAlias = SND_FindAlias;
         bgs->animData->animScriptData.playSoundAlias = G_AnimScriptSound;
@@ -1051,7 +1052,7 @@ void __cdecl    G_InitGame(int levelTime, int randomSeed, int restart, int regis
     level.num_entities = Com_GetFirstFreeEntityNum();
     level.firstFreeEnt = 0;
     level.lastFreeEnt = 0;
-    SV_LocateGameData(level.gentities, level.num_entities, 760, &level.clients->ps, 10720);
+    SV_LocateGameData(level.gentities, level.num_entities, sizeof(gentity_s), &level.clients->ps, sizeof(gclient_s));
 
     G_ParseHitLocDmgTable();
     BG_LoadPenetrationDepthTable();
@@ -2398,7 +2399,7 @@ void G_PrintAllFastFileErrors()
     // zombies: the SP front end loads no common zone (SP 0x004C8940..0x004C8966): nothing to report there.
     if ( !Com_IsSPFrontEndRunning() )
         G_PrintFastFileErrors(G_SP_IsSPLevel() ? (char*)"common_zombie" : (char*)"common_mp");
-    G_PrintFastFileErrors((char *)sv_mapname->current.integer);
+    G_PrintFastFileErrors((char *)sv_mapname->current.string);
 }
 
 void __cdecl G_PrintFastFileErrors(char *fastfile)
@@ -2622,7 +2623,7 @@ void __cdecl CalculateRanks()
                 ++level.numVotingClients;
         }
     }
-    qsort(level.sortedClients, level.numConnectedClients, 4u, (int (__cdecl *)(const void *, const void *))SortRanks);
+    qsort(level.sortedClients, level.numConnectedClients, sizeof(*(level.sortedClients)), (int (__cdecl *)(const void *, const void *))SortRanks);
     for ( ia = 0; ia < level.numConnectedClients; ++ia )
     {
         clientNum = level.sortedClients[ia];
@@ -4016,7 +4017,7 @@ static const char *volatile s_svSamplePos[SVPROF_SAMPLE_SLOTS];
 static volatile unsigned int s_svSampleCount[SVPROF_SAMPLE_SLOTS];
 // bo1_mod_svprof 2: outside SVPROF_SCRIPT, suspend the server thread and count its instruction pointer (per category);
 // the report names the functions through dbghelp (BO1_SVPC)
-static volatile unsigned int s_svPcAddr[SVPROF_SAMPLE_SLOTS];
+static volatile uintptr_t s_svPcAddr[SVPROF_SAMPLE_SLOTS];
 static volatile unsigned int s_svPcCount[SVPROF_SAMPLE_SLOTS];
 static volatile unsigned char s_svPcCat[SVPROF_SAMPLE_SLOTS];
 static void G_ModSvProfSamplePc(int cat)
@@ -4039,10 +4040,16 @@ static void G_ModSvProfSamplePc(int cat)
     if (depth >= 0 && depth <= 63)
         cat = g_svProfStack[depth];
     ResumeThread(thread);
+#if defined(_M_X64) || defined(__x86_64__)
+    if (!ok || !ctx.Rip)
+        return;
+    const uintptr_t pc = ctx.Rip;
+#else
     if (!ok || !ctx.Eip)
         return;
-    const unsigned int pc = ctx.Eip;
-    unsigned int h = (pc * 2654435761u) >> 20;
+    const uintptr_t pc = ctx.Eip;
+#endif
+    unsigned int h = ((unsigned int)pc * 2654435761u) >> 20;
     for (int probe = 0; probe < 16; ++probe, h = (h + 1) & (SVPROF_SAMPLE_SLOTS - 1))
     {
         if (!s_svPcAddr[h])
@@ -4386,7 +4393,7 @@ void G_ModSvProfEnd(long long frameQpcTicks)
                     best = i;
             if (best < 0)
                 break;
-            const void *fn = gScrCompilePub[SCRIPTINSTANCE_SERVER].func_table ? (const void *)gScrCompilePub[SCRIPTINSTANCE_SERVER].func_table[best] : 0;
+            const void *fn = gScrCompilePub[SCRIPTINSTANCE_SERVER].func_table ? (const void *)(intptr_t)gScrCompilePub[SCRIPTINSTANCE_SERVER].func_table[best] : 0;
             char name[64];
             _snprintf(name, sizeof(name), "b%d", best);
             struct { SYMBOL_INFO info; char more[256]; } sym;
@@ -4415,7 +4422,7 @@ void G_ModSvProfEnd(long long frameQpcTicks)
             unsigned int pcTotal = 0;
             for (int i = 0; i < SVPROF_SAMPLE_SLOTS; ++i)
             {
-                const unsigned int pc = s_svPcAddr[i];
+                const uintptr_t pc = s_svPcAddr[i];
                 const unsigned int count = s_svPcCount[i];
                 const int cat = s_svPcCat[i];
                 s_svPcCount[i] = 0;
@@ -4433,7 +4440,7 @@ void G_ModSvProfEnd(long long frameQpcTicks)
                 if (symFromAddr && symFromAddr(GetCurrentProcess(), (DWORD64)pc, &disp, &sym.info))
                     _snprintf(name, sizeof(name), "%s:%s%s", catName, sym.info.Name, sym.info.Size && disp >= sym.info.Size ? "+past" : "");
                 else
-                    _snprintf(name, sizeof(name), "%s:0x%x", catName, pc);
+                    _snprintf(name, sizeof(name), "%s:0x%x", catName, (unsigned int)pc);
                 name[sizeof(name) - 1] = 0;
                 for (char *c = name; *c; ++c)
                     if (*c == '"' || *c == '\\' || *c < ' ')

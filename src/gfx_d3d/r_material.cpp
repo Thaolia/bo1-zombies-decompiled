@@ -982,24 +982,24 @@ Material *__cdecl Material_Duplicate(Material *mtlCopy, char *name)
     else
     {
         v3 = strlen(name);
-        mtlNew = Material_Alloc(v3 + 193);
-        memcpy(mtlNew, mtlCopy, 0xC0u);
-        *(unsigned int *)mtlNew = (unsigned int)(mtlNew + 192);
+        mtlNew = Material_Alloc(v3 + sizeof(Material) + 1);
+        memcpy(mtlNew, mtlCopy, sizeof(Material));
+        ((Material *)mtlNew)->info.name = (const char *)(mtlNew + sizeof(Material));
         memcpy(*(unsigned __int8 **)mtlNew, (unsigned __int8 *)name, v3 + 1);
         stateBitsTableSize = 8 * mtlCopy->stateBitsCount;
-        *((unsigned int *)mtlNew + 47) = (unsigned int)Material_Alloc(stateBitsTableSize);
-        memcpy(*((unsigned __int8 **)mtlNew + 47), (unsigned __int8 *)mtlCopy->stateBitsTable, stateBitsTableSize);
+        ((Material *)mtlNew)->stateBitsTable = (GfxStateBits *)Material_Alloc(stateBitsTableSize);
+        memcpy((unsigned __int8 *)((Material *)mtlNew)->stateBitsTable, (unsigned __int8 *)mtlCopy->stateBitsTable, stateBitsTableSize);
         if ( mtlCopy->textureTable )
         {
-            textureTableSize = 16 * mtlCopy->textureCount;
-            *((unsigned int *)mtlNew + 45) = (unsigned int)Material_Alloc(textureTableSize);
-            memcpy(*((unsigned __int8 **)mtlNew + 45), (unsigned __int8 *)mtlCopy->textureTable, textureTableSize);
+            textureTableSize = sizeof(MaterialTextureDef) * mtlCopy->textureCount;
+            ((Material *)mtlNew)->textureTable = (MaterialTextureDef *)Material_Alloc(textureTableSize);
+            memcpy((unsigned __int8 *)((Material *)mtlNew)->textureTable, (unsigned __int8 *)mtlCopy->textureTable, textureTableSize);
         }
         if ( mtlCopy->localConstantTable )
         {
             constantTableSize = 32 * mtlCopy->constantCount;
-            *((unsigned int *)mtlNew + 46) = (unsigned int)Material_Alloc(constantTableSize);
-            memcpy(*((unsigned __int8 **)mtlNew + 46), (unsigned __int8 *)mtlCopy->localConstantTable, constantTableSize);
+            ((Material *)mtlNew)->localConstantTable = (MaterialConstantDef *)Material_Alloc(constantTableSize);
+            memcpy((unsigned __int8 *)((Material *)mtlNew)->localConstantTable, (unsigned __int8 *)mtlCopy->localConstantTable, constantTableSize);
         }
         Material_Add((Material *)mtlNew, hashIndex[0]);
         return (Material *)mtlNew;
@@ -1108,7 +1108,7 @@ void __cdecl Material_GetHashIndex(const char *name, unsigned __int16 *hashIndex
 Material *__cdecl Material_Register(char *name, int imageTrack)
 {
     if ( useFastFile->current.enabled )
-        return (Material *)((int (__cdecl *)(char *, int))Material_Register_FastFile)(name, imageTrack);
+        return ((Material *(__cdecl *)(char *, int))Material_Register_FastFile)(name, imageTrack);
     else
         return Material_Register_LoadObj(name, imageTrack);
 }
@@ -1262,7 +1262,7 @@ void __cdecl R_GetMaterialList(XAssetHeader header, char *data)
         }
         materialMemory = (XAssetHeader *)&data[8 * *(unsigned int *)data + 4];
         materialMemory->xmodelPieces = header.xmodelPieces;
-        materialMemory[1].xmodelPieces = (XModelPieces *)memory;
+        materialMemory[1].xmodelPieces = (XModelPieces *)(intptr_t)memory;
         ++*(unsigned int *)data;
     }
 }

@@ -349,7 +349,7 @@ void    CG_Vehicle_PreControllers(
     barrelPitchAlreadySet = 0;
     if (!cent->vehicle)
     {
-        cent->vehicle = (cgVehicle_s *)MT_Alloc(84, 21, SCRIPTINSTANCE_SERVER);
+        cent->vehicle = (cgVehicle_s *)MT_Alloc(sizeof(cgVehicle_s), 21, SCRIPTINSTANCE_SERVER);
         if (!cent->vehicle
             && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\cgame\\cg_vehicle.cpp", 347, 0, "%s", "cent->vehicle"))
         {
@@ -663,7 +663,7 @@ void    CG_Vehicle_PreControllers(
         else
             v79 = 0.0f;
 
-        LODWORD(v77[1]) = (int)&fc;
+        LODWORD(v77[1]) = (int)(intptr_t)&fc;
         v76 = v77;
         v75 = (float)(v79 * 3.1415927f) - 1.5707964f;
         fc = cosf(v75);

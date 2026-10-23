@@ -15,7 +15,7 @@ void __cdecl R_LoadSun(const char *name, sunflare_t *sun)
     iassert(name);
     iassert(sun);
 
-    Com_Memset((unsigned int *)sun, 0, 96);
+    Com_Memset((unsigned int *)sun, 0, sizeof(sunflare_t));
     firstCharToCopy = name;
     for ( nameIter = name; *nameIter; ++nameIter )
     {

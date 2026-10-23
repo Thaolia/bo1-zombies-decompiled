@@ -1,6 +1,7 @@
 #pragma once
 
 #include <universal/dvar.h>
+#include <platform/arch_size.h>
 #include <physics/phys_colgeom.h>
 #include <physics/phys_traverse.h>
 
@@ -315,6 +316,10 @@ struct __declspec(align(16)) IKState // sizeof=0xE60
     // padding byte
     // padding byte
 };
+static_assert(sizeof(IKState) == BO1_ARCH_SIZE(3712, 5344));
+// Bytes the IK state arrays reserve per entry. Retail reserves 3680 (0xE60), 32 less than this IKState: an upstream
+// mismatch kept on 32-bit (docs/PORTING.md); 64-bit reserves the real size.
+constexpr int IK_STATE_ALLOC_SIZE = BO1_ARCH_SIZE(3680, (int)sizeof(IKState));
 
 void __cdecl IK_AllocateLocalClientMemory(void *ikStatesBuf, int localClientIndex);
 void __cdecl IK_InitSystem();

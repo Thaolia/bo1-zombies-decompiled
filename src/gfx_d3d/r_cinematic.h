@@ -102,7 +102,7 @@ bool __cdecl CinematicHunk_IsEmpty(CinematicHunk *hunk);
 char __cdecl R_Cinematic_HunksOpen(int activeTexture, char playbackFlags);
 void __cdecl CinematicHunk_Open(CinematicHunk *hunk, char *memory, int size);
 void __cdecl R_Cinematic_HunksAllocate(int activeTexture, char playbackFlags);
-int __cdecl CinematicHunk_Alloc(CinematicHunk *hunk, int size);
+char *__cdecl CinematicHunk_Alloc(CinematicHunk *hunk, int size);
 void __cdecl R_Cinematic_HunksReset(int activeTexture, char playbackFlags);
 void R_Cinematic_InitBinkTextures();
 void __cdecl R_Cinematic_BlackRendererImages();

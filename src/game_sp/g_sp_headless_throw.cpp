@@ -339,7 +339,7 @@ static void ReportLures(gentity_s *player)
             s_prevPos[num][1] = actor->ent->r.currentOrigin[1];
             s_prevPos[num][2] = actor->ent->r.currentOrigin[2];
         }
-        const unsigned short noteworthy = *(const unsigned short *)((const char *)lure + 362); // fields_1 script_noteworthy
+        const unsigned short noteworthy = lure->script_noteworthy;
         Com_Printf(16, "bo1_lure_poi: time %d ent %d noteworthy '%s' poi_active %d attract_to_origin %d positions %d attractors %d claimed %d zombies_override %d ignoreall %d scriptgoal256 %d codegoal256 %d\n",
             level.time, i, noteworthy ? SL_ConvertToString(noteworthy, SCRIPTINSTANCE_SERVER) : "", LureVarInt(object, 0),
             LureVarInt(object, 1), LureArraySize(object, 2), LureArraySize(object, 3), LureArraySize(object, 6), override_,

@@ -18,9 +18,9 @@ int s_jobID = 1;
 
 IDirect3DQuery9 *s_compositingFence;
 
-void __cdecl CL_CompositeSetupImageCallback(unsigned int *param)
+void __cdecl CL_CompositeSetupImageCallback(GfxImage **param)
 {
-    *param = (unsigned int)CL_CompositeSetupImage();
+    *param = CL_CompositeSetupImage();
 }
 
 GfxImage *__cdecl CL_CompositeSetupImage()

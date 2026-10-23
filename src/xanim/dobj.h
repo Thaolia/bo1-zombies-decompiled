@@ -1,6 +1,7 @@
 #pragma once
 
 #include <qcommon/bitarray.h>
+#include <platform/arch_size.h>
 
 #define DOBJ_HANDLE_NONE -1
 
@@ -110,6 +111,7 @@ struct DObj // sizeof=0x7C
                 struct XModel **models;
         };
 };
+static_assert(sizeof(DObj) == BO1_ARCH_SIZE(0x7C, 144));
 
 struct __declspec(align(2)) DObjModel_s // sizeof=0x8
 {                                                                             // XREF: DObjModel/r

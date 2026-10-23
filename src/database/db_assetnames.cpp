@@ -16,6 +16,12 @@
 #include <bgame/bg_emblems.h>
 #include <qcommon/com_bsp.h>
 #include <gfx_d3d/r_extracam.h>
+#include <platform/arch_size.h>
+#include <stringed/stringed_hooks.h>
+#include <sound/snd_bank.h>
+#include <game/g_bsp.h>
+#include <qcommon/cm_load_obj.h>
+#include <cgame/cg_effects_load_obj.h>
 
 const char *(__cdecl *DB_XAssetGetNameHandler[43])(const XAssetHeader *) =
 {
@@ -158,149 +164,169 @@ void(__cdecl *DB_XAssetSetNameHandler[43])(XAssetHeader *, const char *) =
   NULL
 };
 
-static_assert(sizeof(RawFile) == 12);
+static_assert(sizeof(RawFile) == BO1_ARCH_SIZE(12, 24));
 int __cdecl DB_SizeofXAsset_RawFile_()
 {
-    return 12;
+    return sizeof(RawFile);
 }
 
-static_assert(sizeof(PhysPreset) == 84);
+static_assert(sizeof(PhysPreset) == BO1_ARCH_SIZE(84, 96));
 int __cdecl DB_SizeofXAsset_PhysPreset_()
 {
-    return 84;
+    return sizeof(PhysPreset);
 }
 
-static_assert(sizeof(PhysConstraints) == 2696);
+static_assert(sizeof(PhysConstraints) == BO1_ARCH_SIZE(2696, 3088));
 int __cdecl DB_SizeofXAsset_PhysConstraints_()
 {
-    return 2696;
+    return sizeof(PhysConstraints);
 }
 
-static_assert(sizeof(DestructibleDef) == 24);
+static_assert(sizeof(DestructibleDef) == BO1_ARCH_SIZE(24, 48));
 //int __cdecl SV_GetMaxAttachCount()
 int __cdecl DB_SizeofXAsset_DestructibleDef_()
 {
-    return 24;
+    return sizeof(DestructibleDef);
 }
 
-static_assert(sizeof(Font_s) == 24);
+static_assert(sizeof(Font_s) == BO1_ARCH_SIZE(24, 40));
 int __cdecl DB_SizeofXAsset_Font_s_()
 {
-    return 24;
+    return sizeof(Font_s);
 }
 
-static_assert(sizeof(XAnimParts) == 104);
+static_assert(sizeof(XAnimParts) == BO1_ARCH_SIZE(104, 152));
 //int __cdecl PM_MediumLandingForSurface()
 int __cdecl DB_SizeofXAsset_XAnimParts_()
 {
-    return 104;
+    return sizeof(XAnimParts);
 }
 
-static_assert(sizeof(XModel) == 252);
+static_assert(sizeof(XModel) == BO1_ARCH_SIZE(252, 328));
 int __cdecl DB_SizeofXAsset_XModel_()
 {
-    return 252;
+    return sizeof(XModel);
 }
 
 // (for some reason the intellisense size is wrong unless it's right next to the struct definition)
 int __cdecl DB_SizeofXAsset_Material_()
 {
-    return 192;
+    return sizeof(Material);
 }
 
-static_assert(sizeof(MaterialTechniqueSet) == 528);
+static_assert(sizeof(MaterialTechniqueSet) == BO1_ARCH_SIZE(528, 1056));
 int __cdecl DB_SizeofXAsset_MaterialTechniqueSet_()
 {
-    return 528;
+    return sizeof(MaterialTechniqueSet);
 }
 
-static_assert(sizeof(SndDriverGlobals) == 52);
+static_assert(sizeof(SndDriverGlobals) == BO1_ARCH_SIZE(52, 104));
 int __cdecl DB_SizeofXAsset_SndDriverGlobals_()
 {
-    return 52;
+    return sizeof(SndDriverGlobals);
 }
 
-static_assert(sizeof(XGlobals) == 40);
+static_assert(sizeof(XGlobals) == BO1_ARCH_SIZE(40, 48));
 int __cdecl DB_SizeofXAsset_XGlobals_()
 {
-    return 40;
+    return sizeof(XGlobals);
 }
 
-static_assert(sizeof(StringTable) == 20);
+static_assert(sizeof(StringTable) == BO1_ARCH_SIZE(20, 32));
 int __cdecl DB_SizeofXAsset_StringTable_()
 {
-    return 20;
+    return sizeof(StringTable);
 }
 
-static_assert(sizeof(clipMap_t) == 332);
+static_assert(sizeof(clipMap_t) == BO1_ARCH_SIZE(332, 568));
 int __cdecl DB_SizeofXAsset_clipMap_t_()
 {
-    return 332;
+    return sizeof(clipMap_t);
 }
 
-static_assert(sizeof(ComWorld) == 64);
+static_assert(sizeof(ComWorld) == BO1_ARCH_SIZE(64, 88));
 int __cdecl DB_SizeofXAsset_ComWorld_()
 {
-    return 64;
+    return sizeof(ComWorld);
 }
 
-static_assert(sizeof(EmblemSet) == 44);
+static_assert(sizeof(EmblemSet) == BO1_ARCH_SIZE(44, 80));
 int __cdecl DB_SizeofXAsset_EmblemSet_()
 {
-    return 44;
+    return sizeof(EmblemSet);
 }
 
-static_assert(sizeof(GfxWorld) == 1084);
+static_assert(sizeof(GfxWorld) == BO1_ARCH_SIZE(1084, 1672));
 int __cdecl DB_SizeofXAsset_GfxWorld_()
 {
-    return 1084;
+    return sizeof(GfxWorld);
 }
 
-static_assert(sizeof(GfxLightDef) == 16);
+static_assert(sizeof(GfxLightDef) == BO1_ARCH_SIZE(16, 32));
 int __cdecl DB_SizeofXAsset_GfxLightDef_()
 {
-    return 16;
+    return sizeof(GfxLightDef);
 }
 
-static_assert(sizeof(menuDef_t) == 400);
+static_assert(sizeof(menuDef_t) == BO1_ARCH_SIZE(400, 456));
 int __cdecl DB_SizeofXAsset_menuDef_t_()
 {
-    return 400;
+    return sizeof(menuDef_t);
 }
 
-static_assert(sizeof(XAnimTree_s) == 8);
+static_assert(sizeof(XAnimTree_s) == BO1_ARCH_SIZE(8, 16));
 //int __cdecl XAnimTreeSize()
 //{
 //    return 8;
 //}
 
-static_assert(sizeof(WeaponVariantDef) == 228);
+static_assert(sizeof(WeaponVariantDef) == BO1_ARCH_SIZE(228, 288));
 int __cdecl DB_SizeofXAsset_WeaponVariantDef_()
 {
-    return 228;
+    return sizeof(WeaponVariantDef);
 }
 
-static_assert(sizeof(FxEffectDef) == 60);
+static_assert(sizeof(FxEffectDef) == BO1_ARCH_SIZE(60, 72));
 int __cdecl DB_SizeofXAsset_FxEffectDef_()
 {
-    return 60;
+    return sizeof(FxEffectDef);
 }
 
-static_assert(sizeof(PackIndex) == 28);
+static_assert(sizeof(PackIndex) == BO1_ARCH_SIZE(28, 40));
 int __cdecl DB_SizeofXAsset_PackIndex_()
 {
-    return 28;
+    return sizeof(PackIndex);
 }
 
-static_assert(sizeof(Glasses) == 56);
+static_assert(sizeof(Glasses) == BO1_ARCH_SIZE(56, 72));
 int __cdecl DB_SizeofXAsset_Glasses_()
 {
-    return 56;
+    return sizeof(Glasses);
 }
+
+// The exe folds identical functions, so its table shares one size function between types of the same 32-bit size
+// (GfxImage used SndDriverGlobals', SndBank XGlobals'...). Their 64-bit sizes differ: each type has its own here.
+template <typename T>
+static int __cdecl DB_SizeofXAsset()
+{
+    return sizeof(T);
+}
+
+static_assert(sizeof(XModelPieces) == BO1_ARCH_SIZE(12, 24));
+static_assert(sizeof(GfxImage) == BO1_ARCH_SIZE(52, 72));
+static_assert(sizeof(SndBank) == BO1_ARCH_SIZE(40, 72));
+static_assert(sizeof(SndPatch) == BO1_ARCH_SIZE(20, 40));
+static_assert(sizeof(GameWorldSp) == BO1_ARCH_SIZE(44, 88));
+static_assert(sizeof(GameWorldMp) == BO1_ARCH_SIZE(44, 88));
+static_assert(sizeof(MapEnts) == BO1_ARCH_SIZE(12, 24));
+static_assert(sizeof(MenuList) == BO1_ARCH_SIZE(12, 24));
+static_assert(sizeof(LocalizeEntry) == BO1_ARCH_SIZE(8, 16));
+static_assert(sizeof(FxImpactTable) == BO1_ARCH_SIZE(8, 16));
+static_assert(sizeof(ddlRoot_t) == BO1_ARCH_SIZE(8, 16));
 
 int(__cdecl *DB_GetXAssetSizeHandler[43])() =
 {
-  &DB_SizeofXAsset_RawFile_,
+  &DB_SizeofXAsset<XModelPieces>,
   &DB_SizeofXAsset_PhysPreset_,
   &DB_SizeofXAsset_PhysConstraints_,
   &DB_SizeofXAsset_DestructibleDef_,
@@ -309,28 +335,28 @@ int(__cdecl *DB_GetXAssetSizeHandler[43])() =
   &DB_SizeofXAsset_XModel_,
   &DB_SizeofXAsset_Material_,
   &DB_SizeofXAsset_MaterialTechniqueSet_,
-  &DB_SizeofXAsset_SndDriverGlobals_,
-  &DB_SizeofXAsset_XGlobals_,
-  &DB_SizeofXAsset_StringTable_,
+  &DB_SizeofXAsset<GfxImage>,
+  &DB_SizeofXAsset<SndBank>,
+  &DB_SizeofXAsset<SndPatch>,
   &DB_SizeofXAsset_clipMap_t_,
   &DB_SizeofXAsset_clipMap_t_,
   &DB_SizeofXAsset_ComWorld_,
-  &DB_SizeofXAsset_EmblemSet_,
-  &DB_SizeofXAsset_EmblemSet_,
-  &DB_SizeofXAsset_RawFile_,
+  &DB_SizeofXAsset<GameWorldSp>,
+  &DB_SizeofXAsset<GameWorldMp>,
+  &DB_SizeofXAsset<MapEnts>,
   &DB_SizeofXAsset_GfxWorld_,
   &DB_SizeofXAsset_GfxLightDef_,
   NULL,
   &DB_SizeofXAsset_Font_s_,
-  &DB_SizeofXAsset_RawFile_,
+  &DB_SizeofXAsset<MenuList>,
   &DB_SizeofXAsset_menuDef_t_,
-  &XAnimTreeSize,
+  &DB_SizeofXAsset<LocalizeEntry>,
   &DB_SizeofXAsset_WeaponVariantDef_,
   NULL,
   NULL,
   &DB_SizeofXAsset_SndDriverGlobals_,
   &DB_SizeofXAsset_FxEffectDef_,
-  &XAnimTreeSize,
+  &DB_SizeofXAsset<FxImpactTable>,
   NULL,
   NULL,
   NULL,
@@ -341,7 +367,7 @@ int(__cdecl *DB_GetXAssetSizeHandler[43])() =
   &DB_SizeofXAsset_StringTable_,
   &DB_SizeofXAsset_PackIndex_,
   &DB_SizeofXAsset_XGlobals_,
-  &XAnimTreeSize,
+  &DB_SizeofXAsset<ddlRoot_t>,
   &DB_SizeofXAsset_Glasses_,
   &DB_SizeofXAsset_EmblemSet_
 };
@@ -363,12 +389,12 @@ void __cdecl DB_ImageSetName(XAssetHeader *header, const char *name)
 
 const char *__cdecl DB_LocalizeEntryGetName(const XAssetHeader *header)
 {
-    return (const char *)header->xmodelPieces->numpieces;
+    return header->localize->name;
 }
 
 void __cdecl DB_LocalizeEntrySetName(XAssetHeader *header, const char *name)
 {
-    header->xmodelPieces->numpieces = (int)name;
+    header->localize->name = name;
 }
 
 void __cdecl DB_DDLSetname(XAssetHeader *header, const char *name)

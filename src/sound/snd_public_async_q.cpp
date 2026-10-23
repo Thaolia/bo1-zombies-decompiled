@@ -804,7 +804,7 @@ void __cdecl SND_NotifyProcess(const snd_notify *cmd)
             break;
         case SND_NOTIFY_PLAYBACK_UPDATE:
             //PIXBeginNamedEvent(-1, "update playback");
-            if ( !cmd->context.ent_update.handle.handle
+            if ( !cmd->context.playback_update.playback
                 && !Assert_MyHandler(
                             "C:\\projects_pc\\cod\\codsrc\\src\\sound\\snd_public_async_q.cpp",
                             552,
@@ -814,7 +814,7 @@ void __cdecl SND_NotifyProcess(const snd_notify *cmd)
             {
                 __debugbreak();
             }
-            if ( *(unsigned int *)cmd->context.ent_update.handle.handle == -1
+            if ( cmd->context.playback_update.playback->id == -1
                 && !Assert_MyHandler(
                             "C:\\projects_pc\\cod\\codsrc\\src\\sound\\snd_public_async_q.cpp",
                             553,

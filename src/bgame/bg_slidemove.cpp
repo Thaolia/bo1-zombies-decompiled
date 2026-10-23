@@ -39,7 +39,7 @@ gjk_polygon_cylinder_t *__cdecl create_gjkcc_gjk_geom(
     return gjk_geom;
 }
 
-gjkcc_info *__cdecl create_gjkcc_info(unsigned int gjkcc_id, bool is_server_thread, const float *origin)
+gjkcc_info *__cdecl create_gjkcc_info(uintptr_t gjkcc_id, bool is_server_thread, const float *origin)
 {
     gjkcc_info *gcci; // [esp+58h] [ebp-8h]
 
@@ -139,7 +139,7 @@ void __cdecl destroy_gjkcc_info(gjkcc_info *gcci_)
 }
 
 gjkcc_info *__thiscall gjkcc_info_database_t::gjkcc_info_find_or_create(
-                unsigned int gjkcc_id,
+                uintptr_t gjkcc_id,
                 bool is_server_thread,
                 const float *origin)
 {
@@ -230,7 +230,7 @@ void __thiscall gjkcc_info_database_t::verify_internal(bool is_server_thread)
 }
 
 gjkcc_info *__thiscall gjkcc_info_database_t::gjkcc_info_find(
-                unsigned int gjkcc_id,
+                uintptr_t gjkcc_id,
                 bool is_server_thread)
 {
     generic_avl_map_node_t *m_tree_root; // [esp+8h] [ebp-10h]
@@ -282,7 +282,7 @@ gjkcc_info *__thiscall gjkcc_info_database_t::gjkcc_info_find(
 }
 
 void __thiscall gjkcc_info_database_t::gjkcc_info_destroy(
-                unsigned int gjkcc_id,
+                uintptr_t gjkcc_id,
                 bool is_server_thread)
 {
     char *gcci_; // [esp+8h] [ebp-4h]
@@ -311,7 +311,7 @@ void __cdecl destroy_client_gjkcc_info(int localClientNum)
         __debugbreak();
     }
     //gjkcc_info_database_t::gjkcc_info_destroy(&g_gjkcc_info_client_database, (unsigned int)&cg_pmove[localClientNum], 0);
-    g_gjkcc_info_client_database.gjkcc_info_destroy((unsigned int)&cg_pmove[localClientNum], 0);
+    g_gjkcc_info_client_database.gjkcc_info_destroy((uintptr_t)&cg_pmove[localClientNum], 0);
 
 }
 
@@ -408,7 +408,7 @@ void __thiscall gjkcc_info::Unlock()
     }
 }
 
-gjkcc_info *__cdecl find_gjkcc_info(unsigned int gjkcc_id, bool is_server_thread)
+gjkcc_info *__cdecl find_gjkcc_info(uintptr_t gjkcc_id, bool is_server_thread)
 {
     if (is_server_thread)
     {
@@ -608,7 +608,7 @@ void    gjk_trace(const gjk_trace_input_t &gti, list_gjk_trace_output *list)
     {
         init_pgi(&input, gti);
 
-        gi_list = (gjk_geom_info_t **)gti.m_allocator->allocate(sizeof(gjk_geom_info_t *) * gti.m_query_output->m_list_geom_info.m_alloc_count, 4, 0, "phys_transient_allocator out of memory.");
+        gi_list = (gjk_geom_info_t **)gti.m_allocator->allocate(sizeof(gjk_geom_info_t *) * gti.m_query_output->m_list_geom_info.m_alloc_count, alignof(gjk_geom_info_t *), 0, "phys_transient_allocator out of memory.");
 
         int gi_i = 0;
         for (gjk_geom_info_t *i = gti.m_query_output->m_list_geom_info.m_first; i; i = i->m_next_link)

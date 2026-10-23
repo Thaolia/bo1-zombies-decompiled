@@ -2096,7 +2096,7 @@ int __thiscall GlassShard::Shatter(const GlassShard **newShards, int maxNewShard
             if (ns)
             {
                 numNewShards += ns;
-                qsort(newShards, numNewShards, 4u, compareShards);
+                qsort(newShards, numNewShards, sizeof(*(newShards)), compareShards);
                 if (maxShardSize > (&(*newShards)->outline)->Area())
                     break;
             }
@@ -2342,7 +2342,7 @@ void __thiscall GlassShard::Defrag()
         //v4 = GlassShard::Mesh::SetPointers(&this->mesh, (PackedUnitVec *)ptr);
         v4 = this->mesh.SetPointers((PackedUnitVec *)ptr);
         ptr += v4;
-        if ( (unsigned __int8 *)(ptr - this->memoryPtr) != (unsigned __int8 *)this->memorySize
+        if ( ptr - this->memoryPtr != this->memorySize
             && !Assert_MyHandler(
                         "C:\\projects_pc\\cod\\codsrc\\src\\glass\\glass_shard.cpp",
                         1726,
@@ -2795,7 +2795,7 @@ LABEL_38:
             if ( v47 )
             {
                 numNewShards += v47;
-                qsort(newShards, numNewShards, 4u, (int (__cdecl *)(const void *, const void *))compareShards);
+                qsort(newShards, numNewShards, sizeof(*(newShards)), (int (__cdecl *)(const void *, const void *))compareShards);
             }
         }
     }
@@ -3880,7 +3880,7 @@ bool __thiscall GlassShard::InitPhysicsObj(bool enableCollisions)
     GlassShard::GetLocalBBox(localBBoxMin, localBBoxMax);
     if ( enableCollisions )
     {
-        Com_Memset((unsigned int *)&physPreset, 0, 84);
+        Com_Memset((unsigned int *)&physPreset, 0, sizeof(physPreset));
         physPreset.mass = GlassShard::GetMass();
         physPreset.friction = 0.5f;
         AxisToQuat(this->axis, quat);
@@ -3896,7 +3896,7 @@ bool __thiscall GlassShard::InitPhysicsObj(bool enableCollisions)
         //gjk_geom_list_t::add_geom(&gjk_geom_list, aabb_gjk_geom);
         gjk_geom_list.add_geom(aabb_gjk_geom);
         PhysObjUserData *obj = Phys_ObjCreate(1, this->origin, quat, vec3_origin, &physPreset, &gjk_geom_list, 1, -1);
-        this->physObjId = (int)obj;
+        this->physObjId = (intptr_t)obj;
 
         broad_phase_base *bpb = obj->m_bpb;
         aasap_list_remove(bpb);

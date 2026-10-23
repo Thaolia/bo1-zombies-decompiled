@@ -87,6 +87,7 @@
 #include "cg_predict_mp.h"
 #include <cgame/cg_local.h>
 #include <win32/win_main.h>
+#include <platform/arch_size.h>
 
 const char *cg_thirdPersonModeNames[4] =
 { "Free", "Fixed", "Locked", NULL };
@@ -1919,6 +1920,11 @@ void __cdecl CG_RegisterDvars()
 
 int cg_entArrayCount = MAX_GENTITIES; // mod (L43): see cg_local_mp.h
 
+// cgArray keeps the retail 466048-byte slot per local client on 32-bit (cg_s is 465920 there); on 64-bit cg_s
+// outgrows it and the slot is the struct.
+static constexpr size_t CG_ARRAY_SLOT = BO1_ARCH_SIZE(466048, sizeof(cg_s));
+static_assert(sizeof(cg_s) <= CG_ARRAY_SLOT && sizeof(cg_s) == BO1_ARCH_SIZE(465920, 475008), "cgArray slot");
+
 int __cdecl CG_AllocateClientMemory_SizeRequired(int maxLocalClients)
 {
     int localClientNum; // [esp+0h] [ebp-8h]
@@ -1926,9 +1932,12 @@ int __cdecl CG_AllocateClientMemory_SizeRequired(int maxLocalClients)
 
     // mod (L43): bo1_mod_netents (command line) sizes cg_entitiesArray / cg_entityOriginArray for numbers 1537..2046
     cg_entArrayCount = Dvar_GetInt("bo1_mod_netents") ? MAX_CL_ENTNUM : MAX_GENTITIES;
-    size = 907268 * maxLocalClients;
+    // The retail byte counts, plus what each struct allocated below grows by on 64-bit (0 on 32-bit).
+    size = (907268 + (CG_ARRAY_SLOT - 466048) + 512 * (sizeof(fake_centity_s) - 812) + (sizeof(ViewModelInfo) - 52))
+        * maxLocalClients;
     for ( localClientNum = 0; localClientNum < maxLocalClients; ++localClientNum )
-        size += 1062080 + (cg_entArrayCount - MAX_GENTITIES) * (int)sizeof(centity_s) + (cg_entArrayCount > MAX_GENTITIES ? (MAX_CL_ENTNUM - 1536) * 12 : 0);
+        size += 1062080 + 2048 * (sizeof(weaponInfo_s) - 36) + MAX_GENTITIES * (sizeof(centity_s) - 808)
+            + 144 * (sizeof(Destructible) - 172) + 32 * (IK_STATE_ALLOC_SIZE - 3680) + (cg_entArrayCount - MAX_GENTITIES) * (int)sizeof(centity_s) + (cg_entArrayCount > MAX_GENTITIES ? (MAX_CL_ENTNUM - 1536) * 12 : 0);
     return size;
 }
 
@@ -1936,21 +1945,20 @@ void __cdecl CG_AllocateClientMemory(HunkUser *hunk, int maxLocalClients)
 {
     int localClientNum; // [esp+0h] [ebp-4h]
 
-    cgArray = (cg_s *)Hunk_UserAlloc(hunk, 466048 * maxLocalClients, 128, "cgArray");
+    cgArray = (cg_s *)Hunk_UserAlloc(hunk, CG_ARRAY_SLOT * maxLocalClients, 128, "cgArray");
     // zombies: was 12712 * maxLocalClients (the MP exe's sizeof(cgs_t)); cgs_t holds 32 actor corpses now
     // (MAX_ACTOR_CORPSES_SP), and the literal let cgsArray overrun into the next hunk block.
-    static_assert(sizeof(cg_s) <= 466048, "cgArray literal");
     cgsArray = (cgs_t *)Hunk_UserAlloc(hunk, sizeof(cgs_t) * maxLocalClients, 8, "cgsArray");
-    cg_fakeEntitiesArray = (fake_centity_s *)Hunk_UserAlloc(hunk, 415744 * maxLocalClients, 4, "cg_fakeEntitiesArray");
-    cg_viewModelArray = (ViewModelInfo *)Hunk_UserAlloc(hunk, 52 * maxLocalClients, 4, "cg_viewModelArray");
+    cg_fakeEntitiesArray = (fake_centity_s *)Hunk_UserAlloc(hunk, 512 * sizeof(fake_centity_s) * maxLocalClients, alignof(fake_centity_s), "cg_fakeEntitiesArray");
+    cg_viewModelArray = (ViewModelInfo *)Hunk_UserAlloc(hunk, sizeof(ViewModelInfo) * maxLocalClients, alignof(ViewModelInfo), "cg_viewModelArray");
     for ( localClientNum = 0; localClientNum < maxLocalClients; ++localClientNum )
     {
-        cg_weaponsArray[localClientNum] = (weaponInfo_s *)Hunk_UserAlloc(hunk, 73728, 4, "cg_weaponsArray");
-        cg_entitiesArray[localClientNum] = (centity_s *)Hunk_UserAlloc(hunk, cg_entArrayCount * sizeof(centity_s), 4, "cg_entitiesArray"); // mod (L43): retail 827392
+        cg_weaponsArray[localClientNum] = (weaponInfo_s *)Hunk_UserAlloc(hunk, 2048 * sizeof(weaponInfo_s), alignof(weaponInfo_s), "cg_weaponsArray");
+        cg_entitiesArray[localClientNum] = (centity_s *)Hunk_UserAlloc(hunk, cg_entArrayCount * sizeof(centity_s), alignof(centity_s), "cg_entitiesArray"); // mod (L43): retail 827392
         cg_entityOriginArray[localClientNum] = (float (*)[3])Hunk_UserAlloc(hunk, (cg_entArrayCount > MAX_GENTITIES ? MAX_CL_ENTNUM : 1536) * 12, 4, "cg_entityOriginArray"); // mod (L43): retail 18432
-        cg_destructibles[localClientNum] = (Destructible *)Hunk_UserAlloc(hunk, 24768, 4, "cg_destructibles");
-        cg_ikBuf[localClientNum] = (unsigned __int8 *)Hunk_UserAlloc(hunk, 117760, 16, "ikStatesArray");
-        memset(cg_ikBuf[localClientNum], 0, 0x1CC00u);
+        cg_destructibles[localClientNum] = (Destructible *)Hunk_UserAlloc(hunk, 144 * sizeof(Destructible), alignof(Destructible), "cg_destructibles");
+        cg_ikBuf[localClientNum] = (unsigned __int8 *)Hunk_UserAlloc(hunk, 32 * IK_STATE_ALLOC_SIZE, 16, "ikStatesArray");
+        memset(cg_ikBuf[localClientNum], 0, 32 * IK_STATE_ALLOC_SIZE);
         IK_AllocateLocalClientMemory(cg_ikBuf[localClientNum], localClientNum);
     }
 }
@@ -2654,7 +2662,7 @@ bool __cdecl CG_GetEntityOriginAngles(int localClientNum, int entityNum, float *
     cent = CG_GetEntity(localClientNum, entityNum);
     if ( !cent && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\cgame_mp\\cg_main_mp.cpp", 2544, 0, "%s", "cent") )
         __debugbreak();
-    if ( ((*((unsigned int *)cent + 201) >> 1) & 1) == 0 )
+    if ( ((cent->flagWord >> 1) & 1) == 0 )
         return 0;
     *origin = cent->pose.origin[0];
     origin[1] = cent->pose.origin[1];
@@ -2695,7 +2703,7 @@ unsigned __int16 __cdecl CG_GetVehicleTypeString(int clientNum, int entityNum)
     cent = CG_GetEntity(localClientNum, entityNum);
     if ( !cent && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\cgame_mp\\cg_main_mp.cpp", 2576, 0, "%s", "cent") )
         __debugbreak();
-    if ( ((*((unsigned int *)cent + 201) >> 1) & 1) == 0 )
+    if ( ((cent->flagWord >> 1) & 1) == 0 )
         return 0;
     info = CG_GetVehicleInfo(cent->nextState.vehicleState.vehicleInfoIndex);
     if ( !info )
@@ -3719,7 +3727,7 @@ void __cdecl CG_InitEntities(int localClientNum)
         }
         cent->pose.localClientNum = localClientNum;
     }
-    memset((unsigned __int8 *)&cg_fakeEntitiesArray[512 * localClientNum], 0, 0x65800u);
+    memset((unsigned __int8 *)&cg_fakeEntitiesArray[512 * localClientNum], 0, 512 * sizeof(fake_centity_s));
     CG_InitFakeEntities(localClientNum, 1);
     LocalClientGlobals = CG_GetLocalClientGlobals(localClientNum);
     LocalClientGlobals->predictedPlayerEntity.pose.localClientNum = localClientNum;
@@ -4065,7 +4073,7 @@ int __cdecl CG_NotifyTriggers()
 {
     trigger_info_t *v0; // ecx
     trigger_info_t *trigger_info; // [esp+14h] [ebp-18h]
-    unsigned int *other; // [esp+18h] [ebp-14h]
+    centity_s *other; // [esp+18h] [ebp-14h]
     centity_s *ent; // [esp+1Ch] [ebp-10h]
     int bMoreTriggered; // [esp+20h] [ebp-Ch]
     int entnum; // [esp+24h] [ebp-8h]
@@ -4081,10 +4089,10 @@ int __cdecl CG_NotifyTriggers()
         CG_ProcessTriggerDebug(ent, trigger_info);
         if ( ent->nextState.lerp.useCount == trigger_info->useCount )
         {
-            other = (unsigned int *)CG_GetEntity(0, trigger_info->otherEntnum);
-            if ( other[151] == trigger_info->otherUseCount
-                && ((*((unsigned int *)ent + 201) >> 1) & 1) != 0
-                && ((other[201] >> 1) & 1) != 0 )
+            other = CG_GetEntity(0, trigger_info->otherEntnum);
+            if ( other->nextState.lerp.useCount == trigger_info->otherUseCount
+                && ((ent->flagWord >> 1) & 1) != 0
+                && ((other->flagWord >> 1) & 1) != 0 )
             {
                 if ( cg_level.entTriggerIndex[entnum] == cg_level.triggerIndex )
                 {
@@ -4093,7 +4101,7 @@ int __cdecl CG_NotifyTriggers()
                 }
                 cg_level.entTriggerIndex[entnum] = cg_level.triggerIndex;
                 CScr_AddEntity(ent, 0);
-                CScr_NotifyNum(0, other[122], 0, cscr_const.trigger, 1u);
+                CScr_NotifyNum(0, other->nextState.number, 0, cscr_const.trigger, 1u);
             }
         }
         --cg_level.currentTriggerListSize;
@@ -4110,7 +4118,7 @@ void __cdecl CG_Trigger(centity_s *self, centity_s *other)
 {
     trigger_info_t *trigger_info; // [esp+4h] [ebp-4h]
 
-    if ( ((*((unsigned int *)other + 201) >> 1) & 1) == 0
+    if ( ((other->flagWord >> 1) & 1) == 0
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\cgame_mp\\cg_main_mp.cpp",
                     3630,
@@ -4141,13 +4149,13 @@ void __cdecl CG_Trigger(centity_s *self, centity_s *other)
 
 void __cdecl CG_multi_trigger(centity_s *ent)
 {
-    if ( ((*((unsigned int *)ent + 201) >> 17) & 1) != 0 )
+    if ( ((ent->flagWord >> 17) & 1) != 0 )
         CG_FreeEntityDelay(ent);
 }
 
 void __cdecl CG_Touch_Multi(centity_s *self, centity_s *other)
 {
-    if ( ((*((unsigned int *)other + 201) >> 1) & 1) != 0 )
+    if ( ((other->flagWord >> 1) & 1) != 0 )
     {
         CG_Trigger(self, other);
         CG_multi_trigger(other);

@@ -45,7 +45,7 @@ void *demoStreamingReady;
 unsigned int g_networkOverrideThread;
 ThreadOwner g_discReadsOwner;
 
-LONG smpData;
+void *smpData;
 int g_databaseStopServer;
 volatile unsigned int s_winThreadLock;
 
@@ -126,10 +126,10 @@ unsigned int Win_InitThreads()
     HANDLE CurrentProcess; // eax
     DWORD result; // eax
     DWORD cpuCount; // [esp+0h] [ebp-94h]
-    DWORD systemAffinityMask; // [esp+4h] [ebp-90h] BYREF
+    DWORD_PTR systemAffinityMask; // [esp+4h] [ebp-90h] BYREF
     DWORD threadAffinityMask; // [esp+8h] [ebp-8Ch]
     DWORD affinityMaskBits[33]; // [esp+Ch] [ebp-88h]
-    DWORD processAffinityMask; // [esp+90h] [ebp-4h] BYREF
+    DWORD_PTR processAffinityMask; // [esp+90h] [ebp-4h] BYREF
 
     CurrentProcess = GetCurrentProcess();
     result = GetProcessAffinityMask(CurrentProcess, &processAffinityMask, &systemAffinityMask);
@@ -241,7 +241,7 @@ void __cdecl Sys_CreateThread(void (__cdecl *function)(unsigned int), unsigned i
         0,
         0,
         Sys_ThreadMain,
-        (LPVOID)threadContext,
+        (LPVOID)(uintptr_t)threadContext,
         CREATE_SUSPENDED,
         &threadId[threadContext]);
 
@@ -282,7 +282,7 @@ void __cdecl SetThreadName(unsigned int dwThreadID, const char *szThreadName)
 
 DWORD WINAPI Sys_ThreadMain(LPVOID parameter)
 {
-    unsigned int threadContext = (unsigned int)parameter;
+    unsigned int threadContext = (unsigned int)(uintptr_t)parameter;
 
     bcassert(threadContext, THREAD_CONTEXT_COUNT);
     iassert(threadFunc[threadContext]);
@@ -477,9 +477,9 @@ void __cdecl Sys_ResumeThread(unsigned int threadContext)
     ResumeThread(threadHandle[threadContext]);
 }
 
-int __cdecl Sys_RendererSleep()
+void *__cdecl Sys_RendererSleep()
 {
-    return InterlockedExchange(&smpData, 0);
+    return InterlockedExchangePointer(&smpData, 0);
 }
 
 bool __cdecl Sys_RendererReady()
@@ -529,7 +529,7 @@ bool __cdecl Sys_WaitForSingleObjectTimeout(void **event, unsigned int msec)
 void __cdecl Sys_WakeRenderer(void *data)
 {
     Sys_ResetEvent(&renderCompletedEvent);
-    smpData = (int)data;
+    smpData = data;
     //PIXSetMarker(-1, "set smpData");
     Sys_SetEvent(&backendEvent[1]);
     Sys_SetWorkerCmdEvent();

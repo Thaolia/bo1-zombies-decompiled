@@ -794,7 +794,7 @@ void __thiscall UIViewer::Update(float deltaTime)
             memset((unsigned __int8 *)&pml, 0, sizeof(pml));
             pml.msec = (int)(float)(deltaTime * 1000.0);
             PM_Weapon(&this->pmove, &pml);
-            v6 = (unsigned int *)((char *)UIViewer::GetPlayerEntity() + 804);
+            v6 = &UIViewer::GetPlayerEntity()->flagWord;
             *v6 |= 2u;
             UIViewer::GetPlayerEntity()->nextState.eType = ET_PLAYER;
             UIViewer::GetPlayerEntity()->nextState.animState.state = this->ps.legsAnim;
@@ -915,7 +915,7 @@ void __thiscall UIViewer::DrawDobj::Set(
 {
     this->weaponOptions.i = weapParam->weaponOptions.i;
     this->weaponOptions.i = (playerParams->facePatternIndex << 26)
-                                                | ((unsigned int)&objBuf[1758][1] + 3) & this->weaponOptions.i;
+                                                | ((unsigned int)(uintptr_t)((unsigned int *)objBuf + 1758 * 31 + 1) + 3) & this->weaponOptions.i;
     this->heroLighting = hero;
     this->startTime = cls.realtime;
     this->weaponVariantDef = wvd;
@@ -1021,7 +1021,7 @@ const WeaponVariantDef *__thiscall UIViewer::GetWeaponVariantDef(const UIViewer:
     char *v4; // [esp+Ch] [ebp-A8h]
     char *v6; // [esp+14h] [ebp-A0h]
     const char *v7; // [esp+24h] [ebp-90h]
-    unsigned int v8; // [esp+28h] [ebp-8Ch]
+    uintptr_t v8; // [esp+28h] [ebp-8Ch]
     char *v10; // [esp+30h] [ebp-84h]
     char v11; // [esp+37h] [ebp-7Dh]
     char *v12; // [esp+3Ch] [ebp-78h]
@@ -1064,11 +1064,11 @@ const WeaponVariantDef *__thiscall UIViewer::GetWeaponVariantDef(const UIViewer:
         if ( attachRefs[i] && I_strcmp(attachRefs[i], "none") )
         {
             v7 = va("_%s", attachRefs[i]);
-            v8 = (unsigned int)&v7[strlen(v7) + 1];
+            v8 = (uintptr_t)&v7[strlen(v7) + 1];
             v6 = (char *)&attachRefs[3] + 3;
             while ( *++v6 )
                 ;
-            memcpy(v6, v7, v8 - (unsigned int)v7);
+            memcpy(v6, v7, v8 - (uintptr_t)v7);
         }
     }
     v4 = (char *)&attachRefs[3] + 3;
@@ -1367,7 +1367,7 @@ void __thiscall UIViewer::UpdatePlayerAnim(const WeaponVariantDef *weaponVariant
         WeaponIndexForName = BG_GetWeaponIndexForName((char *)weaponVariantDef->szInternalName, 0);
         AssignToSmallerType<unsigned short>(&this->ps.weapon, WeaponIndexForName);
         UIViewer::GetPlayerEntity()->nextState.weapon = this->ps.weapon;
-        v3 = (unsigned int *)((char *)UIViewer::GetPlayerEntity() + 804);
+        v3 = &UIViewer::GetPlayerEntity()->flagWord;
         *v3 |= 2u;
         UIViewer::GetPlayerEntity()->nextState.eType = ET_PLAYER;
         BG_SetConditionBit(0, 1, weaponVariantDef->weapDef->weapClass);
@@ -1473,15 +1473,15 @@ void __thiscall UIViewer::AddPlayerToScene(
     if (strcmp(this->playerCameraName, this->playerCameraDvar->current.string))
     {
         if (this->ingame)
-            v7 = UIViewer::SetCameraPos((char*)this->playerCameraDvar->current.integer, (char*)"ingame", animate);
+            v7 = UIViewer::SetCameraPos((char*)this->playerCameraDvar->current.string, (char*)"ingame", animate);
         else
-            v7 = UIViewer::SetCameraPos((char *)this->playerCameraDvar->current.integer, (char *)"none", animate);
+            v7 = UIViewer::SetCameraPos((char *)this->playerCameraDvar->current.string, (char *)"none", animate);
         if (!v7)
         {
             Dvar_SetString((dvar_s*)this->playerCameraDvar, "player");
-            UIViewer::SetCameraPos((char *)this->playerCameraDvar->current.integer, (char *)"none", animate);
+            UIViewer::SetCameraPos((char *)this->playerCameraDvar->current.string, (char *)"none", animate);
         }
-        integer = (char*)this->playerCameraDvar->current.integer;
+        integer = (char*)this->playerCameraDvar->current.string;
         playerCameraName = this->playerCameraName;
         do
         {

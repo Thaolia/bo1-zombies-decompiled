@@ -4,6 +4,7 @@
 #include <qcommon/net_chan_mp.h>
 #include <server_mp/sv_snapshot_mp.h>
 #include <server_mp/sv_voice_mp.h>
+#include <platform/arch_size.h>
 
 #ifdef BO1_DEMON 
 #define BO1_STATS
@@ -160,4 +161,4 @@ struct client_t // sizeof=0x84D00
 };
 // zombies: connectState sits in padding; the KB size (544120, before and after) must not change.
 // Note: SV_AllocateClientMemory allocates 544000 (the "sizeof=0x84D00" above) per client, 120 short.
-static_assert(sizeof(client_t) == 544120, "client_t size changed");
+static_assert(sizeof(client_t) == BO1_ARCH_SIZE(544120, 553024), "client_t size changed");

@@ -1778,7 +1778,7 @@ bool __cdecl CG_SightTracePoint(int *hitNum, const float *start, const float *en
         }
         if ( nintervals <= 0 )
             return CG_SightTracePointInternal(hitNum, start, end, mask, trace);
-        qsort(intervals, nintervals, 8u, (int (__cdecl *)(const void *, const void *))cmpr);
+        qsort(intervals, nintervals, sizeof(*(intervals)), (int (__cdecl *)(const void *, const void *))cmpr);
         v11 = 0.0f;
         dir = *end - *start;
         dir_4 = end[1] - start[1];

@@ -381,7 +381,7 @@ void CG_SP_ClearPhysicsGravityTable()
 // zombies: the table's reader in CG_CreateRagdollObject (SP 0x0046ad10, from 0x0046ada4, zombiemode only): find the
 // centity's slot; for a created ragdoll (handle > 0) the body takes the override (SP body+0xa24 = found, +0xa28 = value);
 // a found slot is freed even when no ragdoll was created (SP 0x0046ae0f).
-void CG_SP_ApplyPhysicsGravity(centity_s *cent, int ragdollHandle)
+void CG_SP_ApplyPhysicsGravity(centity_s *cent, intptr_t ragdollHandle)
 {
     int i;
 

@@ -294,10 +294,10 @@ bool __cdecl LiveStorage_DecompressBuffer(
     int err; // [esp+0h] [ebp-38h]
     z_stream_s stream; // [esp+4h] [ebp-34h] BYREF
 
-    memset(&stream.zalloc, 0, 12);
+    memset(&stream.zalloc, 0, sizeof(stream.zalloc) + sizeof(stream.zfree) + sizeof(stream.opaque));
     stream.avail_in = compressedSize;
     stream.next_in = compressedBuffer;
-    inflateInit2_(&stream, 15, "1.2.3", 52);
+    inflateInit2_(&stream, 15, "1.2.3", sizeof(stream));
     stream.avail_out = uncompressedSize;
     stream.next_out = uncompressedBuffer;
     err = inflate(&stream, 0);

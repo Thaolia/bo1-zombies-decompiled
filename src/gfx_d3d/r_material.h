@@ -4,6 +4,7 @@
 #include <database/database.h>
 #include <universal/fft.h>
 #include "r_gfx.h"
+#include <platform/arch_size.h>
 
 #define STREAM_SRC_COUNT 10
 
@@ -232,7 +233,7 @@ struct MaterialTechniqueSet // sizeof=0x210
         unsigned __int16 techsetFlags;
         MaterialTechnique *techniques[130];
 };
-static_assert(sizeof(MaterialTechniqueSet) == 528);
+static_assert(sizeof(MaterialTechniqueSet) == BO1_ARCH_SIZE(528, 1056));
 
 struct __declspec(align(4)) GfxImageLoadDef // sizeof=0x10
 {
@@ -394,7 +395,7 @@ struct Material // sizeof=0xC0
         };
         GfxStateBits *stateBitsTable;
 };
-static_assert(sizeof(Material) == 192);
+static_assert(sizeof(Material) == BO1_ARCH_SIZE(192, 208));
 
 
 struct stream_source_info_t // sizeof=0x3

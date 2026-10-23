@@ -5,6 +5,7 @@
 
 #include <Windows.h> // interlockedxchg
 #include <cmath>
+#include <platform/arch_size.h>
 
 struct phys_vec2 // sizeof=0x8
 {                                                                             // XREF: contact_manifold_mesh_point/r
@@ -205,14 +206,14 @@ inline phys_vec3 operator/(const phys_vec3 &a, float d)
 
 struct bpei_database_id // sizeof=0x8
 {                                       // XREF: broad_phase_environment_info/r
-    unsigned int m_id1;                 // XREF: gjk_physics_collision_visitor::query_create_prolog(void const *)+5F/w
-    unsigned int m_id2;                 // XREF: gjk_physics_collision_visitor::query_create_prolog(void const *)+65/w
+    uintptr_t m_id1;                    // XREF: gjk_physics_collision_visitor::query_create_prolog(void const *)+5F/w
+    uintptr_t m_id2;                 // XREF: gjk_physics_collision_visitor::query_create_prolog(void const *)+65/w
 
     bpei_database_id()
     {
     }
 
-    bpei_database_id(unsigned int id) // this is psycho, but it looks like what's going on
+    bpei_database_id(uintptr_t id) // this is psycho, but it looks like what's going on
     {
         m_id1 = id;
         m_id2 = 0;
@@ -239,7 +240,7 @@ struct __declspec(align(16)) plane_lt // sizeof=0x20
 
 struct chull_t // sizeof=0x20
 {
-    unsigned int key;
+    uintptr_t key;
     int nverts;
     phys_vec3 *verts;
     int ninds;
@@ -248,7 +249,7 @@ struct chull_t // sizeof=0x20
     int touched;
     chull_t *next_list;
 };
-static_assert(sizeof(chull_t) == 0x20);
+static_assert(sizeof(chull_t) == BO1_ARCH_SIZE(0x20, 64));
 
 struct minspec_mutex // sizeof=0x4
 {                                       // XREF: .data:minspec_mutex g_render_mutex/r
@@ -912,6 +913,8 @@ public:
         T m_data;
         int m_ptr_list_index;
     };
+    // 64-bit slots hold pointers that the slot pool swaps atomically, so they get at least pointer alignment.
+    static constexpr unsigned int T_internal_alignment() { return sizeof(T_internal) % 16 == 0 ? 16 : (sizeof(void *) == 8 ? 8 : 4); }
 
     struct iterator//phys_free_list<broad_phase_collision_pair>::iterator // sizeof=0x4
     {
@@ -927,6 +930,11 @@ public:
         bool operator==(const iterator &rhs) const { return m_ptr == rhs.m_ptr; }
         bool operator!=(const iterator &rhs) const { return m_ptr != rhs.m_ptr; }
     };
+
+    // The decompiled walks reach a node's data as `(T *)&node[2]`, which is m_data only while T_internal_base is 8
+    // bytes (and T 16-aligned): on 64-bit the base is 16 and m_data stays at 16.
+    static T *data_of(T_internal_base *node) { return &((T_internal *)node)->m_data; }
+    static T_internal_base *node_of(T *data) { return (T_internal_base *)((char *)data - offsetof(T_internal, m_data)); }
 
     // add iterator (idk how accurate this is)
     iterator begin() { return iterator(m_dummy_head.m_next_T_internal); }
@@ -980,7 +988,7 @@ public:
 
     T *add(int no_error, const char *error_msg)
     {
-        T_internal *ptr = (T_internal *)PMM_ALLOC(sizeof(T_internal), sizeof(T_internal) % 16 == 0 ? 16 : 4);
+        T_internal *ptr = (T_internal *)PMM_ALLOC(sizeof(T_internal), T_internal_alignment());
 
         if (ptr)
         {
@@ -1030,7 +1038,7 @@ public:
         prev->m_next_T_internal = next;
         next->m_prev_T_internal = prev;
         //data->m_data.~T();
-        PMM_FREE((unsigned __int8 *)data, sizeof(T_internal), sizeof(T_internal) % 16 == 0 ? 16 : 4);
+        PMM_FREE((unsigned __int8 *)data, sizeof(T_internal), T_internal_alignment());
     }
 
     void remove(T *data_)
@@ -1038,7 +1046,7 @@ public:
         if (data_)
         {
             T_internal *ti = (T_internal *)((char *)data_ - offsetof(T_internal, m_data));
-            PMM_VALIDATE((char *)ti, sizeof(T_internal), sizeof(T_internal) % 16 == 0 ? 16 : 4);
+            PMM_VALIDATE((char *)ti, sizeof(T_internal), T_internal_alignment());
             remove(ti);
         }
     }
@@ -1056,7 +1064,7 @@ public:
             prev->m_next_T_internal = next;
             next->m_prev_T_internal = prev;
             //data->m_data.~T();
-            PMM_FREE((unsigned __int8 *)data, sizeof(T_internal), sizeof(T_internal) % 16 == 0 ? 16 : 4);
+            PMM_FREE((unsigned __int8 *)data, sizeof(T_internal), T_internal_alignment());
         }
     }
 
@@ -1069,7 +1077,7 @@ public:
             i != (T_internal_base *)this;
             ++ptr_array)
         {
-            *ptr_array = (T*)&i[1];
+            *ptr_array = data_of(i);
             i = i->m_next_T_internal;
         }
     }
@@ -1077,32 +1085,32 @@ public:
     void ptr_array_write(T **ptr_array, int ptr_array_size)
     {
         T **v4; // edx
-        T_internal_base *p_m_avl_key; // eax
+        T_internal_base *node; // eax
         T**v6; // esi
-        T_internal_base *v7; // ecx
+        T_internal_base *next; // ecx
 
         iassert(ptr_array_size == m_list_count);
 
         if (ptr_array_size > 0)
         {
             v4 = ptr_array;
-            p_m_avl_key = (T_internal_base *) & (*ptr_array)[-1].m_avl_key;
+            node = node_of(*ptr_array);
             v6 = &ptr_array[ptr_array_size - 1];
-            p_m_avl_key->m_prev_T_internal = &this->m_dummy_head;
-            this->m_dummy_head.m_next_T_internal = p_m_avl_key;
+            node->m_prev_T_internal = &this->m_dummy_head;
+            this->m_dummy_head.m_next_T_internal = node;
             if (ptr_array < v6)
             {
                 do
                 {
-                    v7 = (T_internal_base *)v4[1];
+                    next = node_of(v4[1]);
                     ++v4;
-                    p_m_avl_key->m_next_T_internal = --v7;
-                    v7->m_prev_T_internal = p_m_avl_key;
-                    p_m_avl_key = v7;
+                    node->m_next_T_internal = next;
+                    next->m_prev_T_internal = node;
+                    node = next;
                 } while (v4 < v6);
             }
-            p_m_avl_key->m_next_T_internal = &this->m_dummy_head;
-            this->m_dummy_head.m_prev_T_internal = p_m_avl_key;
+            node->m_next_T_internal = &this->m_dummy_head;
+            this->m_dummy_head.m_prev_T_internal = node;
         }
     }
 };

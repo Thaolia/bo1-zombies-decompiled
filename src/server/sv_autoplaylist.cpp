@@ -207,7 +207,7 @@ int __cdecl SV_AP_PlaylistFromDistribution()
             playlists[j].diff = (int)((double)totalservers * ((double)s_probabilities[j] / 100.0)) - dword_979CF90[3 * j];
             playlists[j].playlist = j;
         }
-        qsort(playlists, 0x40u, 8u, (int (__cdecl *)(const void *, const void *))comparePlaylists);
+        qsort(playlists, 0x40u, sizeof(*(playlists)), (int (__cdecl *)(const void *, const void *))comparePlaylists);
         for ( k = 0; k < 64; ++k )
         {
             if ( playlists[k].diff > 0 )

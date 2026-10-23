@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 
 struct MapEnts // sizeof=0xC
 {                                       // XREF: XAssetPoolEntry<MapEnts>/r
@@ -74,14 +75,14 @@ MapEnts *__cdecl MapEnts_GetFromString(char *name, const char *entityString, int
 bool __cdecl CMod_HasSpawnString(const SpawnVar *userData, const char *key);
 void __cdecl CM_LoadMapFromBsp(const char *name, bool usePvs);
 void CMod_LoadMaterials();
-unsigned int CMod_LoadNodes();
+uintptr_t CMod_LoadNodes();
 void CMod_LoadLeafSurfaces();
 void CMod_LoadCollisionVerts();
 void CMod_LoadCollisionTriangles();
 void CMod_LoadPartitionIndices();
 void CMod_LoadCollisionEdgeWalkable();
-unsigned int CMod_LoadCollisionBorders();
-unsigned int CMod_LoadCollisionPartitions();
+uintptr_t CMod_LoadCollisionBorders();
+uintptr_t CMod_LoadCollisionPartitions();
 MapEnts *CMod_LoadEntityString();
 void CMod_LoadVisibility();
 void __cdecl CMod_LoadBrushRelated(unsigned int version, bool usePvs);
@@ -108,7 +109,7 @@ void __cdecl CMod_LoadLeafs_Version14(bool usePvs);
 cLeaf_s *CMod_LoadLeafBrushNodes();
 unsigned int CMod_LoadLeafBrushNodes_Version14();
 unsigned int CMod_LoadLeafBrushes();
-unsigned int CMod_LoadCollisionAabbTrees();
+uintptr_t CMod_LoadCollisionAabbTrees();
 unsigned __int16 *CM_InitBoxHull();
 cplane_s *__cdecl CM_GetPlanes();
 int __cdecl CM_GetPlaneCount();

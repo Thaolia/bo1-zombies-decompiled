@@ -97,7 +97,7 @@ void __cdecl Path_CreateNodes()
     pathstatic.pathLinks = 0;
     pathstatic.indirectNodes = 0;
     pathstatic.pathbuf = 0;
-    gameWorldCurrent->path.nodes = (pathnode_t *)Hunk_Alloc(0x100000u, "Path_CreateNodes", 6);
+    gameWorldCurrent->path.nodes = (pathnode_t *)Hunk_Alloc(8192 * sizeof(pathnode_t), "Path_CreateNodes", 6);
     gameWorldCurrent->path.basenodes = (pathbasenode_t *)Hunk_Alloc(0x20000u, "Path_CreateNodes", 6);
 }
 
@@ -1000,7 +1000,7 @@ pathnode_tree_t *__cdecl Path_BuildNodeBsp_r(unsigned __int16 *nodes, int numNod
 pathnode_tree_t *__cdecl Path_AllocPathnodeTree()
 {
     ++gameWorldCurrent->path.nodeTreeCount;
-    return (pathnode_tree_t *)Hunk_AllocAlign(0x10u, 4, "Path_AllocPathnodeTree", 6);
+    return (pathnode_tree_t *)Hunk_AllocAlign(sizeof(pathnode_tree_t), alignof(pathnode_tree_t), "Path_AllocPathnodeTree", 6);
 }
 
 int __cdecl ExpandedNodeVisCacheEntry_0(int i, int j)

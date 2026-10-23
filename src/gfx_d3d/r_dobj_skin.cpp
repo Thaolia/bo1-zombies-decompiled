@@ -145,7 +145,8 @@ unsigned int    R_SkinSceneDObjModels(
     unsigned int boneIndex; // [esp-1C14h] [ebp-1C20h]
     unsigned int numSkinnedVerts; // [esp-1C10h] [ebp-1C1Ch] BYREF
     GfxModelSkinnedSurface *surfPos; // [esp-1C0Ch] [ebp-1C18h]
-    unsigned __int8 surfsBuffer[7488]; // [esp-1C08h] [ebp-1C14h] BYREF
+    // A 64-bit record is at most twice its 32-bit size (only its pointers grow); it holds pointers, so align it.
+    alignas(BO1_ARCH_SIZE(1, 16)) unsigned __int8 surfsBuffer[BO1_ARCH_SIZE(7488, 2 * 7488)]; // [esp-1C08h] [ebp-1C14h] BYREF
     //int v51; // [esp+8h] [ebp-4h]
     //int retaddr; // [esp+Ch] [ebp+0h]
 
@@ -322,7 +323,7 @@ unsigned int    R_SkinSceneDObjModels(
                 skinnedSurf = surfPos2_;
                 if (surfPos2_->skinnedCachedOffset == -2)
                 {
-                    surfPos2_ = (GfxModelSkinnedSurface *)((char *)surfPos2_ + 56);
+                    surfPos2_ = (GfxModelSkinnedSurface *)((char *)surfPos2_ + sizeof(GfxModelRigidSurface));
                 }
                 else if (surfPos2_->skinnedCachedOffset == -3)
                 {
@@ -373,7 +374,7 @@ unsigned int    R_SkinSceneDObjModels(
                 surfPos2__ = surfPos2;
                 if (surfPos2->skinnedCachedOffset == -2)
                 {
-                    surfPos2 = (GfxModelSkinnedSurface *)((char *)surfPos2 + 56);
+                    surfPos2 = (GfxModelSkinnedSurface *)((char *)surfPos2 + sizeof(GfxModelRigidSurface));
                 }
                 else if (surfPos2->skinnedCachedOffset == -3)
                 {
@@ -382,7 +383,7 @@ unsigned int    R_SkinSceneDObjModels(
                 else
                 {
                     ++surfPos2;
-                    surfPos2__->oldSkinnedCachedOffset = (int)&frontEndDataOut->tempSkinBuf[32 * surfPos2__->skinnedCachedOffset
+                    surfPos2__->skinnedVert = (GfxPackedVertex *)&frontEndDataOut->tempSkinBuf[32 * surfPos2__->skinnedCachedOffset
                         + firstSurf];
                     surfPos2__->skinnedCachedOffset = -1;
                 }

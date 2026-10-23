@@ -235,6 +235,28 @@ void __cdecl Sys_HeadlessLogAssert(const char *filename, int line, const char *m
     Sys_HeadlessEmergencyLog("BO1_HEADLESS ASSERT: %s(%d): %s\n", filename, line, message);
 }
 
+// The crash and hang reports read a thread CONTEXT's stack, frame and instruction pointers, whose register names and
+// dbghelp machine type depend on the architecture; elsewhere they only report the exception itself. Addresses print
+// in full width.
+#if defined(_M_IX86) || defined(__i386__)
+#define SYS_CONTEXT_SP(ctx) ((ctx).Esp)
+#define SYS_CONTEXT_FP(ctx) ((ctx).Ebp)
+#define SYS_CONTEXT_PC(ctx) ((ctx).Eip)
+#define SYS_STACKWALK_MACHINE IMAGE_FILE_MACHINE_I386
+#elif defined(_M_X64) || defined(__x86_64__)
+#define SYS_CONTEXT_SP(ctx) ((ctx).Rsp)
+#define SYS_CONTEXT_FP(ctx) ((ctx).Rbp)
+#define SYS_CONTEXT_PC(ctx) ((ctx).Rip)
+#define SYS_STACKWALK_MACHINE IMAGE_FILE_MACHINE_AMD64
+#endif
+#if defined(_WIN64)
+#define SYS_ADDR_X "llX"
+typedef unsigned long long SysAddrPrint;
+#else
+#define SYS_ADDR_X "X"
+typedef unsigned int SysAddrPrint;
+#endif
+
 // headless: record where a crash happened, then let WER (no UI, see WinMain) write Application Error 1000 and end it
 static LONG __stdcall Sys_HeadlessExceptionFilter(_EXCEPTION_POINTERS *info)
 {
@@ -249,53 +271,58 @@ static LONG __stdcall Sys_HeadlessExceptionFilter(_EXCEPTION_POINTERS *info)
         moduleName = slash ? slash + 1 : modulePath;
     }
     Sys_HeadlessEmergencyLog(
-        "BO1_HEADLESS CRASH: exception 0x%08X at 0x%08X (%s+0x%X), thread %u\n",
+        "BO1_HEADLESS CRASH: exception 0x%08X at 0x%08" SYS_ADDR_X " (%s+0x%X), thread %u\n",
         (unsigned int)rec->ExceptionCode,
-        (unsigned int)rec->ExceptionAddress,
+        (SysAddrPrint)(uintptr_t)rec->ExceptionAddress,
         moduleName,
-        (unsigned int)rec->ExceptionAddress - (unsigned int)module,
+        (unsigned int)((uintptr_t)rec->ExceptionAddress - (uintptr_t)module),
         (unsigned int)GetCurrentThreadId());
-    // the return addresses on the faulting stack that point into this module, innermost first (a stack scan, so
-    // stale words can appear): feed the offsets to llvm-symbolizer for a call stack
-    if (module && module == GetModuleHandleA(NULL))
+    // the return addresses on the faulting stack that point into the exe, innermost first (a stack scan, so stale
+    // words can appear): feed the offsets to llvm-symbolizer for a call stack. A fault inside a DLL (memset in
+    // VCRUNTIME140) is scanned too, for the exe frames that called it.
+#if defined(SYS_CONTEXT_SP)
+    HMODULE exe = GetModuleHandleA(NULL);
+    if (exe)
     {
-        const IMAGE_NT_HEADERS *nt = (const IMAGE_NT_HEADERS *)((const char *)module + ((const IMAGE_DOS_HEADER *)module)->e_lfanew);
-        unsigned int base = (unsigned int)module;
-        unsigned int end = base + nt->OptionalHeader.SizeOfImage;
-        const unsigned int *sp = (const unsigned int *)info->ContextRecord->Esp;
+        const IMAGE_NT_HEADERS *nt = (const IMAGE_NT_HEADERS *)((const char *)exe + ((const IMAGE_DOS_HEADER *)exe)->e_lfanew);
+        uintptr_t base = (uintptr_t)exe;
+        uintptr_t end = base + nt->OptionalHeader.SizeOfImage;
+        const uintptr_t *sp = (const uintptr_t *)SYS_CONTEXT_SP(*info->ContextRecord);
         char line[1024];
         int len = _snprintf(line, sizeof(line), "BO1_HEADLESS STACK:");
         int found = 0;
         for (int i = 0; i < 2048 && found < 40 && len < (int)sizeof(line) - 16; ++i)
         {
-            unsigned int v;
-            if (IsBadReadPtr(sp + i, 4))
+            uintptr_t v;
+            if (IsBadReadPtr(sp + i, sizeof(*sp)))
                 break;
             v = sp[i];
             if (v > base + 0x1000 && v < end)
             {
-                len += _snprintf(line + len, sizeof(line) - len, " +0x%X", v - base);
+                len += _snprintf(line + len, sizeof(line) - len, " +0x%X", (unsigned int)(v - base));
                 ++found;
             }
         }
         Sys_HeadlessEmergencyLog("%s\n", line);
         // the same stack by its EBP chain (the exe keeps frame pointers): the caller of each frame, innermost
         // first, no stale words. A frame that omits EBP is skipped over, not listed.
-        const unsigned int *fp = (const unsigned int *)info->ContextRecord->Ebp;
+        const uintptr_t *fp = (const uintptr_t *)SYS_CONTEXT_FP(*info->ContextRecord);
         len = _snprintf(line, sizeof(line), "BO1_HEADLESS FRAMES:");
         for (int i = 0; i < 40 && len < (int)sizeof(line) - 16; ++i)
         {
-            if ((unsigned int)fp < info->ContextRecord->Esp || ((unsigned int)fp & 3) || IsBadReadPtr(fp, 8))
+            if ((uintptr_t)fp < SYS_CONTEXT_SP(*info->ContextRecord) || ((uintptr_t)fp & (sizeof(uintptr_t) - 1))
+                || IsBadReadPtr(fp, 2 * sizeof(uintptr_t)))
                 break;
-            const unsigned int ret = fp[1];
+            const uintptr_t ret = fp[1];
             if (ret > base + 0x1000 && ret < end)
-                len += _snprintf(line + len, sizeof(line) - len, " +0x%X", ret - base);
-            if (fp[0] <= (unsigned int)fp)
+                len += _snprintf(line + len, sizeof(line) - len, " +0x%X", (unsigned int)(ret - base));
+            if (fp[0] <= (uintptr_t)fp)
                 break;
-            fp = (const unsigned int *)fp[0];
+            fp = (const uintptr_t *)fp[0];
         }
         Sys_HeadlessEmergencyLog("%s\n", line);
     }
+#endif
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -319,7 +346,7 @@ static LONG __stdcall Sys_LoggingExceptionFilter(_EXCEPTION_POINTERS *info)
 static unsigned int s_threadDumpMs;
 static DWORD s_mainThreadId;
 
-static bool Sys_IsCallReturn(unsigned int base, unsigned int end, unsigned int v)
+static bool Sys_IsCallReturn(uintptr_t base, uintptr_t end, uintptr_t v)
 {
     // a return address follows a call: E8 rel32 (5 bytes back) or FF /2 (2, 3, 6 or 7 bytes back)
     if (v < base + 0x1000 + 7 || v >= end)
@@ -349,13 +376,13 @@ typedef BOOL(WINAPI *SysStackWalk64_t)(DWORD, HANDLE, HANDLE, LPSTACKFRAME64, PV
 static SysStackWalk64_t s_stackWalk64;
 static PFUNCTION_TABLE_ACCESS_ROUTINE64 s_symFunctionTableAccess64;
 static PGET_MODULE_BASE_ROUTINE64 s_symGetModuleBase64;
-static const unsigned int *s_walkStack;
-static unsigned int s_walkEsp;
+static const uintptr_t *s_walkStack;
+static uintptr_t s_walkEsp;
 static unsigned int s_walkCopied;
 
 static BOOL __stdcall Sys_HeadlessWalkRead(HANDLE, DWORD64 addr, PVOID buffer, DWORD size, LPDWORD read)
 {
-    const unsigned int a = (unsigned int)addr;
+    const uintptr_t a = (uintptr_t)addr;
     if (a >= s_walkEsp && a - s_walkEsp + size <= s_walkCopied)
     {
         memcpy(buffer, (const char *)s_walkStack + (a - s_walkEsp), size);
@@ -399,11 +426,12 @@ static bool Sys_HeadlessWalkInit()
 
 static void Sys_HeadlessDumpThreads(int pass)
 {
+#if defined(SYS_CONTEXT_SP)
     HMODULE module = GetModuleHandleA(NULL);
     const IMAGE_NT_HEADERS *nt = (const IMAGE_NT_HEADERS *)((const char *)module + ((const IMAGE_DOS_HEADER *)module)->e_lfanew);
-    unsigned int base = (unsigned int)module;
-    unsigned int end = base + nt->OptionalHeader.SizeOfImage;
-    static unsigned int stack[8192];
+    uintptr_t base = (uintptr_t)module;
+    uintptr_t end = base + nt->OptionalHeader.SizeOfImage;
+    static uintptr_t stack[8192];
     static char line[4096];
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (snap == INVALID_HANDLE_VALUE)
@@ -430,29 +458,29 @@ static void Sys_HeadlessDumpThreads(int pass)
                 got = true;
                 MEMORY_BASIC_INFORMATION mbi;
                 SIZE_T want = sizeof(stack);
-                if (VirtualQuery((const void *)ctx.Esp, &mbi, sizeof(mbi)))
+                if (VirtualQuery((const void *)SYS_CONTEXT_SP(ctx), &mbi, sizeof(mbi)))
                 {
-                    SIZE_T left = (SIZE_T)mbi.BaseAddress + mbi.RegionSize - ctx.Esp;
+                    SIZE_T left = (SIZE_T)mbi.BaseAddress + mbi.RegionSize - SYS_CONTEXT_SP(ctx);
                     if (left < want)
                         want = left;
                 }
-                ReadProcessMemory(GetCurrentProcess(), (const void *)ctx.Esp, stack, want, &copied);
+                ReadProcessMemory(GetCurrentProcess(), (const void *)SYS_CONTEXT_SP(ctx), stack, want, &copied);
             }
             ResumeThread(th);
         }
         CloseHandle(th);
         if (!got)
             continue;
-        int len = _snprintf(line, sizeof(line), "BO1_HEADLESS THREAD %u: eip %s0x%X stack",
+        int len = _snprintf(line, sizeof(line), "BO1_HEADLESS THREAD %u: eip %s0x%" SYS_ADDR_X " stack",
             (unsigned int)te.th32ThreadID,
-            ctx.Eip >= base && ctx.Eip < end ? "+" : "abs ",
-            ctx.Eip >= base && ctx.Eip < end ? (unsigned int)(ctx.Eip - base) : (unsigned int)ctx.Eip);
+            SYS_CONTEXT_PC(ctx) >= base && SYS_CONTEXT_PC(ctx) < end ? "+" : "abs ",
+            SYS_CONTEXT_PC(ctx) >= base && SYS_CONTEXT_PC(ctx) < end ? (SysAddrPrint)(SYS_CONTEXT_PC(ctx) - base) : (SysAddrPrint)SYS_CONTEXT_PC(ctx));
         int found = 0;
-        for (unsigned int i = 0; i < copied / 4 && found < 48 && len < (int)sizeof(line) - 16; ++i)
+        for (unsigned int i = 0; i < copied / sizeof(stack[0]) && found < 48 && len < (int)sizeof(line) - 16; ++i)
         {
             if (Sys_IsCallReturn(base, end, stack[i]))
             {
-                len += _snprintf(line + len, sizeof(line) - len, " +0x%X", stack[i] - base);
+                len += _snprintf(line + len, sizeof(line) - len, " +0x%X", (unsigned int)(stack[i] - base));
                 ++found;
             }
         }
@@ -460,14 +488,14 @@ static void Sys_HeadlessDumpThreads(int pass)
         // x6 c32: the same stack by its EBP chain, read from the copy (as the crash FRAMES line): no stale words;
         // frames that omit EBP are skipped over, not listed.
         len = _snprintf(line, sizeof(line), "BO1_HEADLESS THREADFRAMES %u: ebp", (unsigned int)te.th32ThreadID);
-        unsigned int fp = ctx.Ebp;
+        uintptr_t fp = SYS_CONTEXT_FP(ctx);
         for (int i = 0; i < 48 && len < (int)sizeof(line) - 16; ++i)
         {
-            if (fp < ctx.Esp || (fp & 3) || fp - ctx.Esp + 8 > copied)
+            if (fp < SYS_CONTEXT_SP(ctx) || (fp & (sizeof(uintptr_t) - 1)) || fp - SYS_CONTEXT_SP(ctx) + 2 * sizeof(uintptr_t) > copied)
                 break;
-            const unsigned int *frame = &stack[(fp - ctx.Esp) / 4];
+            const uintptr_t *frame = &stack[(fp - SYS_CONTEXT_SP(ctx)) / sizeof(stack[0])];
             if (frame[1] > base + 0x1000 && frame[1] < end)
-                len += _snprintf(line + len, sizeof(line) - len, " +0x%X", frame[1] - base);
+                len += _snprintf(line + len, sizeof(line) - len, " +0x%X", (unsigned int)(frame[1] - base));
             if (frame[0] <= fp)
                 break;
             fp = frame[0];
@@ -478,34 +506,37 @@ static void Sys_HeadlessDumpThreads(int pass)
             // every frame's return address, this exe's as +offsets (for llvm-symbolizer), others as abs
             len = _snprintf(line, sizeof(line), "BO1_HEADLESS THREADWALK %u: walk", (unsigned int)te.th32ThreadID);
             s_walkStack = stack;
-            s_walkEsp = ctx.Esp;
+            s_walkEsp = SYS_CONTEXT_SP(ctx);
             s_walkCopied = (unsigned int)copied;
             CONTEXT walkCtx = ctx;
             STACKFRAME64 sf;
             memset(&sf, 0, sizeof(sf));
-            sf.AddrPC.Offset = ctx.Eip;
+            sf.AddrPC.Offset = SYS_CONTEXT_PC(ctx);
             sf.AddrPC.Mode = AddrModeFlat;
-            sf.AddrFrame.Offset = ctx.Ebp;
+            sf.AddrFrame.Offset = SYS_CONTEXT_FP(ctx);
             sf.AddrFrame.Mode = AddrModeFlat;
-            sf.AddrStack.Offset = ctx.Esp;
+            sf.AddrStack.Offset = SYS_CONTEXT_SP(ctx);
             sf.AddrStack.Mode = AddrModeFlat;
             for (int i = 0; i < 64 && len < (int)sizeof(line) - 20; ++i)
             {
-                if (!s_stackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), NULL, &sf, &walkCtx, Sys_HeadlessWalkRead,
+                if (!s_stackWalk64(SYS_STACKWALK_MACHINE, GetCurrentProcess(), NULL, &sf, &walkCtx, Sys_HeadlessWalkRead,
                         s_symFunctionTableAccess64, s_symGetModuleBase64, NULL))
                     break;
-                const unsigned int pc = (unsigned int)sf.AddrPC.Offset;
+                const uintptr_t pc = (uintptr_t)sf.AddrPC.Offset;
                 if (!pc)
                     break;
                 if (pc >= base && pc < end)
-                    len += _snprintf(line + len, sizeof(line) - len, " +0x%X", pc - base);
+                    len += _snprintf(line + len, sizeof(line) - len, " +0x%X", (unsigned int)(pc - base));
                 else
-                    len += _snprintf(line + len, sizeof(line) - len, " abs:%X", pc);
+                    len += _snprintf(line + len, sizeof(line) - len, " abs:%" SYS_ADDR_X, (SysAddrPrint)pc);
             }
             Sys_HeadlessThreadLog("%s\n", line);
         }
     }
     CloseHandle(snap);
+#else
+    Sys_HeadlessThreadLog("BO1_HEADLESS THREADDUMP %d: no stack dump on this architecture\n", pass);
+#endif
 }
 
 static DWORD __stdcall Sys_HeadlessThreadDumpThread(void *)
@@ -2055,7 +2086,7 @@ int __cdecl Sys_IsGameProcess(unsigned int id)
     if ( snapshot == (void *)-1 )
         return 0;
     isGame = 0;
-    me.dwSize = 548;
+    me.dwSize = sizeof(me);
     if ( Module32First(snapshot, &me) )
     {
         GetModuleFileNameA(0, modulePath, 0x104u);
@@ -2176,6 +2207,7 @@ int __cdecl PrivateUnhandledExceptionFilter(_EXCEPTION_POINTERS *ExceptionInfo)
         &g_ExceptionStr[strlen(g_ExceptionStr)],
         "Exception Address: %08x\n\n",
         ExceptionInfo->ExceptionRecord->ExceptionAddress);
+#if defined(_M_IX86) || defined(__i386__)
     if ((ExceptionInfo->ContextRecord->ContextFlags & 0x10001) != 0)
         sprintf(
             &g_ExceptionStr[strlen(g_ExceptionStr)],
@@ -2232,6 +2264,64 @@ int __cdecl PrivateUnhandledExceptionFilter(_EXCEPTION_POINTERS *ExceptionInfo)
         }
         strcat(g_ExceptionStr, "\n");
     }
+#elif defined(_M_X64) || defined(__x86_64__)
+    if ((ExceptionInfo->ContextRecord->ContextFlags & CONTEXT_CONTROL) != 0)
+        sprintf(
+            &g_ExceptionStr[strlen(g_ExceptionStr)],
+            "RBP: %016llx\tRIP: %016llx\tSEGCS: %08x\tRSP: %016llx\tSEGSS: %08x\tEFLAGS: %08x\n\n",
+            (unsigned long long)ExceptionInfo->ContextRecord->Rbp,
+            (unsigned long long)ExceptionInfo->ContextRecord->Rip,
+            (unsigned int)ExceptionInfo->ContextRecord->SegCs,
+            (unsigned long long)ExceptionInfo->ContextRecord->Rsp,
+            (unsigned int)ExceptionInfo->ContextRecord->SegSs,
+            (unsigned int)ExceptionInfo->ContextRecord->EFlags);
+    if ((ExceptionInfo->ContextRecord->ContextFlags & CONTEXT_SEGMENTS) != 0)
+        sprintf(
+            &g_ExceptionStr[strlen(g_ExceptionStr)],
+            "SEGGS: %08x\tSEGFS: %08x\tSEGES: %08x\tSEGDS: %08x\n",
+            (unsigned int)ExceptionInfo->ContextRecord->SegGs,
+            (unsigned int)ExceptionInfo->ContextRecord->SegFs,
+            (unsigned int)ExceptionInfo->ContextRecord->SegEs,
+            (unsigned int)ExceptionInfo->ContextRecord->SegDs);
+    if ((ExceptionInfo->ContextRecord->ContextFlags & CONTEXT_INTEGER) != 0)
+        sprintf(
+            &g_ExceptionStr[strlen(g_ExceptionStr)],
+            "RDI: %016llx\tRSI: %016llx\nRAX: %016llx\tRBX: %016llx\nRCX: %016llx\tRDX: %016llx\n\n",
+            (unsigned long long)ExceptionInfo->ContextRecord->Rdi,
+            (unsigned long long)ExceptionInfo->ContextRecord->Rsi,
+            (unsigned long long)ExceptionInfo->ContextRecord->Rax,
+            (unsigned long long)ExceptionInfo->ContextRecord->Rbx,
+            (unsigned long long)ExceptionInfo->ContextRecord->Rcx,
+            (unsigned long long)ExceptionInfo->ContextRecord->Rdx);
+    if ((ExceptionInfo->ContextRecord->ContextFlags & CONTEXT_CONTROL) != 0)
+    {
+        strcat(g_ExceptionStr, "Stack Bytes: \n");
+        for (i = 0; i < 128; ++i)
+        {
+            for (j = 0; j < 8; ++j)
+            {
+                sprintf(
+                    &g_ExceptionStr[strlen(g_ExceptionStr)],
+                    "%02x",
+                    *(unsigned __int8 *)(ExceptionInfo->ContextRecord->Rsp + j + 8 * i));
+                strcat(g_ExceptionStr, " ");
+            }
+            strcat(g_ExceptionStr, "\t[");
+            for (ja = 0; ja < 8; ++ja)
+            {
+                if (*(unsigned __int8 *)(ExceptionInfo->ContextRecord->Rsp + ja + 8 * i) >= 0x21u)
+                    sprintf(
+                        &g_ExceptionStr[strlen(g_ExceptionStr)],
+                        "%c",
+                        *(unsigned __int8 *)(ExceptionInfo->ContextRecord->Rsp + ja + 8 * i));
+                else
+                    sprintf(&g_ExceptionStr[strlen(g_ExceptionStr)], ".");
+            }
+            strcat(g_ExceptionStr, "]\n");
+        }
+        strcat(g_ExceptionStr, "\n");
+    }
+#endif
     v2 = Win_LocalizeRef("WIN_ERROR");
     Com_Error(ERR_FATAL, v2);
     return 1;
@@ -2474,7 +2564,7 @@ void Win_RegisterClass()
     tagWNDCLASSEXA wce; // [esp+0h] [ebp-30h] BYREF
 
     memset((unsigned __int8 *)&wce, 0, sizeof(wce));
-    wce.cbSize = 48;
+    wce.cbSize = sizeof(wce);
     wce.lpfnWndProc = (WNDPROC)MainWndProc;
     wce.hInstance = g_wv.hInstance;
     wce.hIcon = LoadIconA(g_wv.hInstance, (LPCSTR)1);

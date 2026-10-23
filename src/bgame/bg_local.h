@@ -8,6 +8,7 @@
 #include "bg_mantle.h"
 #include <gfx_d3d/r_shader_constant_set.h>
 #include <cgame_mp/cg_scoreboard_mp.h>
+#include <platform/arch_size.h>
 
 #define ACTOR_CORPSES 36
 
@@ -156,11 +157,11 @@ struct cpose_t // sizeof=0x174
         // padding byte
         // padding byte
         // padding byte
-        int ragdollHandle;
-        int killcamRagdollHandle;
-        int physObjId;
-        int physUserBody;
-        int physUserBodyProneFeet;
+        intptr_t ragdollHandle;
+        intptr_t killcamRagdollHandle;
+        intptr_t physObjId;
+        intptr_t physUserBody;
+        intptr_t physUserBodyProneFeet;
         unsigned __int8 destructiblePose;
         // padding byte
         // padding byte
@@ -305,44 +306,53 @@ struct centity_s // sizeof=0x328
         unsigned int fxProjExplosion;
         unsigned int fxHeartbeat;
         centity_s *updateDelayedNext;
-        unsigned __int32 applyLeftHandIK : 1;
-        unsigned __int32 nextValid : 1;
-        unsigned __int32 bMuzzleFlash : 1;
-        unsigned __int32 bMuzzleFlashLeft : 1;
-        unsigned __int32 bTrailMade : 1;
-        unsigned __int32 isBurning : 1;
-        unsigned __int32 skipBloodImpacts : 1;
-        unsigned __int32 heroBloodImpact : 1;
-        unsigned __int32 scriptThreaded : 1;
-        unsigned __int32 clientRumbleLoop : 1;
-        unsigned __int32 didOverheatFx : 1;
-        unsigned __int32 leftFootstep : 1;
-        unsigned __int32 rightFootstep : 1;
-        unsigned __int32 leftRearFootstep : 1;
-        unsigned __int32 rightRearFootstep : 1;
-        unsigned __int32 bIsTrigger : 1;
-        unsigned __int32 bIsTriggerRadius : 1;
-        unsigned __int32 bIsOneShot : 1;
-        unsigned __int32 bIsPlaneOnRadar : 1;
-        unsigned __int32 bFloatLonger : 1;
-        unsigned __int32 bForceBuoyancy : 1;
-        unsigned __int32 bIgnoreRagdoll : 1;
-        unsigned __int32 bClientFlagsNeedProcessing : 1;
-        unsigned __int32 bUpdatedSinceReset : 1;
-        unsigned __int32 bUpdateToggle : 1;
-        unsigned __int32 bZombieEyes : 1; // zombies: SP cached eye bit; MP bit 24 is bUpdateToggle.
-        // zombies: SP cent+0x318 - a corpse stops drawing once the skinned-vertex cache passed its warn mark
-        // (SP CG_Actor 0x00581260); cleared by CG_ShutdownEntity (SP 0x005E4390). Uses a padding bit.
-        unsigned __int32 bSkinCacheHidden : 1;
-        // zombies: SP cent+0x310 bit 0x800000 (EntGetsWeaponFireNotification, SP 0x00897360) and 0x400000
-        // (EntYawOverridesLinkYaw, SP 0x008972b0). KB bits 22/23 hold other flags, so two padding bits are used.
-        unsigned __int32 bEntGetsWeaponFireNotification : 1;
-        unsigned __int32 bEntYawOverridesLinkYaw : 1;
-        // padding bit
-        // padding bit
-        // padding bit
+        // The decompiled code reads the bitfields as one word (*((unsigned int *)cent + 201) on 32-bit).
+        union
+        {
+            struct
+            {
+                unsigned __int32 applyLeftHandIK : 1;
+                unsigned __int32 nextValid : 1;
+                unsigned __int32 bMuzzleFlash : 1;
+                unsigned __int32 bMuzzleFlashLeft : 1;
+                unsigned __int32 bTrailMade : 1;
+                unsigned __int32 isBurning : 1;
+                unsigned __int32 skipBloodImpacts : 1;
+                unsigned __int32 heroBloodImpact : 1;
+                unsigned __int32 scriptThreaded : 1;
+                unsigned __int32 clientRumbleLoop : 1;
+                unsigned __int32 didOverheatFx : 1;
+                unsigned __int32 leftFootstep : 1;
+                unsigned __int32 rightFootstep : 1;
+                unsigned __int32 leftRearFootstep : 1;
+                unsigned __int32 rightRearFootstep : 1;
+                unsigned __int32 bIsTrigger : 1;
+                unsigned __int32 bIsTriggerRadius : 1;
+                unsigned __int32 bIsOneShot : 1;
+                unsigned __int32 bIsPlaneOnRadar : 1;
+                unsigned __int32 bFloatLonger : 1;
+                unsigned __int32 bForceBuoyancy : 1;
+                unsigned __int32 bIgnoreRagdoll : 1;
+                unsigned __int32 bClientFlagsNeedProcessing : 1;
+                unsigned __int32 bUpdatedSinceReset : 1;
+                unsigned __int32 bUpdateToggle : 1;
+                unsigned __int32 bZombieEyes : 1; // zombies: SP cached eye bit; MP bit 24 is bUpdateToggle.
+                // zombies: SP cent+0x318 - a corpse stops drawing once the skinned-vertex cache passed its warn mark
+                // (SP CG_Actor 0x00581260); cleared by CG_ShutdownEntity (SP 0x005E4390). Uses a padding bit.
+                unsigned __int32 bSkinCacheHidden : 1;
+                // zombies: SP cent+0x310 bit 0x800000 (EntGetsWeaponFireNotification, SP 0x00897360) and 0x400000
+                // (EntYawOverridesLinkYaw, SP 0x008972b0). KB bits 22/23 hold other flags, so two padding bits are used.
+                unsigned __int32 bEntGetsWeaponFireNotification : 1;
+                unsigned __int32 bEntYawOverridesLinkYaw : 1;
+                // padding bit
+                // padding bit
+                // padding bit
+            };
+            unsigned int flagWord;
+        };
 };
-static_assert(sizeof(centity_s) == 0x328);
+static_assert(sizeof(centity_s) == BO1_ARCH_SIZE(0x328, 872));
+static_assert(offsetof(centity_s, flagWord) == BO1_ARCH_SIZE(804, 864));
 
 struct fake_centity_s // sizeof=0x32C
 {                                                                             // XREF: fake_centity_t/r
@@ -732,7 +742,7 @@ struct playerState_s // sizeof=0x26A4
                 hudelem_s archival[31];
         } hud;
 };
-static_assert(sizeof(playerState_s) == 9892);
+static_assert(sizeof(playerState_s) == BO1_ARCH_SIZE(9892, 10152));
 
 struct lerpFrame_t // sizeof=0x34
 {                                                                             // XREF: clientInfo_t/r

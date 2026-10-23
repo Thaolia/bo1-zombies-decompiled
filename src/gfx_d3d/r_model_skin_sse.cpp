@@ -17,6 +17,7 @@
 #include <xanim/xanim.h>
 #include <universal/profile.h>
 
+#if R_SKIN_MMX
 #include <xmmintrin.h>
 #include <mmintrin.h>
 
@@ -483,3 +484,4 @@ void __cdecl R_SkinXSurfaceSkinnedSse(const XSurface *xsurf, const DObjSkelMat *
             R_SkinXSurfaceRigidSse(xsurf, xsurf->vertCount, boneMatrix, skinVerticesOut);
     }
 }
+#endif

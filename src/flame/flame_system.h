@@ -1,5 +1,6 @@
 #pragma once
 #include <gfx_d3d/r_material.h>
+#include <platform/arch_size.h>
 #include <universal/dvar.h>
 #include "flame_physics.h"
 
@@ -38,10 +39,19 @@ struct flameGeneric_s // sizeof=0x60
     flameList_t listGlobal;
     flameList_t listLocal;
     flameStream_s *stream;
-    unsigned __int32 type : 3;
-    unsigned __int32 delete_chunk : 1;
-    unsigned __int32 id : 28;
+    union
+    {
+        struct
+        {
+            unsigned __int32 type : 3;
+            unsigned __int32 delete_chunk : 1;
+            unsigned __int32 id : 28;
+        };
+        unsigned int flagWord;
+    };
 };
+static_assert(sizeof(flameGeneric_s) == BO1_ARCH_SIZE(0x60, 120));
+static_assert(offsetof(flameGeneric_s, flagWord) == BO1_ARCH_SIZE(92, 112));
 
 struct flameRender_s // sizeof=0x88
 {                                                                             // XREF: .data:flameRender_s * flameVarList/r

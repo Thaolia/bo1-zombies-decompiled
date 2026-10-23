@@ -97,6 +97,7 @@ void LoadAssetArray(int count)
     XAsset *var = varXAsset;
     for (int i = 0; i < count; ++i)
     {
+        ff::SetAsset(i, &var->header);
         varXAsset = var++;
         Load_XAsset(false);
     }
@@ -110,10 +111,13 @@ struct Walk
     ff::StreamStats stats;
     size_t consumed = 0;
     std::vector<uint8_t> output;
+    std::vector<ff::Reinline> reinlined;
+    std::vector<ff::PointeeMismatch> mismatches;
 };
 
 // DB_LoadXFileInternal's body walk, from the XAssetList on, over 32-bit blocks of the retail sizes.
-Walk WalkZone(const uint8_t *body, size_t bodySize, const unsigned blockSize[7], bool narrow)
+Walk WalkZone(const uint8_t *body, size_t bodySize, const unsigned blockSize[7], bool narrow,
+              const std::vector<ff::Reinline> &reinlined = {})
 {
     // DB_AllocStreamPos aligns absolute addresses (up to 2048 bytes for sound data), and the engine's blocks come
     // from VirtualAlloc: page-aligned blocks give the same 32-bit positions. The slack keeps a walk that overruns a
@@ -132,7 +136,7 @@ Walk WalkZone(const uint8_t *body, size_t bodySize, const unsigned blockSize[7],
         const uintptr_t raw = reinterpret_cast<uintptr_t>(blockData[b].data());
         blocks[b].data = reinterpret_cast<unsigned __int8 *>((raw + kPage - 1) & ~(kPage - 1));
     }
-    ff::BeginZone(body, bodySize, narrow);
+    ff::BeginZone(body, bodySize, narrow, reinlined);
     DB_InitStreams(blocks);
 
     XAssetList list{};
@@ -145,7 +149,7 @@ Walk WalkZone(const uint8_t *body, size_t bodySize, const unsigned blockSize[7],
     DB_PushStreamPos(4u);
     if (list.assets)
     {
-        list.assets = (FF_NextAlloc(list.assets), AllocLoad_FxElemVisStateSample());
+        list.assets = AllocLoad_FxElemVisStateSample();
         varXAsset = list.assets;
         LoadAssetArray(list.assetCount);
     }
@@ -158,6 +162,8 @@ Walk WalkZone(const uint8_t *body, size_t bodySize, const unsigned blockSize[7],
     walk.stats = ff::Stats();
     walk.consumed = ff::InputConsumed();
     walk.output = ff::Output();
+    walk.reinlined = ff::Reinlined();
+    walk.mismatches = ff::Mismatches();
     if (walk.ok && walk.consumed != bodySize)
     {
         walk.ok = false;
@@ -174,15 +180,27 @@ Walk WalkZone(const uint8_t *body, size_t bodySize, const unsigned blockSize[7],
 
 void Report(const char *path, const XFile &header, size_t bodySize, const Walk &walk)
 {
-    std::printf("%s: %d assets, %zu of %zu body bytes read, %llu chunks, %llu pointers translated\n", path,
-                walk.assetCount, walk.consumed, bodySize, static_cast<unsigned long long>(walk.stats.chunks),
-                static_cast<unsigned long long>(walk.stats.pointersTranslated));
+    std::printf("%s: %d assets, %zu of %zu body bytes read, %llu chunks, %llu pointers translated, %llu values "
+                "fixed\n",
+                path, walk.assetCount, walk.consumed, bodySize, static_cast<unsigned long long>(walk.stats.chunks),
+                static_cast<unsigned long long>(walk.stats.pointersTranslated),
+                static_cast<unsigned long long>(walk.stats.valuesFixed));
     for (int b = 0; b < 7; ++b)
         std::printf("  block %d %-16s retail %10u, walked to %10u, 64-bit %10u\n", b, kBlockNames[b],
                     header.blockSize[b], walk.stats.end32[b], walk.stats.end64[b]);
-    std::printf("  untyped allocations %llu, misaligned 64-bit chunks %llu\n",
-                static_cast<unsigned long long>(walk.stats.untypedAllocs),
-                static_cast<unsigned long long>(walk.stats.misaligned64));
+    std::printf("  misaligned 64-bit chunks %llu\n", static_cast<unsigned long long>(walk.stats.misaligned64));
+}
+
+// Offset pointers whose retail target is not their pointee on 64-bit (ff_stream.h, Reinline).
+void ReportMismatches(const Walk &walk)
+{
+    for (size_t i = 0; i < walk.mismatches.size(); ++i)
+    {
+        const ff::PointeeMismatch &m = walk.mismatches[i];
+        std::printf("  pointee mismatch: asset %d '%s', %s -> %s over %s, block %u, %s target: %s\n", m.asset,
+                    m.assetName.c_str(), m.site.c_str(), m.pointee.c_str(), m.target.c_str(), m.block,
+                    m.zero ? "zero" : "non-zero", m.reason.c_str());
+    }
 }
 
 bool WriteZone(const char *path, DBFF64Abi abi, const std::vector<uint8_t> &compressed)
@@ -200,7 +218,8 @@ bool WriteZone(const char *path, DBFF64Abi abi, const std::vector<uint8_t> &comp
 
 // Reads the written zone back and narrows it: the result must be the retail body, and the walk must end each block
 // where the IWffs header says.
-bool Verify(const char *path, const XFile &retail, const uint8_t *retailBody, size_t retailBodySize)
+bool Verify(const char *path, const XFile &retail, const uint8_t *retailBody, size_t retailBodySize,
+            const std::vector<ff::Reinline> &reinlined)
 {
     std::vector<uint8_t> file;
     std::vector<uint8_t> stream;
@@ -214,9 +233,10 @@ bool Verify(const char *path, const XFile &retail, const uint8_t *retailBody, si
     XFile header;
     std::memcpy(&header, stream.data(), sizeof(header));
     const Walk walk = WalkZone(stream.data() + sizeof(header), stream.size() - sizeof(header), retail.blockSize,
-                               true);
+                               true, reinlined);
     if (!walk.ok)
     {
+        ReportMismatches(walk);
         std::fprintf(stderr, "ffconv: verify: %s\n", walk.error.c_str());
         return false;
     }
@@ -259,8 +279,8 @@ bool Verify(const char *path, const XFile &retail, const uint8_t *retailBody, si
         return false;
     }
     std::printf("  verify: narrowing the IWffs zone gives the retail body back (%zu bytes; %zu bytes outside walked "
-                "union members, %zu of them leftover data)\n",
-                retailBodySize, deadBytes, deadDiffer);
+                "union members, %zu of them leftover data; %llu inline pointees equal their retail targets)\n",
+                retailBodySize, deadBytes, deadDiffer, static_cast<unsigned long long>(walk.stats.reinlined));
     return true;
 }
 // The zones the zombies maps load: code and patch zones, the zombie zones, and the menus. A language directory
@@ -323,6 +343,7 @@ bool ConvertZone(const std::string &input, const std::string &output, const Opti
     const Walk walk = WalkZone(body, bodySize, header.blockSize, false);
     if (options.detailed)
         Report(input.c_str(), header, bodySize, walk);
+    ReportMismatches(walk);
     if (!walk.ok)
     {
         std::fprintf(stderr, "ffconv: %s: %s\n", input.c_str(), walk.error.c_str());
@@ -344,10 +365,13 @@ bool ConvertZone(const std::string &input, const std::string &output, const Opti
         std::fprintf(stderr, "ffconv: cannot write %s\n", output.c_str());
         return false;
     }
-    std::printf("  %s: %d assets, %llu pointers, %zu -> %zu body bytes, %zu compressed\n", output.c_str(),
-                walk.assetCount, static_cast<unsigned long long>(walk.stats.pointersTranslated), bodySize,
-                walk.output.size(), compressed.size());
-    return !options.verify || Verify(output.c_str(), header, body, bodySize);
+    std::printf("  %s: %d assets, %llu pointers, %llu values fixed, %llu pointees inline, %zu -> %zu body bytes, %zu "
+                "compressed\n",
+                output.c_str(), walk.assetCount, static_cast<unsigned long long>(walk.stats.pointersTranslated),
+                static_cast<unsigned long long>(walk.stats.valuesFixed),
+                static_cast<unsigned long long>(walk.stats.reinlined), bodySize, walk.output.size(),
+                compressed.size());
+    return !options.verify || Verify(output.c_str(), header, body, bodySize, walk.reinlined);
 }
 
 // Converts every zombies zone of an install; returns how many failed, or -1 if the install has no zone directory.

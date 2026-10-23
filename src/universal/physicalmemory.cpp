@@ -1,4 +1,5 @@
 #include <Windows.h>
+#include <platform/arch_size.h>
 
 #include "physicalmemory.h"
 #include <memoryapi.h>
@@ -27,7 +28,8 @@ void __cdecl PMem_Init()
         // zombie_temple inflates to ~110 MB); without it the size is retail's. The first PMem alloc can come before
         // the dvars exist, so this reads the command line itself.
         // Three or four zones (mods/nightmare: temple + coast + moon is ~320 MB, L60 f1 ran out with 256) add 128 MB each.
-        unsigned int size = 0x14800000u;
+        // 64-bit: the widened zones take ~8% more (Kino's chain 273.5 -> 295 MB), so the pool gets 64 MB more.
+        unsigned int size = BO1_ARCH_SIZE(0x14800000u, 0x18800000u);
         const char *modZones = I_stristr(GetCommandLineA(), "bo1_mod_zones");
         if ( modZones )
         {

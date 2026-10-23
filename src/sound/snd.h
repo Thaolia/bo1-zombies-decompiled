@@ -2,6 +2,7 @@
 #include <universal/q_shared.h>
 #include <game/teams.h>
 #include "snd_dsp.h"
+#include <platform/arch_size.h>
 
 enum snd_flux_type_t : __int32
 {                                       // XREF: SND_SetVoiceStartFlux/r
@@ -482,7 +483,7 @@ struct SndDriverGlobals // sizeof=0x34
     unsigned int masterCount;
     snd_master * masters;
 };
-static_assert(sizeof(SndDriverGlobals) == 52);
+static_assert(sizeof(SndDriverGlobals) == BO1_ARCH_SIZE(52, 104));
 
 struct __declspec(align(4)) snd_enveffect // sizeof=0x20
 {                                                                             // XREF: snd_local_t/r

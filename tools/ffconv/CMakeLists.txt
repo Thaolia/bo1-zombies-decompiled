@@ -27,8 +27,9 @@ add_custom_command(
     OUTPUT "${GEN_DIR}/ff_layouts.gen.h"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${GEN_DIR}"
     COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/gen/layouts.py" --out "${GEN_DIR}/ff_layouts.gen.h"
-            --dxsdk "${DXSDK_DIR}"
+            --dxsdk "${DXSDK_DIR}" --depfile "${GEN_DIR}/ff_layouts.gen.d"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/gen/layouts.py" "${SRC_DIR}/database/db_load.cpp"
+    DEPFILE "${GEN_DIR}/ff_layouts.gen.d"
     COMMENT "Generating the 32/64-bit layout tables")
 add_custom_command(
     OUTPUT "${GEN_DIR}/db_load_ffconv.cpp"

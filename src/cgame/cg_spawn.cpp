@@ -17,10 +17,10 @@
 
 const cent_field_t client_spawn_fields[5] =
 {
-  { "origin", 48, F_VECTOR },
-  { "angles", 60, F_VECTOR },
-  { "model", 682, F_MODEL },
-  { "targetname", 694, F_STRING },
+  { "origin", offsetof(centity_s, pose.origin), F_VECTOR },
+  { "angles", offsetof(centity_s, pose.angles), F_VECTOR },
+  { "model", offsetof(centity_s, nextState.index.brushmodel), F_MODEL },
+  { "targetname", offsetof(centity_s, nextState.targetname), F_STRING },
   { NULL, 0, F_INT }
 };
 
@@ -60,7 +60,7 @@ const char *__cdecl CG_GetEntityTypeName(centity_s *cent)
             {
                 result = "DESTRUCTABLE";
             }
-            else if ( ((*((unsigned int *)cent + 201) >> 15) & 1) != 0 )
+            else if ( ((cent->flagWord >> 15) & 1) != 0 )
             {
                 result = "TRIGGER";
             }
@@ -165,7 +165,7 @@ centity_s *__cdecl CG_Spawn(unsigned int localClientNum)
         if ( !cg_fakeEntitiesInuseArray[512 * localClientNum + cent - &cg_fakeEntitiesArray[512 * localClientNum]] )
         {
             CG_SetFakeEntInUse(localClientNum, cent);
-            *((unsigned int *)&cent->cent + 201) |= 2u;
+            cent->cent.flagWord |= 2u;
             cent->cent.nextState.lerp.useCount = 1;
             cent->cent.nextState.number = i + 1024;
             AssignToSmallerType<unsigned char>(&cent->cent.nextState.clientNum, localClientNum);
@@ -349,7 +349,7 @@ char __cdecl CG_SetTriggerBrushModel(int localClientNum, centity_s *ent)
 {
     _BYTE mins[24]; // [esp+8h] [ebp-18h] OVERLAPPED BYREF
 
-    if ( ((*((unsigned int *)ent + 201) >> 1) & 1) == 0
+    if ( ((ent->flagWord >> 1) & 1) == 0
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\cgame\\cg_spawn.cpp", 520, 0, "%s", "ent->nextValid") )
     {
         __debugbreak();
@@ -405,7 +405,7 @@ void __cdecl CG_InitSentientTrigger(centity_s *self, char spawnflags)
     if ( (spawnflags & 0x10) != 0 )
         self->pose.fx.triggerTime |= 8u;
     if ( (spawnflags & 0x40) != 0 )
-        *((unsigned int *)self + 201) |= 0x20000u;
+        self->flagWord |= 0x20000u;
 }
 
 void __cdecl CG_SP_trigger_multiple(int localClientNum, centity_s *ent, char spawnFlags)
@@ -422,7 +422,7 @@ void __cdecl CG_InitTriggerWait(int localClientNum, centity_s *ent, int *spawnfl
     if ( cg_level.spawnVar.spawnVarsValid && CG_SpawnFloat("wait", "", &wait) && wait <= 0.0 )
     {
         if ( (waitSpawnFlag & 0x40) != 0 )
-            *((unsigned int *)ent + 201) |= 0x20000u;
+            ent->flagWord |= 0x20000u;
         else
             *spawnflags |= waitSpawnFlag;
     }
@@ -577,7 +577,7 @@ void __cdecl CG_CallSpawn(int localClientNum, SpawnVar *spawnVar)
             ent = CG_Spawn(localClientNum);
             CG_ParseEntityFields(localClientNum, ent, spawnVar, 0);
             CG_SP_trigger_multiple(localClientNum, ent, flags);
-            *((unsigned int *)ent + 201) |= 0x8000u;
+            ent->flagWord |= 0x8000u;
             return;
         }
         if ( !strcmp("trigger_radius", classname) )
@@ -585,8 +585,8 @@ void __cdecl CG_CallSpawn(int localClientNum, SpawnVar *spawnVar)
             ent = CG_Spawn(localClientNum);
             CG_ParseEntityFields(localClientNum, ent, spawnVar, 0);
             CG_SP_trigger_radius(localClientNum, ent, flags);
-            *((unsigned int *)ent + 201) |= 0x8000u;
-            *((unsigned int *)ent + 201) |= 0x10000u;
+            ent->flagWord |= 0x8000u;
+            ent->flagWord |= 0x10000u;
             return;
         }
         if ( !strcmp("trigger_once", classname) )
@@ -594,7 +594,7 @@ void __cdecl CG_CallSpawn(int localClientNum, SpawnVar *spawnVar)
             ent = CG_Spawn(localClientNum);
             CG_ParseEntityFields(localClientNum, ent, spawnVar, 0);
             CG_SP_trigger_once(localClientNum, ent, flags);
-            *((unsigned int *)ent + 201) |= 0x8000u;
+            ent->flagWord |= 0x8000u;
         }
         else
         {
@@ -682,7 +682,7 @@ LABEL_55:
                         {
                             __debugbreak();
                         }
-                        out[1] = (char *)(unsigned __int16)v15;
+                        out[1] = (char *)(uintptr_t)(unsigned __int16)v15;
                         undertow_volumes[num_undertow_volumes] = (unsigned __int16)v15;
                         v8 = 0;
                         v9 = 0;
@@ -820,7 +820,7 @@ void __cdecl CG_ParseEntityField(int localClientNum, const char *key, char *valu
                         __debugbreak();
                     }
                     ent->nextState.index.brushmodel = modelIndexa;
-                    *((unsigned int *)ent + 201) |= 2u;
+                    ent->flagWord |= 2u;
                 }
             }
             break;

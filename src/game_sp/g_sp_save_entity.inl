@@ -36,12 +36,12 @@ static const SPEntitySaveField s_entityExtFields[] = {
 };
 #undef XF
 static const SPEntitySaveField s_tagFields[] = { {0, 4, 2}, {4, 4, 2}, {8, 2, 1} };
-static_assert(sizeof(gentity_s) == 0x2F8, "DERIVED entity image");
-static_assert(sizeof(gentitySpExt) == 0x20, "DERIVED entity extension image");
-static_assert(sizeof(tagInfo_s) == 0x70 && offsetof(tagInfo_s, name) == 8, "DERIVED tag image");
-static_assert(sizeof(scripted_anim_sp_t) == 0x64, "SP type 16 has no pointer fields");
-static_assert(sizeof(PathLinkInfo) == 8 && offsetof(PathLinkInfo, next) == 6, "DERIVED disconnected link");
-static_assert(ARRAY_COUNT(((gentity_s *)0)->attachModelNames) == 19, "DERIVED attachments");
+BO1_SAVE_IMAGE_ASSERT(sizeof(gentity_s) == 0x2F8, "DERIVED entity image");
+BO1_SAVE_IMAGE_ASSERT(sizeof(gentitySpExt) == 0x20, "DERIVED entity extension image");
+BO1_SAVE_IMAGE_ASSERT(sizeof(tagInfo_s) == 0x70 && offsetof(tagInfo_s, name) == 8, "DERIVED tag image");
+BO1_SAVE_IMAGE_ASSERT(sizeof(scripted_anim_sp_t) == 0x64, "SP type 16 has no pointer fields");
+BO1_SAVE_IMAGE_ASSERT(sizeof(PathLinkInfo) == 8 && offsetof(PathLinkInfo, next) == 6, "DERIVED disconnected link");
+BO1_SAVE_IMAGE_ASSERT(ARRAY_COUNT(((gentity_s *)0)->attachModelNames) == 19, "DERIVED attachments");
 
 static void SP_CheckEntityFields(const SPEntitySaveField *fields, unsigned count, unsigned size)
 {
@@ -81,7 +81,7 @@ static int SP_EntityReferenceIndex(int type, const void *pointer)
         return 0;
     unsigned stride, count;
     const unsigned char *base = (const unsigned char *)SP_EntityFieldBase(type, &stride, &count);
-    const unsigned delta = (unsigned)pointer - (unsigned)base;
+    const unsigned delta = (unsigned)((uintptr_t)pointer - (uintptr_t)base);
     if (!base || delta % stride || delta / stride >= count)
         Com_Error(ERR_DROP, "WriteField1: reference type %i out of range", type);
     return delta / stride + 1;
@@ -137,7 +137,7 @@ static unsigned short Scr_LoadObjectIndex(unsigned int index)
 // the one-based index of an 8-byte entry in its flat animscript lists (0x01C79B64, at most 0x260), or
 // -1 for the record's own AnimScriptSpecific (SP actor +0xDD0). KB lists are per species.
 static const unsigned SP_ANIMSCRIPTS_PER_LIST = sizeof(AnimScriptList) / sizeof(scr_animscript_t);
-static_assert(sizeof(AnimScriptList) % sizeof(scr_animscript_t) == 0, "DERIVED animscript index");
+BO1_SAVE_IMAGE_ASSERT(sizeof(AnimScriptList) % sizeof(scr_animscript_t) == 0, "DERIVED animscript index");
 
 static int SP_SaveAnimScript(const scr_animscript_t *script, const unsigned char *record)
 {

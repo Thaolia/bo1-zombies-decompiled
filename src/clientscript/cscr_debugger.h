@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include "cscr_main.h"
 #include "cscr_variable.h"
 
@@ -168,7 +169,7 @@ public:
 class Scr_ScriptWindow : public UI_LinesComponent // sizeof=0x20
 {
 public:
-    void *operator new(unsigned int size)
+    void *operator new(size_t size)
     {
         return Hunk_UserAlloc(g_DebugHunkUser, size, 4, "Scr_ScriptWindow");
     }
@@ -493,7 +494,7 @@ void __cdecl Scr_SetElementRefText(scriptInstance_t inst, Scr_WatchElement_s *el
 void __cdecl Scr_DeltaElementRefText(Scr_WatchElement_s *element, const char *oldRefText, char *fieldText);
 void __cdecl Scr_ConnectElementChildren(Scr_WatchElement_s *parentElement);
 void __cdecl Scr_SortElementChildren(scriptInstance_t inst, Scr_WatchElement_s *parentElement);
-int __cdecl CompareThreadElements(int *arg1, int *arg2);
+int __cdecl CompareThreadElements(Scr_WatchElement_s **arg1, Scr_WatchElement_s **arg2);
 Scr_WatchElement_s *__cdecl Scr_CreateWatchElement(
     scriptInstance_t inst,
     char *text,

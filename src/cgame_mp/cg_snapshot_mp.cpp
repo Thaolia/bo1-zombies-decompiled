@@ -61,7 +61,7 @@ void __cdecl CG_ShutdownEntity(int localClientNum, centity_s *cent, bool shutdow
         if ( CL_LocalClient_IsFirstActive(localClientNum) )
         {
             if ( cent )
-                v5 = ((*((unsigned int *)cent + 201) >> 8) & 1) != 0;
+                v5 = ((cent->flagWord >> 8) & 1) != 0;
             else
                 v5 = 0;
         }
@@ -71,7 +71,7 @@ void __cdecl CG_ShutdownEntity(int localClientNum, centity_s *cent, bool shutdow
         }
         if ( v5 )
         {
-            *((unsigned int *)cent + 201) &= ~0x100u;
+            cent->flagWord &= ~0x100u;
             CScr_AddEntity(cent, (unsigned __int16)localClientNum);
             Scr_AddInt(localClientNum, SCRIPTINSTANCE_CLIENT);
             t = Scr_ExecThread(SCRIPTINSTANCE_CLIENT, cg_scr_data.entityshutdownCB, 2u);
@@ -97,7 +97,7 @@ void __cdecl CG_ShutdownEntity(int localClientNum, centity_s *cent, bool shutdow
     }
     // zombies: SP CG_ShutdownEntity (SP 0x005E4390) clears the corpse skin-cache hide latch (cent+0x318)
     cent->bSkinCacheHidden = 0;
-    if ( EntNum_IsCsc(cent->nextState.number) && !cent->pose.eType && ((*((unsigned int *)cent + 201) >> 15) & 1) != 0 )
+    if ( EntNum_IsCsc(cent->nextState.number) && !cent->pose.eType && ((cent->flagWord >> 15) & 1) != 0 )
     {
         number = cent->nextState.number;
         if ( localClientNum
@@ -208,7 +208,7 @@ void __cdecl CG_ShutdownEntity(int localClientNum, centity_s *cent, bool shutdow
     cent->pose.physUserBody = 0;
     cent->pose.physUserBodyProneFeet = 0;
     cent->pose.startBurnTime = 0;
-    *((unsigned int *)cent + 201) &= ~0x20u;
+    cent->flagWord &= ~0x20u;
     if ( cent->destructible )
     {
         CG_FreeDestructible(localClientNum, cent->destructible);
@@ -233,7 +233,7 @@ void __cdecl CG_ShutdownEntity(int localClientNum, centity_s *cent, bool shutdow
             MT_Free((unsigned char *)cent->vehicle->vehicle_cache, 1928, SCRIPTINSTANCE_SERVER);
             cent->vehicle->vehicle_cache = 0;
         }
-        MT_Free((unsigned char *)cent->vehicle, 84, SCRIPTINSTANCE_SERVER);
+        MT_Free((unsigned char *)cent->vehicle, sizeof(cgVehicle_s), SCRIPTINSTANCE_SERVER);
         cent->vehicle = 0;
     }
     auto_rigid_body::remove_ent(cent);
@@ -291,7 +291,7 @@ void __cdecl CG_SetInitialSnapshot(int localClientNum, snapshot_s *snap)
         clientViewAxis);
     for ( i = 0; i < (1 << g_entNumBits); i = EntNum_NextNet(i) ) // mod (L43): networked numbers (retail < 1024)
     {
-        if ( ((*((unsigned int *)CG_GetEntity(localClientNum, i) + 201) >> 1) & 1) != 0
+        if ( ((CG_GetEntity(localClientNum, i)->flagWord >> 1) & 1) != 0
             && !Assert_MyHandler(
                         "C:\\projects_pc\\cod\\codsrc\\src\\cgame_mp\\cg_snapshot_mp.cpp",
                         493,
@@ -463,7 +463,7 @@ void __cdecl CG_SetNextSnap(int localClientNum, snapshot_s *snap)
             v22 = &cgameGlob->nextSnap->entities[num];
             entnum = v22->number;
             cent = CG_GetEntity(localClientNum, entnum);
-            if ( ((*((unsigned int *)cent + 201) >> 1) & 1) == 0
+            if ( ((cent->flagWord >> 1) & 1) == 0
                 && !Assert_MyHandler(
                             "C:\\projects_pc\\cod\\codsrc\\src\\cgame_mp\\cg_snapshot_mp.cpp",
                             1117,
@@ -473,14 +473,14 @@ void __cdecl CG_SetNextSnap(int localClientNum, snapshot_s *snap)
             {
                 __debugbreak();
             }
-            *((unsigned int *)cent + 201) &= ~2u;
+            cent->flagWord &= ~2u;
             centInPrevSnapshot[entnum >> 5] |= 0x80000000 >> (entnum & 0x1F);
         }
         entnum = cgameGlob->nextSnap->ps.clientNum;
         cent = CG_GetEntity(localClientNum, entnum);
-        if ( ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 )
+        if ( ((cent->flagWord >> 1) & 1) != 0 )
         {
-            *((unsigned int *)cent + 201) &= ~2u;
+            cent->flagWord &= ~2u;
             centInPrevSnapshot[entnum >> 5] |= 0x80000000 >> (entnum & 0x1F);
         }
     }
@@ -606,7 +606,7 @@ void __cdecl CG_SetNextSnap(int localClientNum, snapshot_s *snap)
             cent = CG_GetEntity(localClientNum, entnum);
             cent->nextState.number = (unsigned __int16)entnum;
             BG_PlayerStateToEntityState(&snap->ps, &cent->nextState, 0, 0);
-            *((unsigned int *)cent + 201) |= 2u;
+            cent->flagWord |= 2u;
             if ( (centInPrevSnapshot[entnum >> 5] & (0x80000000 >> (entnum & 0x1F))) != 0
                 && cent->nextState.lerp.useCount == cent->currentState.useCount )
             {
@@ -625,22 +625,22 @@ void __cdecl CG_SetNextSnap(int localClientNum, snapshot_s *snap)
                         if ( Com_IsRagdollTrajectory(&cent->currentState.pos) )
                         {
                             if ( Vec3Distance(cent->currentState.pos.trBase, cent->nextState.lerp.pos.trBase) > 128.0 )
-                                *((unsigned int *)cent + 201) |= 0x200000u;
+                                cent->flagWord |= 0x200000u;
                         }
                         else
                         {
-                            *((unsigned int *)cent + 201) |= 0x200000u;
+                            cent->flagWord |= 0x200000u;
                         }
                     }
                     else
                     {
-                        *((unsigned int *)cent + 201) |= 0x200000u;
+                        cent->flagWord |= 0x200000u;
                     }
                 }
             }
-            else if ( ((*((unsigned int *)cent + 201) >> 21) & 1) != 0 )
+            else if ( ((cent->flagWord >> 21) & 1) != 0 )
             {
-                *((unsigned int *)cent + 201) &= ~0x200000u;
+                cent->flagWord &= ~0x200000u;
             }
             if ( (snap->ps.otherFlags & 2) != 0 )
             {
@@ -705,7 +705,7 @@ void __cdecl CG_SetNextSnap(int localClientNum, snapshot_s *snap)
             centInPrevSnapshot[(int)cgameGlob->snap->ps.clientNum >> 5] &= ~(0x80000000 >> (cgameGlob->snap->ps.clientNum
                                                                                                                                                                         & 0x1F));
             CG_ResetEntity(localClientNum, cent, 1);
-            *((unsigned int *)cent + 201) &= ~0x200000u;
+            cent->flagWord &= ~0x200000u;
         }
         else if ( cgameGlob->mapRestart
                      || (!Demo_IsPlaying() || snap->ps.stats[4] == 14) && snap->ps.stats[4] != cgameGlob->snap->ps.stats[4]
@@ -721,7 +721,7 @@ void __cdecl CG_SetNextSnap(int localClientNum, snapshot_s *snap)
             entnum = v22->number;
             cent = CG_GetEntity(localClientNum, entnum);
             memcpy(&cent->nextState, v22, sizeof(cent->nextState));
-            if ( !Demo_IsPlaying() && ((*((unsigned int *)cent + 201) >> 1) & 1) != 0 )
+            if ( !Demo_IsPlaying() && ((cent->flagWord >> 1) & 1) != 0 )
             {
                 v4 = va(
                              "entnum %d num %d numEntities %d clientNum %d flags 0x%x",
@@ -739,7 +739,7 @@ void __cdecl CG_SetNextSnap(int localClientNum, snapshot_s *snap)
                                 v4) )
                     __debugbreak();
             }
-            *((unsigned int *)cent + 201) |= 2u;
+            cent->flagWord |= 2u;
             if ( Com_IsRagdollTrajectory(&cent->nextState.lerp.pos) )
             {
                 if ( bWasDemoJump )
@@ -749,22 +749,22 @@ void __cdecl CG_SetNextSnap(int localClientNum, snapshot_s *snap)
                         if ( Com_IsRagdollTrajectory(&cent->currentState.pos) )
                         {
                             if ( Vec3Distance(cent->currentState.pos.trBase, cent->nextState.lerp.pos.trBase) > 128.0 )
-                                *((unsigned int *)cent + 201) |= 0x200000u;
+                                cent->flagWord |= 0x200000u;
                         }
                         else
                         {
-                            *((unsigned int *)cent + 201) |= 0x200000u;
+                            cent->flagWord |= 0x200000u;
                         }
                     }
                     else
                     {
-                        *((unsigned int *)cent + 201) |= 0x200000u;
+                        cent->flagWord |= 0x200000u;
                     }
                 }
             }
-            else if ( ((*((unsigned int *)cent + 201) >> 21) & 1) != 0 )
+            else if ( ((cent->flagWord >> 21) & 1) != 0 )
             {
-                *((unsigned int *)cent + 201) &= ~0x200000u;
+                cent->flagWord &= ~0x200000u;
             }
             oldEFlags2 = cent->currentState.eFlags2;
             if ( (centInPrevSnapshot[entnum >> 5] & (0x80000000 >> (entnum & 0x1F))) != 0
@@ -981,8 +981,8 @@ void CG_ResetEntity(int localClientNum, centity_s *cent, int newEntity)
     // event ring at the tail when it changed).
     const int previousUseCount = cent->currentState.useCount;
     memcpy(&cent->currentState, &cent->nextState.lerp, sizeof(cent->currentState));
-    *((_DWORD *)cent + 201) &= ~0x10u;
-    *((_DWORD *)cent + 201) &= ~0x800000u;
+    cent->flagWord &= ~0x10u;
+    cent->flagWord &= ~0x800000u;
     cent->pose.cullIn = 0;
     cgameGlob = CG_GetLocalClientGlobals(localClientNum);
     BG_EvaluateTrajectory(&cent->nextState.lerp.pos, cgameGlob->time, cent->pose.origin);
@@ -1083,7 +1083,7 @@ void CG_ResetEntity(int localClientNum, centity_s *cent, int newEntity)
         cent->miscTime = cgameGlob->time;
         if ((cent->nextState.lerp.eFlags & 0x10) != 0)
         {
-            *((_DWORD *)cent + 201) |= 0x100u;
+            cent->flagWord |= 0x100u;
             Entity = CG_GetEntity(localClientNum, cent->nextState.clientNum);
             CScr_AddEntity(Entity, localClientNum);
             Scr_AddInt(localClientNum, SCRIPTINSTANCE_CLIENT);
@@ -1360,7 +1360,7 @@ void __cdecl CG_TransitionKillcam(int localClientNum)
         else
         {
             Entity = CG_GetEntity(localClientNum, newKillCamEntity);
-            if ( ((*((unsigned int *)Entity + 201) >> 1) & 1) != 0 )
+            if ( ((Entity->flagWord >> 1) & 1) != 0 )
             {
                 cgameGlob->killCamLastEntityNum = newKillCamEntity;
                 cgameGlob->invalidKillCamEntity = 1023;
@@ -1602,7 +1602,7 @@ void __cdecl CG_UpdateClientFlags(int localClientNum, centity_s *cent, int oldEF
     {
         __debugbreak();
     }
-    if ( ((*((unsigned int *)cent + 201) >> 22) & 1) == 0 )
+    if ( ((cent->flagWord >> 22) & 1) == 0 )
         CG_ClientFlagResetAll(cent);
     if ( newEnt )
     {

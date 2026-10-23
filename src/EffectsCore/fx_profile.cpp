@@ -35,7 +35,7 @@ void __cdecl FX_DrawProfile(int clientIndex, void (__cdecl *drawFunc)(char *), f
         }
         if ( !_InterlockedDecrement(&system->shared->iteratorCount) )
             FX_RunGarbageCollectionAndPrioritySort(system);
-        qsort(entryPool, entryCount, 0x1Cu, (int (__cdecl *)(const void *, const void *))FX_CompareProfileEntries);
+        qsort(entryPool, entryCount, sizeof(FxProfileEntry), (int (__cdecl *)(const void *, const void *))FX_CompareProfileEntries);
         v11 = system->shared->firstNewEffect - system->shared->firstActiveEffect;
         v3 = va(
                      "%4i of %4i effect objects in use (%.0f%%; %i free)",
@@ -222,13 +222,13 @@ void __cdecl FX_DrawPriorityDebug(int clientIndex, void (__cdecl *drawFunc)(char
     int v8; // [esp+10h] [ebp-204Ch]
     int k; // [esp+34h] [ebp-2028h]
     int j; // [esp+38h] [ebp-2024h]
-    unsigned int *v11; // [esp+3Ch] [ebp-2020h]
+    FxPriorityDebugEntry *v11; // [esp+3Ch] [ebp-2020h]
     volatile int i; // [esp+40h] [ebp-201Ch]
     int v13; // [esp+44h] [ebp-2018h]
     FxEffectContainer *v14; // [esp+48h] [ebp-2014h]
     FxSystemContainer *system; // [esp+4Ch] [ebp-2010h]
     int num; // [esp+50h] [ebp-200Ch]
-    unsigned int base[2049]; // [esp+54h] [ebp-2008h] BYREF
+    FxPriorityDebugEntry base[1025]; // [esp+54h] [ebp-2008h] BYREF
     int v18; // [esp+2058h] [ebp-4h]
 
     system = FX_GetSystem(clientIndex);
@@ -245,15 +245,15 @@ void __cdecl FX_DrawPriorityDebug(int clientIndex, void (__cdecl *drawFunc)(char
         v11 = 0;
         for ( j = 0; j < num; ++j )
         {
-            if ( (const FxEffectDef *)base[2 * j] == v14->effect.def )
+            if ( base[j].def == v14->effect.def )
             {
-                v11 = &base[2 * j];
+                v11 = &base[j];
                 break;
             }
         }
         if ( v11 )
         {
-            ++v11[1];
+            ++v11->count;
         }
         else
         {
@@ -267,13 +267,13 @@ void __cdecl FX_DrawPriorityDebug(int clientIndex, void (__cdecl *drawFunc)(char
             {
                 __debugbreak();
             }
-            base[2 * num] = (unsigned int)v14->effect.def;
-            base[2 * num++ + 1] = 1;
+            base[num].def = v14->effect.def;
+            base[num++].count = 1;
         }
     }
     if ( !_InterlockedDecrement(&system->system.shared->iteratorCount) )
         FX_RunGarbageCollectionAndPrioritySort(&system->system);
-    qsort(base, num, 8u, (int (__cdecl *)(const void *, const void *))FX_ComparePriorityDebugEntries);
+    qsort(base, num, sizeof(FxPriorityDebugEntry), (int (__cdecl *)(const void *, const void *))FX_ComparePriorityDebugEntries);
     v18 = system->system.priorityInfo.warningHigh[system->system.priorityInfo.readIndex];
     v13 = system->system.shared->firstNewEffect - system->system.shared->firstActiveEffect;
     v3 = va("%4i of %4i effect objects in use (%.0f%%; %i free)", v13, 1024, (float)((float)v13 * 0.09765625), 1024 - v13);
@@ -303,22 +303,22 @@ void __cdecl FX_DrawPriorityDebug(int clientIndex, void (__cdecl *drawFunc)(char
         v8 = num;
     for ( k = 0; k < v8; ++k )
     {
-        v7 = va("%4i     %4i     %s", *(unsigned __int8 *)(base[2 * k] + 5), base[2 * k + 1], *(const char **)base[2 * k]);
+        v7 = va("%4i     %4i     %s", base[k].def->efPriority, base[k].count, base[k].def->name);
         drawFunc(v7);
     }
 }
 
-int __cdecl FX_ComparePriorityDebugEntries(unsigned int *e0, unsigned int *e1)
+int __cdecl FX_ComparePriorityDebugEntries(const FxPriorityDebugEntry *e0, const FxPriorityDebugEntry *e1)
 {
     int ap; // [esp+0h] [ebp-18h]
     int ac; // [esp+4h] [ebp-14h]
     int v5; // [esp+Ch] [ebp-Ch]
     int bc; // [esp+14h] [ebp-4h]
 
-    ap = *(unsigned __int8 *)(*e0 + 5);
-    v5 = *(unsigned __int8 *)(*e1 + 5);
-    ac = e0[1];
-    bc = e1[1];
+    ap = e0->def->efPriority;
+    v5 = e1->def->efPriority;
+    ac = e0->count;
+    bc = e1->count;
     if ( ap > v5 )
         return -1;
     if ( ap < v5 )

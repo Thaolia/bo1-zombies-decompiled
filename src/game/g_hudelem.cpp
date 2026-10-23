@@ -15,16 +15,16 @@
 
 const game_hudelem_field_t fields_0[28] =
 {
-  { "x", 0, 4, F_FLOAT, 0, 0, NULL, NULL },
-  { "y", 4, 4, F_FLOAT, 0, 0, NULL, NULL },
-  { "z", 8, 4, F_FLOAT, 0, 0, NULL, NULL },
-  { "fontscale", 12, 4, F_FLOAT, -1, 0, &HudElem_SetFontScale, NULL },
-  { "font", 101, 1, F_INT, -1, 0, &HudElem_SetFont, &HudElem_GetFont },
-  { "alignx", 102, 1, F_INT, 3, 2, &HudElem_SetAlignX, &HudElem_GetAlignX },
-  { "aligny", 102, 1, F_INT, 3, 0, &HudElem_SetAlignY, &HudElem_GetAlignY },
+  { "x", offsetof(game_hudelem_s, elem.x), 4, F_FLOAT, 0, 0, NULL, NULL },
+  { "y", offsetof(game_hudelem_s, elem.y), 4, F_FLOAT, 0, 0, NULL, NULL },
+  { "z", offsetof(game_hudelem_s, elem.z), 4, F_FLOAT, 0, 0, NULL, NULL },
+  { "fontscale", offsetof(game_hudelem_s, elem.fontScale), 4, F_FLOAT, -1, 0, &HudElem_SetFontScale, NULL },
+  { "font", offsetof(game_hudelem_s, elem.font), 1, F_INT, -1, 0, &HudElem_SetFont, &HudElem_GetFont },
+  { "alignx", offsetof(game_hudelem_s, elem.alignOrg), 1, F_INT, 3, 2, &HudElem_SetAlignX, &HudElem_GetAlignX },
+  { "aligny", offsetof(game_hudelem_s, elem.alignOrg), 1, F_INT, 3, 0, &HudElem_SetAlignY, &HudElem_GetAlignY },
   {
     "horzalign",
-    103,
+    offsetof(game_hudelem_s, elem.alignScreen),
     1,
     F_INT,
     15,
@@ -34,7 +34,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "vertalign",
-    103,
+    offsetof(game_hudelem_s, elem.alignScreen),
     1,
     F_INT,
     15,
@@ -42,13 +42,13 @@ const game_hudelem_field_t fields_0[28] =
     &HudElem_SetVertAlign,
     &HudElem_GetVertAlign
   },
-  { "color", 16, 4, F_INT, -1, 0, &HudElem_SetColor, &HudElem_GetColor },
-  { "alpha", 16, 4, F_INT, -1, 0, &HudElem_SetAlpha, &HudElem_GetAlpha },
-  { "label", 72, 2, F_INT, -1, 0, &HudElem_SetLocalizedString, NULL },
-  { "sort", 56, 4, F_FLOAT, 0, 0, NULL, NULL },
+  { "color", offsetof(game_hudelem_s, elem.color), 4, F_INT, -1, 0, &HudElem_SetColor, &HudElem_GetColor },
+  { "alpha", offsetof(game_hudelem_s, elem.color), 4, F_INT, -1, 0, &HudElem_SetAlpha, &HudElem_GetAlpha },
+  { "label", offsetof(game_hudelem_s, elem.label), 2, F_INT, -1, 0, &HudElem_SetLocalizedString, NULL },
+  { "sort", offsetof(game_hudelem_s, elem.sort), 4, F_FLOAT, 0, 0, NULL, NULL },
   {
     "foreground",
-    98,
+    offsetof(game_hudelem_s, elem.flags),
     2,
     F_INT,
     -1,
@@ -58,7 +58,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "hidewhendead",
-    98,
+    offsetof(game_hudelem_s, elem.flags),
     2,
     F_INT,
     -1,
@@ -68,7 +68,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "hidewheninkillcam",
-    98,
+    offsetof(game_hudelem_s, elem.flags),
     2,
     F_INT,
     -1,
@@ -78,7 +78,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "hidewhenindemo",
-    98,
+    offsetof(game_hudelem_s, elem.flags),
     2,
     F_INT,
     -1,
@@ -88,7 +88,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "overrridewhenindemo",
-    98,
+    offsetof(game_hudelem_s, elem.flags),
     2,
     F_INT,
     -1,
@@ -98,7 +98,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "hidewhileremotecontrolling",
-    98,
+    offsetof(game_hudelem_s, elem.flags),
     2,
     F_INT,
     -1,
@@ -108,7 +108,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "hidewheninmenu",
-    98,
+    offsetof(game_hudelem_s, elem.flags),
     2,
     F_INT,
     -1,
@@ -118,7 +118,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "fadewhentargeted",
-    98,
+    offsetof(game_hudelem_s, elem.flags),
     2,
     F_INT,
     -1,
@@ -128,7 +128,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "fontstyle3d",
-    98,
+    offsetof(game_hudelem_s, elem.flags),
     2,
     F_INT,
     -1,
@@ -138,7 +138,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "font3duseglowcolor",
-    98,
+    offsetof(game_hudelem_s, elem.flags),
     2,
     F_INT,
     -1,
@@ -148,7 +148,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "glowcolor",
-    60,
+    offsetof(game_hudelem_s, elem.glowColor),
     4,
     F_INT,
     -1,
@@ -158,7 +158,7 @@ const game_hudelem_field_t fields_0[28] =
   },
   {
     "glowalpha",
-    60,
+    offsetof(game_hudelem_s, elem.glowColor),
     4,
     F_INT,
     -1,
@@ -166,10 +166,10 @@ const game_hudelem_field_t fields_0[28] =
     &HudElem_SetGlowAlpha,
     &HudElem_GetGlowAlpha
   },
-  { "archived", 120, 4, F_INT, -1, 0, &HudElem_SetBoolean, NULL },
+  { "archived", offsetof(game_hudelem_s, archived), 4, F_INT, -1, 0, &HudElem_SetBoolean, NULL },
   {
     "ui3dwindow",
-    109,
+    offsetof(game_hudelem_s, elem.ui3dWindow),
     1,
     F_BYTE,
     -1,
@@ -504,7 +504,7 @@ int __cdecl GetField(char *i, int size)
 
 void __cdecl HudElem_GetFlagForeground(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 98
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.flags)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     495,
@@ -650,7 +650,7 @@ void __cdecl HudElem_SetFontStyle3d(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_GetFontStyle3d(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 98
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.flags)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     546,
@@ -723,7 +723,7 @@ void __cdecl HudElem_SetFont3dUseGlowColor(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_GetFont3dUseGlowColor(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 98
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.flags)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     582,
@@ -788,7 +788,7 @@ void __cdecl HudElem_SetFlagHideWhenDead(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_GetFlagHideWhenDead(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 98
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.flags)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     610,
@@ -853,7 +853,7 @@ void __cdecl HudElem_SetFlagHideWhenInKillCam(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_GetFlagHideWhenInKillCam(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 98
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.flags)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     637,
@@ -918,7 +918,7 @@ void __cdecl HudElem_SetFlagHideWhenInDemo(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_GetFlagHideWhenInDemo(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 98
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.flags)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     664,
@@ -983,7 +983,7 @@ void __cdecl HudElem_SetFlagOverrideWhenInDemo(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_GetFlagOverrideWhenInDemo(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 98
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.flags)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     691,
@@ -1048,7 +1048,7 @@ void __cdecl HudElem_SetFlagHideWhileRemoteControlling(game_hudelem_s *hud, int 
 
 void __cdecl HudElem_GetFlagHideWhileRemoteControlling(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 98
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.flags)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     718,
@@ -1113,7 +1113,7 @@ void __cdecl HudElem_SetFlagHideWhenInMenu(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_GetFlagHideWhenInMenu(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 98
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.flags)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     745,
@@ -1178,7 +1178,7 @@ void __cdecl HudElem_SetFlagFadeWhenTargeted(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_GetFlagFadeWhenTargeted(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 98
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.flags)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     771,
@@ -1229,7 +1229,7 @@ void __cdecl HudElem_SetColor(game_hudelem_s *hud, int offset)
     float v7; // [esp+50h] [ebp-10h]
     float color[3]; // [esp+54h] [ebp-Ch] BYREF
 
-    if ( fields_0[offset].ofs != 16
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.color)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     798,
@@ -1273,7 +1273,7 @@ void __cdecl HudElem_GetColor(game_hudelem_s *hud, int offset)
 {
     float color[3]; // [esp+0h] [ebp-Ch] BYREF
 
-    if ( fields_0[offset].ofs != 16
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.color)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     811,
@@ -1295,7 +1295,7 @@ void __cdecl HudElem_SetAlpha(game_hudelem_s *hud, int offset)
     float v3; // [esp+18h] [ebp-8h]
     float alpha; // [esp+1Ch] [ebp-4h]
 
-    if ( fields_0[offset].ofs != 16
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.color)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     823,
@@ -1319,7 +1319,7 @@ void __cdecl HudElem_SetAlpha(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_GetAlpha(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 16
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.color)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     832,
@@ -1342,7 +1342,7 @@ void __cdecl HudElem_SetGlowColor(game_hudelem_s *hud, int offset)
     float v7; // [esp+50h] [ebp-10h]
     float glowColor[3]; // [esp+54h] [ebp-Ch] BYREF
 
-    if ( fields_0[offset].ofs != 60
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.glowColor)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     842,
@@ -1386,7 +1386,7 @@ void __cdecl HudElem_GetGlowColor(game_hudelem_s *hud, int offset)
 {
     float glowColor[3]; // [esp+0h] [ebp-Ch] BYREF
 
-    if ( fields_0[offset].ofs != 60
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.glowColor)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     855,
@@ -1408,7 +1408,7 @@ void __cdecl HudElem_SetGlowAlpha(game_hudelem_s *hud, int offset)
     float v3; // [esp+18h] [ebp-8h]
     float glowAlpha; // [esp+1Ch] [ebp-4h]
 
-    if ( fields_0[offset].ofs != 60
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.glowColor)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     868,
@@ -1432,7 +1432,7 @@ void __cdecl HudElem_SetGlowAlpha(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_GetGlowAlpha(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 60
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.glowColor)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     877,
@@ -1450,7 +1450,7 @@ void __cdecl HudElem_SetFontScale(game_hudelem_s *hud, int offset)
     const char *v2; // eax
     float scale; // [esp+Ch] [ebp-4h]
 
-    if ( fields_0[offset].ofs != 12
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.fontScale)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     887,
@@ -1626,7 +1626,7 @@ void __cdecl HudElem_GetVertAlign(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_SetUI3DWindow(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 109
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.ui3dWindow)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     957,
@@ -1641,7 +1641,7 @@ void __cdecl HudElem_SetUI3DWindow(game_hudelem_s *hud, int offset)
 
 void __cdecl HudElem_GetUI3DWindow(game_hudelem_s *hud, int offset)
 {
-    if ( fields_0[offset].ofs != 109
+    if ( fields_0[offset].ofs != (int)offsetof(game_hudelem_s, elem.ui3dWindow)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\game\\g_hudelem.cpp",
                     965,

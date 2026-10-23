@@ -606,7 +606,7 @@ void __cdecl R_AddRopeCodeMeshDrawSurf(
     {
         v7 = va(
                      "index = 0x%08x, sortedMaterials = 0x%08x, material = 0x%08x\n",
-                     (unsigned int)(material->info.drawSurf.fields.materialSortedIndex,
+                     (unsigned int)(uintptr_t)(material->info.drawSurf.fields.materialSortedIndex,
                      0,
                      rgp.sortedMaterials[material->info.drawSurf.fields.materialSortedIndex]));
         if ( !Assert_MyHandler(

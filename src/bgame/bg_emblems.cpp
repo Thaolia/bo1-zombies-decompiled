@@ -227,7 +227,7 @@ ResultCache *__cdecl BG_EmblemsGetResults(int controllerIndex, unsigned int incl
                 best->ids[best->count++] = ia;
         }
     }
-    qsort(best->ids, best->count, 2u, (int (__cdecl *)(const void *, const void *))ResultSort);
+    qsort(best->ids, best->count, sizeof(*(best->ids)), (int (__cdecl *)(const void *, const void *))ResultSort);
     best->controllerIndex = controllerIndex;
     best->use = s_useCount;
     best->flush = s_flushCount;

@@ -59,10 +59,10 @@ void __cdecl LiveTicker_DumpTickerInternal()
             16,
             "Stream %i (%d messages): %s\n",
             i,
-            s_ticker.streamDisplayOrder[1293 * i - 5174],
+            s_ticker.streams[i].messageCount,
             StreamNameTextInternal);
-        for ( j = TICKER_STREAM_COD; j < s_ticker.streamDisplayOrder[1293 * i - 5174]; ++j )
-            Com_Printf(16, "\t%d: %s\n", j, (const char *)(5172 * i + 516 * j + 174152212));
+        for ( j = TICKER_STREAM_COD; j < s_ticker.streams[i].messageCount; ++j )
+            Com_Printf(16, "\t%d: %s\n", j, s_ticker.streams[i].messages[j].text);
     }
     Com_Printf(16, "**** End Ticker Dump ****\n");
 #endif
@@ -87,7 +87,7 @@ void __cdecl LiveTicker_InitializeInternal()
 
     for ( i = 0; i < 5; ++i )
     {
-        s_ticker.streamDisplayOrder[1293 * i - 5174] = TICKER_STREAM_COD;
+        s_ticker.streams[i].messageCount = 0;
         s_ticker.streamDisplayOrder[i] = TICKER_STREAM_NONE;
         s_ticker.streams[i].streamName = TICKER_STREAM_NONE;
     }
@@ -117,13 +117,13 @@ void __cdecl LiveTicker_InsertMessageInternal(const char *text, streamName_t str
     if ( text && *text && I_strncmp(text, "\n", 4) && I_strncmp(text, "\r", 4) )
     {
         s_ticker.streams[streamName].streamName = streamName;
-        if ( s_ticker.streamDisplayOrder[1293 * streamName - 5174] < 10 )
+        if ( s_ticker.streams[streamName].messageCount < 10 )
         {
             I_strncpyz(
-                (char *)(5172 * streamName + 516 * s_ticker.streamDisplayOrder[1293 * streamName - 5174] + 174152212),
+                s_ticker.streams[streamName].messages[s_ticker.streams[streamName].messageCount].text,
                 text,
                 strlen(text) + 1);
-            ++s_ticker.streamDisplayOrder[1293 * streamName - 5174];
+            ++s_ticker.streams[streamName].messageCount;
             ++s_ticker.totalMessageCount;
         }
     }
@@ -136,7 +136,7 @@ char __cdecl LiveTicker_IsStreamPopulated(streamName_t streamName)
 
     for ( i = 0; i < 5; ++i )
     {
-        if ( s_ticker.streams[i].streamName == streamName && s_ticker.streamDisplayOrder[1293 * i - 5174] )
+        if ( s_ticker.streams[i].streamName == streamName && s_ticker.streams[i].messageCount )
             return 1;
     }
     return 0;
@@ -155,15 +155,13 @@ void __cdecl LiveTicker_MoveToFirstStream()
     int i; // [esp+0h] [ebp-4h]
 
     if ( s_ticker.currentStream != TICKER_STREAM_NONE )
-        s_ticker.streamDisplayOrder[1293 * s_ticker.currentStream
-                                                            - 6336
-                                                            + 129 * s_ticker.streamDisplayOrder[1293 * s_ticker.currentStream - 5173]] = TICKER_STREAM_COD;
+        s_ticker.streams[s_ticker.currentStream].messages[s_ticker.streams[s_ticker.currentStream].currentMessageIndex].state = MESSAGE_NOT_DISPLAYING;
     for ( i = 0; i < 5; ++i )
     {
-        if ( s_ticker.streamDisplayOrder[1293 * s_ticker.streamDisplayOrder[i] - 5174] > TICKER_STREAM_COD )
+        if ( s_ticker.streams[s_ticker.streamDisplayOrder[i]].messageCount > 0 )
         {
             s_ticker.currentStream = s_ticker.streamDisplayOrder[i];
-            s_ticker.streamDisplayOrder[1293 * s_ticker.currentStream - 5173] = TICKER_STREAM_COD;
+            s_ticker.streams[s_ticker.currentStream].currentMessageIndex = 0;
             return;
         }
     }
@@ -179,10 +177,10 @@ void __cdecl LiveTicker_MoveToNextStream()
     {
         for ( i = 0; i < 5; ++i )
         {
-            if ( s_ticker.streamDisplayOrder[1293 * s_ticker.streamDisplayOrder[i] - 5174] > TICKER_STREAM_COD )
+            if ( s_ticker.streams[s_ticker.streamDisplayOrder[i]].messageCount > 0 )
             {
                 s_ticker.currentStream = s_ticker.streamDisplayOrder[i];
-                s_ticker.streamDisplayOrder[1293 * s_ticker.currentStream - 5173] = TICKER_STREAM_COD;
+                s_ticker.streams[s_ticker.currentStream].currentMessageIndex = 0;
                 return;
             }
         }
@@ -199,7 +197,7 @@ void __cdecl LiveTicker_MoveToNextStream()
                     if ( j == 5 )
                         j = 0;
                     s_ticker.currentStream = s_ticker.streamDisplayOrder[j];
-                    if ( s_ticker.streamDisplayOrder[1293 * s_ticker.currentStream - 5174] > TICKER_STREAM_COD )
+                    if ( s_ticker.streams[s_ticker.currentStream].messageCount > 0 )
                         break;
                 }
                 return;
@@ -227,8 +225,8 @@ void __cdecl LiveTicker_MoveToNextMessage(streamName_t streamName)
 
 void __cdecl LiveTicker_ReplaceMessages(const char *text, streamName_t streamName, bool isMultiple)
 {
-    s_ticker.totalMessageCount -= s_ticker.streamDisplayOrder[1293 * streamName - 5174];
-    s_ticker.streamDisplayOrder[1293 * streamName - 5174] = TICKER_STREAM_COD;
+    s_ticker.totalMessageCount -= s_ticker.streams[streamName].messageCount;
+    s_ticker.streams[streamName].messageCount = 0;
     LiveTicker_AddMessages(text, streamName, isMultiple);
 }
 
@@ -264,8 +262,8 @@ void __cdecl LiveTicker_AddMessages(const char *text, streamName_t streamName, b
 
 void __cdecl LiveTicker_RemoveStream(streamName_t streamName)
 {
-    s_ticker.totalMessageCount -= s_ticker.streamDisplayOrder[1293 * streamName - 5174];
-    s_ticker.streamDisplayOrder[1293 * streamName - 5174] = TICKER_STREAM_COD;
+    s_ticker.totalMessageCount -= s_ticker.streams[streamName].messageCount;
+    s_ticker.streams[streamName].messageCount = 0;
     LiveTicker_MoveToFirstStream();
 }
 
@@ -402,9 +400,7 @@ $LN16_68:
                         currMessage->state = MESSAGE_DONE_DISPLAYING;
                     break;
                 case MESSAGE_DONE_DISPLAYING:
-                    s_ticker.streamDisplayOrder[1293 * s_ticker.currentStream
-                                                                        - 6336
-                                                                        + 129 * s_ticker.streamDisplayOrder[1293 * s_ticker.currentStream - 5173]] = TICKER_STREAM_COD;
+                    s_ticker.streams[s_ticker.currentStream].messages[s_ticker.streams[s_ticker.currentStream].currentMessageIndex].state = MESSAGE_NOT_DISPLAYING;
                     LiveTicker_MoveToNextMessage(currStream->streamName);
                     break;
                 default:

@@ -3,6 +3,7 @@
 #include <universal/q_shared.h>
 #include <ddl/ddl_api.h>
 #include <cstring>
+#include <platform/arch_size.h>
 #include "live_pcache.h"
 #include "live_pcache_profile.h"
 #include <cgame/cg_main.h>
@@ -730,7 +731,9 @@ void __cdecl formatStringWithCommas(char *outputString, int stringLength, unsign
 bool __cdecl LiveNews_EvaluateExpression(const char *expr, char *outputString, int stringLength)
 {
     float v4; // [esp+8h] [ebp-42Ch]
-    char compileBuffer[1024]; // [esp+Ch] [ebp-428h] BYREF
+    // Expression_Parse stores entries and RPN tokens that hold pointers here; they double in size on 64-bit.
+    const int compileBufferSize = BO1_ARCH_SIZE(1024, 2048);
+    char compileBuffer[compileBufferSize]; // [esp+Ch] [ebp-428h] BYREF
     ExpressionStatement statement; // [esp+410h] [ebp-24h] BYREF
     float floatValue; // [esp+420h] [ebp-14h]
     bool validNumber; // [esp+427h] [ebp-Dh]
@@ -757,7 +760,7 @@ bool __cdecl LiveNews_EvaluateExpression(const char *expr, char *outputString, i
         return 0;
     validNumber = 0;
     floatValue = 0.0f;
-    Expression_Parse(&expr, &statement, compileBuffer, 1024);
+    Expression_Parse(&expr, &statement, compileBuffer, compileBufferSize);
     expressionResult = GetExpressionResultString(0, 0, &statement);
     value = I_atoi64(expressionResult);
     if ( value < 0xA )

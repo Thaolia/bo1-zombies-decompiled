@@ -48,7 +48,7 @@ void __cdecl UI_BuildServerDisplayList(int localClientNum, uiInfo_s *uiInfo, int
     char v21; // [esp+13h] [ebp-449h]
     char *motd; // [esp+18h] [ebp-444h]
     char *v23; // [esp+1Ch] [ebp-440h]
-    int filter; // [esp+30h] [ebp-42Ch] BYREF
+    const char *filter[2]; // [esp+30h] [ebp-42Ch] BYREF
     const char *mod; // [esp+38h] [ebp-424h]
     char info[1024]; // [esp+3Ch] [ebp-420h] BYREF
     int ping; // [esp+440h] [ebp-1Ch]
@@ -182,7 +182,7 @@ void __cdecl UI_BuildServerDisplayList(int localClientNum, uiInfo_s *uiInfo, int
                             if (atoi(v13) != ui_browserHardcore->current.integer)
                                 goto LABEL_64;
                         }
-                        if ((*(char*)ui_browserGameMode->current.integer == 48
+                        if ((*ui_browserGameMode->current.string == 48
                             || (v14 = Info_ValueForKey(info, "gametype"), !I_stricmp(ui_browserGameMode->current.string, v14)))
                             && (ui_browserMap->current.integer <= 0
                                 || ui_browserMap->current.integer >= sharedUiInfo.mapCount + 1
@@ -197,7 +197,7 @@ void __cdecl UI_BuildServerDisplayList(int localClientNum, uiInfo_s *uiInfo, int
                                     v17 = Info_ValueForKey(info, "gametype"),
                                     !I_stricmp(v17, v19->gameType)))
                             && (ui_serverFilterType <= 0
-                                || (v20 = UI_GetServerFilter((const char**)&filter, ui_serverFilterType)[1],
+                                || (v20 = UI_GetServerFilter(filter, ui_serverFilterType)[1],
                                     v18 = Info_ValueForKey(info, "game"),
                                     !I_stricmp(v18, v20))))
                         {

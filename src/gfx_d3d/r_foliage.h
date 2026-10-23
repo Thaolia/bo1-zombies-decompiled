@@ -106,7 +106,7 @@ struct GrassPersistForce // sizeof=0x3C
     // padding byte
     // padding byte
     GrassPersistForce::ForceType forceType;
-    unsigned int id;
+    uintptr_t id;
     float curForcePercent;
     float trgForcePercent;
     GrassPersistForce::ShakeForceState shakeForceState;
@@ -176,7 +176,7 @@ bool __cdecl AABBOverlapsSphere(
                 float sphereRadiusSquared,
                 const float *sphereCenter);
 void __cdecl AddNearMuzzleShakeForce(
-                unsigned int id,
+                uintptr_t id,
                 const float *forcePos,
                 const float *forwardVector,
                 const FoliageShakeParams *params);
@@ -184,7 +184,7 @@ void __cdecl SetGrassPersistForceToActive(GrassPersistForce *force);
 void __cdecl R_FoliageNotifyGrenadeExplosion(int localClientNum, float *loc);
 void __cdecl R_FoliageNofityWeaponFiring(
                 int localClientNum,
-                unsigned int id,
+                uintptr_t id,
                 const float *loc,
                 const float *forwardVector,
                 bool isFlameThrower);

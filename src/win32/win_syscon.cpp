@@ -134,10 +134,7 @@ void __cdecl Sys_CreateConsole(HINSTANCE__ *hInstance)
                                                      hInstance,
                                                      0);
             SendMessageA(s_wcd.hwndBuffer, 0x30u, (WPARAM)s_wcd.hfBufferFont, 0);
-            s_wcd.SysInputLineWndProc = (int (__stdcall *)(HWND__ *, unsigned int, unsigned int, int))SetWindowLongA(
-                                                                                                                                                                                                    s_wcd.hwndInputLine,
-                                                                                                                                                                                                    -4,
-                                                                                                                                                                                                    (int)InputLineWndProc);
+            s_wcd.SysInputLineWndProc = (WNDPROC)SetWindowLongPtrA(s_wcd.hwndInputLine, GWLP_WNDPROC, (LONG_PTR)InputLineWndProc);
             SendMessageA(s_wcd.hwndInputLine, 0x30u, (WPARAM)s_wcd.hfBufferFont, 0);
             SetFocus(s_wcd.hwndInputLine);
             Con_GetTextCopy(text, 0x4000);
@@ -180,7 +177,7 @@ LRESULT __stdcall ConWndProc(HWND__ *hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     }
 }
 
-char *__cdecl Conbuf_CleanText(const char *source, char *target, int sizeofTarget)
+int __cdecl Conbuf_CleanText(const char *source, char *target, int sizeofTarget)
 {
     const char *start; // [esp+0h] [ebp-8h]
     const char *last; // [esp+4h] [ebp-4h]
@@ -220,7 +217,7 @@ char *__cdecl Conbuf_CleanText(const char *source, char *target, int sizeofTarge
         }
     }
     *target = 0;
-    return (char *)(target - start);
+    return target - start;
 }
 
 void __cdecl Sys_DestroyConsole()
@@ -278,7 +275,7 @@ void __cdecl Conbuf_AppendText(char *pMsg)
 {
     char target[32772]; // [esp+20h] [ebp-8010h] BYREF
     char *source; // [esp+8028h] [ebp-8h]
-    char *v3; // [esp+802Ch] [ebp-4h]
+    int v3; // [esp+802Ch] [ebp-4h]
 
     if ( !s_wcd.hwndBuffer
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\win32\\win_syscon.cpp", 414, 0, "%s", "s_wcd.hwndBuffer") )
@@ -290,7 +287,7 @@ void __cdecl Conbuf_AppendText(char *pMsg)
     else
         source = &pMsg[strlen(pMsg) - 0x3FFF];
     v3 = Conbuf_CleanText(source, target, 0x8000);
-    s_totalChars += (unsigned int)v3;
+    s_totalChars += v3;
     if ( s_totalChars <= 0x4000 )
     {
         SendMessageA(s_wcd.hwndBuffer, 0xB1u, 0xFFFFu, 0xFFFF);
@@ -298,7 +295,7 @@ void __cdecl Conbuf_AppendText(char *pMsg)
     else
     {
         SendMessageA(s_wcd.hwndBuffer, 0xB1u, 0, -1);
-        s_totalChars = (unsigned int)v3;
+        s_totalChars = v3;
     }
     SendMessageA(s_wcd.hwndBuffer, 0xB6u, 0, 0xFFFF);
     SendMessageA(s_wcd.hwndBuffer, 0xB7u, 0, 0);

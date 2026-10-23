@@ -270,7 +270,7 @@ void __cdecl CG_MovieCamera_f()
             {
                 value = 1;
                 hud_state = 0;
-                if ( ((*((unsigned int *)CG_GetEntity(0, cgameGlob->clientNum) + 201) >> 1) & 1) != 0 )
+                if ( ((CG_GetEntity(0, cgameGlob->clientNum)->flagWord >> 1) & 1) != 0 )
                 {
                     cgameGlob->movieCameraOrigin[0] = cgameGlob->refdef.vieworg[0];
                     cgameGlob->movieCameraOrigin[1] = cgameGlob->refdef.vieworg[1];
@@ -318,7 +318,7 @@ void __cdecl CG_FollowCamera_f()
                 {
                     cgameGlob->followCameraClient = clientNum;
                     centTarget = CG_GetEntity(0, cgameGlob->followCameraClient);
-                    if ( ((*((unsigned int *)centTarget + 201) >> 1) & 1) != 0 )
+                    if ( ((centTarget->flagWord >> 1) & 1) != 0 )
                     {
                         cgameGlob->movieCameraOrigin[0] = centTarget->pose.origin[0];
                         cgameGlob->movieCameraOrigin[1] = centTarget->pose.origin[1];

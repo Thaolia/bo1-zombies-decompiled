@@ -644,7 +644,7 @@ int __cdecl UI_GetServerStatusInfoScoreBoard(char *serverAddress, serverStatusIn
 
 void __cdecl UI_SortServerStatusScoreBoardInfo(serverStatusInfo_s *info)
 {
-    qsort(info->lines[1], info->numLines - 1, 0x20u, (int (__cdecl *)(const void *, const void *))ScoreBar_CompareScores);
+    qsort(info->lines[1], info->numLines - 1, sizeof(info->lines[1]), (int (__cdecl *)(const void *, const void *))ScoreBar_CompareScores);
 }
 
 int __cdecl ScoreBar_CompareScores(const char **sv1, const char **sv2)
@@ -1214,12 +1214,12 @@ void __cdecl UI_DrawNetFilter(
 {
     const char **ServerFilter; // eax
     const char *v7; // eax
-    int filter; // [esp+1Ch] [ebp-Ch] BYREF
+    const char *filter[2]; // [esp+1Ch] [ebp-Ch] BYREF
     const char *pszTeanslation; // [esp+24h] [ebp-4h]
 
     if ( ui_serverFilterType < 0 || ui_serverFilterType > numServerFilters )
         ui_serverFilterType = 0;
-    ServerFilter = UI_GetServerFilter((const char **)&filter, ui_serverFilterType);
+    ServerFilter = UI_GetServerFilter(filter, ui_serverFilterType);
     v7 = va("EXE_SERVERFILTER %s", *ServerFilter);
     pszTeanslation = SEH_LocalizeTextMessage(v7, "server filter", LOCMSG_SAFE);
     UI_DrawText(

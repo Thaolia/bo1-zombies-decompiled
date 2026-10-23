@@ -437,7 +437,7 @@ void __cdecl SND_ParseInit(
     memset((unsigned __int8 *)CURVES, 0, sizeof(CURVES));
     for ( m = 0; m < curveCount; ++m )
         CURVES[m] = curves[m].name;
-    memset((unsigned __int8 *)&SND_SNAPSHOT_FIELDS[9], 0, 0x800u);
+    memset((unsigned __int8 *)&SND_SNAPSHOT_FIELDS[9], 0, 64 * sizeof(snd_csv_entry_t));
     for ( i = 0; i < snapshotGroupCount; ++i )
     {
         if ( &snapshotGroups[i] && snapshotGroups[i].name[0] )

@@ -2,6 +2,7 @@
 #include "phys_local.h"
 #include "phys_gjk.h"
 #include "rigid_body.h"
+#include <platform/arch_size.h>
 
 enum $067C566A97EEC6E7D3DB7B726B5C1A66 : __int32
 {
@@ -43,7 +44,7 @@ struct destructible_ent_aa : phys_auto_activate_callback // sizeof=0xC
     }
     void auto_activate(struct broad_phase_info *bpi_impactor);
 };
-static_assert(sizeof(destructible_ent_aa) == 12);
+static_assert(sizeof(destructible_ent_aa) == BO1_ARCH_SIZE(12, 24));
 
 struct dynamic_ent_aa : phys_auto_activate_callback // sizeof=0xC
 {

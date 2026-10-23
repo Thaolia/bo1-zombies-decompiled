@@ -107,7 +107,7 @@ bool __cdecl Ragdoll_BodyPoseValid(RagdollBody *body)
     return body->state >= BS_TUNNEL_TEST;
 }
 
-void __cdecl Ragdoll_GetRootOrigin(int ragdollHandle, float *origin)
+void __cdecl Ragdoll_GetRootOrigin(intptr_t ragdollHandle, float *origin)
 {
     RagdollBody *body; // [esp+0h] [ebp-4h]
 
@@ -171,7 +171,7 @@ const RagdollBody *__cdecl Ragdoll_CreateRagdollForDObj(
 
     if ( ragdoll )
     {
-        body = (RagdollBody *)Ragdoll_HandleBody((int)ragdoll);
+        body = (RagdollBody *)Ragdoll_HandleBody((intptr_t)ragdoll);
         if ( reset )
             Ragdoll_BodyNewState(body, BS_DEAD);
         if ( body->state == BS_DEAD )
@@ -295,7 +295,7 @@ bool __cdecl Ragdoll_ValidateDef(unsigned int ragdollDef)
     return ragdollDefs[ragdollDef].numBones != 0;
 }
 
-void __cdecl Ragdoll_Remove(int ragdoll)
+void __cdecl Ragdoll_Remove(intptr_t ragdoll)
 {
     RagdollBody *body; // [esp+0h] [ebp-4h]
 
@@ -314,7 +314,7 @@ void __cdecl Ragdoll_Remove(int ragdoll)
     }
 }
 
-void __cdecl Ragdoll_FreeBody(int ragdollBody)
+void __cdecl Ragdoll_FreeBody(intptr_t ragdollBody)
 {
     RagdollBody *body; // [esp+24h] [ebp-4h]
 

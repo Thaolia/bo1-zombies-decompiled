@@ -25,4 +25,8 @@ On Windows, the port's offline build (no Steam, Bink, NVAPI, DemonWare or voice 
 files `setup.ps1` copied: `cmake --preset win32-msvc-offline`, `cmake --build --preset win32-msvc-offline-release`,
 then `Play.bat offline`.
 
+The 64-bit build (work in progress: Kino der Toten loads and plays for a minute; longer games are not tested yet)
+runs on converted zones: convert into `build/zones64` with `ffconv --verify --game <install> --out build\zones64`,
+build with `cmake --preset win64-msvc` and `cmake --build --preset win64-msvc-release`, then `Play.bat x64`.
+
 French version: `README.fr.md`.

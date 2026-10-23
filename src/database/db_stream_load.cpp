@@ -3,6 +3,7 @@
 #include <universal/assertive.h>
 #include <string.h>
 #include "db_file_load.h"
+#include "db_ff64.h"
 #include <clientscript/cscr_stringlist.h>
 
 StreamDelayInfo g_streamDelayArray[4096];
@@ -60,36 +61,46 @@ void __cdecl Load_DelayStream()
         DB_LoadXFileData((unsigned __int8 *)g_streamDelayArray[index].ptr, g_streamDelayArray[index].size);
 }
 
-void __cdecl DB_ConvertOffsetToAlias(unsigned int *data)
+// A stream offset is the encoded (block, offset) of a byte the stream already loaded: 3 + 29 bits in retail zones,
+// 32 + 32 bits in IWffs zones (db_ff64.h).
+static unsigned __int8 *DB_OffsetToAddress(uintptr_t offset)
 {
-    unsigned int offset; // [esp+0h] [ebp-8h]
+    if constexpr (sizeof(uintptr_t) == 8)
+        return &g_streamBlocks[DB_FF64_OffsetBlock(offset)].data[DB_FF64_OffsetInBlock(offset)];
+    else
+        return &g_streamBlocks[(offset - 1) >> 29].data[(offset - 1) & 0x1FFFFFFF];
+}
 
-    offset = *data;
-    if ( (!*data || offset >= 0xFFFFFFFE)
+void __cdecl DB_ConvertOffsetToAlias(void *data)
+{
+    uintptr_t offset; // [esp+0h] [ebp-8h]
+
+    offset = *(uintptr_t *)data;
+    if ( (!offset || offset >= (uintptr_t)-2)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\database\\db_stream_load.cpp",
                     67,
                     0,
                     "%s\n\t(offset) = %i",
                     "(offset && (offset != 0xFFFFFFFF) && (offset != 0xFFFFFFFE))",
-                    offset) )
+                    (int)offset) )
     {
         __debugbreak();
     }
-    *data = *(unsigned int *)&g_streamBlocks[(offset - 1) >> 29].data[(offset - 1) & 0x1FFFFFFF];
+    *(uintptr_t *)data = *(uintptr_t *)DB_OffsetToAddress(offset);
 }
 
-void __cdecl DB_ConvertOffsetToPointer(unsigned int *data)
+void __cdecl DB_ConvertOffsetToPointer(void *data)
 {
-    *data = (unsigned int)&g_streamBlocks[(unsigned int)(*data - 1) >> 29].data[(*data - 1) & 0x1FFFFFFF];
+    *(uintptr_t *)data = (uintptr_t)DB_OffsetToAddress(*(uintptr_t *)data);
 }
 
 void __cdecl Load_XStringCustom(const char **str)
 {
-    unsigned __int8 *numBytesLoaded; // [esp+4h] [ebp-8h]
+    int numBytesLoaded; // [esp+4h] [ebp-8h]
 
     numBytesLoaded = DB_LoadXFileDataNullTerminated((unsigned __int8 *)*str);
-    DB_IncStreamPos((int)numBytesLoaded);
+    DB_IncStreamPos(numBytesLoaded);
 }
 
 void __cdecl Load_TempStringCustom(const char **str)
@@ -98,7 +109,7 @@ void __cdecl Load_TempStringCustom(const char **str)
 
     Load_XStringCustom(str);
     if ( *str )
-        String = (const char *)SL_GetString((char *)*str, 4u, SCRIPTINSTANCE_SERVER);
+        String = (const char *)(uintptr_t)SL_GetString((char *)*str, 4u, SCRIPTINSTANCE_SERVER);
     else
         String = 0;
     *str = String;

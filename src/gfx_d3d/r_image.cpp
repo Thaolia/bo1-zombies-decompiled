@@ -88,7 +88,7 @@ void __cdecl R_GetImageList(ImageList *imageList)
 
 void __cdecl R_AddImageToList(XAssetHeader header, XAssetHeader *data)
 {
-    if ( (unsigned int)data->xmodelPieces >= sizeof(((ImageList *)0)->image) / sizeof(GfxImage *)
+    if ( (uintptr_t)data->xmodelPieces >= sizeof(((ImageList *)0)->image) / sizeof(GfxImage *)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_image.cpp",
                     225,
@@ -98,7 +98,7 @@ void __cdecl R_AddImageToList(XAssetHeader header, XAssetHeader *data)
     {
         __debugbreak();
     }
-    data[(int)data->xmodelPieces++ + 1] = header;
+    data[(intptr_t)data->xmodelPieces++ + 1] = header;
 }
 
 void __cdecl R_SumOfUsedImages(Image_MemUsage *usage)
@@ -247,7 +247,7 @@ GfxImage *__cdecl Image_Alloc(
     if ( !name && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_image.cpp", 512, 0, "%s", "name") )
         __debugbreak();
     v5 = strlen(name);
-    image = (GfxImage *)Hunk_Alloc(v5 + 53, "Image_Alloc", 23);
+    image = (GfxImage *)Hunk_Alloc(v5 + sizeof(GfxImage) + 1, "Image_Alloc", 23);
     if ( !image && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_image.cpp", 521, 1, "%s", "image") )
         __debugbreak();
     image->name = (const char *)&image[1];
@@ -331,7 +331,7 @@ void __cdecl R_ShutdownImages()
     GfxImage *imagea; // [esp+0h] [ebp-2014h]
     int v2; // [esp+4h] [ebp-2010h]
     unsigned int i; // [esp+8h] [ebp-200Ch]
-    unsigned int v4[2049]; // [esp+Ch] [ebp-2008h]
+    GfxImage *v4[2049]; // [esp+Ch] [ebp-2008h]
     int j; // [esp+2010h] [ebp-4h]
 
     RB_UnbindAllImages();
@@ -342,7 +342,7 @@ void __cdecl R_ShutdownImages()
         if ( image )
         {
             if ( Image_IsProg(image) )
-                v4[v2++] = (unsigned int)image;
+                v4[v2++] = image;
             else
                 Image_Free(imageGlobals.imageHashTable[i]);
         }
@@ -350,7 +350,7 @@ void __cdecl R_ShutdownImages()
     memset((unsigned __int8 *)&imageGlobals, 0, 0x2000u);
     for ( j = 0; j < v2; ++j )
     {
-        imagea = (GfxImage *)v4[j];
+        imagea = v4[j];
         imageGlobals.imageHashTable[Image_GetAvailableHashLocation(imagea->name)] = imagea;
     }
 }
@@ -701,7 +701,7 @@ $LN7_167:
 
 void __cdecl R_DelayLoadImage(XAssetHeader header, void *data)
 {
-    const char *externalDataSize; // [esp+4h] [ebp-4h]
+    int externalDataSize; // [esp+4h] [ebp-4h]
 
     GfxImage *image = header.image;
 
@@ -709,12 +709,12 @@ void __cdecl R_DelayLoadImage(XAssetHeader header, void *data)
     if (image->delayLoadPixels)
     {
         image->delayLoadPixels = 0;
-        externalDataSize = (const char *)image->cardMemory.platform[0];
+        externalDataSize = image->cardMemory.platform[0];
         image->cardMemory.platform[0] = 0;
         image->cardMemory.platform[1] = 0;
         if (r_loadForRenderer->current.enabled && !Image_LoadFromFile(image, 0))
             Image_AssignDefaultTexture(image);
-        DB_LoadedExternalData((unsigned int)externalDataSize);
+        DB_LoadedExternalData(externalDataSize);
     }
 }
 
@@ -938,7 +938,7 @@ GfxImage *__cdecl Image_FindExisting_FastFile(const char *name)
 GfxImage *__cdecl Image_Register(char *imageName, unsigned __int8 semantic, int imageTrack)
 {
     if ( useFastFile->current.enabled )
-        return (GfxImage *)((int (__cdecl *)(char *, unsigned int, int))Image_Register_FastFile)(imageName, semantic, imageTrack);
+        return ((GfxImage *(__cdecl *)(char *, unsigned int, int))Image_Register_FastFile)(imageName, semantic, imageTrack);
     else
         return Image_Register_LoadObj(imageName, semantic, imageTrack);
 }

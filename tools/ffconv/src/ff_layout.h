@@ -27,6 +27,18 @@ struct Leaf
     LeafKind kind;
 };
 
+// A 4-byte signed integer inside a byte leaf that holds a distance in bytes between elements of one array of a unit
+// type (GfxAabbTree::childrenOffset). The bytes are copied like the leaf, then the value is rescaled by the unit's
+// size: value64 = value32 / unit32 * unit64, and the inverse when narrowing.
+struct ValueFixup
+{
+    uint32_t off32;
+    uint32_t off64;
+    uint32_t unit32;
+    uint32_t unit64;
+    const char *field;
+};
+
 struct TypeLayout
 {
     const char *name;
@@ -36,6 +48,8 @@ struct TypeLayout
     uint32_t align64;
     const Leaf *leaves;
     uint32_t leafCount;
+    const ValueFixup *fixups = nullptr;
+    uint32_t fixupCount = 0;
 };
 
 template <typename T> const TypeLayout &Layout();
@@ -46,13 +60,21 @@ struct OwnedLayout
 {
     std::vector<Leaf> leaves;
     TypeLayout layout;
+    std::vector<ValueFixup> fixups;
 };
 
 inline const TypeLayout &Own(OwnedLayout &owned, const char *name, uint32_t size32, uint32_t align32, uint32_t size64,
                              uint32_t align64)
 {
-    owned.layout = {name, size32, align32, size64, align64, owned.leaves.data(),
-                    static_cast<uint32_t>(owned.leaves.size())};
+    owned.layout = {name,
+                    size32,
+                    align32,
+                    size64,
+                    align64,
+                    owned.leaves.data(),
+                    static_cast<uint32_t>(owned.leaves.size()),
+                    owned.fixups.data(),
+                    static_cast<uint32_t>(owned.fixups.size())};
     return owned.layout;
 }
 
@@ -102,6 +124,14 @@ template <typename T, size_t N> struct Builder<T[N]>
                     leaf.off32 += static_cast<uint32_t>(i) * elem.size32;
                     leaf.off64 += static_cast<uint32_t>(i) * elem.size64;
                     owned.leaves.push_back(leaf);
+                }
+            for (size_t i = 0; i < N; ++i)
+                for (uint32_t f = 0; f < elem.fixupCount; ++f)
+                {
+                    ValueFixup fixup = elem.fixups[f];
+                    fixup.off32 += static_cast<uint32_t>(i) * elem.size32;
+                    fixup.off64 += static_cast<uint32_t>(i) * elem.size64;
+                    owned.fixups.push_back(fixup);
                 }
             return Own(owned, elem.name, elem.size32 * N, elem.align32, elem.size64 * N, elem.align64);
         }();

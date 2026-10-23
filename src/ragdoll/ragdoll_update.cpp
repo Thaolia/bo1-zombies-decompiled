@@ -42,7 +42,7 @@ void __cdecl Ragdoll_AnimMatToMat43(const DObjAnimMat *mat, float (*out)[3])
     (*out)[11] = mat->trans[2];
 }
 
-char __cdecl Ragdoll_RebindBody(int ragdollHandle)
+char __cdecl Ragdoll_RebindBody(intptr_t ragdollHandle)
 {
     RagdollDef *def; // [esp+0h] [ebp-1Ch]
     DObj *obj; // [esp+4h] [ebp-18h]
@@ -379,7 +379,7 @@ void __cdecl Ragdoll_GetTorsoPosition(RagdollBody *body, float *center)
     center[2] = v2->origin[2];
 }
 
-void __cdecl Ragdoll_Launch(int localClientNum, int ragdollHandle, const float *force, hitLocation_t hitloc)
+void __cdecl Ragdoll_Launch(int localClientNum, intptr_t ragdollHandle, const float *force, hitLocation_t hitloc)
 {
     float *v4; // [esp+0h] [ebp-10h]
     float v5; // [esp+4h] [ebp-Ch]
@@ -460,7 +460,7 @@ void __cdecl Ragdoll_LaunchUpdate(RagdollBody *body)
     }
 }
 
-void __cdecl Ragdoll_Attach(int localClientNum, int ragdollHandle, int attachEnt, hitLocation_t hitloc)
+void __cdecl Ragdoll_Attach(int localClientNum, intptr_t ragdollHandle, int attachEnt, hitLocation_t hitloc)
 {
     RagdollBody *body; // [esp+0h] [ebp-4h]
 
@@ -794,7 +794,7 @@ char __cdecl Ragdoll_CreatePhysJoint(RagdollBody *body, JointDef *jointDef, Join
     type = jointDef->type;
     if ( type == RAGDOLL_JOINT_HINGE )
     {
-        joint->joint = (int)Phys_CreateHinge(
+        joint->joint = (intptr_t)Phys_CreateHinge(
                                                     bone->rigidBody,
                                                     parentBone->rigidBody,
                                                     anchor,
@@ -807,7 +807,7 @@ char __cdecl Ragdoll_CreatePhysJoint(RagdollBody *body, JointDef *jointDef, Join
     }
     else if ( type == RAGDOLL_JOINT_SWIVEL )
     {
-        joint->joint = (int)Phys_CreateSwivel(
+        joint->joint = (intptr_t)Phys_CreateSwivel(
                                                     bone->rigidBody,
                                                     parentBone->rigidBody,
                                                     anchor,
@@ -1018,14 +1018,14 @@ char __cdecl Ragdoll_CreatePhysObj(RagdollBody *body, BoneDef *boneDef, Bone *bo
                                              &g_empty_collision_visitor);
     //gjk_geom_list_t::add_geom(&gjk_geom_list, capsule_gjk_geom);
     gjk_geom_list.add_geom(capsule_gjk_geom);
-    bone->rigidBody = (int)Phys_ObjCreate(2, b0Origin, b0Quat, vec3_origin, &preset, &gjk_geom_list, 0, -1);
+    bone->rigidBody = (intptr_t)Phys_ObjCreate(2, b0Origin, b0Quat, vec3_origin, &preset, &gjk_geom_list, 0, -1);
     cent = CG_GetEntity(body->localClientNum, body->dobj);
     if ( bone->rigidBody )
     {
         userData = (PhysObjUserData *)bone->rigidBody;
-        if ( ((*((unsigned int *)cent + 201) >> 19) & 1) != 0 )
+        if ( ((cent->flagWord >> 19) & 1) != 0 )
             userData->m_flags |= 4u;
-        if ( ((*((unsigned int *)cent + 201) >> 20) & 1) != 0 )
+        if ( ((cent->flagWord >> 20) & 1) != 0 )
             userData->m_flags |= 0x10u;
         userData->m_flags |= 0x20u;
         // zombies: SP Ragdoll_CreatePhysObj (SP 0x00832b93, zombiemode) replaces the rigid body's gravity vector
@@ -1779,21 +1779,19 @@ static const int hangBone = 3;
 static const int renderflag = 255;
 void    Ragdoll_DebugRender(RagdollBody *body)
 {
-    int joint2; // edx
+    intptr_t joint2; // edx
     environment_rigid_body *envRigBody; // eax
     phys_vec3 v4; // [esp-2Ch] [ebp-6Ch] BYREF
     float v5; // [esp-10h] [ebp-50h]
-    unsigned int v6[2]; // [esp-Ch] [ebp-4Ch] BYREF
-    float z; // [esp-4h] [ebp-44h]
-    phys_vec3 world_pos; // [esp+0h] [ebp-40h]
+    phys_vec3 v6; // [esp-Ch] [ebp-4Ch] BYREF
     environment_rigid_body *v9; // [esp+10h] [ebp-30h]
     environment_rigid_body **v10; // [esp+14h] [ebp-2Ch]
-    int rigidBody; // [esp+18h] [ebp-28h]
+    intptr_t rigidBody; // [esp+18h] [ebp-28h]
     rigid_body *body1; // [esp+1Ch] [ebp-24h]
     PhysObjUserData *userData; // [esp+20h] [ebp-20h]
     int id; // [esp+24h] [ebp-1Ch]
-    int v15; // [esp+28h] [ebp-18h]
-    int v16; // [esp+2Ch] [ebp-14h]
+    intptr_t v15; // [esp+28h] [ebp-18h]
+    intptr_t v16; // [esp+2Ch] [ebp-14h]
     int i; // [esp+30h] [ebp-10h]
     Joint joint; // [esp+34h] [ebp-Ch] BYREF
 
@@ -1834,17 +1832,17 @@ void    Ragdoll_DebugRender(RagdollBody *body)
     else if ( !body->debug_hang_point )
     {
         v9 = *v10;
-        v6[0] = LODWORD(v9->m_mat.w.x);
-        v6[1] = LODWORD(v9->m_mat.w.y);
-        z = v9->m_mat.w.z;
-        world_pos.x = v9->m_mat.w.w;
-        v5 = z;
-        z = z + 60.0;
+        v6.x = v9->m_mat.w.x;
+        v6.y = v9->m_mat.w.y;
+        v6.z = v9->m_mat.w.z;
+        v6.w = v9->m_mat.w.w;
+        v5 = v6.z;
+        v6.z = v6.z + 60.0;
         envRigBody = phys_sys::get_environment_rigid_body();
         body->debug_hang_point = phys_sys::create_rbc_point(v9, envRigBody, 0);
         memset(&v4, 0, 12);
         //rigid_body_constraint_point::set(body->debug_hang_point, &v4, (const phys_vec3 *)v6);
-        body->debug_hang_point->set(&v4, (const phys_vec3 *)v6);
+        body->debug_hang_point->set(&v4, &v6);
         //rigid_body::set_flag(v9, 0x40u, 1);
         v9->set_flag(0x40, 1);
     }

@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <xanim/xanim.h>
 
 #include "mem_largelocal.h"
@@ -49,7 +50,7 @@ void __cdecl Hunk_AddData(int type, void *data, void *(__cdecl *alloc)(int));
 void __cdecl Hunk_OverrideDataForFile(int type, const char *name, void *data);
 int __cdecl DB_GetAllXAssetOfType(XAssetType type, XAssetHeader *assets, int maxCount);
 int __cdecl DB_GetAllXAssetOfType_LoadObj(XAssetType type, XAssetHeader *assets, int maxCount);
-void __cdecl Hunk_AddAsset(XAssetHeader header, unsigned int *data);
+void __cdecl Hunk_AddAsset(XAssetHeader header, void *data);
 void __cdecl DB_EnumXAssets(
                 XAssetType type,
                 void (__cdecl *func)(XAssetHeader, void *),
@@ -70,7 +71,7 @@ void Hunk_Clear();
 int __cdecl Hunk_Used();
 unsigned __int8 *__cdecl Hunk_Alloc(unsigned int size, const char *name, int type);
 unsigned __int8 *__cdecl Hunk_AllocAlign(unsigned int size, int alignment, const char *name, int type);
-unsigned int __cdecl Hunk_AllocateTempMemoryHigh(int size, const char *name);
+uintptr_t __cdecl Hunk_AllocateTempMemoryHigh(int size, const char *name);
 void Hunk_ClearTempMemoryHigh();
 unsigned __int8 *__cdecl Hunk_AllocLow(unsigned int size, const char *name, int type);
 unsigned __int8 *__cdecl Hunk_AllocLowAlign(unsigned int size, int alignment, const char *name, int type);
