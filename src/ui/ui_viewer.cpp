@@ -1740,7 +1740,7 @@ void __thiscall UIViewer::AddWeaponToScene(
 
 char __thiscall UIViewer::SetCameraPos(char *string, bool animate)
 {
-    long double v3; // st7
+    double v3; // st7
     char str[256]; // [esp+1Ch] [ebp-130h] BYREF
     int MAX_STRING; // [esp+120h] [ebp-2Ch]
     float at[3]; // [esp+124h] [ebp-28h] BYREF

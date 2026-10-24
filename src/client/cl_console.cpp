@@ -982,8 +982,6 @@ void CL_ConsolePrint_AddLine(
     int flags)
 {
     char *v8; // eax
-    char *v9; // ecx
-    const char *v10; // edx
     int c; // [esp+24h] [ebp-24h]
     int atStartOfBrokenLine; // [esp+28h] [ebp-20h]
     Font_s *font; // [esp+2Ch] [ebp-1Ch]
@@ -1113,13 +1111,9 @@ void CL_ConsolePrint_AddLine(
                         __debugbreak();
                     }
                     con.textTempLine[con.lineOffset++] = 94;
-                    v9 = &con.textTempLine[con.lineOffset];
-                    v10 = text;
-                    *(_DWORD *)v9 = *(_DWORD *)text;
-                    *((_WORD *)v9 + 2) = *((_WORD *)v10 + 2);
-                    v9[6] = v10[6];
-                    con.lineOffset += 7;
-                    text += 7;
+                    memcpy(&con.textTempLine[con.lineOffset], text, CONTXTCMD_LEN_HUDICON);
+                    con.lineOffset += CONTXTCMD_LEN_HUDICON;
+                    text += CONTXTCMD_LEN_HUDICON;
 
                     bcassert(con.lineOffset, sizeof(con.textTempLine));
                     atStartOfBrokenLine = 0;
@@ -1786,7 +1780,7 @@ unsigned int __cdecl CL_AddMessageIcon(
     else
         v9 = 16;
     msgLenc = CL_AddMessageChar(msg, msgLenb, msgMaxLen, v9 + 16);
-    if ( msgLenc + 4 > msgMaxLen
+    if ( msgLenc + (int)sizeof(iconShader) > msgMaxLen
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\client\\cl_console.cpp",
                     1551,
@@ -1796,9 +1790,9 @@ unsigned int __cdecl CL_AddMessageIcon(
     {
         __debugbreak();
     }
-    *(unsigned int *)&msg[msgLenc] = (unsigned int)iconShader;
-    msgLend = msgLenc + 4;
-    if ( msgLend - msgLen != 8
+    memcpy(&msg[msgLenc], &iconShader, sizeof(iconShader));
+    msgLend = msgLenc + (int)sizeof(iconShader);
+    if ( msgLend - msgLen != CONTXTCMD_LEN_HUDICON + 1
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\client\\cl_console.cpp",
                     1557,

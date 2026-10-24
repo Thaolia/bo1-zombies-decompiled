@@ -2205,7 +2205,7 @@ void __cdecl BG_LerpOffset(float *offset_goal, float maxOffsetChange, float *off
 void __cdecl BG_Player_DoControllersInternal(const entityState_s *es, const clientInfo_t *ci, controller_info_t *info)
 {
     float v3; // xmm0_4
-    long double v4; // st7
+    double v4; // st7
     float *v5; // [esp+1Ch] [ebp-F8h]
     float *v6; // [esp+20h] [ebp-F4h]
     float v7; // [esp+30h] [ebp-E4h]

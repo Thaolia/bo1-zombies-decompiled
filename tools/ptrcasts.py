@@ -11,7 +11,10 @@ no pointer is narrowed to an integer. This parses each file for x86_64 with libc
     byte-offset   `(T *)((char *)p + N)` where p points to a struct that holds pointers and N is a literal;
     sort-size     a qsort/bsearch whose literal element size differs from the 64-bit size of what the base points to
                   (sort-unknown when the base is a void or byte pointer: check the element type by hand);
-    ptr-alloc     a call whose result is cast to a pointer to pointers and whose size is `4 * n`.
+    ptr-alloc     a call whose result is cast to a pointer to pointers and whose size is `4 * n`;
+    handle-narrow an explicit cast to 4 bytes or less of an integer declared to hold a pointer (`intptr_t`,
+                  `uintptr_t`, `DWORD_PTR`, ...): `Phys_GetUserData((int)obj1)`. -Wshorten-64-to-32 does not see
+                  explicit casts. Most keep the low bits on purpose (alignment tests, hashes) and are listed anyway.
 
     tools/ptrcasts.py BUILD_DIR [--jobs N] [--filter REGEX]    # BUILD_DIR: a configured 64-bit GNU preset
 
@@ -31,6 +34,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from litsizes import OWN_CODE, ROOT, literal_value, parse_args, strip, unwrap_implicit  # noqa: E402
 
 CASTS = (ci.CursorKind.CSTYLE_CAST_EXPR, ci.CursorKind.CXX_REINTERPRET_CAST_EXPR)
+VALUE_CASTS = CASTS + (ci.CursorKind.CXX_STATIC_CAST_EXPR, ci.CursorKind.CXX_FUNCTIONAL_CAST_EXPR)
+POINTER_INTEGERS = re.compile(r'\b(u?intptr_t|INT_PTR|UINT_PTR|LONG_PTR|ULONG_PTR|DWORD_PTR|psize_int)\b')
+SMALL_INTEGERS = (ci.TypeKind.BOOL, ci.TypeKind.CHAR_S, ci.TypeKind.CHAR_U, ci.TypeKind.SCHAR, ci.TypeKind.UCHAR,
+                  ci.TypeKind.SHORT, ci.TypeKind.USHORT, ci.TypeKind.INT, ci.TypeKind.UINT)
 CHAR_KINDS = (ci.TypeKind.CHAR_S, ci.TypeKind.CHAR_U, ci.TypeKind.SCHAR, ci.TypeKind.UCHAR)
 SORT_SIZE_ARG = {'qsort': 2, 'bsearch': 3}
 
@@ -82,6 +89,19 @@ def classify(cast):
     return None
 
 
+def handle_narrow(cast):
+    # A cast a macro expands to (windows.h's LOWORD) has no tokens of its own; it narrows on purpose.
+    if cast.type.get_canonical().kind not in SMALL_INTEGERS or not any(True for _ in cast.get_tokens()):
+        return None
+    src = operand(cast)
+    if src is None:
+        return None
+    inner = strip(src)
+    if POINTER_INTEGERS.search(inner.type.spelling):
+        return 'handle-narrow', inner.type.spelling
+    return None
+
+
 def sort_call(call):
     index = SORT_SIZE_ARG.get(call.spelling)
     args = list(call.get_arguments())
@@ -118,8 +138,8 @@ def check(entry):
 
     def visit(node, cast_type):
         own = node.location.file and OWN_CODE.match(os.path.relpath(node.location.file.name, ROOT))
-        if own and node.kind in CASTS:
-            found = classify(node)
+        if own and node.kind in VALUE_CASTS:
+            found = (classify(node) if node.kind in CASTS else None) or handle_narrow(node)
             if found:
                 report(node, found, node.type.spelling)
         if own and node.kind == ci.CursorKind.CALL_EXPR:

@@ -4238,7 +4238,7 @@ void __cdecl Load_DynEntityCollArray(bool atStreamStart, int count)
 
 void __cdecl Load_DynEntityClientArray(bool atStreamStart, int count)
 {
-    Load_Stream(atStreamStart, (unsigned __int8 *)varDynEntityClient, 20 * count);
+    Load_Stream(atStreamStart, (unsigned __int8 *)varDynEntityClient, sizeof(DynEntityClient) * count);
 }
 
 void __cdecl Load_DynEntityServerArray(bool atStreamStart, int count)

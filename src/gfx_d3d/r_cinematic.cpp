@@ -1076,8 +1076,10 @@ char __cdecl R_Cinematic_StartPlayback_Now(const char *filename, unsigned int pl
     R_Cinematic_CheckBinkError();
     BinkSetMemory(R_Cinematic_Bink_Alloc, R_Cinematic_Bink_Free);
     R_Cinematic_CheckBinkError();
+#if defined(_WIN32) // posix and switch have no DirectSound device: g_cinematicDS stays null there
     if (g_cinematicDS)
         BinkSetSoundSystem(BinkOpenDirectSound, (UINTa)g_cinematicDS);
+#endif
     R_Cinematic_CheckBinkError();
     R_Cinematic_CheckBinkError();
     if ( Sys_IsHeadless() ) // zombies: headless - no sound tracks, so Bink opens no sound device of its own

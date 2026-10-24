@@ -68,6 +68,11 @@ Should drop in really quickly and it hides a ton of platform specific ugliness!
 
 #include "bink.h"
 
+// Switch port: posix and switch draw Bink frames through the PC (D3D9) path, which src/gfx_d3d9emu provides.
+#if defined(__RADNT__) || !defined(_WIN32)
+#define BINK_TEXTURES_PC_D3D9
+#endif
+
 #if defined(__RADPS3__) || defined(__RADWII__) || defined(__RADNGC__)
   #define if_used_3d_device // no global 3D device handle on ps3, wii or ngc
 #elif defined(__RADXBOX__)
@@ -132,7 +137,7 @@ typedef struct BINKTEXTURESET
 
   // this is specialized global data for each platform
 
-  #if defined( __RADNT__ )
+  #if defined( BINK_TEXTURES_PC_D3D9 )
   
     // on windows, we need a second set of textures to draw with
     BINKFRAMETEXTURES tex_draw;
@@ -187,7 +192,7 @@ RADDEFFUNC void Draw_Bink_textures( if_used_3d_device
 //=============================================================================
 
 
-#if defined(__RADNT__)
+#if defined(BINK_TEXTURES_PC_D3D9)
 
   // On Windows, we need to use lock and unlock semantics for best performance
 
@@ -221,7 +226,7 @@ RADDEFFUNC void Draw_Bink_textures( if_used_3d_device
 
 //=============================================================================
 
-#if defined(__RADXENON__) || defined(__RADNT__) || defined(__RADPS3__)
+#if defined(__RADXENON__) || defined(BINK_TEXTURES_PC_D3D9) || defined(__RADPS3__)
 
   //
   // we only have to compile the shaders on Xenon, PS3 and PC, they 

@@ -870,8 +870,8 @@ void R_WaterSimulationRender(const float *eyePos, int time, unsigned int viewInd
 void __cdecl R_WaterSimulationTrackView(const float *eyePos)
 {
     double v1; // xmm0_8
-    long double v2; // [esp+0h] [ebp-54h]
-    long double v3; // [esp+8h] [ebp-4Ch]
+    double v2; // [esp+0h] [ebp-54h]
+    double v3; // [esp+8h] [ebp-4Ch]
     tile_t *tile; // [esp+20h] [ebp-34h]
     int newY; // [esp+24h] [ebp-30h]
     int newX; // [esp+2Ch] [ebp-28h]

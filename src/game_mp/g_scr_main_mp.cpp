@@ -1097,7 +1097,7 @@ int __cdecl Scr_GetArrayValues_Vector(
     script_array_size = GetArraySize(SCRIPTINSTANCE_SERVER, parent_id);
     if ( script_array_size > vector_array_size )
     {
-        v6 = va("contents of vector array are too large (must be <= %ld) (%s)", vector_array_size, array_type_description);
+        v6 = va("contents of vector array are too large (must be <= %ld) (%s)", (long)vector_array_size, array_type_description);
         Scr_ParamError(parameter_index, v6, SCRIPTINSTANCE_SERVER);
     }
     else
@@ -6991,7 +6991,7 @@ void GScr_log()
 {
 #if 0
     double value; // xmm0_8
-    long double v1; // [esp+4h] [ebp-8h]
+    double v1; // [esp+4h] [ebp-8h]
     scriptInstance_t v2; // [esp+4h] [ebp-8h]
 
     *((float *)&v1 + 1) = Scr_GetFloat(0, SCRIPTINSTANCE_SERVER);
@@ -7011,7 +7011,7 @@ void GScr_sin()
 {
 #if 0
     double value; // xmm0_8
-    long double v1; // [esp+4h] [ebp-8h]
+    double v1; // [esp+4h] [ebp-8h]
     scriptInstance_t v2; // [esp+4h] [ebp-8h]
 
     *((float *)&v1 + 1) = Scr_GetFloat(0, SCRIPTINSTANCE_SERVER) * 0.017453292;
@@ -7031,7 +7031,7 @@ void GScr_cos()
 {
 #if 0
     double value; // xmm0_8
-    long double v1; // [esp+4h] [ebp-8h]
+    double v1; // [esp+4h] [ebp-8h]
     scriptInstance_t v2; // [esp+4h] [ebp-8h]
 
     *((float *)&v1 + 1) = Scr_GetFloat(0, SCRIPTINSTANCE_SERVER) * 0.017453292;
@@ -7066,7 +7066,7 @@ void GScr_asin()
 #if 0
     const char *v0; // eax
     double v1; // xmm0_8
-    long double v2; // [esp+8h] [ebp-8h]
+    double v2; // [esp+8h] [ebp-8h]
     scriptInstance_t v3; // [esp+8h] [ebp-8h]
 
     *((float *)&v2 + 1) = Scr_GetFloat(0, SCRIPTINSTANCE_SERVER);
@@ -7092,7 +7092,7 @@ void GScr_acos()
 #if 0
     const char *v0; // eax
     double v1; // xmm0_8
-    long double v2; // [esp+8h] [ebp-8h]
+    double v2; // [esp+8h] [ebp-8h]
     scriptInstance_t v3; // [esp+8h] [ebp-8h]
 
     *((float *)&v2 + 1) = Scr_GetFloat(0, SCRIPTINSTANCE_SERVER);
@@ -7116,7 +7116,7 @@ void GScr_atan()
 {
 #if 0
     double v0; // xmm0_8
-    long double v1; // [esp+4h] [ebp-8h]
+    double v1; // [esp+4h] [ebp-8h]
     scriptInstance_t v2; // [esp+4h] [ebp-8h]
 
     *((float *)&v1 + 1) = Scr_GetFloat(0, SCRIPTINSTANCE_SERVER);
@@ -8584,7 +8584,7 @@ void __cdecl GScr_DamageConeTraceInternal(scr_entref_t entref, int contentMask)
 {
     double v2; // xmm0_8
     unsigned int NumParam; // eax
-    long double v4; // [esp+Ch] [ebp-38h]
+    double v4; // [esp+Ch] [ebp-38h]
     float v5; // [esp+Ch] [ebp-38h]
     gentity_s *Entity; // [esp+14h] [ebp-30h]
     float damageAngles[3]; // [esp+18h] [ebp-2Ch] BYREF
@@ -13668,8 +13668,8 @@ void __cdecl GScr_GetLightFovOuter(scr_entref_t entref)
 void __cdecl GScr_SetLightFovRange(scr_entref_t entref)
 {
     const char *v1; // eax
-    long double v2; // [esp+10h] [ebp-3Ch]
-    long double v3; // [esp+10h] [ebp-3Ch]
+    double v2; // [esp+10h] [ebp-3Ch]
+    double v3; // [esp+10h] [ebp-3Ch]
     float v4; // [esp+10h] [ebp-3Ch]
     float v5; // [esp+14h] [ebp-38h]
     float v6; // [esp+18h] [ebp-34h]

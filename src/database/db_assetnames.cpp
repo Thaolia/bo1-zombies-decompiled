@@ -176,7 +176,7 @@ int __cdecl DB_SizeofXAsset_PhysPreset_()
     return sizeof(PhysPreset);
 }
 
-static_assert(sizeof(PhysConstraints) == BO1_ARCH_SIZE(2696, 3088));
+static_assert(sizeof(PhysConstraints) == BO1_ARCH_SIZE(2696, 3216));
 int __cdecl DB_SizeofXAsset_PhysConstraints_()
 {
     return sizeof(PhysConstraints);

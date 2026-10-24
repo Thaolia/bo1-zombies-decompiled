@@ -7,6 +7,23 @@
 // MinGW already spells __int8..__int64, __forceinline and the calling conventions; the engine uses them in headers
 // that include nothing else first.
 #include <_mingw.h>
+#elif !defined(_WIN32)
+// posix and switch: the same spellings, with MSVC's sizes. long is 8 bytes here (LP64), so none of them uses it.
+#define __int8 char
+#define __int16 short
+#define __int32 int
+#define __int64 long long
+#define __forceinline inline __attribute__((always_inline))
+#define __inline inline
+#define __cdecl
+#define __stdcall
+#define __fastcall
+#define __thiscall
+#define _cdecl
+#define _stdcall
+#define _fastcall
+#define __ptr32
+#define __ptr64
 #endif
 
 // __declspec: GCC's built-in mapping is __attribute__((x)), which silently drops align(N) because the GNU attribute
@@ -26,4 +43,34 @@
 #else
 #define BO1_DECLSPEC_dllimport
 #define BO1_DECLSPEC_dllexport
+// Forms only the SDK's COM headers use (d3d9.h): no layout or code depends on them.
+#define BO1_DECLSPEC_uuid(x)
+#define BO1_DECLSPEC_novtable
+#endif
+
+#if !defined(_WIN32)
+#include "posix/msvc_intrinsics.h"
+// com_math.h's double random() would collide with the C library's long random() (stdlib.h, already included above).
+#define random bo1_random
+// The MSVC runtime's rand and srand (posix/msvc_crt.cpp): RAND_MAX is 0x7FFF, which the engine divides by everywhere
+// (glibc's and newlib's is 2^31 - 1), and the same seed gives the same numbers, from one seed per thread that starts
+// at 1, as in the UCRT.
+#ifdef __cplusplus
+extern "C" {
+#endif
+int bo1_rand(void);
+void bo1_srand(unsigned int seed);
+#ifdef __cplusplus
+}
+// For std::rand in the standard headers (<algorithm>'s random_shuffle), which <cstdlib> declared before this.
+namespace std
+{
+using ::bo1_rand;
+using ::bo1_srand;
+} // namespace std
+#endif
+#define rand bo1_rand
+#define srand bo1_srand
+#undef RAND_MAX
+#define RAND_MAX 0x7FFF
 #endif

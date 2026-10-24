@@ -20,20 +20,27 @@
 // command line sets bo1_frameperf (win_main.cpp). Per zone: inclusive time of the current frame on the main thread
 // (outermost entry only) and on all other threads, read and cleared once per frame by G_SP_FramePerfEnd.
 #include <intrin.h>
+#include <platform/arch_size.h>
+#if !defined(_WIN32)
+#include <stdint.h>
+// windows.h's declaration (the platform layer's), without including windows.h here: the files that include
+// q_shared.h must see windows.h's LOWORD/HIWORD at the same point of their includes as with the SDK (q_shared.h).
+extern "C" uint32_t GetCurrentThreadId(void);
+#endif
 
 struct BO1ProfZone
 {
     const char *name;
     BO1ProfZone *next;
     unsigned long long mainTicks;
-    volatile long otherTicks1k; // other threads, rdtsc ticks / 1024
+    volatile bo1_long otherTicks1k; // other threads, rdtsc ticks / 1024
     unsigned int mainCalls;
     int mainDepth;
-    volatile long registered;
+    volatile bo1_long registered;
 };
 
 extern bool g_bo1ProfOn;
-extern unsigned long g_bo1ProfMainThread;
+extern bo1_ulong g_bo1ProfMainThread;
 extern BO1ProfZone *volatile g_bo1ProfZones; // every zone entered at least once while on
 void BO1_ProfRegister(BO1ProfZone *zone);
 
@@ -49,8 +56,8 @@ enum BO1FirstUseKind
     BO1_FIRST_COMBO, // (vs, ps, vertex declaration, pass state bits) - what a driver compiles shader variants for
     BO1_FIRST_KINDS
 };
-extern volatile long g_bo1FirstUse[BO1_FIRST_KINDS];
-extern volatile long g_bo1RenderFirstUse[BO1_FIRST_KINDS]; // same counts, read per render frame (RB_SwapBuffers)
+extern volatile bo1_long g_bo1FirstUse[BO1_FIRST_KINDS];
+extern volatile bo1_long g_bo1RenderFirstUse[BO1_FIRST_KINDS]; // same counts, read per render frame (RB_SwapBuffers)
 void BO1_ProfFirstUse(int kind, unsigned long long key, const char *name); // call only when g_bo1ProfOn
 int BO1_ProfFirstUseNames(char *out, int size); // recent first-used pass names (material:technique), then cleared
 
@@ -70,16 +77,16 @@ enum BO1RenderCountKind
     BO1_RC_BUF_LOCK_KB,   // bytes locked by them (0 = whole buffer, not counted)
     BO1_RC_KINDS
 };
-extern volatile long g_bo1RenderCount[BO1_RC_KINDS];
-inline void BO1_RenderCount(int kind, long n) { if (g_bo1ProfOn) _InterlockedExchangeAdd(&g_bo1RenderCount[kind], n); }
+extern volatile bo1_long g_bo1RenderCount[BO1_RC_KINDS];
+inline void BO1_RenderCount(int kind, bo1_long n) { if (g_bo1ProfOn) _InterlockedExchangeAdd(&g_bo1RenderCount[kind], n); }
 
 // GPU phases: frame start..draw commands, shadow maps, depth prepass, lit (+reflected, resolves), decal / sun /
 // coronas / dlights / distortion, emissive (effects), post effects, rest of the frame (2D, UI)
 #define BO1_GPU_SEGS 8
 struct BO1RenderFrame
 {
-    volatile long frame;   // render frame number (1-based); written last, when the entry is complete
-    volatile long state;   // 0 GPU times pending, 1 resolved, 2 GPU times unavailable
+    volatile bo1_long frame;   // render frame number (1-based); written last, when the entry is complete
+    volatile bo1_long state;   // 0 GPU times pending, 1 resolved, 2 GPU times unavailable
     float swapMs;          // Present end to Present end (the render thread's frame)
     float presentMs;       // time inside Present()
     float gpuMs;           // GPU timestamp: first command after the previous Present to the last before this one
@@ -89,9 +96,9 @@ struct BO1RenderFrame
     float presentProcMs;   // whole-process CPU cycles during Present (QueryProcessCycleTime), in ms of one CPU
     float presentMainMs;   // main thread CPU cycles during Present
     char threads[128];     // Present >= 10 ms: the 3 threads with the most CPU during it, start module+offset:ms
-    long first[BO1_FIRST_KINDS]; // first uses (profile.h BO1FirstUseKind) drawn in this render frame
+    bo1_long first[BO1_FIRST_KINDS]; // first uses (profile.h BO1FirstUseKind) drawn in this render frame
     float gpuSeg[BO1_GPU_SEGS]; // GPU ms per phase (RB_BO1GpuMark in RB_StandardDrawCommands), -1 = not drawn
-    long counts[BO1_RC_KINDS];
+    bo1_long counts[BO1_RC_KINDS];
 };
 #define BO1_RENDER_RING 64
 extern BO1RenderFrame g_bo1RenderRing[BO1_RENDER_RING]; // index frame % BO1_RENDER_RING
@@ -109,11 +116,13 @@ struct BO1ProfScope
         if (!z->registered)
             BO1_ProfRegister(z);
         zone = z;
-#if defined(_M_IX86) || defined(__i386__)
+#if defined(_WIN32) && (defined(_M_IX86) || defined(__i386__))
         main = __readfsdword(0x24) == g_bo1ProfMainThread;
-#else
+#elif defined(_WIN32)
         // x64 TEB: ClientId.UniqueThread, what GetCurrentThreadId reads
         main = __readgsdword(0x48) == g_bo1ProfMainThread;
+#else
+        main = GetCurrentThreadId() == g_bo1ProfMainThread;
 #endif
         if (!main || !z->mainDepth++)
             start = __rdtsc();
@@ -133,7 +142,7 @@ struct BO1ProfScope
         }
         else
         {
-            _InterlockedExchangeAdd(&zone->otherTicks1k, (long)((__rdtsc() - start) >> 10));
+            _InterlockedExchangeAdd(&zone->otherTicks1k, (bo1_long)((__rdtsc() - start) >> 10));
         }
     }
 };
@@ -176,24 +185,26 @@ enum SvProfCat
     SVPROF_COUNT
 };
 extern volatile int g_svProfOn;
-extern unsigned long g_svProfThread;
+extern bo1_ulong g_svProfThread;
 extern unsigned long long g_svProfTicks[SVPROF_COUNT];
 extern unsigned int g_svProfCalls[SVPROF_COUNT];
 extern int g_svProfStack[64];
 extern int g_svProfDepth;
 extern unsigned long long g_svProfLast;
-extern volatile long g_modRendWarn[6]; // mod (L43): renderer overflows since start: [0] shader constant sets, [1] skinned cache, [2] special models (r_mod_gfxEnts); [3] window peak of special-model slots wanted in a frame, [4] this frame's refused slots, [5] frames wanting more than 256
+extern volatile bo1_long g_modRendWarn[6]; // mod (L43): renderer overflows since start: [0] shader constant sets, [1] skinned cache, [2] special models (r_mod_gfxEnts); [3] window peak of special-model slots wanted in a frame, [4] this frame's refused slots, [5] frames wanting more than 256
 
 struct SvProfScope
 {
     bool on;
     explicit SvProfScope(int cat)
     {
-#if defined(_M_IX86) || defined(__i386__)
+#if defined(_WIN32) && (defined(_M_IX86) || defined(__i386__))
         on = g_svProfOn && __readfsdword(0x24) == g_svProfThread && g_svProfDepth < 63;
-#else
+#elif defined(_WIN32)
         // x64 TEB: ClientId.UniqueThread, what GetCurrentThreadId reads
         on = g_svProfOn && __readgsdword(0x48) == g_svProfThread && g_svProfDepth < 63;
+#else
+        on = g_svProfOn && GetCurrentThreadId() == g_svProfThread && g_svProfDepth < 63;
 #endif
         if (!on)
             return;

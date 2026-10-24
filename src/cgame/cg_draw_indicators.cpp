@@ -479,7 +479,7 @@ LABEL_48:
 void __cdecl CG_DrawGrenadeIndicators(int localClientNum)
 {
     double v1; // xmm0_8
-    long double v2; // [esp+18h] [ebp-6Ch]
+    double v2; // [esp+18h] [ebp-6Ch]
     float v3; // [esp+20h] [ebp-64h]
     float predicted_dmg_ratio; // [esp+28h] [ebp-5Ch]
     float v5; // [esp+2Ch] [ebp-58h]
@@ -585,7 +585,7 @@ void __cdecl CG_DrawWarningPointer(
                 const float *color,
                 float radiusOffset)
 {
-    long double v6; // st7
+    double v6; // st7
     float angle; // [esp+14h] [ebp-78h]
     float v8; // [esp+18h] [ebp-74h]
     float v9; // [esp+1Ch] [ebp-70h]
@@ -657,7 +657,7 @@ void __cdecl CG_DrawWarningIcon(
                 Material *material,
                 float radiusOffset)
 {
-    long double v7; // st7
+    double v7; // st7
     float angle; // [esp+0h] [ebp-60h]
     float v9; // [esp+4h] [ebp-5Ch]
     float v10; // [esp+8h] [ebp-58h]

@@ -12,4 +12,4 @@ unsigned int __cdecl Sys_AddApicIdIfUnique(
                 unsigned int apicId,
                 unsigned int *existingApicId,
                 unsigned int existingCount);
-long double __cdecl Sys_BenchmarkGHz();
+double __cdecl Sys_BenchmarkGHz();

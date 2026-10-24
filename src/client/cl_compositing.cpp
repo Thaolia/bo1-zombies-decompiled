@@ -377,10 +377,10 @@ bool __cdecl R_HW_IsFencePending(IDirect3DQuery9 *const *fence)
 //{
 //    float v9; // xmm0_4
 //    float v10; // xmm0_4
-//    long double smoothSize; // [esp+Ch] [ebp-16Ch]
-//    long double v12; // [esp+Ch] [ebp-16Ch]
-//    long double v13; // [esp+14h] [ebp-164h]
-//    long double v14; // [esp+14h] [ebp-164h]
+//    double smoothSize; // [esp+Ch] [ebp-16Ch]
+//    double v12; // [esp+Ch] [ebp-16Ch]
+//    double v13; // [esp+14h] [ebp-164h]
+//    double v14; // [esp+14h] [ebp-164h]
 //    float *p_packed; // [esp+1Ch] [ebp-15Ch]
 //    float v16[3]; // [esp+20h] [ebp-158h] BYREF
 //    _BYTE matPlacement_12[32]; // [esp+38h] [ebp-140h] OVERLAPPED BYREF

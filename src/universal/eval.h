@@ -50,7 +50,7 @@ struct EvalValue // sizeof=0x10
     //EvalValue::<unnamed_type_u> u;
     union //EvalValue::<unnamed_type_u> // sizeof=0x8
     {                                       // XREF: EvalValue/r
-        long double d;
+        double d;
         int i;
         char *s;
     } u;
@@ -83,6 +83,6 @@ void __cdecl Eval_PrepareBinaryOpBoolean(Eval *eval);
 bool __cdecl Eval_IsUnaryOp(const Eval *eval);
 char __cdecl Eval_PushInteger(Eval *eval, int value);
 bool __cdecl Eval_CanPushValue(const Eval *eval);
-char __cdecl Eval_PushNumber(Eval *eval, long double value);
+char __cdecl Eval_PushNumber(Eval *eval, double value);
 EvalValue * Eval_Solve(EvalValue *result, Eval *eval);
 bool __cdecl Eval_OperatorForToken(const char *text, EvalOperatorType *op);

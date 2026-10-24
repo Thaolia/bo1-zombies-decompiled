@@ -1441,9 +1441,9 @@ double __cdecl Vehicle_AdjustRollForInputDeadZone(float rollPercent)
 
 void __cdecl Vehicle_AddRotate(vehicle_physic_t *phys, float fRoll, float fPitch, float fYaw)
 {
-    long double v4; // st7
-    long double v5; // st7
-    long double v6; // st7
+    double v4; // st7
+    double v5; // st7
+    double v6; // st7
     int n; // [esp+38h] [ebp-8Ch]
     int m; // [esp+3Ch] [ebp-88h]
     int k; // [esp+40h] [ebp-84h]

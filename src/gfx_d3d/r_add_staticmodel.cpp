@@ -50,7 +50,7 @@ void __cdecl R_AddDelayedStaticModelDrawSurf(
         __debugbreak();
     }
     R_WritePrimDrawSurfInt(delayedCmdBuf, count | (which_lod << 28));
-    R_WritePrimDrawSurfInt(delayedCmdBuf, (unsigned int)xsurf);
+    R_WritePrimDrawSurfPtr(delayedCmdBuf, xsurf);
     R_WritePrimDrawSurfData(delayedCmdBuf, list, (count + 1) >> 1);
 }
 
@@ -723,7 +723,7 @@ void __cdecl R_SkinStaticModelsCameraForLod_Internal(
                                  &surfData->drawSurf[region],
                                  &surfData->delayedCmdBuf)) )
                 {
-                    if ( !R_AllocDrawSurf(&surfData->delayedCmdBuf, drawSurf, &surfData->drawSurf[region], ((count + 1) >> 1) + 2) )
+                    if ( !R_AllocDrawSurf(&surfData->delayedCmdBuf, drawSurf, &surfData->drawSurf[region], ((count + 1) >> 1) + 1 + PRIM_DRAW_SURF_PTR_WORDS) )
                         return;
                     R_AddDelayedStaticModelDrawSurf(&surfData->delayedCmdBuf, &surfaces[surfaceIndex], list, count, lod);
                 }
@@ -962,7 +962,7 @@ void __cdecl R_StaticModelWriteInfoHeader(int fileHandle)
 
 void __cdecl R_StaticModelWriteInfo(int fileHandle, const GfxStaticModelDrawInst *smodelDrawInst, float dist)
 {
-    long double len; // [esp+4Ch] [ebp-1028h]
+    double len; // [esp+4Ch] [ebp-1028h]
     char dest; // [esp+5Ch] [ebp-1018h] BYREF
     _BYTE v5[4103]; // [esp+5Dh] [ebp-1017h] BYREF
     float v6; // [esp+1064h] [ebp-10h]
@@ -1339,7 +1339,7 @@ void __cdecl R_SkinStaticModelsShadowForLod(
                              &surfData->drawSurfList,
                              &surfData->delayedCmdBuf)) )
             {
-                if ( !R_AllocDrawSurf(&surfData->delayedCmdBuf, drawSurf, &surfData->drawSurfList, ((count + 1) >> 1) + 2) )
+                if ( !R_AllocDrawSurf(&surfData->delayedCmdBuf, drawSurf, &surfData->drawSurfList, ((count + 1) >> 1) + 1 + PRIM_DRAW_SURF_PTR_WORDS) )
                     return;
                 R_AddDelayedStaticModelDrawSurf(&surfData->delayedCmdBuf, &surfaces[surfaceIndex], list, count, lod);
             }

@@ -2652,7 +2652,7 @@ void __cdecl G_SpawnTurret(gentity_s *self, const char *weaponinfoname, SpawnVar
     const char *v5; // eax
     const char *v6; // eax
     double v7; // xmm0_8
-    long double v8; // [esp+0h] [ebp-40h]
+    double v8; // [esp+0h] [ebp-40h]
     float v9; // [esp+0h] [ebp-40h]
     float forwardAngleDot; // [esp+18h] [ebp-28h]
     float v11; // [esp+1Ch] [ebp-24h]

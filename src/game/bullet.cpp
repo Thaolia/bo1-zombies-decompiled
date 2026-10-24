@@ -145,7 +145,7 @@ double __cdecl G_GoodRandomFloat(int *idum)
 
 void __cdecl Bullet_Endpos(int randSeed, float spread, float *end, float *dir, const weaponParms *wp, float maxRange)
 {
-    long double v6; // [esp+0h] [ebp-94h]
+    double v6; // [esp+0h] [ebp-94h]
     float v7; // [esp+2Ch] [ebp-68h]
     float v8; // [esp+34h] [ebp-60h]
     float right; // [esp+88h] [ebp-Ch] BYREF
@@ -217,7 +217,7 @@ void __cdecl Bullet_Endpos(int randSeed, float spread, float *end, float *dir, c
 
 void __cdecl Bullet_RandomDir(int time, float *x, float *y)
 {
-    long double v3; // st7
+    double v3; // st7
     float sinT; // [esp+Ch] [ebp-10h]
     float theta; // [esp+10h] [ebp-Ch]
     float r; // [esp+14h] [ebp-8h]
@@ -514,7 +514,7 @@ void __cdecl Bullet_Process(
     unsigned int modelIndex; // [esp+14h] [ebp-6Ch]
     unsigned int partName; // [esp+18h] [ebp-68h]
     int v14; // [esp+1Ch] [ebp-64h]
-    long double v15; // [esp+20h] [ebp-60h]
+    double v15; // [esp+20h] [ebp-60h]
     bool v16; // [esp+20h] [ebp-60h]
     float v17; // [esp+24h] [ebp-5Ch]
     int partBits[5]; // [esp+30h] [ebp-50h] BYREF

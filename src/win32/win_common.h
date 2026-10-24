@@ -1,5 +1,6 @@
 #pragma once
 #include <universal/mem_userhunk.h>
+#include <platform/arch_size.h>
 
 enum CriticalSection : __int32
 {                                                                             // XREF: Smp_CriticalSectionBlock/r
@@ -85,8 +86,8 @@ enum CriticalSection : __int32
 
 struct FastCriticalSection // sizeof=0x8
 {                                                                             // XREF: .data:g_dvarCritSect/r
-        volatile long readCount;
-        volatile long writeCount;                        // XREF: Dvar_FindMalleableVar_0:loc_7BD2E2/r
+        volatile bo1_long readCount;
+        volatile bo1_long writeCount;                        // XREF: Dvar_FindMalleableVar_0:loc_7BD2E2/r
 };
 
 void __cdecl Sys_Mkdir(const char *path);

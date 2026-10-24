@@ -778,7 +778,7 @@ gentity_s* Weapon_RocketLauncher_Fire(
 
 void __cdecl gunrandom(float *x, float *y)
 {
-    long double v2; // st7
+    double v2; // st7
     float sinT; // [esp+Ch] [ebp-10h]
     float theta; // [esp+10h] [ebp-Ch]
     float r; // [esp+14h] [ebp-8h]
@@ -802,7 +802,7 @@ gentity_s *__cdecl Weapon_BombDrop_Fire(
                 gentity_s *target,
                 const float *targetOffset)
 {
-    long double v8; // [esp+0h] [ebp-4Ch]
+    double v8; // [esp+0h] [ebp-4Ch]
     float fAimOffset; // [esp+20h] [ebp-2Ch]
     float r; // [esp+28h] [ebp-24h] BYREF
     float dir[3]; // [esp+2Ch] [ebp-20h] BYREF

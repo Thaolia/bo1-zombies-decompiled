@@ -3205,7 +3205,7 @@ void __cdecl DrawText2D(
                         xa = xa + iconWidth;
                         if ( (renderFlags & 0x80) != 0 )
                             xa = (float)(padding * xScale) + xa;
-                        curText += 7;
+                        curText += CONTXTCMD_LEN_HUDICON;
                         ++count;
                         --maxLengthRemaining;
                     }
@@ -5788,7 +5788,7 @@ void __cdecl RB_UpdateDynamicBuffers(GfxBackEndData *backendData)
     *backendData->dynamicBufferCurrentFrame = 0;
 }
 
-const void *data;
+static const void *data;
 void     RB_RenderThread(unsigned int threadContext)
 {
     void *Value; // eax
@@ -6060,8 +6060,8 @@ void __cdecl RB_RegisterBackendAssets()
 //void __cdecl RB_SaveScreen_BlendBlurred(const GfxBlendSaveScreenBlurredParam *p, const GfxViewInfo *viewInfo)
 //{
 //    float v2; // xmm0_4
-//    long double v3; // [esp+28h] [ebp-54h]
-//    long double image; // [esp+30h] [ebp-4Ch]
+//    double v3; // [esp+28h] [ebp-54h]
+//    double image; // [esp+30h] [ebp-4Ch]
 //    float t0; // [esp+54h] [ebp-28h]
 //    float s1; // [esp+5Ch] [ebp-20h]
 //    const SavedScreenParams *ssParams; // [esp+60h] [ebp-1Ch]

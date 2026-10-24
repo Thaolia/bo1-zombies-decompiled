@@ -1433,7 +1433,7 @@ void __cdecl Menus_RemoveMenu(XAssetHeader header)
                 memmove(
                     (unsigned __int8 *)&uiInfo->uiDC.Menus[i],
                     (unsigned __int8 *)&uiInfo->uiDC.Menus[i + 1],
-                    4 * (uiInfo->uiDC.menuCount - i) - 4);
+                    sizeof(uiInfo->uiDC.Menus[0]) * (uiInfo->uiDC.menuCount - i - 1));
                 --uiInfo->uiDC.menuCount;
                 --i;
             }
@@ -2477,7 +2477,7 @@ void __cdecl Script_ExecOnDvarFloatValue(int localClientNum, UiContext *dc, item
 
 bool __cdecl Script_ExecIfFloatsEqual(const char *dvarValue, const char *testValue)
 {
-    long double v3; // [esp+4h] [ebp-Ch]
+    double v3; // [esp+4h] [ebp-Ch]
     float v4; // [esp+Ch] [ebp-4h]
 
     v3 = atof(testValue);

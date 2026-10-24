@@ -4023,7 +4023,7 @@ static volatile unsigned char s_svPcCat[SVPROF_SAMPLE_SLOTS];
 static void G_ModSvProfSamplePc(int cat)
 {
     static HANDLE thread;
-    static unsigned long threadId;
+    static bo1_ulong threadId;
     if (threadId != g_svProfThread)
     {
         if (thread)
@@ -4287,8 +4287,8 @@ void G_ModSvProfEnd(long long frameQpcTicks)
         "\"ms_p99\":%.2f,\"ms_max\":%.2f,%s\"path_n\":%.1f,\"trace_n\":%.0f,\"va_mb\":%d,\"rw_consts\":%ld,\"rw_skin\":%ld,\"rw_gfxents\":%ld,\"ge_peak\":%ld,\"ge_over256\":%ld,\"snap_ents\":%d,\"snap_bytes\":%d,\"pcore_pct\":%d}\n",
         level.time, winMs, frames, actors, sumMs / frames, frameMs[n / 2], frameMs[(n * 99) / 100 < n ? (n * 99) / 100 : n - 1],
         frameMs[n - 1], cats, (double)winCalls[SVPROF_PATH] / frames, (double)winCalls[SVPROF_TRACE] / frames,
-        (int)((mem.ullTotalVirtual - mem.ullAvailVirtual) >> 20), g_modRendWarn[0], g_modRendWarn[1], g_modRendWarn[2],
-        _InterlockedExchange(&g_modRendWarn[3], 0), g_modRendWarn[5], g_bo1SnapEntsMax, g_bo1SnapBytesMax,
+        (int)((mem.ullTotalVirtual - mem.ullAvailVirtual) >> 20), (long)g_modRendWarn[0], (long)g_modRendWarn[1],
+        (long)g_modRendWarn[2], (long)_InterlockedExchange(&g_modRendWarn[3], 0), (long)g_modRendWarn[5], g_bo1SnapEntsMax, g_bo1SnapBytesMax,
         g_svPcoreFrames[1] + g_svPcoreFrames[2] ? 100 * g_svPcoreFrames[2] / (g_svPcoreFrames[1] + g_svPcoreFrames[2]) : -1);
     memset(g_svPcoreFrames, 0, sizeof(g_svPcoreFrames));
     g_bo1SnapEntsMax = 0; // mod (L55): per window: snapshot entities wanted, compressed bytes

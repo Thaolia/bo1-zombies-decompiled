@@ -100,7 +100,7 @@ double __cdecl lerp_float(const float tgt, float cur, float rate, float delta_t)
 {
   double result; // st7
   double v5; // st6
-  long double v6; // st5
+  double v6; // st5
   double v7; // st4
   double v8; // st4
   float stepa; // [esp+8h] [ebp+8h]
@@ -778,7 +778,7 @@ pulse_sum_wheel *__thiscall pulse_sum_constraint_solver::create_pulse_sum_wheel(
 
   v2 = (pulse_sum_wheel **)//phys_transient_allocator::allocate(
                              this->m_solver_memory_allocator.allocate(
-                             192,
+                             sizeof(pulse_sum_wheel),
                              16,
                              0,
                              SOLVER_MEMORY_ALLOCATOR_ERROR_MSG);

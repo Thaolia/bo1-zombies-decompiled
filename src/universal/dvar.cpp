@@ -140,7 +140,7 @@ const char *__cdecl Dvar_EnumToString(const dvar_s *dvar)
     {
         __debugbreak();
     }
-    if ( !dvar->domain.integer.max
+    if ( !dvar->domain.enumeration.strings // integer.max overlays strings only on 32-bit
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\universal\\dvar.cpp",
                     241,
@@ -193,7 +193,7 @@ const char *__cdecl Dvar_IndexStringToEnumString(const dvar_s *dvar, const char 
     {
         __debugbreak();
     }
-    if ( !dvar->domain.integer.max
+    if ( !dvar->domain.enumeration.strings // integer.max overlays strings only on 32-bit
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\universal\\dvar.cpp",
                     259,

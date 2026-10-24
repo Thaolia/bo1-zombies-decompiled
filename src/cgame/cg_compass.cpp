@@ -1012,10 +1012,10 @@ void __cdecl CG_DrawPlayerPopUps(
     double v11; // xmm0_8
     double v12; // xmm0_8
     double v13; // xmm0_8
-    long double v14; // [esp+40h] [ebp-7Ch]
-    long double v15; // [esp+40h] [ebp-7Ch]
-    long double v16; // [esp+40h] [ebp-7Ch]
-    long double v17; // [esp+40h] [ebp-7Ch]
+    double v14; // [esp+40h] [ebp-7Ch]
+    double v15; // [esp+40h] [ebp-7Ch]
+    double v16; // [esp+40h] [ebp-7Ch]
+    double v17; // [esp+40h] [ebp-7Ch]
     float v18; // [esp+54h] [ebp-68h]
     float v19; // [esp+64h] [ebp-58h]
     float y; // [esp+6Ch] [ebp-50h]
@@ -2866,8 +2866,8 @@ void    CG_CompassDrawTickertape(
                 bool drawObjectives)
 {
     double v11; // xmm0_8
-    long double v12; // [esp+30h] [ebp-BCh]
-    long double v13; // [esp+38h] [ebp-B4h]
+    double v12; // [esp+30h] [ebp-BCh]
+    double v13; // [esp+38h] [ebp-B4h]
     float v14; // [esp+40h] [ebp-ACh]
     Material *v15; // [esp+44h] [ebp-A8h]
     float iconX; // [esp+4Ch] [ebp-A0h]

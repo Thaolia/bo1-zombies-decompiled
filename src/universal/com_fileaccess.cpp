@@ -27,7 +27,11 @@ FILE *__cdecl FileWrapper_Open(const char *ospath, const char *mode)
     FILE *file; // [esp+0h] [ebp-4h]
 
     *_errno() = 0;
+#if defined(_WIN32)
     file = fopen(ospath, mode);
+#else
+    file = bo1_fopen(ospath, mode);
+#endif
     if ( file != (FILE *)-1 )
         return file;
     v3 = _errno();

@@ -420,7 +420,7 @@ LABEL_60:
                 else
                 {
                     xPos = (__int16)lParam;
-                    yPos = SHIWORD(lParam);
+                    yPos = SWORD1(lParam);
                     r.left = 0;
                     r.top = 0;
                     r.right = 1;

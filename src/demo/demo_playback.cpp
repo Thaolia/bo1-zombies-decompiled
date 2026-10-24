@@ -4623,7 +4623,7 @@ void __cdecl Demo_WriteRecordedClip(int localClientNum, unsigned __int16 slot)
     writeFileInfo.fileData = 0;
     writeFileInfo.fileSize = demo.playback->clipRecordBufIndex;
     writeFileInfo.tags = 0;
-    memset(&writeFileInfo.thumbData, 0, 12);
+    memset(&writeFileInfo.thumbData, 0, offsetof(fileShareWriteFileInfo, location) - offsetof(fileShareWriteFileInfo, thumbData));
     writeFileInfo.location = FILESHARE_LOCATION_USERSTORAGE;
     writeFileInfo.dataCallback = (unsigned int (__cdecl *)(void *, unsigned int, unsigned int))Demo_SendClipToStreamingBuffer;
     writeFileInfo.successCallback = Demo_UploadClipSuccess;

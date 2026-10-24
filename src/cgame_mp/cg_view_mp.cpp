@@ -880,7 +880,7 @@ void __cdecl CG_ViewRegisterDvars()
 
 void __cdecl CG_UpdateTurretKillCam(int localClientNum)
 {
-    long double v1; // st7
+    double v1; // st7
     float *refdefViewAngles; // [esp+8h] [ebp-7Ch]
     float *vieworg; // [esp+1Ch] [ebp-68h]
     float v4; // [esp+34h] [ebp-50h]
@@ -1259,9 +1259,9 @@ void __cdecl CG_UpdateVehicleKillCamDof(const vehicle_info_t *info, float distan
 
 void __cdecl CG_UpdateScriptedKillCam(int localClientNum)
 {
-    long double v1; // [esp+8h] [ebp-68h]
-    long double v2; // [esp+8h] [ebp-68h]
-    long double v3; // [esp+8h] [ebp-68h]
+    double v1; // [esp+8h] [ebp-68h]
+    double v2; // [esp+8h] [ebp-68h]
+    double v3; // [esp+8h] [ebp-68h]
     float *vieworg; // [esp+8h] [ebp-68h]
     float *refdefViewAngles; // [esp+18h] [ebp-58h]
     float phase; // [esp+28h] [ebp-48h]
@@ -2402,8 +2402,8 @@ void __cdecl CG_DevSaveCamera(float *angles, float *origin)
 #if 0
 void    CG_OffsetChaseCamView(int localClientNum, CameraMode camMode)
 {
-    long double v3; // [esp+4h] [ebp-9Ch]
-    long double v4; // [esp+Ch] [ebp-94h] BYREF
+    double v3; // [esp+4h] [ebp-9Ch]
+    double v4; // [esp+Ch] [ebp-94h] BYREF
     float right[3]; // [esp+1Ch] [ebp-84h] BYREF
     float up[3]; // [esp+28h] [ebp-78h]
     float v7; // [esp+34h] [ebp-6Ch]
@@ -2598,8 +2598,8 @@ void    CG_OffsetThirdPersonView(int localClientNum)
 {
     float v2; // xmm0_4
     double v3; // xmm0_8
-    long double v4; // [esp-14h] [ebp-BCh]
-    long double v5; // [esp-Ch] [ebp-B4h]
+    double v4; // [esp-14h] [ebp-BCh]
+    double v5; // [esp-Ch] [ebp-B4h]
     float focusDist; // [esp+0h] [ebp-A8h]
     __int64 v7; // [esp+4h] [ebp-A4h] BYREF
     float v8; // [esp+Ch] [ebp-9Ch]

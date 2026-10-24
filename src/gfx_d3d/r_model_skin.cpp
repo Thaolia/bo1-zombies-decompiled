@@ -560,13 +560,13 @@ void R_SkinXModelCmd(SkinXModelCmd *data)
 
         if (skinnedSurf->skinnedCachedOffset < 0)
         {
-            iassert(((reinterpret_cast<uint>(skinnedSurf->skinnedVert) & 15) == 0));
+            iassert(((reinterpret_cast<uintptr_t>(skinnedSurf->skinnedVert) & 15) == 0));
             skinVerticesOut = skinnedSurf->skinnedVert;
         }
         else
         {
             iassert(gfxBuf.skinnedCacheLockAddr);
-            iassert((reinterpret_cast<uint>(gfxBuf.skinnedCacheLockAddr) & 15) == 0);
+            iassert((reinterpret_cast<uintptr_t>(gfxBuf.skinnedCacheLockAddr) & 15) == 0);
             iassert((skinnedSurf->skinnedCachedOffset & 15) == 0);
 
             skinVerticesOut = (GfxPackedVertex *)&gfxBuf.skinnedCacheLockAddr[skinnedSurf->skinnedCachedOffset];

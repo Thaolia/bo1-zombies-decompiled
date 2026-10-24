@@ -90,7 +90,7 @@ void __cdecl CG_RegisterVehicle(const char *name, __int16 index)
 {
     double v2; // xmm0_8
     int WeaponIndexForName; // eax
-    long double v4; // [esp+0h] [ebp-406Ch]
+    double v4; // [esp+0h] [ebp-406Ch]
     unsigned __int8 *v5; // [esp+8h] [ebp-4064h]
     const char *v6; // [esp+Ch] [ebp-4060h]
     int j; // [esp+14h] [ebp-4058h]

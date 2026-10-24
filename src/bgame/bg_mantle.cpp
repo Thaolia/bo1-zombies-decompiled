@@ -770,7 +770,7 @@ void __cdecl Mantle_SetHaveWeapon(MantleState *mstate, const playerState_s *ps)
 void Mount_CheckLedge(pmove_t *pm, pml_t *pml, MantleResults *mresults)
 {
     float angle; // [esp+4h] [ebp-108h]
-    long double v5; // [esp+10h] [ebp-FCh]
+    double v5; // [esp+10h] [ebp-FCh]
     float color[6]; // [esp+18h] [ebp-F4h] BYREF
     float dropMaxs[3]; // [esp+30h] [ebp-DCh] BYREF
     float v8[3]; // [esp+3Ch] [ebp-D0h] BYREF

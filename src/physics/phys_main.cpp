@@ -3296,7 +3296,7 @@ user_rigid_body *__cdecl GetTraceResultsRigidBody(const trace_t *traceResults)
     DynEntityClient *dynEntClient; // [esp+14h] [ebp-18h]
     user_rigid_body *rb; // [esp+18h] [ebp-14h]
     centity_s *cent; // [esp+1Ch] [ebp-10h]
-    int physObjId; // [esp+20h] [ebp-Ch]
+    intptr_t physObjId; // [esp+20h] [ebp-Ch]
     DynEntityDrawType drawType; // [esp+24h] [ebp-8h] BYREF
     unsigned __int16 hitEntId; // [esp+28h] [ebp-4h]
 
@@ -3948,7 +3948,7 @@ rigid_body_constraint_ragdoll * Phys_CreateHinge(
     //
     //v42[0] = a1;
     //v42[1] = anchora;
-    body1 = Phys_GetUserData((int)obj1)->body;
+    body1 = Phys_GetUserData(obj1)->body;
     body2 = Phys_GetUserData(obj2)->body;
     joint = phys_sys::create_rbc_ragdoll((environment_rigid_body *)body1, (environment_rigid_body *)body2, 1);
     if (joint)

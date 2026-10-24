@@ -384,8 +384,8 @@ struct mapInfo // sizeof=0x130
     int teamMembers;                    // XREF: UI_LoadArenas(void)+25B/w
                                         // UI_LoadArenas(void)+305/r ...
     int typeBits;
-    int timeToBeat[32];                 // XREF: UI_LoadArenas(void)+1DD/w
-                                        // UI_GetLevelShot(int)+24/r ...
+    int timeToBeat[31];                 // XREF: UI_LoadArenas(void)+1DD/w
+    Material *levelShotMaterial;        // UI_GetLevelShot's cache, decompiled as timeToBeat[31]
     Material *levelShot;                // XREF: UI_GetListIndexFromMapIndex(int)+6E/r
                                         // UI_MapCountByGameType(void)+3E/w ...
     int active;                         // XREF: UI_LoadMaps(void)+105/o

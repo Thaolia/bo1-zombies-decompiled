@@ -304,7 +304,7 @@ void    CreateConstraint(PhysConstraint *constraint)
                 &rb2_anchor_loc_,
                 0.0,
                 constraint->distance);
-            constraint->constraintHandle = (int)phys_constraint;
+            constraint->constraintHandle = (intptr_t)phys_constraint;
         }
     }
 }

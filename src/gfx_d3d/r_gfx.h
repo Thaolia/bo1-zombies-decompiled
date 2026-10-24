@@ -3,6 +3,7 @@
 #include <universal/com_math.h>
 
 #include <cstddef>
+#include <cstring>
 
 enum GfxDrawSceneMethod : __int32
 {                                                                             // XREF: GfxDrawMethod/r
@@ -177,6 +178,15 @@ struct GfxDelayedCmdBuf // sizeof=0x10
         unsigned int primDrawSurfSize;
         GfxDrawSurf drawSurfKey;
 };
+
+// The prim draw-surf stream (primDrawSurfsBuf) is made of 32-bit words: a pointer in it takes two of them on 64-bit.
+#define PRIM_DRAW_SURF_PTR_WORDS ((unsigned int)(sizeof(void *) / sizeof(unsigned int)))
+inline const void *R_ReadPrimDrawSurfPtr(const unsigned int *pos)
+{
+    const void *ptr;
+    memcpy(&ptr, pos, sizeof(ptr));
+    return ptr;
+}
 
 struct GfxDrawSurfList // sizeof=0x8
 {                                                                             // XREF: GfxBspDrawSurfData/r

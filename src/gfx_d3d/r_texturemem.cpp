@@ -152,6 +152,7 @@ unsigned int __cdecl R_VideoMemory()
 
 unsigned int __cdecl R_VideoMemoryForDevice(_GUID *lpGUID)
 {
+#if defined(_WIN32)
     HRESULT v2; // [esp+0h] [ebp-28h]
     const DDraw *v3; // [esp+4h] [ebp-24h]
     _DDSCAPS2 caps; // [esp+8h] [ebp-20h] BYREF
@@ -177,6 +178,9 @@ unsigned int __cdecl R_VideoMemoryForDevice(_GUID *lpGUID)
         return total;
     else
         return 0;
+#else
+    return 0;
+#endif
 }
 
 int __stdcall R_DDEnumCallback(
@@ -198,6 +202,7 @@ int __stdcall R_DDEnumCallback(
 
 unsigned int __cdecl R_DrasticVideoMemoryForDevice(_GUID *lpGUID)
 {
+#if defined(_WIN32)
     HMODULE ModuleHandleA; // eax
     HRESULT v3; // [esp+0h] [ebp-2Ch]
     const DDraw *v4; // [esp+4h] [ebp-28h]
@@ -253,6 +258,9 @@ unsigned int __cdecl R_DrasticVideoMemoryForDevice(_GUID *lpGUID)
         dd->Release();
         return 0;
     }
+#else
+    return 0;
+#endif
 }
 
 int __stdcall R_DDEnumDrasticCallback(

@@ -3816,7 +3816,7 @@ void __thiscall pulse_sum_wheel::SOLVER_solver_prolog(float delta_t)
 void __thiscall pulse_sum_contact_point::clamp_f(pulse_sum_contact *psc)
 {
     double v3; // st7
-    long double v4; // st7
+    double v4; // st7
     float pulse_sum_fric_sqa; // [esp+4h] [ebp-8h]
     float pulse_sum_fric_sqb; // [esp+4h] [ebp-8h]
     float pulse_sum_fric_sqc; // [esp+4h] [ebp-8h]

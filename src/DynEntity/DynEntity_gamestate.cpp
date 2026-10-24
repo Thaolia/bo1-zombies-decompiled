@@ -80,7 +80,7 @@ void __cdecl MSG_WriteQuat(msg_t *msg, float *quat)
 
 void __cdecl DynEnt_ReadGameState(msg_t *msg, int localClientNum)
 {
-    int PhysObj; // eax
+    intptr_t PhysObj; // eax
     DynEntityPose *dynEntPose; // [esp+4h] [ebp-50h]
     DynEntityDrawType drawType; // [esp+8h] [ebp-4Ch] BYREF
     DynEntityClient *dynEntClient; // [esp+Ch] [ebp-48h]

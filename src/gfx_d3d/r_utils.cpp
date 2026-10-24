@@ -121,13 +121,13 @@ int __cdecl R_PickEntityBone(int traceMask, const float *org, const float *dir, 
 //double __cdecl FresnelTerm(float n0, float n1, float cosIncidentAngle)
 //{
 //    float v3; // xmm0_4
-//    long double v5; // [esp+8h] [ebp-6Ch]
-//    long double v6; // [esp+8h] [ebp-6Ch]
-//    long double v7; // [esp+8h] [ebp-6Ch]
-//    long double v8; // [esp+8h] [ebp-6Ch]
-//    long double v9; // [esp+8h] [ebp-6Ch]
-//    long double v10; // [esp+8h] [ebp-6Ch]
-//    long double v11; // [esp+8h] [ebp-6Ch]
+//    double v5; // [esp+8h] [ebp-6Ch]
+//    double v6; // [esp+8h] [ebp-6Ch]
+//    double v7; // [esp+8h] [ebp-6Ch]
+//    double v8; // [esp+8h] [ebp-6Ch]
+//    double v9; // [esp+8h] [ebp-6Ch]
+//    double v10; // [esp+8h] [ebp-6Ch]
+//    double v11; // [esp+8h] [ebp-6Ch]
 //    double tanRatio_4; // [esp+20h] [ebp-54h]
 //    double sinRatio_4; // [esp+38h] [ebp-3Ch]
 //    double sinSum_4; // [esp+48h] [ebp-2Ch]

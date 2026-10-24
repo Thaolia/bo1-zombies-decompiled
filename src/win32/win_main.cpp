@@ -236,14 +236,14 @@ void __cdecl Sys_HeadlessLogAssert(const char *filename, int line, const char *m
 }
 
 // The crash and hang reports read a thread CONTEXT's stack, frame and instruction pointers, whose register names and
-// dbghelp machine type depend on the architecture; elsewhere they only report the exception itself. Addresses print
-// in full width.
-#if defined(_M_IX86) || defined(__i386__)
+// dbghelp machine type depend on the architecture, and the exe's PE headers; elsewhere (other architectures, and posix,
+// whose executable is an ELF image) they only report the exception itself. Addresses print in full width.
+#if defined(_WIN32) && (defined(_M_IX86) || defined(__i386__))
 #define SYS_CONTEXT_SP(ctx) ((ctx).Esp)
 #define SYS_CONTEXT_FP(ctx) ((ctx).Ebp)
 #define SYS_CONTEXT_PC(ctx) ((ctx).Eip)
 #define SYS_STACKWALK_MACHINE IMAGE_FILE_MACHINE_I386
-#elif defined(_M_X64) || defined(__x86_64__)
+#elif defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
 #define SYS_CONTEXT_SP(ctx) ((ctx).Rsp)
 #define SYS_CONTEXT_FP(ctx) ((ctx).Rbp)
 #define SYS_CONTEXT_PC(ctx) ((ctx).Rip)
@@ -346,6 +346,7 @@ static LONG __stdcall Sys_LoggingExceptionFilter(_EXCEPTION_POINTERS *info)
 static unsigned int s_threadDumpMs;
 static DWORD s_mainThreadId;
 
+#if defined(SYS_CONTEXT_SP)
 static bool Sys_IsCallReturn(uintptr_t base, uintptr_t end, uintptr_t v)
 {
     // a return address follows a call: E8 rel32 (5 bytes back) or FF /2 (2, 3, 6 or 7 bytes back)
@@ -423,6 +424,7 @@ static bool Sys_HeadlessWalkInit()
     }
     return state == 1;
 }
+#endif
 
 static void Sys_HeadlessDumpThreads(int pass)
 {
@@ -535,7 +537,7 @@ static void Sys_HeadlessDumpThreads(int pass)
     }
     CloseHandle(snap);
 #else
-    Sys_HeadlessThreadLog("BO1_HEADLESS THREADDUMP %d: no stack dump on this architecture\n", pass);
+    Sys_HeadlessThreadLog("BO1_HEADLESS THREADDUMP %d: no stack dump on this platform\n", pass);
 #endif
 }
 

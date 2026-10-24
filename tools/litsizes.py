@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""List calls that pass a literal byte count for a struct whose size differs between 32 and 64 bits.
+"""List calls that pass a literal byte count for a struct or a pointer array whose size differs on 64 bits.
 
 The decompiled code spells most sizes as numbers: `Hunk_UserAlloc(hunk, 73728, ...)` for 2048 weaponInfo_s,
 `memset(p, 0, 0x8D388)`. A 64-bit build compiles them without a warning and then overruns. For every call with an
-integer literal argument (alone or multiplied by something), this looks at the struct types involved, either the
-pointee of another argument or the type the result is cast to, and reports the call when the literal is a multiple
-of the struct's 32-bit size and that size changes on 64-bit.
+integer literal argument (alone, multiplied by something, or as a shift), this looks at the element types involved,
+either the pointee of another argument or the type the result is cast to, and reports the call when the literal is a
+multiple of the element's 32-bit size and that size changes on 64-bit. An element is a struct or a pointer (a 4-byte
+stride over an array of pointers: `memset(cornerEntry, 0, 4 * n)`).
 
     tools/litsizes.py BUILD_DIR [--jobs N] [--filter REGEX]    # BUILD_DIR: a configured 64-bit GNU preset
 
@@ -67,15 +68,18 @@ def unwrap_implicit(e):
 
 
 def literal_value(e):
-    """The integer literal of `N` or `N * x` / `x * N`, else None."""
+    """The integer literal of `N`, `N * x` / `x * N`, or the factor of `x << N`, else None."""
     e = strip(e)
     if e.kind == ci.CursorKind.INTEGER_LITERAL:
         toks = [t.spelling for t in e.get_tokens()]
         return int(toks[0].rstrip('uUlL'), 0) if toks else None
     if e.kind == ci.CursorKind.BINARY_OPERATOR:
         kids = list(e.get_children())
-        ops = [t.spelling for t in e.get_tokens() if t.spelling == '*']
-        if len(kids) == 2 and ops:
+        if len(kids) == 2 and e.binary_operator == ci.BinaryOperator.Shl:
+            shift = literal_value(kids[1])
+            if shift is not None and literal_value(kids[0]) is None and shift < 32:
+                return 1 << shift
+        if len(kids) == 2 and any(t.spelling == '*' for t in e.get_tokens()):
             for k in kids:
                 v = literal_value(k)
                 if v is not None:
@@ -93,7 +97,8 @@ def record_of(t):
         return None
     while p.kind in (ci.TypeKind.CONSTANTARRAY,):
         p = p.get_array_element_type().get_canonical()
-    return p if p.kind == ci.TypeKind.RECORD else None
+    # An array of pointers counts too: `memset(cornerEntry, 0, 4 * n)` clears half of n pointers on 64-bit.
+    return p if p.kind in (ci.TypeKind.RECORD, ci.TypeKind.POINTER) else None
 
 
 def out_record(e):
@@ -116,7 +121,7 @@ def scan(path, args, target):
             rel = os.path.relpath(node.location.file.name, ROOT)
             if OWN_CODE.match(rel):
                 call_args = list(node.get_arguments())
-                literals = [v for v in (literal_value(a) for a in call_args) if v is not None and v >= 8]
+                literals = [v for v in (literal_value(a) for a in call_args) if v is not None and v >= 4]
                 if literals:
                     # An allocator's result cast to T * says what the bytes are; its own arguments (the HunkUser
                     # it allocates from) do not.

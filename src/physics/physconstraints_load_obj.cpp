@@ -191,7 +191,7 @@ static_assert(offsetof(PhysConstraint, attach_point_type1) == BO1_ARCH_SIZE(8, o
 static_assert(offsetof(PhysConstraint, target_bone1) == BO1_ARCH_SIZE(20, offsetof(PhysConstraint, target_bone1)));
 static_assert(offsetof(PhysConstraint, attach_point_type2) == BO1_ARCH_SIZE(24, offsetof(PhysConstraint, attach_point_type2)));
 static_assert(offsetof(PhysConstraint, target_bone2) == BO1_ARCH_SIZE(36, offsetof(PhysConstraint, target_bone2)));
-static_assert(sizeof(PhysConstraint) == BO1_ARCH_SIZE(168, sizeof(PhysConstraint)));
+static_assert(sizeof(PhysConstraint) == BO1_ARCH_SIZE(168, 200));
 
 void __cdecl PhysConstraints_Strcpy(unsigned __int8 *member, const char *keyValue)
 {

@@ -215,12 +215,12 @@ void __cdecl R_SetSunFromDvars(sunflare_t *sun)
     double v4; // xmm0_8
     double v5; // xmm0_8
     double v6; // xmm0_8
-    long double v7; // [esp+0h] [ebp-90h]
-    long double v8; // [esp+0h] [ebp-90h]
-    long double v9; // [esp+0h] [ebp-90h]
-    long double v10; // [esp+0h] [ebp-90h]
-    long double v11; // [esp+0h] [ebp-90h]
-    long double v12; // [esp+0h] [ebp-90h]
+    double v7; // [esp+0h] [ebp-90h]
+    double v8; // [esp+0h] [ebp-90h]
+    double v9; // [esp+0h] [ebp-90h]
+    double v10; // [esp+0h] [ebp-90h]
+    double v11; // [esp+0h] [ebp-90h]
+    double v12; // [esp+0h] [ebp-90h]
 
     if ( !sun && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_sky.cpp", 102, 0, "%s", "sun") )
         __debugbreak();

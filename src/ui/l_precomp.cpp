@@ -966,7 +966,7 @@ define_s *__cdecl PC_DefineFromString(char *string)
     memset((unsigned __int8 *)&src, 0, sizeof(src));
     strncpy((char *)&src, "*extern", 0x40u);
     src.scriptstack = script;
-    src.definehash = (define_s **)GetClearedMemory(0x1000u);
+    src.definehash = (define_s **)GetClearedMemory(sizeof(define_s *) * 1024);
     res = PC_Directive_define(&src);
     for ( t = src.tokens; t; t = src.tokens )
     {
@@ -1237,7 +1237,7 @@ int __cdecl PC_OperatorPriority(int op)
     return result;
 }
 
-int __cdecl PC_EvaluateTokens(source_s *source, token_s *tokens, int *intvalue, long double *floatvalue, int integer)
+int __cdecl PC_EvaluateTokens(source_s *source, token_s *tokens, int *intvalue, double *floatvalue, int integer)
 {
     bool v6; // [esp+18h] [ebp-DC0h]
     bool v7; // [esp+1Ch] [ebp-DBCh]
@@ -1716,7 +1716,7 @@ LABEL_113:
     return 0;
 }
 
-int __cdecl PC_DollarEvaluate(source_s *source, int *intvalue, long double *floatvalue, int integer)
+int __cdecl PC_DollarEvaluate(source_s *source, int *intvalue, double *floatvalue, int integer)
 {
     token_s *t; // [esp+14h] [ebp-454h]
     token_s *ta; // [esp+14h] [ebp-454h]
@@ -1851,7 +1851,7 @@ int __cdecl PC_Directive_elif(source_s *source)
     }
 }
 
-int __cdecl PC_Evaluate(source_s *source, int *intvalue, long double *floatvalue, int integer)
+int __cdecl PC_Evaluate(source_s *source, int *intvalue, double *floatvalue, int integer)
 {
     token_s *t; // [esp+14h] [ebp-450h]
     token_s *ta; // [esp+14h] [ebp-450h]
@@ -2025,7 +2025,7 @@ int __cdecl PC_Directive_evalfloat(source_s *source)
 {
     float v2; // xmm0_4
     token_s token; // [esp+Ch] [ebp-440h] BYREF
-    long double value; // [esp+444h] [ebp-8h] BYREF
+    double value; // [esp+444h] [ebp-8h] BYREF
 
     if ( !PC_Evaluate(source, 0, &value, 0) )
         return 0;
@@ -2103,7 +2103,7 @@ int __cdecl PC_DollarDirective_evalfloat(source_s *source)
 {
     float v2; // xmm0_4
     token_s token; // [esp+1Ch] [ebp-440h] BYREF
-    long double value; // [esp+454h] [ebp-8h] BYREF
+    double value; // [esp+454h] [ebp-8h] BYREF
 
     if ( !PC_DollarEvaluate(source, 0, &value, 0) )
         return 0;
@@ -2256,7 +2256,7 @@ source_s *__cdecl LoadSourceFile(char *filename)
     source->defines = 0;
     source->indentstack = 0;
     source->skip = 0;
-    source->definehash = (define_s **)GetClearedMemory(0x1000u);
+    source->definehash = (define_s **)GetClearedMemory(sizeof(define_s *) * 1024);
     PC_AddGlobalDefinesToSource(source);
     return source;
 }

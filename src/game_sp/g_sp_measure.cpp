@@ -757,7 +757,7 @@ std::vector<double> s_fpIntervals;
 long long s_fpReportStart;
 unsigned int s_fpOver16, s_fpOver33, s_fpOverHitch, s_fpHitchLines;
 double s_fpTscPerMs;
-volatile long s_fpSvFrames, s_fpSvMaxUs, s_fpSvOver25; // server thread writes, main thread reads and clears
+volatile bo1_long s_fpSvFrames, s_fpSvMaxUs, s_fpSvOver25; // server thread writes, main thread reads and clears
 long s_fpFirst[BO1_FIRST_KINDS], s_fpFirstPrev[BO1_FIRST_KINDS], s_fpFirstWindow[BO1_FIRST_KINDS]; // first-use counts
 char s_fpFirstNames[512], s_fpFirstNamesPrev[512];
 int s_fpFirstDropped, s_fpFirstDroppedPrev;
@@ -794,9 +794,9 @@ std::string FramePerfRenderBrief(long f)
     if (f <= 0 || e.frame != f)
         return "null";
     sprintf_s(item, "[%.1f,%.1f,%.1f,%.1f,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld]", e.swapMs, e.presentMs, e.gpuMs, e.gpuEndDeltaMs,
-        e.counts[BO1_RC_TEX_CREATE], e.counts[BO1_RC_TEX_UPLOAD_KB], e.counts[BO1_RC_TEX_RELEASE],
-        e.counts[BO1_RC_STREAM_DONE], e.counts[BO1_RC_BUF_CREATE], e.counts[BO1_RC_BUF_LOCK], e.first[BO1_FIRST_PS],
-        e.first[BO1_FIRST_COMBO]);
+        (long)e.counts[BO1_RC_TEX_CREATE], (long)e.counts[BO1_RC_TEX_UPLOAD_KB], (long)e.counts[BO1_RC_TEX_RELEASE],
+        (long)e.counts[BO1_RC_STREAM_DONE], (long)e.counts[BO1_RC_BUF_CREATE], (long)e.counts[BO1_RC_BUF_LOCK],
+        (long)e.first[BO1_FIRST_PS], (long)e.first[BO1_FIRST_COMBO]);
     return item;
 }
 
@@ -838,12 +838,14 @@ void FramePerfRender(unsigned int hitchMs)
         // buf create, buf lock, buf lock KB]; prev: [swap, present, gpu, gpu_end_delta, tex create, upload KB,
         // tex release, stream done, buf create, buf lock, first ps, first combo] of frames f-1, f-2 (and next: f+1);
         // first: first uses [vs, ps, pair, pass, texture, combo] drawn in frame f
-        const long *c = e.counts;
+        const bo1_long *c = e.counts;
         Com_Printf(16, "BO1_RENDERFRAME {\"level_time\":%d,\"frame\":%ld,\"swap_ms\":%.1f,\"present_ms\":%.1f,\"gpu_ms\":%.1f,"
             "\"gpu_end_delta_ms\":%.1f,\"present_cpu_ms\":%.1f,\"present_proc_ms\":%.1f,\"present_main_ms\":%.1f,\"gpu_state\":%ld,\"avail_mb\":%u,\"counts\":[%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld],"
             "\"threads\":\"%s\",\"first\":[%ld,%ld,%ld,%ld,%ld,%ld],\"gpu_seg\":[%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f],\"prev\":[%s,%s],\"next\":%s}\n",
-            level.time, f, e.swapMs, e.presentMs, e.gpuMs, e.gpuEndDeltaMs, e.presentCpuMs, e.presentProcMs, e.presentMainMs, e.state, e.availMB, c[0], c[1], c[2], c[3], c[4],
-            c[5], c[6], c[7], c[8], c[9], FramePerfJsonText(e.threads).c_str(), e.first[0], e.first[1], e.first[2], e.first[3], e.first[4], e.first[5],
+            level.time, f, e.swapMs, e.presentMs, e.gpuMs, e.gpuEndDeltaMs, e.presentCpuMs, e.presentProcMs, e.presentMainMs, (long)e.state, e.availMB,
+            (long)c[0], (long)c[1], (long)c[2], (long)c[3], (long)c[4], (long)c[5], (long)c[6], (long)c[7], (long)c[8], (long)c[9],
+            FramePerfJsonText(e.threads).c_str(), (long)e.first[0], (long)e.first[1], (long)e.first[2], (long)e.first[3],
+            (long)e.first[4], (long)e.first[5],
             e.gpuSeg[0], e.gpuSeg[1], e.gpuSeg[2], e.gpuSeg[3], e.gpuSeg[4], e.gpuSeg[5],
             e.gpuSeg[6], e.gpuSeg[7], FramePerfRenderBrief(f - 1).c_str(), FramePerfRenderBrief(f - 2).c_str(),
             FramePerfRenderBrief(f + 1).c_str());
@@ -1024,7 +1026,8 @@ void G_SP_FramePerfMark(int mark)
         "\"gpu_ms_max\":%.1f,\"present_ms_max\":%.1f,\"avail_mb\":[%u,%u],\"rc\":[%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld]}\n",
         level.time, (unsigned int)frames, frames * 1000.0 / elapsedMs, Percentile(s_fpIntervals, 0.5),
         Percentile(s_fpIntervals, 0.99), Percentile(s_fpIntervals, 1.0), s_fpOver16, s_fpOver33, s_fpOverHitch,
-        _InterlockedExchange(&s_fpSvFrames, 0), _InterlockedExchange(&s_fpSvMaxUs, 0) * 0.001, _InterlockedExchange(&s_fpSvOver25, 0),
+        (long)_InterlockedExchange(&s_fpSvFrames, 0), _InterlockedExchange(&s_fpSvMaxUs, 0) * 0.001,
+        (long)_InterlockedExchange(&s_fpSvOver25, 0),
         sysBusy, procPct, s_fpFirstWindow[0], s_fpFirstWindow[1], s_fpFirstWindow[2], s_fpFirstWindow[3], s_fpFirstWindow[4], s_fpFirstWindow[5],
         Percentile(s_fpGpuMs, 0.5), Percentile(s_fpGpuMs, 0.99), s_fpGpuMax, s_fpPresentMax,
         s_fpAvailMin == 0xFFFFFFFF ? 0 : s_fpAvailMin, s_fpAvailMax, s_fpRcWindow[0], s_fpRcWindow[1], s_fpRcWindow[2],
@@ -1060,8 +1063,8 @@ void G_SP_FramePerfServer(long long ticks)
         return;
     const double ms = (double)ticks * 1000.0 / (double)Frequency();
     _InterlockedIncrement(&s_fpSvFrames);
-    const long us = (long)(ms * 1000.0);
-    long old;
+    const bo1_long us = (bo1_long)(ms * 1000.0);
+    bo1_long old;
     while (us > (old = s_fpSvMaxUs) && _InterlockedCompareExchange(&s_fpSvMaxUs, us, old) != old)
         ;
     if (ms >= 25.0)

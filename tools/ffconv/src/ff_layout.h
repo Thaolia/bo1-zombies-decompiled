@@ -16,6 +16,8 @@ enum LeafKind : uint8_t
     LEAF_PTR,       // 4-byte pointer slot, 8 bytes wide on 64-bit
     LEAF_UNION_PTR, // union of a pointer and data of 4 bytes or less
     LEAF_OPAQUE,    // union of pointers and wider data: only its active member may be streamed
+    LEAF_HANDLE,    // intptr_t that holds a pointer at runtime (layouts.py WIDENED_INTEGERS): 4 bytes, 8 on 64-bit,
+                    // sign-extended; the zones stream it as 0
 };
 
 struct Leaf

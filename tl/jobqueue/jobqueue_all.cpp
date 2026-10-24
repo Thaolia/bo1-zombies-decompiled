@@ -153,7 +153,7 @@ void tlAtomicMutex::Unlock()
   if ( this->LockCount-- == 1 )
   {
       volatile int barrier = 0;
-      InterlockedExchange((volatile long *)&barrier, 0);
+      InterlockedExchange((volatile bo1_long *)&barrier, 0);
 
       ThreadId = 0;
   }
@@ -194,7 +194,7 @@ void tlSharedAtomicMutex::Unlock()
     tlSharedAtomicMutex *m = ThisPtr;
     const uint32_t tid = GetCurrentThreadId();
 
-    int newCount = InterlockedDecrement((volatile long *)&m->LockCount);
+    int newCount = InterlockedDecrement((volatile bo1_long *)&m->LockCount);
 
     if (newCount == 0)
     {
@@ -265,7 +265,7 @@ void tlSharedAtomicMutex::Lock()
 
     // weird compiler artifact from original code
     volatile int target = 0;
-    InterlockedExchange((volatile long *)&target, 0);
+    InterlockedExchange((volatile bo1_long *)&target, 0);
 
     m->LockCount = 1;
 #endif
@@ -498,7 +498,7 @@ LABEL_3:
 
         uint64_t mask = 1ULL << bitIndex;
 
-        volatile uint64_t *cell =
+        volatile unsigned __int64 *cell =
             &level->CellAvailable[cellIndex];
 
         while (true)

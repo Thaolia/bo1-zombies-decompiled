@@ -764,7 +764,7 @@ void __cdecl Demo_StartRecord_f()
             fileInfo.tags = 0;
             fileInfo.location = FILESHARE_LOCATION_POOLEDSTORAGE;
             fileInfo.fileSlot = 6;
-            memset(&fileInfo.thumbData, 0, 12);
+            memset(&fileInfo.thumbData, 0, offsetof(fileShareWriteFileInfo, location) - offsetof(fileShareWriteFileInfo, thumbData));
             fileInfo.fileSize = 0;
             fileInfo.dataCallback = (unsigned int (__cdecl *)(void *, unsigned int, unsigned int))Demo_WriteToStream;
             fileInfo.successCallback = Demo_StreamingSuccessCallback;

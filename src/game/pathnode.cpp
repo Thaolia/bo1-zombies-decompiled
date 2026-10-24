@@ -3828,7 +3828,7 @@ void    Path_UpdateLimitedDepthArcBadPlaceCount(
     side1[2] = (float)(side1[0] * arc->origin[0]) + (float)(side1[1] * arc->origin[1]);
     YawVectors((float)(angle * 0.5) + arc->angle0, forward, 0);
     v5 = (float)(angle * 0.0087266462);
-    //__libm_sse2_sin(*(long double *)side1end);
+    //__libm_sse2_sin(*(double *)side1end);
     //*(float *)&v5 = v5;
     v5 = sin(v5);
     v18 = LODWORD(v5);

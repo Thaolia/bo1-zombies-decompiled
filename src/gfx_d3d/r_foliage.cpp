@@ -197,7 +197,7 @@ void __cdecl R_FoliageSetInitialBurnState()
 //                unsigned int numWindForces,
 //                const float *modelPlacement)
 //{
-//    long double v4; // [esp+0h] [ebp-20h]
+//    double v4; // [esp+0h] [ebp-20h]
 //    const GrassWindForce *gforce; // [esp+8h] [ebp-18h]
 //    float ratio; // [esp+10h] [ebp-10h]
 //    unsigned int i; // [esp+14h] [ebp-Ch]

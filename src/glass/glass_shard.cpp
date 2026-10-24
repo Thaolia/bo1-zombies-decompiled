@@ -2643,7 +2643,7 @@ LABEL_23:
     //glassExtent = GlassShard::Outline::Extent(&this->outline);
     glassExtent = this->outline.Extent();
     newShards[0] = this;
-    memset(&newShards[1], 0, 36);
+    memset(&newShards[1], 0, 9 * sizeof(newShards[0]));
     numNewShards = 1;
     minShardSize = this->group->glassDef->minShardSize * clGlasses->renderer->shardShatterSizeLimitScale->current.value;
     maxShardSize = this->group->glassDef->maxShardSize;
@@ -3104,7 +3104,7 @@ void __thiscall GlassShard::GenerateVerts(
     float v59; // [esp+112Ch] [ebp-420h]
     float v60; // [esp+1130h] [ebp-41Ch]
     unsigned int v61[257]; // [esp+1134h] [ebp-418h]
-    int v62; // [esp+153Ch] [ebp-10h]
+    uintptr_t v62; // [esp+153Ch] [ebp-10h]
     unsigned int v63; // [esp+1540h] [ebp-Ch]
     unsigned int v64; // [esp+1544h] [ebp-8h]
     float *v65; // [esp+1548h] [ebp-4h]
@@ -3210,7 +3210,7 @@ void __thiscall GlassShard::GenerateVerts(
     v12.array[2] = (int)(float)((float)(this->axis[0][2] * 127.0) + 127.5);
     v12.array[3] = 63;
     v56.packed = v12.packed;
-    v62 = *(&clGlasses->renderer->maxNumGroupChanges + this->outline.numVerts);
+    v62 = (uintptr_t)clGlasses->renderer->vertexList[this->outline.numVerts - 1];
     if ( highLod )
         numVertsLow = this->mesh.numVerts;
     else

@@ -14,6 +14,7 @@
 #include <universal/com_math.h>
 #include <universal/assertive.h>
 #include <universal/profile.h>
+#include <platform/arch_size.h>
 
 #include <cstdint>
 #include <cmath>
@@ -41,6 +42,8 @@
 #endif
 #endif
 
+#endif // WIN32
+
 // angle indexes
 #define	PITCH				0		// up / down
 #define	YAW					1		// left / right
@@ -48,6 +51,7 @@
 
 #define ID_INLINE __inline 
 
+// Every target (x86, x64, AArch64) is little-endian.
 int __cdecl ShortSwap(__int16 l);
 int __cdecl LongSwap(int l);
 
@@ -58,8 +62,8 @@ static ID_INLINE int BigLong(int l) { return LongSwap(l); }
 //static ID_INLINE float BigFloat(const float *l) { FloatSwap(l); }
 #define LittleFloat
 
+#ifdef WIN32
 #define	PATH_SEP '\\'
-
 #endif // WIN32
 
 
@@ -170,7 +174,6 @@ typedef unsigned __int64 ull;
 typedef unsigned int uint;
 typedef unsigned char uchar;
 typedef unsigned short ushort;
-typedef unsigned long ulong;
 
 typedef     signed char     int8; // slight changes here made to conform with steam api...
 typedef     signed char     sint8;
@@ -180,7 +183,7 @@ typedef     signed short    sint16;
 typedef unsigned short    uint16;
 typedef __int32				int32;
 typedef unsigned __int32 uint32;
-typedef signed long			sint32;
+typedef bo1_long			sint32;
 typedef ll                            int64;
 typedef ll                            sint64;
 typedef ull                         uint64;
@@ -233,6 +236,12 @@ typedef ull                         uint64;
 #define WORDn(x, n)     (*((_WORD*)&(x)+n))
 #define DWORDn(x, n)    (*((_DWORD*)&(x)+n))
 
+// LOBYTE, LOWORD, HIBYTE and HIWORD replace windows.h's (which take the bits of the value, not the last part of the
+// object), or are replaced by them when windows.h comes later: each file keeps the definition its include order gives.
+#undef LOBYTE
+#undef LOWORD
+#undef HIBYTE
+#undef HIWORD
 #define LOBYTE_NAMEHACK(x)    BYTEn(x,LOW_IND(x,_BYTE))
 #define LOBYTE(x)    BYTEn(x,LOW_IND(x,_BYTE))
 #define LOWORD(x)    WORDn(x,LOW_IND(x,_WORD))

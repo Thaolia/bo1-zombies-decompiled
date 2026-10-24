@@ -676,7 +676,7 @@ char *__cdecl UI_FeederItemText_Servers(int localClientNum, int contextIndex, in
 
 char *__cdecl UI_FeederItemText_ServerStatus(int index, unsigned int column)
 {
-    if ( index < 0 || index >= (int)sharedUiInfo.serverStatusInfoScoreBoard.lines[2][5] || column > 1 )
+    if ( index < 0 || index >= *(const int *)&sharedUiInfo.serverStatusInfoScoreBoard.lines[2][5] || column > 1 )
         return (char *)"";
     if ( sharedUiInfo.serverStatusInfo.lines[index + 4][column + 6]
         && *sharedUiInfo.serverStatusInfo.lines[index + 4][column + 6] == 64 )
@@ -697,7 +697,7 @@ char *__cdecl UI_FeederItemText_ServerStatusScoreboard(int index, unsigned int c
 
 const char *__cdecl UI_FeederItemText_Mods(int index)
 {
-    if ( index < 0 || index >= (int)sharedUiInfo.modList[63].modDescr )
+    if ( index < 0 || index >= *(const int *)&sharedUiInfo.modList[63].modDescr )
         return "";
     if ( sharedUiInfo.modList[index].modName && *sharedUiInfo.modList[index].modName )
         return sharedUiInfo.modList[index].modName;

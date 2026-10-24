@@ -179,9 +179,9 @@ void __cdecl CG_ShakeCamera(int localClientNum)
     double v1; // xmm0_8
     double v2; // xmm0_8
     double v3; // xmm0_8
-    long double v4; // [esp+0h] [ebp-2Ch]
-    long double v5; // [esp+0h] [ebp-2Ch]
-    long double v6; // [esp+0h] [ebp-2Ch]
+    double v4; // [esp+0h] [ebp-2Ch]
+    double v5; // [esp+0h] [ebp-2Ch]
+    double v6; // [esp+0h] [ebp-2Ch]
     CameraShakeSet *camShakeSet; // [esp+Ch] [ebp-20h]
     CameraShake *cameraShake; // [esp+10h] [ebp-1Ch]
     cg_s *cgameGlob; // [esp+14h] [ebp-18h]

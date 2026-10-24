@@ -1151,7 +1151,7 @@ void __cdecl Cmd_SetViewpos_f(gentity_s *ent)
 {
     const char *v1; // eax
     const char *v2; // eax
-    long double v3; // st7
+    double v3; // st7
     int v4; // [esp+0h] [ebp-424h]
     char buffer[1024]; // [esp+4h] [ebp-420h] BYREF
     float origin[3]; // [esp+408h] [ebp-1Ch] BYREF

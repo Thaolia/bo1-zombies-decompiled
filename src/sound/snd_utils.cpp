@@ -272,12 +272,12 @@ void __cdecl Snd_Pan3d(
     double v8; // st7
     //double v9; // xmm0_8
     //double v10; // xmm0_8
-    //long double v11; // [esp+10h] [ebp-E8h]
-    //long double v12; // [esp+10h] [ebp-E8h]
+    //double v11; // [esp+10h] [ebp-E8h]
+    //double v12; // [esp+10h] [ebp-E8h]
     float v13; // [esp+10h] [ebp-E8h]
     float v14; // [esp+14h] [ebp-E4h]
-    //long double v15; // [esp+18h] [ebp-E0h]
-    //long double v16; // [esp+18h] [ebp-E0h]
+    //double v15; // [esp+18h] [ebp-E0h]
+    //double v16; // [esp+18h] [ebp-E0h]
     float v17; // [esp+20h] [ebp-D8h]
     float v18; // [esp+28h] [ebp-D0h]
     float v19; // [esp+2Ch] [ebp-CCh]

@@ -182,7 +182,7 @@ struct broad_phase_terrain_query_callback // sizeof=0x4
     //{
     //    void (__thiscall *query)(broad_phase_terrain_query_callback *this, const broad_phase_environment_query_input *, broad_phase_environement_query_results *);
     //};
-    virtual void query(const broad_phase_environment_query_input *, broad_phase_environement_query_results *);
+    virtual void query(const broad_phase_environment_query_input *, broad_phase_environement_query_results *) = 0;
 };
 
 struct broad_phase_collision_pair // sizeof=0xC

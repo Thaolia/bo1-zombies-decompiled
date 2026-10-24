@@ -59,7 +59,7 @@ void __cdecl SND_DspScaleCache(unsigned int count, float a, float *c)
     v3 = c;
 
     iassert((count & 31) == 0);
-    iassert((((int)c) & 31) == 0);
+    iassert((((uintptr_t)c) & 31) == 0);
 
     if ( count >> 5 )
     {

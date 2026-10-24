@@ -2639,7 +2639,7 @@ char __cdecl Bot_GrenadeInRange(
                 float *outPitch)
 {
     double v6; // xmm0_8
-    long double v7; // [esp+0h] [ebp-78h]
+    double v7; // [esp+0h] [ebp-78h]
     float iProjectileSpeedForward; // [esp+20h] [ebp-58h]
     float iProjectileSpeedRelativeUp; // [esp+2Ch] [ebp-4Ch]
     float iProjectileSpeed; // [esp+30h] [ebp-48h]

@@ -173,8 +173,8 @@ void    R_SetViewParmsForLight(
     double v4; // xmm0_8
     double v5; // xmm0_8
     float v6; // xmm0_4
-    long double v7; // [esp+14h] [ebp-CCh]
-    long double v8; // [esp+14h] [ebp-CCh]
+    double v7; // [esp+14h] [ebp-CCh]
+    double v8; // [esp+14h] [ebp-CCh]
     float tanHalfFovX; // [esp+18h] [ebp-C8h]
     float cosHalfFovOuter; // [esp+2Ch] [ebp-B4h]
     unsigned int COS_HALF_CLAMP_EPSILON; // [esp+3Ch] [ebp-A4h]

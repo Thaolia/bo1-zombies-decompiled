@@ -231,7 +231,7 @@ void __cdecl PMem_FreeIndex(PhysicalMemoryPrim *prim, unsigned int allocIndex, i
             }
             if ( !--prim->allocListCount )
                 break;
-            allocEntry = (PhysicalMemoryAllocation *)(&prim->allocListCount + 2 * prim->allocListCount);
+            allocEntry = &prim->allocList[prim->allocListCount - 1];
         }
         while ( !allocEntry->name );
     }

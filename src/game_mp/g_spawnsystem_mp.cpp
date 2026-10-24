@@ -377,8 +377,8 @@ void __cdecl SpawnSystem_SetPointsBaseWeight(int teammask, float *objective_posi
 {
     double v4; // xmm0_8
     double v5; // xmm0_8
-    long double v6; // [esp+8h] [ebp-58h]
-    long double v7; // [esp+8h] [ebp-58h]
+    double v6; // [esp+8h] [ebp-58h]
+    double v7; // [esp+8h] [ebp-58h]
     float axis[3][3]; // [esp+14h] [ebp-4Ch] BYREF
     float forward[3]; // [esp+38h] [ebp-28h] BYREF
     float angle_cos; // [esp+44h] [ebp-1Ch]

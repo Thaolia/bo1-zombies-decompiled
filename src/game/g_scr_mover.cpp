@@ -799,7 +799,7 @@ void __cdecl ScriptEntCmd_DevAddPitch(scr_entref_t entref)
 void __cdecl ScriptEnt_DevAddRotate(scr_entref_t entref, unsigned int iAxis)
 {
     const char *v2; // eax
-    long double v3; // st7
+    double v3; // st7
     int i; // [esp+18h] [ebp-5Ch]
     gentity_s *pSelf; // [esp+1Ch] [ebp-58h]
     float axisOut[3][3]; // [esp+20h] [ebp-54h] BYREF

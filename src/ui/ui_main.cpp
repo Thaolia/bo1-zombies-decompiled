@@ -3137,7 +3137,7 @@ char *__cdecl GetXpLockDescription(int localClientNum, int playlistId)
     Com_sprintf(tempString, 5u, "%s", v4);
     if ( !*rankString )
         Com_PrintWarning(13, "Empty rank string for rank %i\n", rank);
-    memset(&convArgs.args[2], 0, 28);
+    memset(&convArgs.args[2], 0, sizeof(convArgs.args) - 2 * sizeof(convArgs.args[0]));
     convArgs.argCount = 2;
     convArgs.args[0] = rankString;
     convArgs.args[1] = tempString;

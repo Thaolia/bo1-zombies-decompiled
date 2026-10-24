@@ -1937,7 +1937,7 @@ void __cdecl UI_Gametype_Custom_UploadToFileShare(
     s_fileShareBuffer = writeFileInfo.fileData;
     writeFileInfo.tags = 0;
     writeFileInfo.fileName = fileName;
-    memset(&writeFileInfo.thumbData, 0, 12);
+    memset(&writeFileInfo.thumbData, 0, offsetof(fileShareWriteFileInfo, location) - offsetof(fileShareWriteFileInfo, thumbData));
     writeFileInfo.dataCallback = 0;
     writeFileInfo.successCallback = UI_Gametype_Custom_UploadToFileShareSuccess;
     writeFileInfo.failureCallback = (void (__cdecl *)(int))UI_Gametype_Custom_UploadToFileShareFailure;

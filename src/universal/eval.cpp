@@ -201,7 +201,7 @@ bool    Eval_EvaluationStep(Eval *eval)
     int v5; // esi
     EvalValue *v6; // edx
     EvalOperatorType *v7; // ecx
-    long double v9; // [esp+10h] [ebp-B4h]
+    double v9; // [esp+10h] [ebp-B4h]
     const char *v10; // [esp+1Ch] [ebp-A8h] BYREF
     int i; // [esp+20h] [ebp-A4h]
     int v12; // [esp+24h] [ebp-A0h]
@@ -215,7 +215,7 @@ bool    Eval_EvaluationStep(Eval *eval)
     EvalOperatorType v20; // [esp+44h] [ebp-80h]
     bool same; // [esp+4Bh] [ebp-79h]
     const char *v22; // [esp+4Ch] [ebp-78h] BYREF
-    long double dQuotientFloor; // [esp+50h] [ebp-74h]
+    double dQuotientFloor; // [esp+50h] [ebp-74h]
     const char *v24; // [esp+5Ch] [ebp-68h] BYREF
     const char *v25; // [esp+60h] [ebp-64h] BYREF
     const char *v26; // [esp+64h] [ebp-60h] BYREF
@@ -459,7 +459,7 @@ bool    Eval_EvaluationStep(Eval *eval)
             dQuotientFloor = floor(
                 *(double *)(eval + 16 * (*(_DWORD *)(eval + 20484) - 2) + 4104)
                 / *(double *)(eval + 16 * (*(_DWORD *)(eval + 20484) - 1) + 4104));
-            *(long double *)(eval + 16 * (*(_DWORD *)(eval + 20484) - 2) + 4104) = *(double *)(eval
+            *(double *)(eval + 16 * (*(_DWORD *)(eval + 20484) - 2) + 4104) = *(double *)(eval
                 + 16
                 * (*(_DWORD *)(eval + 20484) - 2)
                 + 4104)
@@ -858,7 +858,7 @@ bool __cdecl Eval_CanPushValue(const Eval *eval)
     return eval->pushedOp;
 }
 
-char __cdecl Eval_PushNumber(Eval *eval, long double value)
+char __cdecl Eval_PushNumber(Eval *eval, double value)
 {
     if ( !Eval_CanPushValue(eval) )
         return 0;

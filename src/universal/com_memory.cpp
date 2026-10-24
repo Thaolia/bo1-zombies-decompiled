@@ -1312,12 +1312,20 @@ void __cdecl Z_VirtualDecommit(char *ptr, int size, int type)
     Z_VirtualDecommitInternal(ptr, size);
 }
 
+// The bytes Z_Malloc puts in front of each block. Retail's 164 leaves blocks 4 bytes past malloc's alignment; MSVC
+// never assumes more, but GCC and clang copy 16-aligned types (GlassPhysics' phys_vec3s) with aligned moves.
+#if defined(_MSC_VER)
+constexpr int Z_HEADER_SIZE = 164;
+#else
+constexpr int Z_HEADER_SIZE = 176;
+#endif
+
 void __cdecl Z_Free(char *ptr, int type)
 {
     if ( ptr )
     {
-        track_z_free(type, ptr, 164);
-        free(ptr - 164);
+        track_z_free(type, ptr, Z_HEADER_SIZE);
+        free(ptr - Z_HEADER_SIZE);
     }
 }
 
@@ -1335,11 +1343,11 @@ char *__cdecl Z_TryMallocGarbage(int size, const char *name, int type)
 {
     char *buf; // [esp+0h] [ebp-4h]
 
-    buf = (char *)malloc(size + 164);
+    buf = (char *)malloc(size + Z_HEADER_SIZE);
     if ( buf )
     {
-        buf += 164;
-        track_z_alloc(size + 72, name, type, buf, 0, 164);
+        buf += Z_HEADER_SIZE;
+        track_z_alloc(size + 72, name, type, buf, 0, Z_HEADER_SIZE);
     }
     return buf;
 }
@@ -1350,7 +1358,7 @@ unsigned int *__cdecl Z_Malloc(int size, const char *name, int type)
 
     buf = Z_TryMalloc(size, name, type);
     if ( !buf )
-        Z_MallocFailed(size + 164);
+        Z_MallocFailed(size + Z_HEADER_SIZE);
     return buf;
 }
 
@@ -1366,7 +1374,7 @@ char *__cdecl Z_MallocGarbage(int size, const char *name, int type)
 
     buf = Z_TryMallocGarbage(size, name, type);
     if ( !buf )
-        Z_MallocFailed(size + 164);
+        Z_MallocFailed(size + Z_HEADER_SIZE);
     return buf;
 }
 

@@ -27,6 +27,13 @@ void __cdecl R_AddDelayedStaticModelDrawSurf(
                 unsigned int count,
                 unsigned int which_lod);
 void __cdecl R_WritePrimDrawSurfInt(GfxDelayedCmdBuf *delayedCmdBuf, unsigned int value);
+inline void R_WritePrimDrawSurfPtr(GfxDelayedCmdBuf *delayedCmdBuf, const void *ptr)
+{
+    unsigned int words[PRIM_DRAW_SURF_PTR_WORDS];
+    memcpy(words, &ptr, sizeof(ptr));
+    for (unsigned int i = 0; i < PRIM_DRAW_SURF_PTR_WORDS; ++i)
+        R_WritePrimDrawSurfInt(delayedCmdBuf, words[i]);
+}
 void __cdecl R_WritePrimDrawSurfData(GfxDelayedCmdBuf *delayedCmdBuf, unsigned __int8 *data, unsigned int count);
 GfxStaticModelId __cdecl R_GetStaticModelId(unsigned int smodelIndex, int lod);
 void __cdecl R_AddAllStaticModelSurfacesCamera(

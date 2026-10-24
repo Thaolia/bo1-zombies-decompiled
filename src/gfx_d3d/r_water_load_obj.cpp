@@ -201,7 +201,7 @@ void __cdecl R_CreateWaterSetup(const water_t *source, int waterMapSetupIndex, w
 
 //void __cdecl R_PickWaterFrequencies(water_t *water)
 //{
-//    long double v1; // [esp+0h] [ebp-50h]
+//    double v1; // [esp+0h] [ebp-50h]
 //    int m; // [esp+10h] [ebp-40h]
 //    float m_scale; // [esp+14h] [ebp-3Ch]
 //    float kz; // [esp+1Ch] [ebp-34h]

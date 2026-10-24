@@ -55,9 +55,9 @@ struct SpawnVar // sizeof=0xA0C
 struct __declspec(align(8)) SysInfo // sizeof=0x260
 {                                                                             // XREF: .data:sys_info/r
                                                                                 // ?Com_SetRecommended@@YAXHH@Z/r
-        long double cpuGHz;                                 // XREF: Sys_RegisterInfoDvars+DA/r
+        double cpuGHz;                                 // XREF: Sys_RegisterInfoDvars+DA/r
                                                                                 // Sys_Init(void)+1B7/r ...
-        long double configureGHz;                     // XREF: Com_SetRecommended(int,int)+31/r
+        double configureGHz;                     // XREF: Com_SetRecommended(int,int)+31/r
                                                                                 // Com_SetRecommended(int,int)+41/w ...
         int logicalCpuCount;                                // XREF: Sys_Init(void)+13F/r
                                                                                 // Sys_Init(void)+165/r ...

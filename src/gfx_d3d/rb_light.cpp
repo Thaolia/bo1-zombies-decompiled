@@ -588,7 +588,7 @@ unsigned __int8 __cdecl R_LightGridLookup(
             honorSuppression = 1;
             bestPrimaryLightWeight = cornerWeight[cornerIndex];
             primaryLightIndex = entry->primaryLightIndex;
-            memset((unsigned __int8 *)cornerEntry, 0, 4 * cornerIndex);
+            memset((unsigned __int8 *)cornerEntry, 0, sizeof(*cornerEntry) * cornerIndex);
             goto LABEL_10;
         }
         v10 = entry->primaryLightIndex;
@@ -765,7 +765,7 @@ void __cdecl R_UpdateVisHistory(const GfxLightGrid *lightGrid, const unsigned in
 void AllocAllMemoryNeeded()
 {
     if (!LightGridHashtable)
-        LightGridHashtable = (htab **)Z_VirtualAlloc(0x40001C, "initLightGridPoints", 0);
+        LightGridHashtable = (htab **)Z_VirtualAlloc(sizeof(htab *) * 0x100007, "initLightGridPoints", 0);
     if (!LightGridMemory)
         LightGridMemory = (htab *)Z_VirtualAlloc(0x1000000, "initLightGridMemory", 0);
 }

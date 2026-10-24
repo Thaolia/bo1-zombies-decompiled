@@ -275,7 +275,7 @@ void phys_contact_manifold::add_feature_point(const phys_vec3 *p)
     {
         mp = (contact_manifold_mesh_point *)this->m_allocator->fast_allocate(32, g_contact_manifold_error_msg);
 
-        iassert((unsigned int)(mp) % PHYS_ALIGNOF(contact_manifold_mesh_point) == 0);
+        iassert((uintptr_t)(mp) % PHYS_ALIGNOF(contact_manifold_mesh_point) == 0);
         iassert(mp == m_list_mesh_point + m_list_mesh_point_count);
 
         ++this->m_list_mesh_point_count;

@@ -28,7 +28,7 @@ struct __declspec(align(8)) token_s // sizeof=0x430
     // padding byte
     // padding byte
     // padding byte
-    long double floatvalue;             // XREF: PC_DollarDirective_evalint(source_s *)+9C/w
+    double floatvalue;             // XREF: PC_DollarDirective_evalint(source_s *)+9C/w
                                         // PC_DollarDirective_evalfloat(source_s *)+EB/w ...
     char *whitespace_p;                 // XREF: UnreadSignToken(source_s *)+2E/w
                                         // PC_Directive_eval+4D/w ...
@@ -121,7 +121,7 @@ struct __declspec(align(8)) value_s // sizeof=0x20
     // padding byte
     // padding byte
     // padding byte
-    long double floatvalue;
+    double floatvalue;
     int parentheses;
     value_s *prev;
     value_s *next;
@@ -147,7 +147,7 @@ int __cdecl PS_ReadWhiteSpace(script_s *script);
 int __cdecl PS_ReadEscapeCharacter(script_s *script, char *ch);
 int __cdecl PS_ReadString(script_s *script, token_s *token, int quote);
 int __cdecl PS_ReadName(script_s *script, token_s *token);
-void __cdecl NumberValue(char *string, __int16 subtype, unsigned int *intvalue, long double *floatvalue);
+void __cdecl NumberValue(char *string, __int16 subtype, unsigned int *intvalue, double *floatvalue);
 int __cdecl PS_ReadNumber(script_s *script, token_s *token);
 int __cdecl PS_ReadPunctuation(script_s *script, token_s *token);
 int __cdecl PS_ReadPrimitive(script_s *script, token_s *token);

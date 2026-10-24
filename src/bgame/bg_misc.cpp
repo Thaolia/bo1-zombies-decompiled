@@ -2359,7 +2359,7 @@ bool __cdecl BG_PlayerHasRoomForEntAllAmmoTypes(const entityState_s *ent, const 
 void __cdecl BG_EvaluateTrajectory(const trajectory_t *tr, int atTime, float *result)
 {
     double v3; // xmm0_8
-    long double v4; // [esp-34h] [ebp-ACh]
+    double v4; // [esp-34h] [ebp-ACh]
     float v5; // [esp-10h] [ebp-88h]
     float v6; // [esp-8h] [ebp-80h]
     float v7; // [esp-4h] [ebp-7Ch]
@@ -2594,7 +2594,7 @@ void __cdecl BG_EvaluateTrajectory(const trajectory_t *tr, int atTime, float *re
 void __cdecl BG_EvaluateTrajectoryDelta(const trajectory_t *tr, int atTime, float *result)
 {
     double v3; // xmm0_8
-    long double v4; // [esp+0h] [ebp-5Ch]
+    double v4; // [esp+0h] [ebp-5Ch]
     float deltaTime; // [esp+58h] [ebp-4h]
     float deltaTimea; // [esp+58h] [ebp-4h]
     float deltaTimeb; // [esp+58h] [ebp-4h]

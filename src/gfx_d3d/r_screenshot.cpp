@@ -1619,14 +1619,14 @@ void __cdecl R_GetDirForCubemapPixel(int faceIndex, float x, float y, float *dir
 //                const float *baseColor,
 //                unsigned __int8 *pixel)
 //{
-//    long double v6; // [esp+Ch] [ebp-88h]
-//    long double v7; // [esp+Ch] [ebp-88h]
-//    long double v8; // [esp+Ch] [ebp-88h]
+//    double v6; // [esp+Ch] [ebp-88h]
+//    double v7; // [esp+Ch] [ebp-88h]
+//    double v8; // [esp+Ch] [ebp-88h]
 //    float v9; // [esp+Ch] [ebp-88h]
 //    float v10; // [esp+10h] [ebp-84h]
-//    long double v11; // [esp+14h] [ebp-80h]
-//    long double v12; // [esp+14h] [ebp-80h]
-//    long double v13; // [esp+14h] [ebp-80h]
+//    double v11; // [esp+14h] [ebp-80h]
+//    double v12; // [esp+14h] [ebp-80h]
+//    double v13; // [esp+14h] [ebp-80h]
 //    float v14; // [esp+14h] [ebp-80h]
 //    float *v15; // [esp+64h] [ebp-30h]
 //    int faceIndex; // [esp+68h] [ebp-2Ch]
@@ -1781,12 +1781,12 @@ void __cdecl R_CubemapLightingForDir(
 //    double v4; // xmm0_8
 //    double v5; // xmm0_8
 //    double v6; // xmm0_8
-//    long double v7; // [esp+0h] [ebp-28h]
-//    long double v8; // [esp+0h] [ebp-28h]
-//    long double v9; // [esp+0h] [ebp-28h]
-//    long double v10; // [esp+8h] [ebp-20h]
-//    long double v11; // [esp+8h] [ebp-20h]
-//    long double v12; // [esp+8h] [ebp-20h]
+//    double v7; // [esp+0h] [ebp-28h]
+//    double v8; // [esp+0h] [ebp-28h]
+//    double v9; // [esp+0h] [ebp-28h]
+//    double v10; // [esp+8h] [ebp-20h]
+//    double v11; // [esp+8h] [ebp-20h]
+//    double v12; // [esp+8h] [ebp-20h]
 //    int faceIndex; // [esp+18h] [ebp-10h]
 //    int x; // [esp+1Ch] [ebp-Ch]
 //    int y; // [esp+20h] [ebp-8h]

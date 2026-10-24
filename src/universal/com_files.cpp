@@ -2192,7 +2192,7 @@ iwd_t *__cdecl FS_LoadZipFile(char *zipfile, const char *basename)
         }
         while ( v3 );
         namePtr += &filename_inzip[strlen(filename_inzip) + 1] - &filename_inzip[1] + 1;
-        unzGetCurrentFileInfoPosition(uf, (unsigned long*)&buildBuffer[i].pos);
+        unzGetCurrentFileInfoPosition(uf, (bo1_ulong*)&buildBuffer[i].pos);
         buildBuffer[i].next = iwd->hashTable[hash];
         iwd->hashTable[hash] = &buildBuffer[i];
         unzGoToNextFile(uf);

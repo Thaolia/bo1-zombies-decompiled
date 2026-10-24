@@ -594,7 +594,7 @@ void __cdecl DynEnt_LoadEntities()
         if ( cm.dynEntCount[drawType] )
         {
             cm.dynEntPoseList[drawType] = (DynEntityPose *)DynEnt_Alloc(cm.dynEntCount[collType], 32);
-            cm.dynEntClientList[drawType] = (DynEntityClient *)DynEnt_Alloc(cm.dynEntCount[collType], 20);
+            cm.dynEntClientList[drawType] = (DynEntityClient *)DynEnt_Alloc(cm.dynEntCount[collType], sizeof(DynEntityClient));
             cm.dynEntCollList[collType] = (DynEntityColl *)DynEnt_Alloc(cm.dynEntCount[collType], 32);
         }
         collType = (DynEntityCollType)(drawType + 2);

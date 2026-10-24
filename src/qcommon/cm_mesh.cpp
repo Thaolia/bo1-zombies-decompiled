@@ -1820,15 +1820,15 @@ bool __cdecl CM_DoesCapsuleIntersectTriangle(
     float fraction; // xmm0_4
     const float *v0; // [esp+B4h] [ebp-B0h]
     float v2_v0[3]; // [esp+B8h] [ebp-ACh] BYREF
-    long double a01; // [esp+C4h] [ebp-A0h]
+    double a01; // [esp+C4h] [ebp-A0h]
     float scaledPlaneNormal[3]; // [esp+CCh] [ebp-98h] BYREF
     bool isEndCloseEnough; // [esp+DBh] [ebp-89h]
     float distSqToEdge; // [esp+DCh] [ebp-88h]
     float delta[3]; // [esp+E0h] [ebp-84h] BYREF
-    long double a11; // [esp+ECh] [ebp-78h]
+    double a11; // [esp+ECh] [ebp-78h]
     double scaledPlaneDist; // [esp+F4h] [ebp-70h]
     bool isStartCloseEnough; // [esp+103h] [ebp-61h]
-    long double a00; // [esp+104h] [ebp-60h]
+    double a00; // [esp+104h] [ebp-60h]
     double det; // [esp+10Ch] [ebp-58h]
     const float *v2; // [esp+118h] [ebp-4Ch]
     float v1_v0[3]; // [esp+11Ch] [ebp-48h] BYREF
@@ -1837,7 +1837,7 @@ bool __cdecl CM_DoesCapsuleIntersectTriangle(
     float pt[3]; // [esp+138h] [ebp-2Ch] BYREF
     double cutoffDistSq; // [esp+144h] [ebp-20h]
     double scaleSq; // [esp+14Ch] [ebp-18h]
-    long double scaledDist[2]; // [esp+154h] [ebp-10h]
+    double scaledDist[2]; // [esp+154h] [ebp-10h]
 
     v0 = cm.verts[*indices];
     v1 = cm.verts[indices[1]];
@@ -1914,9 +1914,9 @@ bool __cdecl CM_IsPointOverTriangle(
                 const float *v0,
                 const float *e0,
                 const float *e1,
-                long double a00,
-                long double a01,
-                long double a11,
+                double a00,
+                double a01,
+                double a11,
                 double det)
 {
     double b1; // [esp+4h] [ebp-30h]

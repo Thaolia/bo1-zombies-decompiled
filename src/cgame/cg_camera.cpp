@@ -2988,7 +2988,7 @@ void __cdecl CG_ExtraCamDebug_SaveView(int localClientNum)
 
 void __cdecl CG_CalcFov_ExtraCam(int localClientNum)
 {
-    long double v1; // [esp+0h] [ebp-1Ch]
+    double v1; // [esp+0h] [ebp-1Ch]
     float value; // [esp+0h] [ebp-1Ch]
     float fov_x; // [esp+8h] [ebp-14h]
     cg_s *cgameGlob; // [esp+Ch] [ebp-10h]

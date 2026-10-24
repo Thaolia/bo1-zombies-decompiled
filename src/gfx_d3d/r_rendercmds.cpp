@@ -880,7 +880,7 @@ void R_ToggleSmpFrame()
     frontEndDataOut->textureOverrideCount = 0;
     frontEndDataOut->cloudCount = 0;
     frontEndDataOut->shaderConstantSetCount = 1;
-    extern volatile long g_scsFrameStamp;
+    extern volatile bo1_long g_scsFrameStamp;
     ++g_scsFrameStamp; // mod (L43): r_mod_scsShare: slots copied before this reset are stale
     frontEndDataOut->codeMeshPtr = &g_codeMesh[g_currCodeMesh];
     g_currCodeMesh = (g_currCodeMesh + 1) % 2;

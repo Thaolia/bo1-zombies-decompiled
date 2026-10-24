@@ -5,22 +5,19 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <regex>
 #include <set>
 #include <sstream>
 #include <utility>
 #include <vector>
 
+#include <gfx_d3d9emu/shader_pack.h>
 #include <mojoshader.h>
 
 namespace ff
 {
 namespace
 {
-// The engine's material stream destinations (s_streamDestInfo in r_material.cpp): a vertex input's location is its
-// destination index, so the GL backend binds streams the way Material_BuildVertexDecl does.
-const std::pair<int, int> kStreamDest[20] = {{0, 0}, {3, 0},  {10, 0}, {10, 1}, {12, 0}, {5, 0},  {5, 1},
-                                             {5, 2}, {5, 3},  {5, 4},  {5, 5},  {5, 6},  {5, 7},  {5, 8},
-                                             {5, 9}, {5, 10}, {5, 11}, {5, 12}, {5, 13}, {1, 0}};
 const int kUsageTexcoord = 5;
 const int kUsageColor = 10;
 
@@ -124,6 +121,42 @@ int NumberAfter(const std::string &s, const char *prefix)
     return std::atoi(s.c_str() + std::strlen(prefix));
 }
 
+// The samplers the engine binds its shadow maps to (r_material_load_obj.cpp): D3D9 hardware compares the coordinate's
+// z with the depth texture there, so GLSL needs a shadow sampler.
+std::set<int> ShadowSamplers(const MOJOSHADER_parseData &parsed)
+{
+    std::set<int> registers;
+    for (int i = 0; i < parsed.symbol_count; ++i)
+    {
+        const MOJOSHADER_symbol &s = parsed.symbols[i];
+        if (s.register_set == MOJOSHADER_SYMREGSET_SAMPLER && s.name &&
+            (!std::strcmp(s.name, "shadowmapSamplerSun") || !std::strcmp(s.name, "shadowmapSamplerSpot")))
+            for (unsigned r = 0; r < s.register_count; ++r)
+                registers.insert(static_cast<int>(s.register_index + r));
+    }
+    return registers;
+}
+
+// A shadow sampler's lookup returns the comparison as a float, which D3D9 hardware replicates in every component. The
+// projected lookup takes its reference from z / w as tex2Dproj does; texld and texldl need z, which MojoShader drops
+// (texldl's level stays w).
+bool ShadowLookup(std::string &line, const std::string &sampler)
+{
+    static const std::regex projected("^(\\t+\\S+ = )textureProj\\((ps_s\\d+), (\\S+)\\);$");
+    static const std::regex plain("^(\\t+\\S+ = )texture\\((ps_s\\d+), (\\S+)\\.xy\\);$");
+    static const std::regex lod("^(\\t+\\S+ = )textureLod\\((ps_s\\d+), (\\S+)\\.xy, (\\S+)\\);$");
+    std::smatch m;
+    if (std::regex_match(line, m, projected) && m[2] == sampler)
+        line = m[1].str() + "vec4(textureProj(" + sampler + ", " + m[3].str() + "));";
+    else if (std::regex_match(line, m, plain) && m[2] == sampler)
+        line = m[1].str() + "vec4(texture(" + sampler + ", " + m[3].str() + ".xyz));";
+    else if (std::regex_match(line, m, lod) && m[2] == sampler)
+        line = m[1].str() + "vec4(textureLod(" + sampler + ", " + m[3].str() + ".xyz, " + m[4].str() + "));";
+    else
+        return false;
+    return true;
+}
+
 bool Normalize(const MOJOSHADER_parseData &parsed, bool pixel, const std::set<Usage> &centroid, std::string &glsl,
                std::string &error)
 {
@@ -135,10 +168,7 @@ bool Normalize(const MOJOSHADER_parseData &parsed, bool pixel, const std::set<Us
     for (int i = 0; !pixel && i < parsed.attribute_count; ++i)
     {
         const MOJOSHADER_attribute &a = parsed.attributes[i];
-        int location = -1;
-        for (int d = 0; d < 20; ++d)
-            if (kStreamDest[d] == Usage{a.usage, a.index})
-                location = d;
+        const int location = ShaderPack_InputLocation(a.usage, a.index);
         if (location < 0)
         {
             error = "vertex input with D3D usage " + std::to_string(a.usage) + "/" + std::to_string(a.index) +
@@ -148,6 +178,7 @@ bool Normalize(const MOJOSHADER_parseData &parsed, bool pixel, const std::set<Us
         attributeLocation[a.name] = location;
     }
 
+    const std::set<int> shadowSamplers = pixel ? ShadowSamplers(parsed) : std::set<int>();
     std::istringstream in(parsed.output);
     std::vector<std::string> body;
     std::set<int> literalRegisters;
@@ -184,10 +215,20 @@ bool Normalize(const MOJOSHADER_parseData &parsed, bool pixel, const std::set<Us
             body.push_back(init + ");");
             continue;
         }
+        // MojoShader's vPos flips rows for GL's default framebuffer; the contract counts them from the top already,
+        // and D3D9's vPos is the pixel's integer position where gl_FragCoord is its centre.
         if (StartsWith(line, "uniform vec2 vposFlip;"))
-        {
-            body.push_back("#define vposFlip bo1_vpos_flip.xy");
             continue;
+        if (line == "\tvec4 ps_vPos = vec4(gl_FragCoord.x, (gl_FragCoord.y * vposFlip.x) + vposFlip.y, gl_FragCoord.z, "
+                    "gl_FragCoord.w);")
+        {
+            body.push_back("\tvec4 ps_vPos = vec4(gl_FragCoord.xy - 0.5, gl_FragCoord.zw);");
+            continue;
+        }
+        if (line.find("vposFlip") != std::string::npos)
+        {
+            error = "vposFlip outside the vPos line MojoShader writes: " + line;
+            return false;
         }
         if (StartsWith(line, "#define " + std::string(stage) + "_c") &&
             line.find(uniforms + "[") != std::string::npos)
@@ -208,7 +249,17 @@ bool Normalize(const MOJOSHADER_parseData &parsed, bool pixel, const std::set<Us
         if (std::sscanf(line.c_str(), "uniform %31s ps_s%d;", samplerType, &samplerIndex) == 2 &&
             StartsWith(samplerType, "sampler"))
         {
-            body.push_back("layout(binding = " + std::to_string(samplerIndex) + ") uniform " + samplerType + " ps_s" +
+            std::string type = samplerType;
+            if (shadowSamplers.count(samplerIndex))
+            {
+                if (type != "sampler2D")
+                {
+                    error = "shadow map sampler s" + std::to_string(samplerIndex) + " is a " + type;
+                    return false;
+                }
+                type = "sampler2DShadow";
+            }
+            body.push_back("layout(binding = " + std::to_string(samplerIndex) + ") uniform " + type + " ps_s" +
                            std::to_string(samplerIndex) + ";");
             continue;
         }
@@ -235,6 +286,18 @@ bool Normalize(const MOJOSHADER_parseData &parsed, bool pixel, const std::set<Us
         ReplaceAll(line, uniforms + "[", registers + "[");
         RenameBuiltinVaryings(line);
         ModernTextureCalls(line);
+        for (int shadow : shadowSamplers)
+        {
+            const std::string sampler = "ps_s" + std::to_string(shadow);
+            const size_t at = line.find(sampler);
+            if (at == std::string::npos || std::isdigit(static_cast<unsigned char>(line[at + sampler.size()])))
+                continue;
+            if (!ShadowLookup(line, sampler))
+            {
+                error = "shadow map sampler " + sampler + " in a lookup the normaliser does not know: " + line;
+                return false;
+            }
+        }
         ReplaceAll(line, "gl_FragColor", "bo1_ps_color");
         CollectVaryings(line, varyings);
         body.push_back(line);
@@ -245,9 +308,10 @@ bool Normalize(const MOJOSHADER_parseData &parsed, bool pixel, const std::set<Us
     out << "// Translated from D3D9 bytecode by ffconv (MojoShader + ff_glsl.cpp); see docs/RENDERER.md.\n";
     if (pixel)
         out << "layout(std140, binding = 1) uniform BO1PixelConstants\n{\n    vec4 ps_c_reg[256];\n"
-               "    vec4 bo1_vpos_flip;\n    vec4 bo1_alpha_test;\n};\n";
+               "    vec4 bo1_alpha_test;\n};\n";
     else
-        out << "layout(std140, binding = 0) uniform BO1VertexConstants\n{\n    vec4 vs_c_reg[256];\n};\n";
+        out << "layout(std140, binding = 0) uniform BO1VertexConstants\n{\n    vec4 vs_c_reg[256];\n"
+               "    vec4 bo1_pos_fixup;\n};\n";
     for (const Usage &usage : varyings)
     {
         const int location = VaryingLocation(usage);
@@ -275,6 +339,19 @@ bool Normalize(const MOJOSHADER_parseData &parsed, bool pixel, const std::set<Us
     }
     for (size_t i = 0; i < body.size(); ++i)
     {
+        // D3D9 samples a pixel at its integer coordinate, GL at the half: the position moves by bo1_pos_fixup (half a
+        // pixel right and down, in clip space) before clipping, as D3D9 hardware moves it after the viewport
+        // transform, so that the viewport still covers whole pixels. D3D9 also clamps the COLOR-semantic interpolators
+        // to [0, 1] at the vertex output (MojoShader routed them through gl_FrontColor/gl_Color, which compatibility
+        // GL clamps by default; the rename to core-profile varyings dropped that) before they are interpolated.
+        if (!pixel && i == mainEnd - 1)
+        {
+            for (const Usage &usage : varyings)
+                if (usage.first == kUsageColor)
+                    out << "\tio_" << usage.first << "_" << usage.second << " = clamp(io_" << usage.first << "_"
+                        << usage.second << ", 0.0, 1.0);\n";
+            out << "\tgl_Position.xy += bo1_pos_fixup.xy * gl_Position.w;\n";
+        }
         if (pixel && i == mainEnd - 1)
             // D3D9's fixed-function alpha test: x is 0 (off), 1 (alpha > ref) or 2 (alpha >= ref), y the 0-255 ref.
             out << "\tif (bo1_alpha_test.x != 0.0)\n\t{\n"

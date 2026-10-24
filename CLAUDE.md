@@ -36,6 +36,13 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
   and explain every remaining difference before keeping the edit.
 - A literal byte count (`Hunk_UserAlloc(hunk, 73728, ...)`, `memset(p, 0, 0x8D388)`) is a 32-bit `sizeof` in disguise.
   Write `sizeof`/`offsetof` instead; `tools/litsizes.py` lists the ones it can see.
+- Write `double`, never `long double`: MSVC compiles it as `double`, GCC and clang as 80-bit x87 (x86-64) or 128-bit
+  soft-float (AArch64), which changes struct layouts, results and speed.
+- A block aligned below its type's `alignof` (an align(64) struct from a 4-aligned `Hunk_UserAlloc`) takes
+  `BO1_ALLOC_ALIGN(retail, T)`, and the size sum that reserves it `BO1_ALLOC_SLACK`: GCC and clang copy over-aligned
+  types with aligned vector moves, MSVC never does. `tools/overaligned.py` lists the candidates.
+- On posix, an engine file includes `windows.h` only where its Windows build does (directly or through an SDK
+  header): `LOWORD`/`HIWORD`/`LOBYTE`/`HIBYTE` take the meaning the include order gives them, as with MSVC.
 - When a 64-bit crash reveals a bug family (a 32-bit stride, a 4-byte view, a casted call), inventory the whole tree
   for it before moving on: `tools/ptrcasts.py`, `tools/litsizes.py`, or a replay of the `mingw64-clang` compile commands
   with one clang warning (`-Wfortify-source`, `-Wcast-function-type-mismatch`; method in `docs/PORTING.md`, phase 3).
@@ -53,6 +60,11 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
   `glGet`-style queries, no implicit sync, explicit memory/usage and pipeline-state objects.
 - Shaders come from `ffconv` as GLSL 4.60 core with explicit bindings and constants in std140 UBOs. Never hand-edit
   generated shaders; fix the translator/normaliser instead.
+- D3D9's half-pixel offset lives in the shaders (`bo1_pos_fixup`, filled by the frontend); a backend applies the
+  viewport as given. Never move a viewport by a fraction of a pixel: clipping then eats the edge pixels' samples
+  (`docs/RENDERER.md`, contract).
+- After a change to `gfx_backend.h`, `src/gfx_backend/` or the shader interface, run `d3d9emu_test` and
+  `SDL_VIDEODRIVER=offscreen gb_gl_test` from the Linux build folder; both must pass.
 
 ## Workflow
 - Changes touching 5+ files: work in a sibling `git worktree` (`../BO-Zombies_switch_new`) and let the user compare
@@ -63,6 +75,9 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
 - Before claiming a phase step done, run its verification listed in `docs/PORTING.md` and report the actual
   output. "It compiles" is not "it works".
 - Tooling runs from WSL2. MSVC builds run on the Windows side. devkitPro lives in `/opt/devkitpro`.
+- Build the posix target from an ext4 copy of the worktree (rsync it, then CMake/Ninja there): from `/mnt/c` every
+  header read waits on 9p. Check a posix change with a headless run compared against a win64 run of the same tree and
+  zones, paths and numbers masked (`docs/PORTING.md`, phase 4a step 2); every remaining difference must be explained.
 - Search sources with `grep -a`: some files hold Latin-1 bytes, and plain `grep` treats them as binary and prints
   none of their lines.
 - After touching a shared header or `src/platform/compat.h`, rerun `tools/syntax_check.py` on both `mingw32-gcc` and

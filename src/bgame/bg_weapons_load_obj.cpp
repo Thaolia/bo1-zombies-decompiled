@@ -2069,7 +2069,7 @@ char **__cdecl BG_RegisterSurfaceTypeSounds(const char *surfaceSoundBase)
     }
     if (surfaceTypeSoundListCount == 16)
         Com_Error(ERR_DROP, "Exceeded MAX_SURFACE_TYPE_SOUND_LISTS (%d)", 16);
-    result = (char **)Hunk_AllocLow(0x7Cu, "BG_RegisterSurfaceTypeSounds", 17);
+    result = (char **)Hunk_AllocLow(sizeof(char *) * 31, "BG_RegisterSurfaceTypeSounds", 17);
     for (i = 0; i < 31; ++i)
     {
         v2 = Com_SurfaceTypeToName(i);

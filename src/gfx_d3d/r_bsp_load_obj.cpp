@@ -1,3 +1,4 @@
+#include <vector>
 #include "r_bsp_load_obj.h"
 #include <universal/q_shared.h>
 #include "r_dvars.h"
@@ -2796,6 +2797,8 @@ unsigned int R_CalculateVertexStream2Usage()
 
     s_world.draw.vertexStream2DataSize = 0;
     usageList = 0;
+    // Each surface's usage until the byte offsets are known (the decompiled form kept the pointer in stream2ByteOffset).
+    std::vector<Stream2Usage *> surfUsage(s_world.surfaceCount, nullptr);
     for ( surfIndex = 0; surfIndex < s_world.surfaceCount; ++surfIndex )
     {
         surfUsesStream2 = 0;
@@ -2829,7 +2832,7 @@ unsigned int R_CalculateVertexStream2Usage()
             {
                 if ( vertexCount > existingUse->vertexCount )
                     existingUse->vertexCount = vertexCount;
-                tris->stream2ByteOffset = (int)existingUse;
+                surfUsage[surfIndex] = existingUse;
             }
             else
             {
@@ -2838,12 +2841,8 @@ unsigned int R_CalculateVertexStream2Usage()
                 newUsage.vertexCount = vertexCount;
                 newUsage.next = 0;
                 inserted = InsertNewUsage(&usageList, &newUsage);
-                tris->stream2ByteOffset = (int)inserted;
+                surfUsage[surfIndex] = inserted;
             }
-        }
-        else
-        {
-            tris->stream2ByteOffset = 0;
         }
     }
     stream2ByteSize = 0;
@@ -2855,8 +2854,8 @@ unsigned int R_CalculateVertexStream2Usage()
     for ( i = 0; i < s_world.surfaceCount; ++i )
     {
         v2 = &s_world.dpvs.surfaces[i];
-        if ( v2->tris.stream2ByteOffset )
-            v2->tris.stream2ByteOffset = *(unsigned int *)(v2->tris.stream2ByteOffset + 4);
+        if ( surfUsage[i] )
+            v2->tris.stream2ByteOffset = surfUsage[i]->byteOffset;
         else
             v2->tris.stream2ByteOffset = -1;
     }

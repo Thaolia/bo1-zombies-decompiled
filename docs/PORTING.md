@@ -53,9 +53,46 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-22 | MMX/SSE skinning (`r_model_skin_sse.cpp`) is 32-bit x86 only (`R_SKIN_MMX`); other targets use the C skinning path | MSVC x64 has no MMX intrinsics (`__m64`, `_mm_empty`). A SSE2/NEON port is a phase 5 performance item |
 | 2026-10-22 | 64-bit slot pools: `get_slot_pool` raises the alignment to 8 and rounds the slot size to 8 | `extra_info::m_allocation_owner` is CASed and the free-list link is 8 bytes: callers passing alignment 4 (`chull_t`, `inds`, `pathlink_s`, transient blocks) gave misaligned atomics, which AArch64 rejects, and a 4-byte `inds` slot got its link written over `m_slot_pool_owner` |
 | 2026-10-22 | Physics, ragdoll, gjk-cache and foliage handles are `intptr_t`/`uintptr_t` end to end; `FxElem` is `#pragma pack(4)` so it stays 44 bytes | The handles are pointers on 64-bit. `FxElem` growing to 56 would overflow the 16-bit FX pool handles (`4096 × 64 / 4`); packed, its 8-byte `physObjId` is unaligned, which x64 and AArch64 allow for plain loads |
-| 2026-10-22 | `DynEntityClient::physObjId` and `PhysConstraint::constraintHandle` stay `int` for now | Both are streamed (`Load_DynEntityClientArray`, `Load_PhysConstraintArray`); `layouts.py` refuses an integer that grows from 4 to 8 bytes. Options: a `LEAF_HANDLE` kind in ffconv (copy 4 → 8 bytes with sign extension), or keep the streamed field and hold the real handle in a parallel runtime array |
+| 2026-10-23 | `DynEntityClient::physObjId` and `PhysConstraint::constraintHandle` are `intptr_t` (closes the 2026-10-22 "stay `int`" row); `ffconv` widens them as `LEAF_HANDLE` leaves, listed in `layouts.py` `WIDENED_INTEGERS` | They hold a pointer at runtime (`Phys_ObjCreate`, `rigid_body_constraint_*`); the `(int)` casts truncated on 64-bit and do not compile with clang on Linux. On 32-bit `intptr_t` is `int`: same layout, same code. Both structs are streamed (`Load_DynEntityClientArray` into the runtime block, `Load_PhysConstraintArray`), so ffconv sign-extends them 4 → 8 bytes and narrows them back for `--verify`. The zones stream them as 0, and a non-zero value fails the zone. A leaf of its own rather than a value fixup: the field changes size, so offset mapping, stream-boundary and shared-target checks must know it, like a pointer without the offset translation. Any other integer that grows still stops `layouts.py`. A parallel runtime array was rejected: every use would change |
 | 2026-10-22 | `ffconv` rescales integer fields that hold a byte distance inside a widened array (value fixups, `layouts.py` `VALUE_FIXUPS`); `GfxAabbTree::childrenOffset` is the only one | The retail value is `children - tree` in bytes of 40-byte nodes; copied as is, the 64-bit renderer walked into garbage (`R_AddAabbTreeSurfacesInFrustum_r`). Rescaling in the converter keeps `db_load.cpp` and the renderer unchanged, and `--verify` narrows it back byte for byte |
 | 2026-10-22 | `broad_phase_base` users read the real fields, not `x[-1].field` | The Itanium ABI (GCC, clang) reuses its tail padding (`m_list_bpi_head` at 76 instead of MSVC's 80); the typed form is right for both ABIs and leaves MSVC's code unchanged |
+| 2026-10-23 | posix/switch builds take the D3D9 declarations (`d3d9.h`, `d3d9types.h`, `d3d9caps.h`) from the user's local DirectX SDK (June 2010) at build time; the Win32 declarations come from our own `windows.h` shim (`src/platform/posix/include/`) | Nothing from Microsoft is committed, and the values the engine and the fastfiles depend on (`D3DFORMAT`, `D3DRS_*`, struct layouts) are the SDK's own. Alternatives were vendoring the Wine/mingw-w64 headers (LGPL) or writing D3D9 declarations by hand. Every build machine, the Switch one included, needs the SDK (it is already needed by the Windows builds) |
+| 2026-10-23 | The `windows.h` shim only declares Win32 functions (grouped by area, `extern "C"`, Windows signatures); structs and constants the engine names get the Windows layout and values; its 64-bit integer types are `long long` like `__int64` | The platform layer implements the functions; a stub that fakes success would hide what is missing. `int64_t` is `long` on LP64, a different type: the engine passes `unsigned __int64 *` where Windows takes `ULONG64 *` |
+| 2026-10-23 | `CRITICAL_SECTION` / `SRWLOCK` contain a `pthread_mutex_t` / `pthread_rwlock_t` (`SRWLOCK_INIT` is `PTHREAD_RWLOCK_INITIALIZER`) | Big enough on every target by construction (glibc x86-64: 40 / 56 bytes, Windows: 40 / 8; newlib differs again). The engine only declares them as globals and never reads their fields |
+| 2026-10-23 | The MSVC CRT functions that only compute (`sprintf_s`, `strcpy_s`, `strncpy_s`, `_snprintf_s`, `fopen_s`, `strtok_s`, `localtime_s`, `_ctime64`, `_ui64toa`, `_aligned_realloc`, ...) are defined in `posix/msvc_intrinsics.h` with MSVC's semantics; `_putenv`, `sscanf_s`, `io.h` and `direct.h` are declared | An overflowing `_s` call ends the process, as MSVC's default invalid parameter handler does (the engine installs none); the 64-bit time functions refuse dates before 1970 and after 3000 like MSVC's |
+| 2026-10-23 | posix builds the Windows sources as they are (`win_main`, `win_net`, `win_wndproc`, `win_voice`, CubeMapGenLib, the rest of `win32/`) on the Win32 layer of `src/platform/posix`; only `win_syscon` (a terminal console instead, `posix_syscon.cpp`), `win_mini_dumper` and the XAudio2 driver are replaced (closes the row that left the first group out) | One copy of `WinMain` and of all the headless tooling, so posix logs and behaves as Windows does; MSVC compiles the same code. The layer answers what Windows answers without the device (no window, no mixer, no XInput pad, no D3D9 runtime) or ends the process naming a function that needs a window. Windows-only diagnostics that read PE headers or dbghelp (crash stack scan, thread dumps) are `#if defined(_WIN32)`; the console window has no posix meaning, and the minidumper writes nothing in this tree |
+| 2026-10-23 | The posix x86-64 build reads the win64 IWffs zones (`DB_FF64_ABI_WIN64`); its build runs `layouts.py --check-target64 x86_64-linux-gnu`, which fails naming any streamed type that lays out differently there | All 241 streamed types have the same tables under SysV x86-64 (LP64, Itanium) and MSVC x64, parsed as each build compiles `db_load.cpp`: one zone set serves both. aarch64 gets its own check or tables in phase 5 |
+| 2026-10-23 | GNU builds compile with `-fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks` | The decompiled code reads objects through other types, does signed arithmetic as the x86 instructions did (wrapping) and may test a pointer after dereferencing it; MSVC optimises on none of these |
+| 2026-10-23 | D3DX, DirectSound and Direct3D on posix: the shim declares the D3DX subset the engine uses (`include/d3dx9.h`) and a DirectSound with no device; until `gfx_d3d9emu`, `Direct3DCreate9` returns NULL and D3DX returns `E_NOTIMPL` (`d3d9_absent.cpp`); sound has no device (`snd_driver_absent.cpp`, the engine starts as with `nosnd`) | Closes the 4a step 1 open decision: the SDK's `d3dx9*.h` and `dsound.h` need much more of Win32 (GDI, `IStream`, `sal.h`); every answer is a state the engine already handles (no D3D9 runtime, no sound device) |
+| 2026-10-23 | `bo1_fopen` (posix) is `fopen` with MSVC's behaviour: `\` separators and text mode unless the mode says `b` (CR LF read as LF, LF written as CR LF, Ctrl-Z ends a read); `FileWrapper_Open` and the shared FOV file use it on posix | The engine opens its text files (`localization.txt`) with `"rt"` and parses lines at LF: without the translation the language read as `english\r`. Logs written with `"at"` come out CR LF as on Windows |
+| 2026-10-23 | `r_texturemem.cpp`: the DirectDraw video-memory queries are `#if defined(_WIN32)`; elsewhere they answer 0, as on a PC without `ddraw.dll` | `ddraw.h` is not in the June 2010 SDK. The texture budget code around them stays shared |
+| 2026-10-23 | The globals `index` (`vtos`) and `basename` (`FS_GetMapBaseName`) are renamed `vtosIndex` / `mapBaseName`; the unused Hex-Rays typedef `ulong` is gone; `q_shared.h`'s angle indexes and byte-order helpers are no longer under `#ifdef WIN32` | glibc declares `index()`, `basename()` and its own `ulong`. Renaming keeps the data layout (`codediff.py` identical). Every target is little-endian |
+| 2026-10-23 | `gfx_backend.h` is modelled on an explicit API: immutable samplers and pipelines cached by value, passes with load operations, a `DrawState` per draw that holds everything the draw reads besides its pipeline, uploads ordered with the recorded work, and three sync points (`ReadTexture`, `WaitIdle`, `Present`); it keeps D3D9's conventions (row 0 on top, depth 0-1, pixel centres on integers, clockwise front faces) | deko3d implements the same header later without touching the frontend (`docs/RENDERER.md`, review checklist). With D3D9's conventions the frontend passes coordinates through and only a backend converts (GL: clip control, a half-pixel offset, a flipped blit at present) |
+| 2026-10-23 | posix's Direct3D 9 is `src/gfx_d3d9emu` on the null backend until the GL one (step 3); `d3d9_absent.cpp` is gone and D3DX stays `E_NOTIMPL` (`d3dx9emu.cpp`, with the D3DPERF markers) | The frontend is checked against the contract on every headless run before GL exists. The engine calls D3DX only where the zones do not lead (`r_material_load_obj.cpp`, materials built from raw files) and to save screenshots, which then fail as a failed D3DX call does on Windows |
+| 2026-10-23 | The emulated adapter: the host's first display, no PCI vendor, a shader model 3 device with the caps `r_caps.cpp` requires, the formats the backend supports (`INTZ`, `RESZ`, `NULL`, D24S8/D16 shadow maps; not D24FS8, `ATOC`/`SSAA`, vertex texture fetch, sRGB), up to 4 GB of texture memory | Every refusal is a state the engine handles on a PC without that feature; the vendor id 0 keeps the NVAPI and ATI paths off, as `BO1_OFFLINE` already removed NVAPI. 4 GB is the most `GetAvailableTextureMem`'s `UINT` can say |
+| 2026-10-23 | Lockable D3D9 resources (managed, dynamic, system memory, scratch, offscreen plain) keep a CPU copy of each level the engine locks; the unlock uploads the locked box, and a copy the GPU wrote since is read back at the next lock | A D3D9 lock sees the resource's content (the model lighting volume is locked every frame for a few texels, the engine reads render targets back with `GetRenderTargetData` and a lock). Only locked levels have a copy; their memory is measured on the Switch (phase 5) before any other scheme |
+| 2026-10-23 | The Win32 window layer runs on SDL2 (`win32_gui.cpp`): layer-owned windows backed by SDL windows, Windows' message order, one message queue per thread, SDL displays as monitors. A headless run never shows its windows; SDL video starts at the first display or window call | The engine's window code (`win_wndproc.cpp`, `r_init.cpp`) runs unchanged. The Windows headless client sits on a private desktop: a hidden window gives the same messages and the same occluded 9Ex `Present`. The dedicated server never opens a display |
+| 2026-10-23 | On posix and switch `rand` / `srand` are the UCRT's generator (`bo1_rand`: 214013 / 2531011, bits 16-30, one seed per thread starting at 1; `RAND_MAX` 0x7FFF) through `compat.h` | The decompiled code divides by 32767 or 32768 as compiled constants (`random()`, `crandom()`, `bg_wind`, `cg_main`), so glibc's 31-bit values broke every such range: `GaussianRandom`'s rejection loop in `R_CreateParticleCloudBuffer` never ended. The same seed also gives the Windows sequence. Checked against the Windows CRT |
+| 2026-10-23 | The vertex input locations are `ShaderPack_InputLocation(usage, index)` in `shader_pack.h`, shared by `ffconv` (`ff_glsl.cpp`) and the frontend's vertex declarations | One table for the number both sides must agree on (the material stream destinations, `s_streamDestInfo`); `ffconv`'s output is byte-identical |
+| 2026-10-23 | `long double` is written `double` everywhere in the engine (231 lines, 78 files) | MSVC compiles `long double` as `double`, so that is the reference's meaning. GCC and clang made it 80-bit x87 in 16 bytes on x86-64 (`token_s`, `script_s`, `EvalValue`, `SysInfo`, `scoped_performance_error` laid out differently from MSVC x64, x87 arithmetic) and 128-bit soft-float on AArch64. `codediff.py --cflags=-mlong-double-64` (the base compiled with MSVC's width) checks the change is only that |
+| 2026-10-23 | Over-aligned blocks: an allocation whose retail alignment is below its type's takes `BO1_ALLOC_ALIGN(retail, T)` and its size sum `BO1_ALLOC_SLACK` (`arch_size.h`; the `MatchState` snapshot blocks), and `Z_Malloc`'s header is 176 bytes instead of 164 outside MSVC, so its blocks keep malloc's 16-byte alignment | GCC and clang copy align(16)/align(64) types with `movaps`, which faults on the 4-aligned blocks retail gives them (`SV_BuildClientSnapshot` crashed on the Linux client). MSVC copies with unaligned moves, so the retail values and layout stay there, as the win32 reference requires. Inventory: `tools/overaligned.py` |
+| 2026-10-23 | The `windows.h` shim defines minwindef.h's `LOBYTE`/`HIBYTE`/`LOWORD`/`HIWORD`; `q_shared.h` `#undef`s them before its own Hex-Rays ones; engine headers include `windows.h` on posix only where the SDK's headers would (`profile.h` declares `GetCurrentThreadId` instead) | The two definitions disagree beyond 2-byte operands: windows.h's take bits 8-15 or 16-31 of the value, `q_shared.h`'s the last byte or word of the object. With the SDK each file gets the one defined last in its include order. Without them in the shim, every posix file had `q_shared.h`'s, so `GScr_AnimHasNotetrack`'s `HIWORD(anim)` read the top of a 64-bit pointer (anim tree 0) where win64 reads bits 16-31. The 739 preprocessed uses in the 94 files built on both sides now expand to the same definition as with MSVC x64 |
+| 2026-10-24 | Keyboard and mouse on posix are SDL's events turned into the messages Windows posts (`win32_input.cpp`): the layout's virtual-key codes with set 1 scan codes and the extended-key flag, `WM_CHAR` in Windows-1252 from SDL's text input, control characters from `TranslateMessage` decided at key-down, a virtual cursor captured while the engine hides it over its focused window | The engine's input code (`MainWndProc`, `MapKey`'s tables, `IN_MouseMove`'s cursor polling and recentring) runs unchanged and sees what it sees on Windows; SDL's text input knows layouts, dead keys and input methods; a cursor warp is unreliable on Wayland and absent from the offscreen driver, so movement while captured comes from SDL's relative motion |
+| 2026-10-24 | The clipboard is a copy the video thread keeps (refreshed on `SDL_CLIPBOARDUPDATE`), and the text the engine sets leaves at the video thread's next pump | SDL's clipboard belongs to the video thread (the render thread), which waits for the main thread every frame: a paste that waited for it stalled both threads for the wait's whole timeout (seen: 1 s, then an empty paste) |
+| 2026-10-24 | Input tests run a normal windowed client under `SDL_VIDEODRIVER=offscreen` with `BO1_INPUT_SCRIPT`, whose made-up SDL events go straight to the input layer | The offscreen driver gives a shown window, keyboard focus and an EGL OpenGL 4.6 context (llvmpipe) without touching the user's display; a headless client never reads the mouse (`IN_Frame`). The system's SDL2 is sdl2-compat 2.32.74 over SDL3, whose `SDL_PushEvent` faults on a hand-made key event. The engine drops input while it loads (`Sys_LoadingKeepAlive`, `DB_Sleep`), and the main loop polls the mouse during the asynchronous fastfile loads too, so nothing the layer sees tells loading from playing: scripts give their steps times after the map load |
+| 2026-10-24 | The backends sit behind a dispatcher (`gb_backend.cpp`): each fills a table of the contract's functions in its own namespace, handles derive from empty `gb::` structs; `BO1_GFX_BACKEND=null`/`gl` picks one, else GL when the platform gives a context, never in a headless run | One binary carries both: the windowed client draws, the headless client and the tests keep the null backend's checks; a table built from qualified names fails the build if a backend misses a function |
+| 2026-10-24 | The GL backend owns its context on one thread of its own, fed by command chunks in order, plus a second lane for compiles and links served between commands; it loads its entry points from the platform's context (`gb_gl_host.h`) and links no GL library | The contract lets creation and uploads come from any thread (the database thread loads textures while the render thread draws), which one GL context cannot follow; the second lane keeps a new pipeline from waiting for the frames queued before it; the same host interface is what an EGL Switch host implements |
+| 2026-10-24 | D3D9's half-pixel offset is in the shaders: the normaliser ends every vertex shader with `gl_Position.xy += bo1_pos_fixup.xy * gl_Position.w` (the frontend writes 63/128 of a pixel right and down for the viewport's size) and writes `vPos` as `gl_FragCoord.xy - 0.5`; backends apply the viewport as given, and `bo1_vpos_flip` is gone (both constant blocks are 4 112 bytes) | A viewport moved by half a pixel clips geometry half a pixel inside the first column and row: with 4 samples, Kino showed a line of clear colour there, half its samples bare (measured per draw). D3D9 hardware moves vertices after the transform and clips to whole pixels; 63/128 rather than 1/2 keeps an edge through a D3D9 centre on D3D9's side, as wined3d does |
+| 2026-10-24 | With `glClipControl(GL_UPPER_LEFT, ...)` the front face is `GL_CW` | Measured by `gb_gl_test` (culling and two-sided stencil): the upper-left origin turns the rows over but GL still judges facing as with its own origin |
+| 2026-10-24 | `DestroyShader` ends the pipelines made with the shader (contract; null and GL) | Pipelines are cached by description, which holds shader pointers: a new shader allocated at a freed one's address would otherwise get its stale pipeline |
+| 2026-10-24 | SDL video that the GL host started stops when it closes and no window exists (`Bo1_VideoRelease`) | The engine's first Direct3D object (`Sys_DetectVideoCard`) lives on the main thread, its windows on the render thread; SDL reads events on the thread that started video, so the windows' events were never read |
+| 2026-10-24 | `D3DXSaveSurfaceToFileA` writes JPG, TGA (uncompressed), BMP and PNG with stb_image_write v1.16 (`third_party/stb`, vendored unmodified); the file goes through the frontend's host (`SaveFile`) | The engine's `screenshot` and `screenshotJpeg` are how runs are compared with the win64 reference; the host keeps file paths a platform matter and lets `d3d9emu_test` check the bytes |
+| 2026-10-24 | The normaliser declares the samplers the constant table names `shadowmapSamplerSun` / `shadowmapSamplerSpot` as `sampler2DShadow` and wraps their lookups in `vec4(...)`, giving `texture` and `textureLod` the `.xyz` MojoShader cut to `.xy`; any other lookup on them fails the shader | D3D9 hardware compares a depth texture bound to a sampler with the coordinate's z; GL only does with a shadow sampler, and a plain sampler reading a texture in comparison mode gives undefined results |
+| 2026-10-24 | The GL backend's calls that act on a bound target (storage, uploads, parameters) go through `EditTexture`, which binds on the upload unit and makes it active | The binding cache skipped `glActiveTexture` when the upload unit already held the texture, so an upload after a draw went to the draw's last unit: Kino's model lighting atlas (a volume locked when lighting changes) kept its first contents and every model drew black; a 2D upload would have overwritten another texture silently |
+| 2026-10-24 | The normaliser clamps each COLOR output (`io_10_#`) of a vertex shader to [0, 1] at the end of `main`, next to `bo1_pos_fixup` | D3D9 clamps COLOR-semantic interpolators to [0, 1] at the vertex output before interpolation; MojoShader passed them through `gl_FrontColor`/`gl_Color` (clamped by default in compatibility GL) and the rename to core-profile varyings dropped it. 63 of 356 vertex shaders compute a COLOR output that can leave [0, 1] (negatives, products), so it is not a no-op; `gb_gl_test` fails without it (a 2-to-0 gradient reads white at the middle, not grey) |
+| 2026-10-24 | The controller is `SDL_GameController` (`win32_gamepad.cpp`): the video thread reads one open pad into a snapshot each pump, the XInput entry points read it under a lock; the SDL->XInput map is a pure inline function (`win32_gamepad.h`) tested by `tests/platform/gamepad_test.cpp` | The engine polls XInput and applies its own dead zones, so the layer only translates; factoring the map pure lets it be tested without a device, and the snapshot keeps the engine's reads off the video thread |
+| 2026-10-24 | All streamed sounds are MS-ADPCM, so the SDL2 audio backend needs only PCM and MS-ADPCM decode, no WMA/ffmpeg | An inventory of every `.wav` in the install's iwds (29 103 files, format field at offset 28 of the Treyarch stream header) found 29 102 MS-ADPCM and 1 PCM16, 0 WMA; loaded sounds are PCM or MS-ADPCM too (`snd_driver_xaudio2.cpp` branches). xWMA was the only thing pulling in ffmpeg |
+| 2026-10-24 | A headless run renders on the null backend unless `BO1_GFX_BACKEND=gl` asks for GL (then under SDL's offscreen driver for tests) | The headless client's `bo1_clientCommands` (times after the client is active) and back buffer screenshots are what the win64 comparisons use; absolute times do not survive llvmpipe's slow loads |
 
 ## Phases
 | # | Phase | Status |
@@ -65,7 +102,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 1c | `BO1_OFFLINE` build (Steam, DemonWare, voice, NVAPI, Bink, mjpeg/vpx, monkey, Tracy out; `src/platform/stubs/`) | done (2026-10-21) |
 | 2 | `tools/ffconv`: PC fastfiles → native-64 `IWffs` + GLSL 4.60/UBO shaders | done for the win64 ABI (2026-10-21); AArch64 layout tables wait for phase 4 |
 | 3 | 64-bit clean engine on Windows x64 (still D3D9) | in progress: `win64-msvc` runs Kino as a dedicated server (log identical to the reference) and as a client (60 s, same pictures as the reference); 10 rounds next |
-| 4 | Portable platform layer + D3D9-emu frontend + GL backend on Linux x86_64 | todo |
+| 4 | Portable platform layer + D3D9-emu frontend + GL backend on Linux x86_64 | in progress: 4a, the Linux x86-64 dedicated server runs Kino and Moon headless with the win64 log (22 differing lines, all platform facts); 4b step 1, the D3D9 frontend on the null backend and the SDL2 window layer: the Linux headless client plays Kino until the game over, its log against win64's explained line by line; 4b step 2, keyboard, mouse and clipboard, checked by scripted input on an offscreen window; 4b step 3, the GL 4.3 backend: Kino renders on llvmpipe, checked against the contract by `gb_gl_test` and against win64 by screenshots |
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | todo |
 | 6 | Stabilisation, all base maps, docs | todo |
 | 7 | (optional) deko3d backend behind the same `gfx_backend.h` | todo |
@@ -298,8 +335,8 @@ Base: upstream commit `102f699` (2026-10-03).
         `fx_convert.cpp` asserts it when building an effect from `.efx`);
       - runtime budgets sized by the 32-bit linker, not stream layout: `Glasses::workMemorySize` (`Allocate` uses
         `Z_Malloc` anyway) and `Glasses::shardMemorySize` (see below);
-      - pointer-sized handles typed `int`: `DynEntityClient::physObjId`, `PhysConstraint::constraintHandle` are 0 in
-        the zone and written at runtime; they are the open item below, not a converter value.
+      - pointer-sized handles: `DynEntityClient::physObjId`, `PhysConstraint::constraintHandle` are 0 in the zone and
+        written at runtime; now `intptr_t`, widened by `ffconv` (phase 4, 64-bit handle fields).
     - `ffconv --verify --game <install> --out build/iwffs-v2`: 65 zones, 0 failed, 295 s; 29 098 values rescaled in
       12 zones (`frontend` and the 11 maps), which are the only zones that differ from `build/iwffs-full`; the other
       53 zones and `shaders.pack` are byte-identical. `check_shader_pack.py`: 13 704 shaders, 0 rejected.
@@ -409,16 +446,8 @@ Base: upstream commit `102f699` (2026-10-03).
       403-519 s, no mismatch left in the 64-bit zones, every inline copy equal to its retail target; only the 20 zones
       with mismatches changed, `shaders.pack` is identical (13 704 shaders, 0 rejected by `check_shader_pack.py`).
   - Left for the next steps:
-    - GNU builds (`linux64-clang`, `switch`) must add `-fno-strict-aliasing` before phase 4 runs anything: the
-      decompiled code reads the same bytes through unrelated types everywhere, which MSVC compiles as written but
-      gcc/clang may reorder under type-based alias analysis. Wave 4 showed it on mingw32-gcc: wrapping the
-      `centity_s` and `flameGeneric_s` bitfields in a union let gcc merge or reorder stores in `cg_event.cpp`,
-      `flame_class_fire.cpp`, `flame_class_smoke.cpp`, `flame_class_chunk.cpp`, `flame_drips.cpp` and
-      `flame_stream.cpp` (no behaviour change there, since the objects are distinct);
     - `cg_view_mp.cpp` `CG_OffsetThirdPersonView` keeps pointers in floats (`LODWORD(viewAngles[2]) =
       CG_GetEntity(...)`, then `+ 804`/`+ 488`): third-person view only, needs a rewrite with real locals;
-    - `DynEntityClient::physObjId` and `PhysConstraint::constraintHandle` (decision above; `DynEntity_client.cpp`
-      9 errors, `g_mover.cpp:307/324`);
     - glass: `GlassClient::Outlines::CalcMemorySize` now uses `sizeof(Outline)`/`sizeof(Outlines)` (12 → 16,
       8 → 16), but the shard pool is still `Glasses::shardMemorySize` from the zone, a 32-bit budget: a 64-bit
       shatter may run out sooner, which `AllocateShardMemory` reports as NULL and the caller skips. Measure on a map
@@ -437,8 +466,237 @@ Base: upstream commit `102f699` (2026-10-03).
     - the 64-bit save format (saves are skipped on 64-bit for now);
     - MSVC x64 warnings were not reviewed yet (the builds above print errors only): a `/W4` pass for C4311/C4312
       pointer truncations is the next cheap check.
-- **4**: `linux64-clang` plays 10 rounds of Kino. RenderDoc captures for each pass. No GL debug errors. The
+- **4**: first step (4a): `linux64-clang` builds a dedicated server that loads a zombies map from the IWffs zones and
+  runs its scripts headless, with the same log as the Windows x64 dedicated run (platform layer only, no renderer,
+  sound or input). Then: `linux64-clang` plays 10 rounds of Kino. RenderDoc captures for each pass. No GL debug errors. The
   null-backend test of `gfx_d3d9emu` passes.
+  - 4a step 1, every engine file parses for Linux (2026-10-23): `cmake --preset linux64-clang`, then
+    `tools/syntax_check.py build/linux64-clang`. Win32 comes from the shim (`docs/ARCHITECTURE.md`, "Win32 on posix
+    and switch"); the 13 Windows-only files of the decisions above are left out. Before the shim: 569 of 1183 files
+    with errors. Now 12 of 1170:
+    - 9 files, 16 errors: the phase 3 pointer truncations listed above (`DynEntity_client`, `g_mover`,
+      `cl_console`, `r_add_staticmodel`, `rb_pixelcost`, `r_bsp_load_obj`, `g_missile`, `ui_feeders`,
+      `ui_main_pc`), the same as `mingw64-clang-full`;
+    - open decision: `r_material_load_obj.cpp` and `r_screenshot.cpp` use D3DX (`ID3DXBuffer`, the constant table
+      and semantic parsers, `D3DXCompileShader`, `D3DXSaveSurfaceToFileA`), `r_cinematic.cpp` uses DirectSound and
+      the Windows layout of Bink's `BINKTEXTURESET` (`binktextures.h` selects `__RADLINUX__` here, which has no
+      `tex_draw` nor the lock/unlock calls). The SDK's `d3dx9*.h` and `dsound.h` need far more of Win32 than the
+      engine does (`TEXTMETRIC`, `IStream`, GDI glyph metrics, `sal.h`). Options: the D3DX subset the engine uses
+      declared in the shim for the D3D9 layer to implement, the SDK headers with a larger shim, or `_WIN32` guards.
+  - `mingw32-gcc` and `mingw32-clang` (`--exclude sound/snd_driver_xaudio2`): 1248 files, 0 errors.
+    `mingw64-clang-full`: 13 files, 422 errors, the same files and counts as before the shim.
+  - `tools/codediff.py build/mingw32-gcc` on every engine `.cpp` changed for this step: identical.
+    `r_model_skin.cpp` needs `--cflags=-mmmx` there (the HEAD version does not build with GCC otherwise); with
+    `-D_DEBUG` its edited asserts, `phys_colgeom.cpp`'s and `snd_dsp.cpp`'s only move `.rodata` offsets (the
+    stringized assert text).
+  - 64-bit handle fields (2026-10-23): `DynEntityClient::physObjId` and `PhysConstraint::constraintHandle` are
+    `intptr_t` (decision above), with `DynEntCl_CreatePhysObj`'s return and the locals that carry them
+    (`GetTraceResultsRigidBody` also truncated `centity_s::pose.physObjId`). `DynEnt_LoadEntities` allocates the
+    client lists with `sizeof(DynEntityClient)` (was 20, load_obj path). 64-bit sizes: `DynEntityClient` 24,
+    `PhysConstraint` 200, `PhysConstraints` 3216.
+    - `syntax_check.py build/linux64-clang --filter 'DynEntity|g_mover'`: 7 files, 0 errors (`DynEntity_client` and
+      `g_mover` leave the 4a step 1 list); `mingw32-gcc` and `mingw32-clang`: 1248 files, 0 errors.
+      `-Wshorten-64-to-32` over the 37 files that use these structs: no new narrowing. `codediff.py
+      build/mingw32-gcc`: identical for the 7 edited files and 43 of the other 45 files that include the two
+      headers; `g_missile.cpp` and `r_bsp_load_obj.cpp` differ only through their own pending edits
+      (`StickMissile`'s corpse read, `R_CalculateVertexStream2Usage`).
+    - `ffconv`: 18 handle leaves in 3 types (`DynEntityClient`, `PhysConstraint`, the 16 of `PhysConstraints`).
+      `--verify` on the 65 zones: 0 failed, 237 handles widened and narrowed back in 13 zones (`code_post_gfx`,
+      `code_post_gfx_mp` and 11 maps), all 0. All are `constraintHandle`s (`clipMap_t::constraints` and
+      `PhysConstraints` assets): the dyn-ent client lists only reserve the runtime block, which grows by 4 bytes per
+      entity (`frontend` too). `build/zones64` regenerated (416 s): those 14 zones changed, the other 51 and
+      `shaders.pack` are byte-identical (13 704 shaders, 0 rejected by `check_shader_pack.py`).
+  - 4a step 2, the dedicated server runs on Linux (2026-10-23):
+    - Build: from an ext4 copy of the tree (compiling from `/mnt/c` waits on 9p for every header: half the speed),
+      `cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++` (clang 22): every engine file
+      compiles and `BO1Zombies` links (ELF x86-64). The build first runs the IWffs layout check (241 types, same as
+      win64; decision above). The link showed three Itanium/MSVC differences, fixed with spellings MSVC compiles the
+      same: two globals named `data` of different types (`rb_backend.cpp`, `r_water_sim.cpp`; MSVC's decorated
+      names include the type), `rb_backend`'s now `static`; two interfaces whose virtual function had no definition
+      (`bdDownloadInterceptor::handleDownload`, `broad_phase_terrain_query_callback::query`), now pure (Itanium
+      emits the typeinfo with the first non-inline virtual function).
+    - Run as `run64.sh` does: `fs_b` = `build/Release`, `fs_h` = a folder holding the exe, with `zone` linked to
+      `build/zones64/zone` and `localization.txt` to the install's; `+set bo1_headless 1 ... +set bo1_autoquit 60000
+      +devmap zombie_theater`. Exit 0: the zones load (`zombie_theater` in 857 ms, win64 915 ms), game
+      initialization, scripts, autoquit, every zone unloaded.
+    - Log against a win64 run of the same tree and zones, paths, the date and numbers masked: Kino 14 636 / 14 638
+      lines, Moon 14 583 / 14 585, 22 differing lines each, all platform facts: no D3D9 runtime ("Unknown video
+      card", `sys_gpu`, `sys_configSum`), the host name and addresses, no CPU set API (`bo1_mod_pcore`), two profile
+      lines printed in another order by other threads, and `r_lightTweakSunColor` (upstream bug, below). With the
+      numbers kept, only durations and the measured CPU speed differ; every PMem figure is the same.
+    - Bugs the comparison showed:
+      - 64-bit, in both 64-bit builds: `PMem_FreeIndex` walked down the allocation list with the 32-bit stride
+        (`&prim->allocListCount + 2 * count` for `&allocList[count - 1]`), so it took another entry's position for a
+        name and padding for a position: the low PMem position became garbage after some frees (1.4 GB in the 392 MB
+        pool at Linux shutdown, 1.07 GB on win64, the low half of a string pointer). Now indexed; both runs end at
+        `freed -146.55`. The inventory of field-address strides found one more, in `GlassShard`'s mesh build:
+        `*(&renderer->maxNumGroupChanges + numVerts)` is `vertexList[numVerts - 1]`, read into an `int` (half a
+        pointer on 64-bit), now indexed into a `uintptr_t`. The other strides step through `int`/`float` fields only
+        (`actor_state`, `pathnode`, `ui_server`, `cg_visionsets`, physics vectors, BSP and exposure headers).
+      - posix: `NET_GetLocalAddress` kept the IPv4 address in `u_long`, 8 bytes in glibc, so `HIBYTE` read byte 7
+        (`IP: 0.0.1.1`); now `uint32_t`.
+      - posix layer, before the first run: `VirtualAlloc(MEM_COMMIT)` without `MEM_RESERVE` (PMem's), CreateFile's
+        `FILE_APPEND_DATA` (the emergency log), text mode (`localization.txt`), an include spelled `types.h` for
+        `Types.h` (a check of every `#include` in `src/`, `tl/` and `DemonWare/` found no other that resolves only
+        case-insensitively; `TlHelp32.h` and `DbgHelp.h` got `include_cased/` relays).
+    - `codediff.py build/mingw32-gcc` on every engine `.cpp` changed in this step (`win_main`, `win_net`,
+      `com_fileaccess`, `common`, `live_storage`, `phys_broad_phase`, `phys_collision`, `glass_shard`, CubeMapGenLib's
+      `CCubeMapProcessor` and `CImageSurface`) and on the 23 files that include `demo_common.h` or
+      `phys_broad_phase.h`: identical, except `rb_backend.cpp` (37 operands: the `.bss` offsets of the now `static`
+      `data` and of the 32 variables after it) and `physicalmemory.cpp` (one loop's induction variable: the old and
+      new expressions are the same address in the 32-bit layout, `allocListCount` at 4, `allocList` at 12, 8-byte
+      entries).
+    - `syntax_check.py` on `mingw32-gcc` and `mingw32-clang` (`--exclude sound/snd_driver_xaudio2`): 1248 files,
+      0 errors each. `win64-msvc` builds (0 errors) and runs both maps (the references above).
+    - Open: the D3D9 layer, SDL2 window and input and the sound backend (4b); the IWffs check or tables for aarch64
+      (phase 5); `GetModuleFileNameA` is the only path the layer returns in Windows form, `SHGetFolderPathA` and
+      `_getcwd` return POSIX paths the engine extends with `\` (they work, the log shows the mixed form).
+  - 4b step 1, the D3D9 frontend on the null backend and the SDL2 window layer (2026-10-23):
+    - New: the contract `src/gfx_backend/gfx_backend.h` (`docs/RENDERER.md`) with `gb_common.h`, the null backend
+      (`src/gfx_backend/null/`), the frontend `src/gfx_d3d9emu/` (the 87 methods the posix build calls, inventoried
+      with libclang; any other one ends the process naming itself), its host `posix_d3d9host.cpp`, and the window
+      layer on SDL2 (`win32_gui.cpp`). `d3d9_absent.cpp` is gone.
+    - `tests/gfx_d3d9emu` (`d3d9emu_test`, built with the posix target, and with g++ under ASan and UBSan): all
+      checks pass, 107 backend calls (device and swap chain, resources and locks, passes and load operations, clears,
+      pipelines and samplers, draws and UP draws, RESZ, queries, Reset).
+    - `ffconv` after `shader_pack.h` (`ShaderPack_InputLocation`) and `db_load.cpp` (below) changed: `--verify --game`
+      on the 65 zones, 0 failed, 13 704 shaders; `check_shader_pack.py`: 0 rejected; the 65 zones and `shaders.pack`
+      are byte-identical to `build/zones64`.
+    - Linux headless client (`+set bo1_headless_client 1` with `headless.ps1 -Client`'s settings, `+devmap
+      zombie_theater`, autoquit 95 s), after the fixes below: `Video card is "no GPU (Direct3D 9 on null)"`, the hidden
+      window is created as on Windows, the map loads, the player spawns with the M1911, round 1 starts, the zombies
+      down the idle player (game over at level time 44 250), the end of game runs for 47 s, autoquit at level time
+      91 200, every zone unloaded (`freed -146.55`, as the dedicated server). The frontend logged only its two start
+      lines: no unemulated method, no contract breach (the null backend ends the process on one).
+    - Against a win64 client of the same tree and zones (`build/run/win64c8`, 95 s; the real GPU spends its first
+      seconds on shaders, so level time 78 700, game over at 54 300), numbers and paths masked: 54 kinds of lines
+      differ, all explained. Platform facts: the video card and its memory, `sys_gpu`, `sys_configSum`, the host name
+      and address, the CPU set API, DPI awareness, the mods folder the Windows run folder has. The null backend: the
+      sun sprite occlusion calibration fails (its queries count 0). Timing: the null backend draws 937 loading-screen
+      frames against 715 (each sets `ls_mapname` and `ls_gametype`), moving-entity notices per server frame, the
+      first-draw technique warnings, one more AI path failure, the random loading tip, and when the game over comes.
+    - Bugs the client run found, each with an inventory of the tree:
+      - 64-bit, in both 64-bit builds: `Load_DynEntityClientArray` streamed `20 * count` bytes while `DynEntityClient`
+        is 24 on 64-bit, so the server list streamed next overlapped the client list (`Phys_ObjDestroy` on
+        `physObjId` 3 in `DynEntCl_InitEntities`; found with a hardware watchpoint). Now `sizeof`. All 78 type/size
+        pairs of `db_load.cpp`'s `Load_Stream` calls, checked with `static_assert`s against each variable's type:
+        no other. `ffconv` is 32-bit, so the zones do not change.
+      - 64-bit: `Dvar_EnumToString` and `Dvar_IndexStringToEnumString` tested `domain.integer.max` for the string
+        table, which it overlays on 32-bit only (padding on 64-bit). Now `domain.enumeration.strings`.
+      - posix: glibc's 31-bit `rand()` hung `R_CreateParticleCloudBuffer` (decision above).
+      - GNU compilers: `SV_BuildClientSnapshot` faulted on a `movaps` into the 4-aligned `MatchState` blocks
+        (decision above). `tools/overaligned.py` over the 1 206 posix files lists 62 casts: the two `MatchState`
+        blocks and `Z_Malloc` (`GlassPhysics`) needed a change; the others ask for 16 or 128, come from 16-byte pools
+        (`MT_Alloc`, the fastfile stream) or point into aligned arrays. One upstream bug (below).
+      - 64-bit, from the same list: `vehicle_cache_t` was allocated and freed as 1 928 bytes (3 568 on 64-bit, an
+        overrun of 1 640 bytes in the script memory tree; MSVC x86's `sizeof` is 1 968, the same 128-node size class
+        as 1 928, so win32 behaves the same); `LoadScriptFile`/`LoadScriptMemory` allocated `length + 1201` for a
+        `script_s` followed by its text (1 240 on MSVC x64). Now `sizeof`.
+      - 64-bit, in both 64-bit builds: `R_LightGridLookup` cleared its corner pointers with `memset(..., 4 * n)`, half
+        of them on 64-bit; a pointer left with its low half zeroed faulted in `R_GetLightingAtPoint`. `litsizes.py`
+        now also counts arrays of pointers and shifts (`x << 2`); on `rb_light.cpp` it also lists the light grid hash
+        table (`0x40001C` bytes, 4 × `0x100007` pointers, used by `r_vc_makelog`), now `sizeof(htab *)`.
+      - `litsizes.py` so extended, over the 764 `mingw64-clang-full` files: 430 calls, 289 on pointer elements. Most
+        are element counts or buffer lengths passed next to an array (`String_Parse`, `_Dvar_RegisterEnum`,
+        `AreaGlasses`, `FindEntryInList`, ...), out-parameter allocators whose element is a struct, or already
+        `sizeof` (`cscr_compiler`'s `512 * sizeof(scr_block_s *)`). The real ones are now `sizeof`/`offsetof`, with
+        identical 32-bit code: partial clears and moves of pointer arrays (`standCmds` in `cg_newDraw_mp`,
+        `convArgs.args` in the UI and the expression evaluator (7), `newShards` in `glass_shard`, `uiDC.Menus` in
+        `ui_shared`, `brush_edges.cpp` (5, one of them stepping `begina + 4` bytes to the next pointer),
+        `fs_serverIwdNames`); three `fileShareWriteFileInfo` clears from `thumbData` that missed `numTags`; the
+        script parser's hash tables (`l_precomp`, `l_script`: 1 024 and 256 pointers in 4 096 and 1 024 bytes, an
+        overrun on 64-bit); `BG_RegisterSurfaceTypeSounds` (31 pointers, load_obj path); and the physics solver's
+        `create_pulse_sum_normal`/`create_pulse_sum_wheel`, which allocated 160 and 192 bytes (their MSVC x86 sizes)
+        for objects of 176 and 224 bytes on x64: every contact overran the next solver allocation. Left as is:
+        `UI_ServersSort` sorts 4-byte elements from `&serverStatusInfo.lines[31][1]`, the decompiler's spelling of an
+        `int` array (its comparator reads `int`s), which lands elsewhere on 64-bit; server browser only, unreachable
+        offline, to check against the binary.
+      - GNU compilers: `long double` (decision above).
+      - posix: the word macros (decision above). A zombie's death animscript asserted in `Scr_GetAnims` (tree 0)
+        after the game over. A trap in `HIGH_IND` (an error when its operand is a pointer, `long` or `unsigned long`)
+        over the 1 206 posix files lists 5 uses: with the shim, `GScr_AnimHasNotetrack` (2) and `DB_GetXAsset`'s
+        `s_inuseCache` tag (2, the pointer's bits 16-31) take windows.h's as on Windows; `q_shared.h`'s `SHIWORD` has
+        no windows.h counterpart, and `MainWndProc` read `WM_MOVE`'s y from the top of the 64-bit `LPARAM` in both
+        64-bit builds: now `SWORD1`, the same word as on 32-bit.
+      - 64-bit, in both 64-bit builds: `Phys_CreateHinge` passed `(int)obj1` to `Phys_GetUserData`, truncating the
+        handle (a crash after the game over). An explicit cast escapes `-Wshorten-64-to-32`; `ptrcasts.py` now lists
+        them (`handle-narrow`). Over the 1 206 posix files: 175 casts of `intptr_t`/`uintptr_t`/`DWORD_PTR` values to
+        4 bytes or less; this one is the only truncated handle. The rest keep low bits on purpose (alignment tests,
+        hashes, debug prints), read counts the decompiler typed as pointers (`indices` in `fx_sprite`, the
+        `animscriptfunc` offsets, the script VM's counts), or are expansions of windows.h's word macros.
+    - `codediff.py build/mingw32-gcc --cflags=-mlong-double-64` over the 1 248 files (the 9 SSE/MMX files with
+      `-msse2 -mmmx`): 1 158 identical; the 71 libtomcrypt files differ in `.rdata` offsets as before; the 19 edited
+      files that differ are explained: `cg_vehicle`/`cg_snapshot_mp` (the `vehicle_cache_t` size), `sv_init_mp` and
+      `com_memory` (the GNU branch of `BO1_ALLOC_ALIGN`/`Z_HEADER_SIZE`: 4 → 64, 164 → 176), `dvar` (block order at
+      -O2; identical at -O0), `physicalmemory` and `rb_backend` (4a step 2), `cl_console`, `r_bsp_load_obj`,
+      `rb_pixelcost`, `g_missile`, `ui_feeders`, `ui_main_pc` (their 64-bit edits of 4a step 1), `cm_mesh`,
+      `l_precomp`, `l_script`, `eval` (only the mangled names of functions taking `long double`), `phys_util` and
+      `rbc_def_vehicle` (x87 register and stack-slot choices around former `long double` locals). The 16 files of
+      the pointer-array fixes, after that run: identical, `l_precomp`, `l_script` and `rbc_def_vehicle` keeping only
+      the differences above.
+    - The same `long double` change compiled for MSVC x86 (`clang++ --target=i686-pc-windows-msvc`, the phase 3
+      MSVC-ABI command with `-O2 -c`), HEAD against the worktree, instructions compared: 67 of the 70 `.cpp` files
+      identical (`phys_util` and `rbc_def_vehicle` included); `cg_vehicle` differs by the `vehicle_cache_t` size
+      only; `rb_pixelcost` differs by its 4a edit only (with that edit kept and `long double` restored: identical);
+      `cg_scr_main` does not compile in that mode at HEAD either (a cast clang refuses), and is identical with MinGW.
+    - `syntax_check.py` on `mingw32-gcc` and `mingw32-clang`: 1 248 files, 0 errors each. `win64-msvc` builds
+      (0 errors). The posix build links and runs the IWffs layout check (241 types).
+    - Open (rest of 4b): keyboard and mouse (step 2, below), fullscreen, the GL 4.3 backend (step 3, with
+      `D3DXSaveSurfaceToFileA` for the screenshots the comparisons use), SDL2 audio, the gamepad.
+  - 4b step 2, keyboard, mouse and clipboard (2026-10-24, `win32_input.cpp`, decisions above):
+    - A windowed client (`r_fullscreen 0`, the same window settings as the headless client) under
+      `SDL_VIDEODRIVER=offscreen`, `+devmap zombie_theater`, autoquit 58 s, with `BO1_INPUT_SCRIPT` from 42 s (after
+      the map load, which the engine's own input drop requires): the console opens on the key at scan code 0x29;
+      typed `/viewpos` prints `(-99 -1256 144) : 61 0`; two 200-pixel moves right and one 100 up turn the view to
+      `17 349` (yaw down 44 degrees, pitch up 11); holding W for 2 s moves the player to `(269 -1138 147)`, 385 units
+      along yaw 17; `/echoo`, Backspace, ` Hello_World! backspace ok`, Enter runs `/echo Hello_World! backspace ok`
+      (shifted characters, Backspace through `WM_CHAR` 8); `/viewpos` put on the clipboard and pasted with Ctrl+V
+      (`WM_CHAR` 22, `Field_Paste`, `Sys_GetClipboardData`) runs; a left click fires (the impact effect appears).
+      In a run whose events came before the map load (they reach `Sys_QueEvent`, then the load drops them), gdb on
+      `Sys_QueEvent` shows the other mappings: the wheel (206 up, 205 down, one event per notch),
+      the right, middle and X1 buttons (201, 202, 203), F1 167, keypad 8 without Num Lock 183, Up 154, Delete 162,
+      keypad Enter 191, Shift 160 with `a` 97, Right Ctrl 159, `-` 45, Escape 27, Tab 9, Space 32.
+    - Bugs the runs found in the layer itself, fixed before the results above: `TranslateMessage` read the modifiers
+      when the render thread pumped, so a Ctrl released before that lost its Ctrl+V (now decided at key-down); a
+      paste that waited for the video thread stalled it and the main thread for a second (now the clipboard copy).
+    - The headless client run is unchanged (Kino 60 s, game over, autoquit, `freed -146.55`); `d3d9emu_test` passes.
+    - Not tested by machine: a real keyboard and mouse under WSLg (X11), and SDL's relative mode there; the offscreen
+      driver has none, so the captured cursor's virtual motion is what the runs exercised.
+  - 4b step 3, the GL backend (2026-10-24, `src/gfx_backend/gl`, `docs/RENDERER.md`, decisions above):
+    - `gb_gl_test` (SDL offscreen, llvmpipe, Mesa 26.1.6, OpenGL 4.6 core): 46 checks pass. Each convention check was
+      seen failing first: the front face (3 checks failed with `GL_CCW`), the pixel centres (2 failed without
+      `bo1_pos_fixup`), the 4-sample edges (2 failed with the old half-pixel viewport), the upload after a draw
+      (2 failed without `EditTexture`); an exact half-pixel fixup failed 4 checks on ties at edges through pixel
+      centres, hence 63/128.
+    - `d3d9emu_test` passes (115 backend calls; the constant blocks are 4 112 bytes, a viewport change uploads only
+      the vertex block; `D3DXSaveSurfaceToFileA` writes the exact TGA bytes, a sub-rect, a JPG, and refuses DDS).
+    - `ffconv --verify --game build\Release` after each normaliser change (vPos, `bo1_pos_fixup`, shadow samplers):
+      65 zones, 0 failed, 13 704 shaders, 0 rejected by `check_shader_pack.py`; the 65 zones identical byte for byte
+      to the previous ones (`diff -rq`); against the previous pack only the expected lines changed (356 vertex
+      shaders with the fixup, 300 pixel shaders with the new `vPos`, `bo1_vpos_flip` gone).
+    - The game on GL: the windowed client under `SDL_VIDEODRIVER=offscreen` and the headless client with
+      `BO1_GFX_BACKEND=gl` load Kino and draw it: the theater from the spawn, the HUD, the round text, upright, the
+      13 704 shaders compiled and linked without an error, no GL debug message (`BO1_GL_DEBUG=1`); against the
+      win64 shot from the spawn, the same scene: theater, lit furniture, pistol and hands, HUD. Bugs the runs
+      found, fixed before the results above (found with a per-draw pixel watch on the backend's thread, since
+      removed): the input pump never ran (SDL video started on the main thread for `Sys_DetectVideoCard`); a line
+      of clear colour along the first column and row with 4 samples (the half-pixel viewport); every model drawn
+      black (uploads after a draw went to the wrong texture unit, so the model lighting atlas never changed:
+      `glTexSubImage3D` reported `GL_INVALID_OPERATION`); shadow map samplers read as plain samplers.
+    - `gl perf:` on llvmpipe with other sessions loading the machine (load 3-8 on 8 threads): about 3.5 fps in
+      game for 5 400 draws a frame, the backend's thread busy the whole frame (software rasterising), the frontend
+      side waiting for it; about 40 fps on the loading screen. The client uploads about 14 MB a second in game
+      (4 MB a frame), to profile on the console (phase 5).
+    - The headless client on the null backend is unchanged (Kino 95 s, autoquit, `freed -146.55`); `win64-msvc`
+      builds.
+    - COLOR clamp (2026-10-24): the normaliser clamps COLOR outputs to [0, 1] (decision above); `ffconv --verify`
+      reconverts, 65 zones 0 failed, the zones identical, only `shaders.pack` changed (356 vertex shaders gain the
+      clamp), 0 rejected by `check_shader_pack.py`. `gb_gl_test` grows a check (46) that fails without it.
+    - Gamepad (2026-10-24): `SDL_GameController` behind the XInput API (decision above); the mapping is unit-tested
+      (`gamepad_test`, fail-first confirmed) and a headless GL run opens the subsystem without a crash and reports no
+      device on a machine with no pad. Real-controller input needs a pad on a display (hand-to-user).
+    - Open (rest of 4b): SDL2 audio (PCM + MS-ADPCM only, no ffmpeg -- inventory above), fullscreen (needs a real
+      display to verify); for GL, the GLSL version for Mesa 20.1 on the Switch (`docs/RENDERER.md`).
 - **5**: Kino plays 10 rounds docked and handheld with no crash, RAM logged every round, target 30 fps at 720p
   docked. Render-thread CPU time is recorded here to decide on phase 7.
   - Switch constraints from `.claude/rules/switch-homebrew.md` (learned on another libnx port) that this plan must
@@ -462,6 +720,14 @@ Base: upstream commit `102f699` (2026-10-03).
       definitions (build id goes in a romfs file logged at start), build tree on ext4 rather than `/mnt/c`.
 
 ## Known upstream bugs (not fixed, noted for later)
+- `src/universal/dvar.cpp` (`_Dvar_RegisterLinearRGB`, `_Dvar_RegisterColorXYZ`): x, y and z are declared
+  `unsigned int` instead of `float` and stored in the first three bytes of an uninitialised `DvarValue`, so
+  `r_lightTweakSunColor`'s default reads back as a float built from stack bytes (`2.00006` on win64, `3.6e-43` on
+  Linux). Renderer only (`r_bsp.cpp` overwrites it when a world loads); fixing it changes the 32-bit build.
+- `src/EffectsCore/fx_draw.cpp` (`FX_DrawElem_Cloud`): `_InterlockedExchangeAdd((volatile unsigned long long *)
+  &system->gfxCloudCount, 1u)` on a 4-byte field. winnt.h's C++ overload makes it a 64-bit add, which also rewrites
+  the next 4 bytes (`visState` on 32-bit, padding on 64-bit; the field is 8-aligned there, so AArch64 can run it).
+  The posix shim reproduces the overload.
 - `src/gfx_d3d/rb_draw3d.cpp:239`: `memcpy(gfxCmdBufState.refSamplerState, gfxCmdBufState.refSamplerState,
   sizeof(gfxCmdBufState))` copies a whole struct's size onto one of its own members (overlap and overflow). This
   is decompiler output and must be checked against the binary before being fixed.
@@ -473,8 +739,14 @@ Base: upstream commit `102f699` (2026-10-03).
   20484 × `sizeof(Eval)` bytes away, out of bounds on 32-bit too. Any caller of `Eval_Solve` would crash. Phase 3
   leaves it: the fix is a rewrite with `Eval`'s fields, checked against the binary. It is unreachable by default:
   the only callers are the `.menu` text parser's `(`-expressions (`PC_Int/Float_Expression_Parse`), used only with
-  `useFastFile 0`. With MSVC the `Eval` layout is the same on x86 and x64; with GNU compilers `EvalValue::u.d` is a
-  `long double` (12 or 16 bytes, not 8), so the rewrite should make it `double`, which is what MSVC compiles.
+  `useFastFile 0`. With MSVC the `Eval` layout is the same on x86 and x64; `EvalValue::u.d` is a `double` on every
+  compiler since phase 4b (decision 2026-10-23, `long double`).
+- `src/physics/phys_colgeom.cpp` (`gjk_double_sphere_t` query creation): `allocate(sizeof(gjk_double_sphere_t), 0,
+  0)` passes alignment 0, for which `phys_transient_allocator::allocate` computes address 0 and asserts; the other
+  shapes pass 16. Same on every build; unreached so far (found by `tools/overaligned.py`).
+- `src/physics/xdoll.cpp` (`XDoll_CreatePhysObj`, the AABB case of a model without `collSurfs`): `surfFlags = (int)"t"` takes
+  the address of a string as surface flags, then their bits 20-25 as the surface type: a decompiled constant that
+  happened to match an address. The type is address-dependent on every build.
 - Found during phase 3 and kept as they are (each still needs checking against the binary):
   - `src/universal/mem_fixed.cpp`: `Hunk_FixedInit`/`Hunk_FixedReset` never advance `node` in the free-list loop, so
     only one block is linked; Init links with stride `block_size`, Reset with `block_size + 4`. `HU_SCHEME_FIXED` has

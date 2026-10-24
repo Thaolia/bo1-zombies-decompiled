@@ -490,7 +490,7 @@ void __cdecl DynEnt_DestroyPhysics(PhysWorld worldIndex, const DynEntityDef *dyn
 {
     __int16 cindex; // [esp+4h] [ebp-Ch]
     int i; // [esp+8h] [ebp-8h]
-    int physObjId; // [esp+Ch] [ebp-4h]
+    intptr_t physObjId; // [esp+Ch] [ebp-4h]
 
     if ( dynEntClient->physObjId )
     {
@@ -954,8 +954,8 @@ int __cdecl DynEnt_GetDamage(DynEntityClient *dynEntClient, const DynEntityDef *
 // local variable allocation has failed, the output may be wrong!
 void    DynEnt_SetupConstraints(const DynEntityDef *dynEntDef)
 {
-    int PhysObj; // eax
-    int v3; // eax
+    intptr_t PhysObj; // eax
+    intptr_t v3; // eax
     int v4; // eax
     phys_vec3 b2refloc; // [esp+Ch] [ebp-22Ch] BYREF
     phys_vec3 b2axisloc; // [esp+1Ch] [ebp-21Ch] BYREF
@@ -1109,7 +1109,7 @@ void    DynEnt_SetupConstraints(const DynEntityDef *dynEntDef)
                         {
                             //rigid_body_constraint_point::set(constraint, &b1loc, &b2loc);
                             constraint->set(&b1loc, &b2loc);
-                            c->constraintHandle = (int)constraint;
+                            c->constraintHandle = (intptr_t)constraint;
                         }
                         else
                         {
@@ -1123,7 +1123,7 @@ void    DynEnt_SetupConstraints(const DynEntityDef *dynEntDef)
                         {
                             //rigid_body_constraint_distance::set(rbc_dist, &b1loc, &b2loc, 0.0, c->distance);
                             rbc_dist->set(&b1loc, &b2loc, 0.0, c->distance);
-                            c->constraintHandle = (int)rbc_dist;
+                            c->constraintHandle = (intptr_t)rbc_dist;
                         }
                         else
                         {
@@ -1243,7 +1243,7 @@ void __cdecl DynEnt_CalcPhysPreset(const DynEntityDef *dynEntDef)
     Phys_CalcPreset(physPreset, dims, surfaceType);
 }
 
-int __cdecl DynEntCl_CreatePhysObj(
+intptr_t __cdecl DynEntCl_CreatePhysObj(
                 const DynEntityDef *dynEntDef,
                 DynEntityClient *dynEntClient,
                 const GfxPlacement *pose)
@@ -1252,7 +1252,7 @@ int __cdecl DynEntCl_CreatePhysObj(
     broad_phase_info *bpi; // [esp+14h] [ebp-28h]
     unsigned __int16 absId; // [esp+20h] [ebp-1Ch]
     create_gjk_geom_collision_visitor collision_visitor; // [esp+24h] [ebp-18h] BYREF
-    int physId; // [esp+2Ch] [ebp-10h]
+    intptr_t physId; // [esp+2Ch] [ebp-10h]
     gjk_geom_list_t gjk_geom_list; // [esp+30h] [ebp-Ch] BYREF
     PhysObjUserData *phys_user_data; // [esp+38h] [ebp-4h]
     int savedregs; // [esp+3Ch] [ebp+0h] BYREF
@@ -1302,7 +1302,7 @@ int __cdecl DynEntCl_CreatePhysObj(
     //collision_visitor.__vftable = (create_gjk_geom_collision_visitor_vtbl *)&create_gjk_geom_collision_visitor::`vftable';
     collision_visitor.gjk_geom_list = &gjk_geom_list;
     create_gjk_geom(dynEntDef, &collision_visitor, 0x280EC93u);
-    physId = (int)Phys_ObjCreate(0, pose->origin, pose->quat, vec3_origin, dynEntDef->physPreset, &gjk_geom_list, 1, -1);
+    physId = (intptr_t)Phys_ObjCreate(0, pose->origin, pose->quat, vec3_origin, dynEntDef->physPreset, &gjk_geom_list, 1, -1);
     dynEntClient->physObjId = physId;
     if ( physId )
     {
@@ -2615,7 +2615,7 @@ char __cdecl DynEntCl_DynEntImpactEvent(
                 int damage,
                 bool isMelee)
 {
-    int PhysObj; // eax
+    intptr_t PhysObj; // eax
     snapshot_s *nextSnap; // [esp+40h] [ebp-C8h]
     DynEntityPose *dynEntPose; // [esp+54h] [ebp-B4h]
     pointtrace_t clip; // [esp+58h] [ebp-B0h] BYREF
@@ -2750,7 +2750,7 @@ void __cdecl DynEntCl_ExplosionEvent(
                 int innerDamage,
                 int outerDamage)
 {
-    int PhysObj; // eax
+    intptr_t PhysObj; // eax
     double v10; // st7
     double v11; // st7
     double v12; // st7

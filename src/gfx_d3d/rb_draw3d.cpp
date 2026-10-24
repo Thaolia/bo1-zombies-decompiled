@@ -37,7 +37,7 @@ const float (*__cdecl R_GetCloudArea())[4]
 
 void __cdecl R_CalcGameTimeVec(float gameTime, float *out)
 {
-    long double v2; // st7
+    double v2; // st7
     float v3; // [esp+8h] [ebp-1Ch]
     float cosOfFracPartOfGameTime; // [esp+18h] [ebp-Ch]
     float sinOfFracPartOfGameTime; // [esp+1Ch] [ebp-8h]

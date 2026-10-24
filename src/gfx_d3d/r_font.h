@@ -39,6 +39,10 @@ void __cdecl R_ShutdownFonts();
 double __cdecl R_NormalizedTextScale(Font_s *font, float scale);
 int __cdecl R_LetterWidth(unsigned int letter, Font_s *font);
 int __cdecl R_TextWidth(const char *text, int maxChars, Font_s *font);
+
+// A HUD icon inside text: after '^', the command byte (1, or 2 for a flipped icon), width, height and the Material
+// pointer, stored unaligned.
+#define CONTXTCMD_LEN_HUDICON ((int)(3 + sizeof(void *)))
 int __cdecl R_TextHeight(Font_s *font);
 const char *__cdecl R_TextLineWrapPosition(
                 const char *text,

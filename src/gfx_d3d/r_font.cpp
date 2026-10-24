@@ -318,7 +318,7 @@ const char *__cdecl R_TextLineWrapPosition(
                     pixelsUsed += (font->pixelHeight * (parsePos[1] - 16) + 16) / 32;
                 if ( preLetterPos != text )
                     wrapPos = preLetterPos;
-                parsePos += 7;
+                parsePos += CONTXTCMD_LEN_HUDICON;
             }
             else
             {
@@ -384,7 +384,7 @@ int __cdecl R_ConsoleTextWidth(const char *textPool, int poolSize, int firstChar
         else if ( letter == 94 && (textPool[parsePos] == 1 || textPool[parsePos] == 2) )
         {
             width += (font->pixelHeight * (textPool[indexMask & (parsePos + 1)] - 16) + 16) / 32;
-            parsePos = indexMask & (parsePos + 7);
+            parsePos = indexMask & (parsePos + CONTXTCMD_LEN_HUDICON);
         }
         else
         {

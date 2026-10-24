@@ -5,13 +5,20 @@ libclang parses src/database/db_load.cpp twice, once for the retail 32-bit targe
 Every type the loader streams (the pointee of each `var*` global, plus the zone header types) is flattened into leaf
 fields: a pointer, a union that holds a pointer, or a run of plain bytes. Leaves are matched between the two targets
 by their field path, so each one gets its 32-bit and 64-bit offset. Padding is kept as byte leaves where the 64-bit
-layout has room for it. Integer fields listed in VALUE_FIXUPS also get a value fixup entry (see ff_layout.h).
+layout has room for it. Integer fields listed in VALUE_FIXUPS also get a value fixup entry (see ff_layout.h), and the
+`intptr_t` fields listed in WIDENED_INTEGERS become handle leaves (4 bytes on 32-bit, 8 on 64-bit).
 
     tools/ffconv/gen/layouts.py --out ff_layouts.gen.h [--target64 x86_64-w64-mingw32] [--dxsdk DIR]
 
-A type the tables cannot describe (a base class, a size that differs for another reason than pointers) stops the
-generator with its name: ffconv must never guess a layout. A union mixing pointers with wider data becomes an
-opaque leaf, which ffconv rejects if the loader ever streams it as a whole.
+A 64-bit build of another ABI may read the same zones only if every streamed type lays out the same there. The
+posix x86-64 build checks it at build time, parsing db_load.cpp as that build compiles it (src/platform/posix shim,
+the DirectX SDK headers it copies): the tables must equal the --target64 ones, or the check names the types that differ.
+
+    tools/ffconv/gen/layouts.py --check-target64 x86_64-linux-gnu --posix-dxsdk BUILD/dxsdk --stamp FILE
+
+A type the tables cannot describe (a base class, a size that differs for another reason than pointers or a listed
+widened integer) stops the generator with its name: ffconv must never guess a layout. A union mixing pointers with
+wider data becomes an opaque leaf, which ffconv rejects if the loader ever streams it as a whole.
 """
 import argparse
 import os
@@ -23,7 +30,7 @@ import clang.cindex as ci
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..'))
 EXTRA_ROOTS = ['XAsset', 'XAssetList', 'ScriptStringList']
 
-BYTES, PTR, UNION_PTR, OPAQUE = 'LEAF_BYTES', 'LEAF_PTR', 'LEAF_UNION_PTR', 'LEAF_OPAQUE'
+BYTES, PTR, UNION_PTR, OPAQUE, HANDLE = 'LEAF_BYTES', 'LEAF_PTR', 'LEAF_UNION_PTR', 'LEAF_OPAQUE', 'LEAF_HANDLE'
 FIXUP = 'FIXUP'
 
 # (record, field, unit): an int field of `record` that holds a byte distance between two elements of one array of
@@ -33,7 +40,15 @@ VALUE_FIXUPS = {
     # r_bsp_load_obj.cpp: tree->childrenOffset = (char *)&rgl.aabbTrees[first child] - (char *)tree.
     ('GfxAabbTree', 'childrenOffset'): 'GfxAabbTree',
 }
+# (record, field): an integer the engine declares `intptr_t` because it holds a pointer at runtime. It grows from 4 to
+# 8 bytes, which is refused for any other integer: ffconv sign-extends it, and fails a zone where its streamed value
+# is not 0, since a 32-bit runtime pointer would mean nothing to the 64-bit engine. docs/PORTING.md (decisions).
+WIDENED_INTEGERS = {
+    ('DynEntityClient', 'physObjId'),         # DynEntCl_CreatePhysObj: a PhysObjUserData pointer
+    ('PhysConstraint', 'constraintHandle'),   # DynEnt_SetupConstraints: a rigid_body_constraint_* pointer
+}
 POINTER_KINDS = {ci.TypeKind.POINTER, ci.TypeKind.MEMBERPOINTER, ci.TypeKind.BLOCKPOINTER}
+SIGNED_INTEGER_KINDS = {ci.TypeKind.INT, ci.TypeKind.LONG, ci.TypeKind.LONGLONG}
 
 
 class LayoutError(Exception):
@@ -54,6 +69,20 @@ def parse(target, dxsdk):
     fatal = [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Fatal]
     if fatal:
         raise LayoutError(f'{target}: {fatal[0]}')
+    return tu
+
+
+def parse_posix(target, posix_dxsdk):
+    """db_load.cpp as the posix builds compile it (CMakeLists.txt): Win32 from the shim, no WIN32 define."""
+    posix = os.path.join(ROOT, 'src/platform/posix')
+    args = ['-x', 'c++', '-std=gnu++20', f'--target={target}', '-include', os.path.join(ROOT, 'src/platform/compat.h'),
+            '-w', '-DBO1_MP', '-DBO1_OFFLINE', '-DSTEAM_API_NODLL', '-D__RADINEXE__', f'-I{ROOT}', f'-I{ROOT}/src',
+            f'-I{ROOT}/src/libs', f'-I{posix}/include', f'-I{posix}/include_cased', f'-I{posix_dxsdk}',
+            '-ferror-limit=0', '-resource-dir', resource_dir()]
+    tu = ci.Index.create().parse(os.path.join(ROOT, 'src/database/db_load.cpp'), args=args)
+    errors = [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]
+    if errors:
+        raise LayoutError(f'{target}: {errors[0]} ({len(errors)} errors)')
     return tu
 
 
@@ -100,14 +129,22 @@ def has_pointer(t):
     return False
 
 
-def has_fixup(t):
+def has_listed_field(t, fields):
     t = t.get_canonical()
     if t.kind == ci.TypeKind.CONSTANTARRAY:
-        return has_fixup(t.element_type)
+        return has_listed_field(t.element_type, fields)
     if t.kind == ci.TypeKind.RECORD:
         name = record_name(t)
-        return any((name, f.spelling) in VALUE_FIXUPS or has_fixup(f.type) for f in t.get_fields())
+        return any((name, f.spelling) in fields or has_listed_field(f.type, fields) for f in t.get_fields())
     return False
+
+
+def has_fixup(t):
+    return has_listed_field(t, VALUE_FIXUPS)
+
+
+def has_handle(t):
+    return has_listed_field(t, WIDENED_INTEGERS)
 
 
 def fixup_row(record, field, path, base, out):
@@ -117,16 +154,23 @@ def fixup_row(record, field, path, base, out):
     out.append((path, base, 4, FIXUP, VALUE_FIXUPS[(record, field.spelling)]))
 
 
+def handle_row(record, field, path, base, out):
+    t = field.type.get_canonical()
+    if field.type.spelling != 'intptr_t' or t.kind not in SIGNED_INTEGER_KINDS:
+        raise LayoutError(f'{record}.{field.spelling}: a widened integer must be declared intptr_t')
+    out.append((path, base, t.get_size(), HANDLE))
+
+
 def leaves(t, path, base, out):
     """Append (path, offset, size, kind) for type t at byte offset base, and (path, offset, 4, FIXUP, unit) for the
-    fields VALUE_FIXUPS lists."""
+    fields VALUE_FIXUPS lists. The fields WIDENED_INTEGERS lists are HANDLE leaves."""
     t = t.get_canonical()
     size = t.get_size()
     if t.kind in POINTER_KINDS:
         out.append((path, base, size, PTR))
     elif t.kind == ci.TypeKind.CONSTANTARRAY:
         elem = t.element_type.get_canonical()
-        if not has_pointer(elem) and not has_fixup(elem):
+        if not has_pointer(elem) and not has_fixup(elem) and not has_handle(elem):
             out.append((path, base, size, BYTES))
         else:
             for i in range(t.element_count):
@@ -153,7 +197,10 @@ def leaves(t, path, base, out):
                 else:
                     fpath = f'{path}.{f.spelling or "@" + str(i)}'
                     fbase = base + f.get_field_offsetof() // 8
-                    leaves(f.type, fpath, fbase, out)
+                    if (record_name(t), f.spelling) in WIDENED_INTEGERS:
+                        handle_row(record_name(t), f, fpath, fbase, out)
+                    else:
+                        leaves(f.type, fpath, fbase, out)
                     if (record_name(t), f.spelling) in VALUE_FIXUPS:
                         fixup_row(record_name(t), f, fpath, fbase, out)
                 i += 1
@@ -176,6 +223,8 @@ def union_leaf(t, path, base, out):
     members = list(t.get_fields())
     if any(has_fixup(m.type) for m in members):
         raise LayoutError(f'{path}: a value fixup inside a union')
+    if any(has_handle(m.type) for m in members):
+        raise LayoutError(f'{path}: a widened integer inside a union')
     if not any(has_pointer(m.type) for m in members):
         out.append((path, base, size, BYTES))
         return
@@ -261,19 +310,23 @@ def build(tu32, tu64):
                   for r32, r64 in zip(l32, l64) if r32[3] == FIXUP]
         l32 = [r for r in l32 if r[3] != FIXUP]
         l64 = [r for r in l64 if r[3] != FIXUP]
+        handles = [(path, o32) for path, o32, _, kind in l32 if kind == HANDLE]
         rows = []
         for (path, o32, s32, k32), (_, o64, s64, k64) in zip(l32, l64):
             if k32 != k64:
                 raise LayoutError(f'{name}{path}: leaf kind differs between targets')
             if k32 == BYTES and s32 != s64:
                 raise LayoutError(f'{name}{path}: {s32} bytes on 32-bit, {s64} on 64-bit')
+            if k32 == HANDLE and (s32, s64) != (4, 8):
+                raise LayoutError(f'{name}{path}: a widened integer of {s32} bytes on 32-bit, {s64} on 64-bit')
             rows.append((o32, o64, s32, s64, k32))
         rows = keep_padding(rows, t32.get_size(), t64.get_size())
         for o32, o64, *_ in fixups:
             if not any(k == BYTES and r32 <= o32 and o32 + 4 <= r32 + n32 and o64 - o32 == r64 - r32
                        for r32, r64, n32, _, k in rows):
                 raise LayoutError(f'{name}: a value fixup at {o32} is not inside a byte leaf')
-        tables[name] = (t32.get_size(), t32.get_align(), t64.get_size(), t64.get_align(), merge(rows), fixups)
+        tables[name] = (t32.get_size(), t32.get_align(), t64.get_size(), t64.get_align(), merge(rows), fixups,
+                        handles)
     return tables
 
 
@@ -292,10 +345,12 @@ def emit(tables, target64, out):
         'namespace ff',
         '{',
     ]
-    for name, (s32, a32, s64, a64, rows, fixups) in tables.items():
+    for name, (s32, a32, s64, a64, rows, fixups, handles) in tables.items():
         lid = ident(name)
         body = ', '.join(f'{{{o32}, {o64}, {l32}, {l64}, {k}}}' for o32, o64, l32, l64, k in rows)
         lines.append(f'static_assert(sizeof({name}) == {s32} && alignof({name}) == {a32}, "{name}: 32-bit layout");')
+        for path, o32 in handles:
+            lines.append(f'static_assert(offsetof({name}, {path[1:]}) == {o32}, "{name}{path}: widened integer");')
         lines.append(f'inline constexpr Leaf kLeaves_{lid}[] = {{{body}}};')
         fixup_ref = ''
         if fixups:
@@ -319,26 +374,50 @@ def emit(tables, target64, out):
         f.write('\n'.join(lines))
 
 
+def write_depfile(path, target, tus):
+    headers = sorted({os.path.abspath(i.include.name) for tu in tus for i in tu.get_includes()})
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(target.replace(' ', '\\ ') + ': ' + ' \\\n  '.join(h.replace(' ', '\\ ') for h in headers) + '\n')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--out', required=True)
+    parser.add_argument('--out')
     parser.add_argument('--target32', default='i686-w64-mingw32')
     parser.add_argument('--target64', default='x86_64-w64-mingw32')
     parser.add_argument('--dxsdk', default='/mnt/c/SDKs/DXSDK_Jun10/DXSDK')
-    parser.add_argument('--depfile', help='write the headers both parses read, for the build to rerun on a change')
+    parser.add_argument('--depfile', help='write the headers the parses read, for the build to rerun on a change')
+    parser.add_argument('--check-target64', help='a posix 64-bit target whose tables must equal --target64\'s')
+    parser.add_argument('--posix-dxsdk', help='with --check-target64: the D3D9 headers the posix build copied')
+    parser.add_argument('--stamp', help='with --check-target64: touched when the tables are equal')
     opts = parser.parse_args()
+    if bool(opts.out) == bool(opts.check_target64) or (opts.check_target64 and not (opts.posix_dxsdk and opts.stamp)):
+        parser.error('give either --out, or --check-target64 with --posix-dxsdk and --stamp')
     tu32, tu64 = parse(opts.target32, opts.dxsdk), parse(opts.target64, opts.dxsdk)
     try:
         tables = build(tu32, tu64)
+        if opts.check_target64:
+            tu_check = parse_posix(opts.check_target64, opts.posix_dxsdk)
+            checked = build(tu32, tu_check)
     except LayoutError as e:
         print(f'layouts.py: {e}', file=sys.stderr)
         return 1
+    if opts.check_target64:
+        differ = sorted(set(tables) ^ set(checked)) + [n for n in tables if n in checked and tables[n] != checked[n]]
+        if differ:
+            print(f'layouts.py: {len(differ)} streamed types lay out differently on {opts.check_target64} than on '
+                  f'{opts.target64}, so its build cannot read those zones: {", ".join(differ[:20])}', file=sys.stderr)
+            return 1
+        with open(opts.stamp, 'w', encoding='utf-8') as f:
+            f.write(f'{len(tables)} streamed types lay out the same on {opts.check_target64} and {opts.target64}\n')
+        if opts.depfile:
+            write_depfile(opts.depfile, opts.stamp, (tu32, tu64, tu_check))
+        return 0
     emit(tables, opts.target64, opts.out)
     if opts.depfile:
-        headers = sorted({os.path.abspath(i.include.name) for tu in (tu32, tu64) for i in tu.get_includes()})
-        with open(opts.depfile, 'w', encoding='utf-8') as f:
-            f.write(opts.out.replace(' ', '\\ ') + ': ' + ' \\\n  '.join(h.replace(' ', '\\ ') for h in headers) + '\n')
-    print(f'{len(tables)} types, {sum(len(t[5]) for t in tables.values())} value fixups -> {opts.out}')
+        write_depfile(opts.depfile, opts.out, (tu32, tu64))
+    print(f'{len(tables)} types, {sum(len(t[5]) for t in tables.values())} value fixups, '
+          f'{sum(len(t[6]) for t in tables.values())} widened integers -> {opts.out}')
     return 0
 
 

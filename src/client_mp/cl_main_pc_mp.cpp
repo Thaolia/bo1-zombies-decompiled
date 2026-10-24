@@ -341,16 +341,11 @@ void __cdecl CL_ConnectHackDW()
 
 bool __cdecl CL_CDKeyValidate(netadr_t addr)
 {
-#ifdef WIN32
     // no-steam: without a logged-on Steam client there is no ticket to make; connect without one (the server
     // decides: SV_GetChallenge admits ticketless clients only when it runs without Steam itself).
     if (!g_steamInitialized)
         return true;
     return Steam_UpdateClientAuthTicket(addr);
-#else
-#error Steam Auth for Arch
-    return false;
-#endif
 }
 
 void __cdecl CL_Connect_f()

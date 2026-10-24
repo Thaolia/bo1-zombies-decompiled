@@ -1099,7 +1099,7 @@ void __cdecl Path_BuildNodeVis(unsigned __int8 *visbuf, unsigned int iVisCacheSi
 
 void __cdecl GetNodeAttackPoint(const pathnode_t *node, float *attackPos)
 {
-    long double v2; // st7
+    double v2; // st7
     float fCos; // [esp+14h] [ebp-8h]
     float fSin; // [esp+18h] [ebp-4h]
 

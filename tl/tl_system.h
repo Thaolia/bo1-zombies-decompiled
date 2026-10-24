@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdarg.h>
+
 union _LARGE_INTEGER;
 
 struct tlFileBuf // sizeof=0xC
@@ -31,7 +33,7 @@ int __cdecl tlGetVersion();
 void __cdecl tlStackRangeInit();
 char __cdecl tlFatalHandler(const char *Msg);
 void __cdecl tlDebugPrint(const char *txt);
-void __cdecl tlVPrintf(const char *Format, char *args);
+void __cdecl tlVPrintf(const char *Format, va_list args);
 void tlPrintf(const char *Format, ...);
 char __cdecl _tlAssert(const char *file, int line, const char *expr, const char *desc);
 void tlFatal(const char *Format, ...);

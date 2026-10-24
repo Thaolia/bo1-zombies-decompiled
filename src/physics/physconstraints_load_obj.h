@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 enum ConstraintType : __int32
 {                                                                             // XREF: PhysConstraint/r
                                                                                 // ?XDoll_IsXDollConstraint@@YA_NW4ConstraintType@@@Z/r
@@ -59,7 +61,9 @@ struct PhysConstraint // sizeof=0xA8
     float minAngle;
     float maxAngle;
     struct Material *material;
-    int constraintHandle;
+    // A rigid_body_constraint_* pointer, or 1 as a marker (a fixed-up light constraint, bodies being created). Zones
+    // stream it as 0; ffconv widens it to 8 bytes (LEAF_HANDLE).
+    intptr_t constraintHandle;
     int rope_index;
     int centity_num[4];
 };

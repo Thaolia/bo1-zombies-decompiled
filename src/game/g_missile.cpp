@@ -473,7 +473,7 @@ void    G_ExplodeMissile(gentity_s *ent)
     unsigned __int8 v5; // al
     unsigned __int8 v6; // al
     unsigned __int8 v7; // al
-    long double v8; // [esp+20h] [ebp-1ACh]
+    double v8; // [esp+20h] [ebp-1ACh]
     gentity_s *v9; // [esp+24h] [ebp-1A8h]
     gentity_s *v10; // [esp+28h] [ebp-1A4h]
     gentity_s *v11; // [esp+2Ch] [ebp-1A0h]
@@ -1510,7 +1510,7 @@ void    MissileImpact(gentity_s *ent, trace_t *trace, float *dir, float *endpos)
     unsigned __int16 z_up; // [esp+18h] [ebp-174h]
     int fRadiusSqrd; // [esp+1Ch] [ebp-170h]
     unsigned int fRadiusSqrda; // [esp+1Ch] [ebp-170h]
-    long double v35; // [esp+20h] [ebp-16Ch]
+    double v35; // [esp+20h] [ebp-16Ch]
     gentity_s *v36; // [esp+28h] [ebp-164h]
     float coneAngleCos; // [esp+30h] [ebp-15Ch]
     int splashMethodOfDeath; // [esp+3Ch] [ebp-150h]
@@ -2218,8 +2218,8 @@ bool __cdecl CheckCrumpleMissile(gentity_s *ent, trace_t *trace)
 bool    BounceMissile(gentity_s *ent, trace_t *trace)
 {
     float v3; // xmm0_4
-    long double v5; // [esp+20h] [ebp-1CCh]
-    long double v6; // [esp+20h] [ebp-1CCh]
+    double v5; // [esp+20h] [ebp-1CCh]
+    double v6; // [esp+20h] [ebp-1CCh]
     int v7; // [esp+38h] [ebp-1B4h]
     float traceEnd[4]; // [esp+3Ch] [ebp-1B0h] BYREF
     float vDelta[3]; // [esp+4Ch] [ebp-1A0h]
@@ -3134,10 +3134,12 @@ int __cdecl StickMissile(
         if ( team == ent->missile.team && !weapDef->timedDetonation && team )
             return isStuck;
         entnum = other->s.number;
+        // Upstream bug kept as is (docs/PORTING.md): the decompiled offset reads 4 bytes of the corpse's player name,
+        // not its entnum.
         if ( other->client->ps.pm_type == 9
-            && (int)g_scr_data.actorXAnimTrees[376 * other->client->ps.corpseIndex - 1495] >= 0 )
+            && *(const int *)&g_scr_data.playerCorpseInfo[other->client->ps.corpseIndex].ci.name[8] >= 0 )
         {
-            entnum = (int)g_scr_data.actorXAnimTrees[376 * other->client->ps.corpseIndex - 1495];
+            entnum = *(const int *)&g_scr_data.playerCorpseInfo[other->client->ps.corpseIndex].ci.name[8];
         }
         ent->flags |= 0x1000u;
         boneName = 0;
@@ -3497,7 +3499,7 @@ void    Missile_ApplyAttractorsRepulsors(gentity_s *missile)
     float v3; // xmm0_4
     float v4; // xmm0_4
     float v5; // xmm0_4
-    long double v6; // [esp-24h] [ebp-ACh]
+    double v6; // [esp-24h] [ebp-ACh]
     float iProjectileSpeed; // [esp-24h] [ebp-ACh]
     float angleToAttractor; // [esp+8h] [ebp-80h]
     float angleToAttractora; // [esp+8h] [ebp-80h]
@@ -4675,7 +4677,7 @@ bool __cdecl JavelinClimbEnd(gentity_s *ent, const float *targetPos)
 char JavelinClimbExceededAngle(gentity_s *ent, const float *targetPos)
 {
     double v3; // xmm0_8
-    long double v5; // [esp-10h] [ebp-3Ch]
+    double v5; // [esp-10h] [ebp-3Ch]
     float toTarget[3]; // [esp+Ch] [ebp-20h] BYREF
     float value; // [esp+18h] [ebp-14h]
     float currentHorzDir[2]; // [esp+1Ch] [ebp-10h]
@@ -5461,7 +5463,7 @@ gentity_s *__cdecl G_FireRocket(
                 const float *targetOffset)
 {
     int v7; // eax
-    long double v8; // st7
+    double v8; // st7
     char *Name; // eax
     int v10; // edx
     int Contents; // eax
@@ -5821,7 +5823,7 @@ gentity_s *__cdecl G_DropBomb(
                 const float *targetOffset)
 {
     int v7; // eax
-    long double v8; // st7
+    double v8; // st7
     int v9; // ecx
     //$0D33AF6AB483EB176B99DAC6E021D6CF *v11; // [esp+10h] [ebp-A4h]
     //$0D33AF6AB483EB176B99DAC6E021D6CF *v12; // [esp+18h] [ebp-9Ch]

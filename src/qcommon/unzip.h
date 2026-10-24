@@ -3,6 +3,7 @@
 //#include <zlib32/zip.h>
 #include <zlib/zlib.h>
 #include <stdio.h> // FILE
+#include <platform/arch_size.h>
 #define ZIP_FILE	FILE
 
 #if defined(STRICTUNZIP) || defined(STRICTZIPUNZIP)
@@ -191,7 +192,7 @@ extern int unzGoToNextFile (unzFile file);
   return UNZ_END_OF_LIST_OF_FILE if the actual file was the latest.
 */
 
-extern int unzGetCurrentFileInfoPosition (unzFile file, unsigned long *pos );
+extern int unzGetCurrentFileInfoPosition (unzFile file, bo1_ulong *pos );
 
 /*
   Get the position of the info of the current file in the zip.

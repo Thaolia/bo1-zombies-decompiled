@@ -668,7 +668,7 @@ void __cdecl R_GetStaticModelLightSurfs(const GfxLight *visibleLights, int visib
                                                                          | (HIDWORD(v2) | HIDWORD(drawSurf.packed)) & 0xFF87FFFF;
                         if ( light->type == 2 && r_spotLightShadows->current.enabled && r_spotLightSModelShadows->current.enabled )
                         {
-                            if ( !R_AllocDrawSurf(&shadowSurfData.delayedCmdBuf, drawSurf, &shadowSurfData.drawSurfList, 3u) )
+                            if ( !R_AllocDrawSurf(&shadowSurfData.delayedCmdBuf, drawSurf, &shadowSurfData.drawSurfList, 2u + PRIM_DRAW_SURF_PTR_WORDS) )
                                 break;
                             R_AddDelayedStaticModelDrawSurf(
                                 &shadowSurfData.delayedCmdBuf,

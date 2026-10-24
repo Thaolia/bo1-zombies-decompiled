@@ -37,6 +37,20 @@ struct ShaderPackEntry
 
 static_assert(sizeof(ShaderPackHeader) == 16 && sizeof(ShaderPackEntry) == 24, "shaders.pack layout");
 
+// The location of a vertex shader input: the index of its D3D9 usage in the engine's material stream destinations
+// (s_streamDestInfo in gfx_d3d/r_material.cpp), so that a stream reaches the input Material_BuildVertexDecl routes
+// it to. -1 for a usage that is not a destination.
+inline int ShaderPack_InputLocation(int usage, int usageIndex)
+{
+    static constexpr uint8_t kDestinations[20][2] = {{0, 0}, {3, 0}, {10, 0}, {10, 1}, {12, 0}, {5, 0},  {5, 1},
+                                                     {5, 2}, {5, 3}, {5, 4},  {5, 5},  {5, 6},  {5, 7},  {5, 8},
+                                                     {5, 9}, {5, 10}, {5, 11}, {5, 12}, {5, 13}, {1, 0}};
+    for (int d = 0; d < 20; ++d)
+        if (kDestinations[d][0] == usage && kDestinations[d][1] == usageIndex)
+            return d;
+    return -1;
+}
+
 // FNV-1a 64 over the bytecode bytes.
 inline uint64_t ShaderPack_Hash(const void *bytecode, size_t size)
 {

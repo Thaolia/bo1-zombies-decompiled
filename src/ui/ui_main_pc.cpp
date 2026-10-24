@@ -973,23 +973,25 @@ int __cdecl UI_JoinGameType_HandleKey(int flags, int key)
 
 int __cdecl UI_JoinMod_HandleKey(int flags, int key)
 {
-    const char *nextJoinMod; // [esp+0h] [ebp-4h]
+    int nextJoinMod; // [esp+0h] [ebp-4h]
     int nextJoinModa; // [esp+0h] [ebp-4h]
 
     if ( key != 200 && key != 201 && key != 13 && key != 191 )
         return 0;
+    // The mod count is the int the retail code reads at modList[63].modDescr (sharedUiInfo_t is one field off,
+    // docs/PORTING.md).
     if ( key == 201 )
     {
         if ( ui_browserMod->current.integer - 1 >= -2 )
-            nextJoinMod = ui_browserMod->current.string;
+            nextJoinMod = ui_browserMod->current.integer;
         else
-            nextJoinMod = sharedUiInfo.modList[63].modDescr;
-        nextJoinModa = (int)(nextJoinMod - 1);
+            nextJoinMod = *(const int *)&sharedUiInfo.modList[63].modDescr;
+        nextJoinModa = nextJoinMod - 1;
     }
     else
     {
         nextJoinModa = ui_browserMod->current.integer + 1;
-        if ( (const char *)nextJoinModa == sharedUiInfo.modList[63].modDescr )
+        if ( nextJoinModa == *(const int *)&sharedUiInfo.modList[63].modDescr )
             nextJoinModa = -2;
     }
     if ( (nextJoinModa < -2 || nextJoinModa > 64)
@@ -1267,11 +1269,11 @@ Material *__cdecl UI_GetLevelShot(int index)
 {
     if ( index < 0 || index >= sharedUiInfo.mapCount )
         index = 0;
-    if ( !sharedUiInfo.mapList[index].timeToBeat[31] )
-        sharedUiInfo.mapList[index].timeToBeat[31] = (int)Material_RegisterHandle(
+    if ( !sharedUiInfo.mapList[index].levelShotMaterial )
+        sharedUiInfo.mapList[index].levelShotMaterial = Material_RegisterHandle(
                                                                                                                 (char *)&sharedUiInfo.mapList[index].mapPackTypeIndex,
                                                                                                                 3);
-    return (Material *)sharedUiInfo.mapList[index].timeToBeat[31];
+    return sharedUiInfo.mapList[index].levelShotMaterial;
 }
 
 void __cdecl UI_DrawMapPreview(int contextIndex, const rectDef_s *rect, const float *color)

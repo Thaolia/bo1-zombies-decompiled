@@ -10,9 +10,9 @@ struct $24C327571DE1B1A743908CE1FB1197BD // sizeof=0x10030
     // padding byte
     // padding byte
     // padding byte
-    long double msecOverhead;
+    double msecOverhead;
     unsigned __int64 timeBegin;
-    long double msecElapsed;            // XREF: R_PixelCost_EndSurface(GfxCmdBufContext)+A3/r
+    double msecElapsed;            // XREF: R_PixelCost_EndSurface(GfxCmdBufContext)+A3/r
                                         // RB_PixelCost_AccumulateMsec+6/r
     int frameIndex;                     // XREF: R_PixelCost_EndSurface(GfxCmdBufContext)+11F/r
                                         // RB_PixelCost_AccumulateMsec+64/r
@@ -95,23 +95,22 @@ const Material *__cdecl R_PixelCost_GetAccumulationMaterial(const Material *mate
 void __cdecl R_PixelCost_BeginSurface(GfxCmdBufContext context)
 {
     int cost; // [esp+4h] [ebp-Ch]
-    unsigned __int64 packedKey; // [esp+8h] [ebp-8h]
-    unsigned __int64 packedKeya; // [esp+8h] [ebp-8h]
+    GfxPixelCostKey key; // [esp+8h] [ebp-8h]
 
     if ( pixelCostMode == GFX_PIXEL_COST_MODE_MEASURE_COST )
     {
-        packedKey = R_PixelCost_PackedKeyForMaterial(context.state->material, context.state->techType);
-        if ( !RB_PixelCost_DoesPrimMatch(packedKey) )
-            RB_PixelCost_ResetPrim(packedKey);
+        key = R_PixelCost_KeyForMaterial(context.state->material, context.state->techType);
+        if ( !RB_PixelCost_DoesPrimMatch(key) )
+            RB_PixelCost_ResetPrim(key);
         ++pixelCostGlob.expectedCount;
         //BLOPS_NULLSUB();
         RB_HW_BeginOcclusionQuery(gfxAssets.pixelCountQuery[r_glob.backEndFrameCount % 4]);
     }
     else if ( pixelCostMode == GFX_PIXEL_COST_MODE_MEASURE_MSEC )
     {
-        packedKeya = R_PixelCost_PackedKeyForMaterial(context.state->material, context.state->techType);
-        if ( !RB_PixelCost_DoesPrimMatch(packedKeya) )
-            RB_PixelCost_ResetPrim(packedKeya);
+        key = R_PixelCost_KeyForMaterial(context.state->material, context.state->techType);
+        if ( !RB_PixelCost_DoesPrimMatch(key) )
+            RB_PixelCost_ResetPrim(key);
         ++pixelCostGlob.expectedCount;
         //BLOPS_NULLSUB();
     }
@@ -240,32 +239,35 @@ int __cdecl RB_PixelCost_GetCostForRecordIndex(int recordIndex)
     }
 }
 
-unsigned __int64 __cdecl R_PixelCost_PackedKeyForMaterial(const Material *material, unsigned __int8 techType)
+GfxPixelCostKey __cdecl R_PixelCost_KeyForMaterial(const Material *material, unsigned __int8 techType)
 {
-    unsigned int key_4; // [esp+4h] [ebp-4h]
+    GfxPixelCostKey key;
 
     if ( !material
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\rb_pixelcost.cpp", 254, 0, "%s", "material") )
     {
         __debugbreak();
     }
-    LOBYTE(key_4) = techType;
-    return __PAIR64__(key_4, (unsigned int)material);
+    // The decompiled form packed the pointer and the technique into one 64-bit word (with 3 uninitialised bytes);
+    // a 64-bit pointer leaves no room, so the key is compared field by field.
+    key.packed = 0;
+    key.mtl.material = material;
+    key.mtl.techType = techType;
+    return key;
 }
 
-bool __cdecl RB_PixelCost_DoesPrimMatch(unsigned __int64 packedKey)
+bool __cdecl RB_PixelCost_DoesPrimMatch(GfxPixelCostKey key)
 {
-    return __PAIR64__(
-                     HIDWORD(pixelCostGlob.records[pixelCostGlob.recordCount].key.packed),
-                     pixelCostGlob.records[pixelCostGlob.recordCount].key.mtl.material) == packedKey;
+    const GfxPixelCostKey *recordKey = &pixelCostGlob.records[pixelCostGlob.recordCount].key;
+    return recordKey->mtl.material == key.mtl.material && recordKey->mtl.techType == key.mtl.techType;
 }
 
-void __cdecl RB_PixelCost_ResetPrim(unsigned __int64 packedKey)
+void __cdecl RB_PixelCost_ResetPrim(GfxPixelCostKey key)
 {
     GfxPixelCostRecord *record; // [esp+0h] [ebp-4h]
 
     record = &pixelCostGlob.records[pixelCostGlob.expectedCount];
-    record->key.packed = packedKey;
+    record->key = key;
     *(unsigned int *)record->costHistory = 0;
     *(unsigned int *)&record->costHistory[2] = 0;
     *(unsigned int *)&record->costHistory[4] = 0;

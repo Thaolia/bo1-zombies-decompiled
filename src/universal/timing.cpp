@@ -2,7 +2,7 @@
 
 #include <Windows.h>
 
-long double msecPerRawTimerTick;
+double msecPerRawTimerTick;
 
 void __cdecl InitTiming()
 {

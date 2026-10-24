@@ -18,6 +18,7 @@ struct StreamStats
     uint64_t chunks = 0;
     uint64_t pointersTranslated = 0;
     uint64_t valuesFixed = 0;       // integers rescaled by a value fixup (ff_layout.h)
+    uint64_t handles = 0;           // LEAF_HANDLE integers widened (narrowing: narrowed back); all of them are 0
     uint64_t misaligned64 = 0;      // a chunk whose 64-bit position is not aligned to its type
     uint64_t reinlined = 0;         // offset pointers streamed inline in the IWffs zone (Reinline)
     uint32_t end32[7] = {};         // highest 32-bit position reached in each block

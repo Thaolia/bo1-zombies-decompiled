@@ -2546,7 +2546,11 @@ static void Com_ModFov_ReadShared()
     float value;
 
     Com_ModFov_SharedPath(path, sizeof(path));
+#if defined(_WIN32)
     f = fopen(path, "rb");
+#else
+    f = bo1_fopen(path, "rb");
+#endif
     if ( !f )
         return;
     len = fread(text, 1, sizeof(text) - 1, f);
@@ -2575,7 +2579,11 @@ void __cdecl Com_ModFov_SaveShared(float value)
         return;
     com_modFovShared = value;
     Com_ModFov_SharedPath(path, sizeof(path));
+#if defined(_WIN32)
     f = fopen(path, "wb");
+#else
+    f = bo1_fopen(path, "wb");
+#endif
     if ( !f )
     {
         Com_Printf(16, "bo1_mod_fov: couldn't write %s\n", path);

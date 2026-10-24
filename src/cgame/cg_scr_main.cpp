@@ -3394,7 +3394,7 @@ void CScr_SplitArgs()
 void CScr_sin()
 {
     float value; // xmm0_8
-    long double v1; // [esp+8h] [ebp-8h]
+    double v1; // [esp+8h] [ebp-8h]
 
     //*((float *)&v1 + 1) = Scr_GetFloat(0, SCRIPTINSTANCE_CLIENT);
     //value = (float)(*((float *)&v1 + 1) * 0.017453292);
@@ -3408,7 +3408,7 @@ void CScr_sin()
 void CScr_cos()
 {
     float value; // xmm0_8
-    long double v1; // [esp+8h] [ebp-8h]
+    double v1; // [esp+8h] [ebp-8h]
 
     //*((float *)&v1 + 1) = Scr_GetFloat(0, SCRIPTINSTANCE_CLIENT);
     //value = (float)(*((float *)&v1 + 1) * 0.017453292);
@@ -3435,7 +3435,7 @@ void CScr_tan()
 
 void CScr_asin()
 {
-    long double v0; // [esp+8h] [ebp-Ch]
+    double v0; // [esp+8h] [ebp-Ch]
     float x; // [esp+10h] [ebp-4h]
 
     x = Scr_GetFloat(0, SCRIPTINSTANCE_CLIENT);
@@ -3449,7 +3449,7 @@ void CScr_asin()
 
 void CScr_acos()
 {
-    long double v0; // [esp+8h] [ebp-Ch]
+    double v0; // [esp+8h] [ebp-Ch]
     float x; // [esp+10h] [ebp-4h]
 
     x = Scr_GetFloat(0, SCRIPTINSTANCE_CLIENT);
@@ -3464,7 +3464,7 @@ void CScr_acos()
 void CScr_atan()
 {
     double v0; // xmm0_8
-    long double v1; // [esp+8h] [ebp-8h]
+    double v1; // [esp+8h] [ebp-8h]
 
     //*((float *)&v1 + 1) = Scr_GetFloat(0, SCRIPTINSTANCE_CLIENT);
     //v0 = *((float *)&v1 + 1);
@@ -6965,7 +6965,7 @@ void __cdecl CScr_SetLightRadius(scr_entref_t entref)
 void __cdecl CScr_GetLightFovInner(scr_entref_t entref)
 {
     double v1; // xmm0_8
-    long double v2; // [esp+8h] [ebp-1Ch]
+    double v2; // [esp+8h] [ebp-1Ch]
     centity_s *pSelf; // [esp+18h] [ebp-Ch]
 
     if ( entref.classnum )
@@ -7007,7 +7007,7 @@ void __cdecl CScr_GetLightFovInner(scr_entref_t entref)
 void __cdecl CScr_GetLightFovOuter(scr_entref_t entref)
 {
     double v1; // xmm0_8
-    long double v2; // [esp+8h] [ebp-1Ch]
+    double v2; // [esp+8h] [ebp-1Ch]
     centity_s *pSelf; // [esp+18h] [ebp-Ch]
 
     if ( entref.classnum )
@@ -7048,8 +7048,8 @@ void __cdecl CScr_GetLightFovOuter(scr_entref_t entref)
 void __cdecl CScr_SetLightFovRange(scr_entref_t entref)
 {
     const char *v1; // eax
-    long double v2; // [esp+10h] [ebp-4Ch]
-    long double v3; // [esp+10h] [ebp-4Ch]
+    double v2; // [esp+10h] [ebp-4Ch]
+    double v3; // [esp+10h] [ebp-4Ch]
     float v4; // [esp+10h] [ebp-4Ch]
     float v5; // [esp+14h] [ebp-48h]
     float v6; // [esp+18h] [ebp-44h]

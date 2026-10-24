@@ -590,7 +590,7 @@ NET_GetLocalAddress
 int NET_GetLocalAddress()
 {
     int result; // eax
-    u_long v1; // [esp+0h] [ebp-114h]
+    uint32_t v1; // [esp+0h] [ebp-114h]
     char hostname[256]; // [esp+4h] [ebp-110h] BYREF
     hostent *hostInfo; // [esp+108h] [ebp-Ch]
     int n; // [esp+10Ch] [ebp-8h]
@@ -1027,7 +1027,7 @@ unsigned int __cdecl NET_TCPIPSocket(char *net_interface, int port, int type)
         if ( net_interface && *net_interface && I_stricmp(net_interface, "localhost") )
             Sys_StringToSockaddr(net_interface, (sockaddr *)&address);
         else
-            address.sin_addr.S_un.S_addr = 0;
+            address.sin_addr.s_addr = 0;
         if ( port == -1 )
             address.sin_port = 0;
         else
@@ -1072,13 +1072,26 @@ int __cdecl NET_Select(unsigned int socket)
     fd_set writefds; // [esp+110h] [ebp-110h] BYREF
     timeval time; // [esp+218h] [ebp-8h] BYREF
 
+#if defined(_WIN32)
     readfds.fd_count = 1;
     readfds.fd_array[0] = socket;
     writefds.fd_count = 1;
     writefds.fd_array[0] = socket;
+#else
+    // A BSD fd_set is a bit set, and select needs the highest descriptor + 1 (Winsock's is a counted array and
+    // ignores nfds).
+    FD_ZERO(&readfds);
+    FD_SET(socket, &readfds);
+    FD_ZERO(&writefds);
+    FD_SET(socket, &writefds);
+#endif
     time.tv_sec = 5;
     time.tv_usec = 0;
+#if defined(_WIN32)
     err = select(0, &readfds, &writefds, 0, &time);
+#else
+    err = select(socket + 1, &readfds, &writefds, 0, &time);
+#endif
     if ( err )
     {
         if ( err == -1 )

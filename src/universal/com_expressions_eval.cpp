@@ -7997,7 +7997,7 @@ void __cdecl GetPlayerCardTitle(int localClientNum, itemDef_s *item, OperandStac
     result.dataType = VAL_STRING;
     GetOperand(dataStack, &source);
     playerName = GetSourceString(source);
-    memset(&convArgs.args[1], 0, 32);
+    memset(&convArgs.args[1], 0, sizeof(convArgs.args) - sizeof(convArgs.args[0]));
     convArgs.argCount = 1;
     convArgs.args[0] = playerName;
     v3 = UI_SafeTranslateString("MENU_PLAYERCARD_TITLE_CAPS");
@@ -9405,7 +9405,7 @@ void __cdecl GetCopyCustomGametypeClassConfirmationText(int localClientNum, item
         selectedClassIndex = classIndexToReplace;
         if ( classIndexToReplace >= classIndexToCopy )
             ++selectedClassIndex;
-        memset(&convArgs.args[2], 0, 28);
+        memset(&convArgs.args[2], 0, sizeof(convArgs.args) - 2 * sizeof(convArgs.args[0]));
         convArgs.argCount = 2;
         convArgs.args[0] = g_customGameModeClassDescriptions[selectedClassIndex].name;
         convArgs.args[1] = g_customGameModeClassDescriptions[classIndexToCopy].name;
@@ -10792,7 +10792,7 @@ void __cdecl GetLbTypeWithButtons(int localClientNum, itemDef_s *item, OperandSt
     binding[1] = 0;
     binding[2] = 6;
     binding[3] = 0;
-    memset(&convArgs.args[2], 0, 28);
+    memset(&convArgs.args[2], 0, sizeof(convArgs.args) - 2 * sizeof(convArgs.args[0]));
     convArgs.args[0] = binding;
     convArgs.args[1] = &binding[2];
     convArgs.argCount = 2;
@@ -11610,7 +11610,7 @@ void __cdecl GetCacFactionNameWithButtons(int localClientNum, itemDef_s *item, O
     binding[1] = 0;
     binding[2] = 6;
     binding[3] = 0;
-    memset(&convArgs.args[1], 0, 32);
+    memset(&convArgs.args[1], 0, sizeof(convArgs.args) - sizeof(convArgs.args[0]));
     convArgs.argCount = 3;
     convArgs.args[0] = binding;
     convArgs.args[1] = UI_SafeTranslateString(factionName);

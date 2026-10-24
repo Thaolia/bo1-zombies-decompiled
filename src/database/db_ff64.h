@@ -13,12 +13,16 @@ inline constexpr uint32_t DB_FF64_VERSION = 473;
 // Struct layouts depend on the 64-bit ABI (bitfields, tail padding), so a zone is written for one of them.
 enum DBFF64Abi : uint32_t
 {
-    DB_FF64_ABI_WIN64 = 1,   // MSVC x64 rules: Windows x64 builds (phase 3)
+    DB_FF64_ABI_WIN64 = 1,   // MSVC x64 rules: Windows x64 builds (phase 3), and the posix x86-64 build (below)
     DB_FF64_ABI_AARCH64 = 2, // AAPCS64 / LP64: the Switch
 };
 
-// The ABI of this build; 0 on a target with no IWffs layout tables yet.
+// The ABI of this build; 0 on a target with no IWffs layout tables yet. The posix x86-64 build (SysV) reads the win64
+// zones: every streamed struct lays out there as with MSVC x64, which its build checks (CMakeLists.txt,
+// tools/ffconv/gen/layouts.py --check-target64).
 #if defined(_WIN64)
+inline constexpr uint32_t DB_FF64_BUILD_ABI = DB_FF64_ABI_WIN64;
+#elif defined(__x86_64__)
 inline constexpr uint32_t DB_FF64_BUILD_ABI = DB_FF64_ABI_WIN64;
 #elif defined(__aarch64__)
 inline constexpr uint32_t DB_FF64_BUILD_ABI = DB_FF64_ABI_AARCH64;

@@ -40,3 +40,16 @@ win32-msvc-offline-release`, puis `Play.bat offline`.
 Kino der Toten se charge et se joue une minute ; les parties plus longues ne sont pas encore testées. Cette build lit
 des zones converties : `ffconv --verify --game <install> --out build\zones64`, puis `cmake --preset win64-msvc`,
 `cmake --build --preset win64-msvc-release` et `Play.bat x64`.
+
+## Build Linux (en cours)
+Sur Linux x86-64, le moteur tourne en serveur dédié, en client headless qui ne dessine rien, ou en client fenêtré
+qui rend en OpenGL 4.3 core (clavier et souris ; pas encore de son ni de manette). `cmake --preset linux64-clang
+-DDXSDK_DIR=<SDK DirectX de juin 2010>` puis `cmake --build --preset linux64-clang` (clang, Ninja, les fichiers de
+développement de SDL2 et de GL (`libsdl2-dev`, `libgl-dev`), et python3-clang pour la vérification du layout des
+zones). Il lit les mêmes zones converties. Lance-le depuis un dossier qui contient le programme, le
+`localization.txt` de ton install, un dossier `zone` de zones converties et le `shaders.pack` du convertisseur :
+`./BO1Zombies +set fs_b <install> +set fs_h <ce dossier> +devmap zombie_theater` pour le client fenêtré, avec `+set
+bo1_headless 1` pour le serveur dédié (et `+set bo1_headless_client 1` pour le client headless).
+`BO1_GFX_BACKEND=null` force le backend qui ne dessine rien, et `BO1_GL_DEBUG=1` écrit les messages de debug
+d'OpenGL dans le log. Les zones converties avant le 2026-10-24 ont besoin d'un nouveau `shaders.pack` (relancer
+`ffconv`).

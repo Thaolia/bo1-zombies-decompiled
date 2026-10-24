@@ -629,8 +629,8 @@ void CG_Vehicle_DoControllers(const cpose_t *pose, const DObj *obj, int *partBit
 
 void __cdecl CG_mg42_DoControllers(const cpose_t *pose, const DObj *obj, int *partBits)
 {
-    long double v3; // st7
-    long double v4; // st7
+    double v3; // st7
+    double v4; // st7
     float firingOffset; // [esp+4h] [ebp-B8h]
     float ofsVec[3]; // [esp+48h] [ebp-74h] BYREF
     float axis[3][3]; // [esp+54h] [ebp-68h] BYREF

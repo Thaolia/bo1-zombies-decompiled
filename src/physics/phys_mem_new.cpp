@@ -401,7 +401,7 @@ void __thiscall phys_slot_pool::extra_info_allocate(char *slot)
         __debugbreak();
     }
 
-    _InterlockedExchangeAdd((volatile long *)&this->m_allocated_slot_count, 1u);
+    _InterlockedExchangeAdd((volatile bo1_long *)&this->m_allocated_slot_count, 1u);
     if (this->m_allocated_slot_count > this->m_total_slot_count
         && _tlAssert(
             "source/phys_mem_new.cpp",
@@ -497,7 +497,7 @@ void __thiscall phys_slot_pool::extra_info_free(unsigned __int8 *slot)
         __debugbreak();
     }
 
-    _InterlockedExchangeAdd((volatile long *)&this->m_allocated_slot_count, (unsigned long)-1);
+    _InterlockedExchangeAdd((volatile bo1_long *)&this->m_allocated_slot_count, (bo1_ulong)-1);
 
     if (this->m_allocated_slot_count > this->m_total_slot_count
         && _tlAssert(

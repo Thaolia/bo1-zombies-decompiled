@@ -1,6 +1,11 @@
 #pragma once
 
+#if defined(_WIN32)
 #include <ddraw.h>
+#else
+// No DirectDraw: the R_*VideoMemoryForDevice queries answer as on a PC without ddraw.dll.
+#include <windows.h>
+#endif
 
 // genius in training
 struct __declspec(align(4)) DDraw // sizeof=0x14

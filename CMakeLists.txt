@@ -64,6 +64,10 @@ if(NOT MSVC)
     target_compile_options(BO1Zombies PRIVATE -include "${SRC_DIR}/platform/compat.h"
         $<$<COMPILE_LANG_AND_ID:CXX,GNU>:-Wno-narrowing>
         $<$<COMPILE_LANG_AND_ID:CXX,Clang>:-Wno-c++11-narrowing>)
+    # The decompiled code is x86 machine code written back as C: it reads objects through other types everywhere
+    # (*(_DWORD *)&...), its signed arithmetic is the instructions' own (it wraps), and it may test a pointer it has
+    # already dereferenced. MSVC never optimises on any of those; GCC and clang must not either.
+    target_compile_options(BO1Zombies PRIVATE -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks)
     # Without LTC_SOURCE, libtomcrypt's rand_prime.c calls libtommath's mp_read_unsigned_bin/mp_prime_is_prime through
     # implicit declarations, as the MSVC build does. GCC 14+ and clang 16+ reject those by default.
     set_source_files_properties("${SRC_DIR}/libs/libtomcrypt-1.17/src/math/rand_prime.c"
@@ -217,9 +221,102 @@ if(BO1_PLATFORM STREQUAL "win32")
         target_link_options(BO1Zombies PRIVATE "/PDBALTPATH:%_PDB%")
     endif()
 else()
-    # posix / switch: the engine does not compile here yet. Phase 1 adds src/platform/compat.h and the
-    # -fsyntax-only pass; see docs/PORTING.md.
-    message(WARNING "BO1: the ${BO1_PLATFORM} build is a work in progress and is expected to fail (docs/PORTING.md)")
+    # posix / switch: Win32 declarations come from our shim (src/platform/posix/include); the D3D9 ones are copied
+    # from the user's DirectX SDK at configure time, so nothing from Microsoft is committed.
+    set(DXSDK_DIR "/mnt/c/SDKs/DXSDK_Jun10/DXSDK" CACHE PATH "June 2010 DirectX SDK root (its Include/d3d9*.h are used)")
+    foreach(BO1_DX_HEADER d3d9.h d3d9types.h d3d9caps.h)
+        if(NOT EXISTS "${DXSDK_DIR}/Include/${BO1_DX_HEADER}")
+            message(FATAL_ERROR "BO1: ${DXSDK_DIR}/Include/${BO1_DX_HEADER} not found; pass -DDXSDK_DIR=<June 2010 SDK root>")
+        endif()
+        configure_file("${DXSDK_DIR}/Include/${BO1_DX_HEADER}" "${CMAKE_BINARY_DIR}/dxsdk/${BO1_DX_HEADER}" COPYONLY)
+    endforeach()
+    target_include_directories(BO1Zombies PRIVATE
+        "${SRC_DIR}/platform/posix/include"
+        "${SRC_DIR}/platform/posix/include_cased"
+        "${CMAKE_BINARY_DIR}/dxsdk")
+    # Windows-only sources the posix/switch platform layer replaces (docs/PORTING.md, phase 4):
+    # - win_syscon.cpp (the Win32 console window; posix_syscon.cpp is the terminal) and win_mini_dumper.cpp (dbghelp
+    #   minidumps, token privileges; posix_main.cpp keeps its started flag);
+    # - XAudio2: snd_driver_absent.cpp implements sound/snd_driver.h (no audio device) until the SDL2 backend.
+    # The rest of win32/ and CubeMapGenLib build on the Win32 layer of src/platform/posix.
+    set_source_files_properties(
+        "${SRC_DIR}/win32/win_syscon.cpp"
+        "${SRC_DIR}/win32/win_mini_dumper.cpp"
+        "${SRC_DIR}/sound/snd_driver_xaudio2.cpp"
+        "${SRC_DIR}/sound/snd_driver_xaudio2_dsp.cpp"
+        PROPERTIES HEADER_FILE_ONLY ON)
+    if(BO1_PLATFORM STREQUAL "posix")
+        # Direct3D 9 is the frontend in src/gfx_d3d9emu on a backend of src/gfx_backend (docs/RENDERER.md): GL on an
+        # SDL2 OpenGL context, else null; windows, displays and the D3D9 host are SDL2's.
+        target_sources(BO1Zombies PRIVATE ${PLATFORM_POSIX_FILES} ${GFX_D3D9EMU_FILES} ${GFX_BACKEND_NULL_FILES}
+                       ${GFX_BACKEND_GL_FILES})
+        find_package(SDL2 REQUIRED)
+        target_link_libraries(BO1Zombies PRIVATE SDL2::SDL2)
+        # The GL backend loads its entry points from the context and only needs the Khronos header (libgl-dev).
+        find_path(BO1_GLCOREARB_DIR GL/glcorearb.h REQUIRED)
+        target_include_directories(BO1Zombies SYSTEM PRIVATE "${BO1_GLCOREARB_DIR}")
+        # Only the dispatcher knows whether the target has the GL backend: a target-wide definition would rebuild
+        # every file.
+        set_target_properties(BO1Zombies PROPERTIES BO1_GB_GL ON)
+        set_source_files_properties("${SRC_DIR}/gfx_backend/gb_backend.cpp" PROPERTIES
+                                    COMPILE_DEFINITIONS "$<$<BOOL:$<TARGET_PROPERTY:BO1_GB_GL>>:BO1_GB_GL>")
+        # D3DXSaveSurfaceToFileA's image encoders (third_party/stb), for that one file.
+        set_source_files_properties("${SRC_DIR}/gfx_d3d9emu/d3dx9emu.cpp" PROPERTIES
+                                    COMPILE_OPTIONS "-isystem;${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb")
+        # The engine spells its includes for Windows' case-insensitive file systems (<Windows.h>); clang only warns
+        # when the sources sit on one too (/mnt/c under WSL), where the spelling cannot matter.
+        target_compile_options(BO1Zombies PRIVATE $<$<CXX_COMPILER_ID:Clang>:-Wno-nonportable-include-path>)
+        find_package(Threads REQUIRED)
+        target_link_libraries(BO1Zombies PRIVATE Threads::Threads ${CMAKE_DL_LIBS} m)
+        # The x86-64 build reads the win64 IWffs zones (src/database/db_ff64.h): before linking, ffconv's layout
+        # generator checks that every streamed struct lays out here as it does there, and names the ones that do not.
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+            find_package(Python3 REQUIRED COMPONENTS Interpreter)
+            set(BO1_LAYOUT_STAMP "${CMAKE_BINARY_DIR}/iwffs_layouts.stamp")
+            add_custom_command(
+                OUTPUT "${BO1_LAYOUT_STAMP}"
+                COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/ffconv/gen/layouts.py"
+                        --check-target64 x86_64-linux-gnu --dxsdk "${DXSDK_DIR}" --posix-dxsdk "${CMAKE_BINARY_DIR}/dxsdk"
+                        --stamp "${BO1_LAYOUT_STAMP}" --depfile "${BO1_LAYOUT_STAMP}.d"
+                DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tools/ffconv/gen/layouts.py" "${SRC_DIR}/database/db_load.cpp"
+                DEPFILE "${BO1_LAYOUT_STAMP}.d"
+                COMMENT "Checking the IWffs struct layouts on this ABI")
+            add_custom_target(iwffs_layout_check DEPENDS "${BO1_LAYOUT_STAMP}")
+            add_dependencies(BO1Zombies iwffs_layout_check)
+        endif()
+    endif()
+    # The run folder, as the Visual Studio generator makes it: the program next to the copied main/ and mods/.
+    set_target_properties(BO1Zombies PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
+    if(BO1_PLATFORM STREQUAL "posix")
+        # The frontend's unit test, on the null backend (docs/PORTING.md, phase 4): ./d3d9emu_test in the build folder.
+        add_executable(d3d9emu_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/gfx_d3d9emu/d3d9emu_test.cpp"
+                       ${GFX_D3D9EMU_FILES} ${GFX_BACKEND_NULL_FILES})
+        target_include_directories(d3d9emu_test PRIVATE "${SRC_DIR}" "${SRC_DIR}/platform/posix/include"
+                                   "${SRC_DIR}/platform/posix/include_cased")
+        target_include_directories(d3d9emu_test SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/dxsdk")
+        target_compile_options(d3d9emu_test PRIVATE -include "${SRC_DIR}/platform/compat.h" -Wall -Wextra
+                               -Wno-unused-parameter -Wno-unknown-pragmas
+                               $<$<CXX_COMPILER_ID:Clang>:-Wno-nonportable-include-path>)
+        # The GL backend's contract test (docs/RENDERER.md): it draws with the backend alone and reads the pixels
+        # back. SDL_VIDEODRIVER=offscreen ./gb_gl_test in the build folder.
+        add_executable(gb_gl_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/gfx_backend/gb_gl_test.cpp"
+                       ${GFX_BACKEND_NULL_FILES} ${GFX_BACKEND_GL_FILES})
+        target_include_directories(gb_gl_test PRIVATE "${SRC_DIR}")
+        target_include_directories(gb_gl_test SYSTEM PRIVATE "${BO1_GLCOREARB_DIR}")
+        target_link_libraries(gb_gl_test PRIVATE SDL2::SDL2 Threads::Threads)
+        target_compile_options(gb_gl_test PRIVATE -Wall -Wextra)
+        set_target_properties(gb_gl_test PROPERTIES BO1_GB_GL ON)
+        # The controller mapping test (docs/PORTING.md, phase 4b): the pure SDL->XInput map, no device. ./gamepad_test.
+        add_executable(gamepad_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/platform/gamepad_test.cpp")
+        target_include_directories(gamepad_test PRIVATE "${SRC_DIR}" "${SRC_DIR}/platform/posix/include"
+                                   "${SRC_DIR}/platform/posix/include_cased")
+        target_link_libraries(gamepad_test PRIVATE SDL2::SDL2)
+        target_compile_options(gamepad_test PRIVATE -Wall -Wextra
+                               $<$<CXX_COMPILER_ID:Clang>:-Wno-nonportable-include-path>)
+        message(STATUS "BO1: posix renders through the D3D9 frontend on the GL backend (null in headless runs); no sound yet (docs/PORTING.md, phase 4)")
+    else()
+        message(WARNING "BO1: the ${BO1_PLATFORM} build is a work in progress and is expected to fail (docs/PORTING.md)")
+    endif()
 endif()
 
 # Mods live apart from the base game: mods/<name>/ is copied next to the exe on every build and is only

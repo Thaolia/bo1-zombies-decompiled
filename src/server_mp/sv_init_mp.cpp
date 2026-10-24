@@ -842,6 +842,7 @@ int __cdecl SV_AllocateClientMemory_SizeRequired(int maxLocalClients, int maxCli
 
     // The sum of SV_AllocateClientMemory's blocks; the two 128s are the alignment slack of the 128-aligned ones.
     return (int)(sizeof(client_t) * maxClients
+        + 2 * BO1_ALLOC_SLACK(4, MatchState)
         + 32 * sizeof(MatchState) * maxClients
         + 2688 * sizeof(entityState_s) * maxClients
         + 32 * sizeof(clientState_s) * maxClients * maxClients
@@ -864,8 +865,9 @@ void __cdecl SV_AllocateClientMemory(HunkUser *hunk, int maxLocalClients, int ma
     svs.clients = (client_t *)Hunk_UserAlloc(hunk, sizeof(client_t) * maxClients, 4, "svs.clients");
     memset((unsigned __int8 *)svs.clients, 0, sizeof(client_t) * maxClients);
     svs.numSnapshotMatchStates = 32 * maxClients;
-    svs.snapshotMatchStates = (MatchState *)Hunk_UserAlloc(hunk, maxClients << 12, 4, "svs.snapshotMatchStates");
-    memset((unsigned __int8 *)svs.snapshotMatchStates, 0, svs.numSnapshotMatchStates << 7);
+    svs.snapshotMatchStates = (MatchState *)Hunk_UserAlloc(
+        hunk, 32 * sizeof(MatchState) * maxClients, BO1_ALLOC_ALIGN(4, MatchState), "svs.snapshotMatchStates");
+    memset((unsigned __int8 *)svs.snapshotMatchStates, 0, sizeof(MatchState) * svs.numSnapshotMatchStates);
     svs.numSnapshotEntities = 2688 * maxClients;
     svs.snapshotEntities = (entityState_s *)Hunk_UserAlloc(hunk, 2688 * sizeof(entityState_s) * maxClients, 4, "svs.snapshotEntities");
     memset((unsigned __int8 *)svs.snapshotEntities, 0, 224 * svs.numSnapshotEntities);
@@ -876,11 +878,8 @@ void __cdecl SV_AllocateClientMemory(HunkUser *hunk, int maxLocalClients, int ma
     memset((unsigned __int8 *)svs.cachedSnapshotFrames, 0, 512 * sizeof(cachedSnapshot_t));
     svs.numCachedSnapshotMatchStates = maxClients;
     svs.cachedSnapshotMatchStates = (MatchState *)Hunk_UserAlloc(
-                                                                                                    hunk,
-                                                                                                    maxClients << 7,
-                                                                                                    4,
-                                                                                                    "svs.cachedSnapshotMatchStates");
-    memset((unsigned __int8 *)svs.cachedSnapshotMatchStates, 0, svs.numCachedSnapshotMatchStates << 7);
+        hunk, sizeof(MatchState) * maxClients, BO1_ALLOC_ALIGN(4, MatchState), "svs.cachedSnapshotMatchStates");
+    memset((unsigned __int8 *)svs.cachedSnapshotMatchStates, 0, sizeof(MatchState) * svs.numCachedSnapshotMatchStates);
     svs.numCachedSnapshotEntities = 80 * maxClients;
     svs.cachedSnapshotEntities = (archivedEntity_s *)Hunk_UserAlloc(
                                                                                                          hunk,

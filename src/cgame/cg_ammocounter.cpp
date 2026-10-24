@@ -1906,7 +1906,7 @@ void __cdecl CG_DrawPlayerWeaponLowAmmoWarning(
     double v9; // xmm0_8
     const char *v10; // eax
     const char *v11; // eax
-    long double v12; // [esp+30h] [ebp-1BCh]
+    double v12; // [esp+30h] [ebp-1BCh]
     bool canReloadLeft; // [esp+6Fh] [ebp-17Dh]
     float fade; // [esp+70h] [ebp-17Ch]
     cg_s *cgameGlob; // [esp+7Ch] [ebp-170h]

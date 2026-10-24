@@ -68,9 +68,9 @@ bool __cdecl CM_IsPointOverTriangle(
                 const float *v0,
                 const float *e0,
                 const float *e1,
-                long double a00,
-                long double a01,
-                long double a11,
+                double a00,
+                double a01,
+                double a11,
                 double det);
 double __cdecl CM_DistanceSquaredBetweenSegments(
                 const float *start0,

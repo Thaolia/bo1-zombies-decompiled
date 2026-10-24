@@ -328,8 +328,8 @@ void    nuge::apply_ballistic_target(
     double v13; // st4
     double v14; // st2
     double v15; // st3
-    long double v16; // st5
-    long double v17; // st4
+    double v16; // st5
+    double v17; // st4
     double v18; // st5
     int v19; // ecx
     int v20; // esi
@@ -554,7 +554,7 @@ void    nuge::calc_velocities(
     Phys_UnitQuaternion *Quaternion; // eax
     float y; // ecx
     float z; // edx
-    long double w; // st7
+    double w; // st7
     double v10; // st7
     double v11; // st6
     double v12; // st7

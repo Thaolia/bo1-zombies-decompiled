@@ -876,7 +876,7 @@ LABEL_34:
     {
         Com_DPrintf(10, "Connected to a pure server.\n");
         Com_Memcpy(fs_serverIwds, src, 4 * fs_numServerIwds);
-        Com_Memcpy(fs_serverIwdNames, s0, 4 * fs_numServerIwds);
+        Com_Memcpy(fs_serverIwdNames, s0, sizeof(*fs_serverIwdNames) * fs_numServerIwds);
         fs_fakeChkSum = 0;
     }
     return v10;
@@ -967,7 +967,7 @@ void __cdecl FS_ServerSetReferencedFFs(const char *FFSums, const char *FFNames)
                                                                 fs_serverReferencedFFNames);
 }
 
-char basename[64];
+char mapBaseName[64]; // not "basename": that name is the C library's basename() on posix
 char *__cdecl FS_GetMapBaseName(char *mapname)
 {
     unsigned int v2; // [esp+0h] [ebp-18h]
@@ -982,13 +982,13 @@ char *__cdecl FS_GetMapBaseName(char *mapname)
     len = v2;
     if ( !I_stricmp(&mapname[v2 - 3], "bsp") )
         len = v2 - 7;
-    memcpy((unsigned __int8 *)basename, (unsigned __int8 *)mapname, len);
-    basename[len] = 0;
+    memcpy((unsigned __int8 *)mapBaseName, (unsigned __int8 *)mapname, len);
+    mapBaseName[len] = 0;
     for ( c = 0; c < len; ++c )
     {
-        if ( basename[c] == 37 )
-            basename[c] = 95;
+        if ( mapBaseName[c] == 37 )
+            mapBaseName[c] = 95;
     }
-    return basename;
+    return mapBaseName;
 }
 

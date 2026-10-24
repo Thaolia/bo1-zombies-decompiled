@@ -1,4 +1,5 @@
 #pragma once
+#include <platform/arch_size.h>
 #include <gfx_d3d/fxprimitives.h>
 #include <xanim/xmodel.h>
 
@@ -69,9 +70,10 @@ struct DynEntityDef // sizeof=0x54
     unsigned __int16 target;
 };
 
+// physObjId holds a PhysObjUserData pointer. Zones stream it as 0; ffconv widens it to 8 bytes (LEAF_HANDLE).
 struct DynEntityClient // sizeof=0x14
 {
-    int physObjId;
+    intptr_t physObjId;
     unsigned __int16 flags;
     unsigned __int16 lightingHandle;
     int health;
@@ -79,6 +81,7 @@ struct DynEntityClient // sizeof=0x14
     unsigned __int16 fadeTime;
     int physicsStartTime;
 };
+static_assert(sizeof(DynEntityClient) == BO1_ARCH_SIZE(20, 24));
 
 void __cdecl DynEntCl_RegisterDvars();
 XModel *__cdecl DynEntCl_GetCurrentXModel(const DynEntityDef *dynEntDef, const DynEntityClient *dynEntClient);
@@ -104,7 +107,7 @@ int __cdecl DynEnt_GetDamage(DynEntityClient *dynEntClient, const DynEntityDef *
 void    DynEnt_SetupConstraints(const DynEntityDef *dynEntDef);
 int __cdecl DynEnt_GetSurfaceType(const DynEntityDef *dynEntDef);
 void __cdecl DynEnt_CalcPhysPreset(const DynEntityDef *dynEntDef);
-int __cdecl DynEntCl_CreatePhysObj(
+intptr_t __cdecl DynEntCl_CreatePhysObj(
                 const DynEntityDef *dynEntDef,
                 DynEntityClient *dynEntClient,
                 const GfxPlacement *pose);

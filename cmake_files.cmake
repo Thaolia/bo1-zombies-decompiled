@@ -2345,6 +2345,85 @@ set(PLATFORM_STUBS_FILES
 	${SRC_PLATFORM_STUBS}
 )
 
+# ----- src/platform/posix (posix only, added by CMakeLists.txt) -----
+set(SRC_PLATFORM_POSIX
+	"${SRC_DIR}/platform/posix/msvc_crt.cpp"
+	"${SRC_DIR}/platform/posix/msvc_intrinsics.h"
+	"${SRC_DIR}/platform/posix/posix_d3d9host.cpp"
+	"${SRC_DIR}/platform/posix/posix_glhost.cpp"
+	"${SRC_DIR}/platform/posix/posix_inputscript.cpp"
+	"${SRC_DIR}/platform/posix/posix_main.cpp"
+	"${SRC_DIR}/platform/posix/posix_syscon.cpp"
+	"${SRC_DIR}/platform/posix/posix_video.h"
+	"${SRC_DIR}/platform/posix/snd_driver_absent.cpp"
+	"${SRC_DIR}/platform/posix/win32_files.cpp"
+	"${SRC_DIR}/platform/posix/win32_gamepad.cpp"
+	"${SRC_DIR}/platform/posix/win32_gamepad.h"
+	"${SRC_DIR}/platform/posix/win32_gui.cpp"
+	"${SRC_DIR}/platform/posix/win32_input.cpp"
+	"${SRC_DIR}/platform/posix/win32_handles.h"
+	"${SRC_DIR}/platform/posix/win32_sockets.cpp"
+	"${SRC_DIR}/platform/posix/win32_system.cpp"
+	"${SRC_DIR}/platform/posix/win32_threads.cpp"
+)
+source_group("platform/posix" FILES ${SRC_PLATFORM_POSIX})
+
+set(PLATFORM_POSIX_FILES
+	${SRC_PLATFORM_POSIX}
+)
+
+# ----- src/gfx_d3d9emu: the D3D9 frontend (posix and switch, added by CMakeLists.txt) -----
+set(SRC_GFX_D3D9EMU
+	"${SRC_DIR}/gfx_d3d9emu/d3d9emu.h"
+	"${SRC_DIR}/gfx_d3d9emu/d3d9emu_common.cpp"
+	"${SRC_DIR}/gfx_d3d9emu/d3d9emu_device.cpp"
+	"${SRC_DIR}/gfx_d3d9emu/d3d9emu_direct3d.cpp"
+	"${SRC_DIR}/gfx_d3d9emu/d3d9emu_host.h"
+	"${SRC_DIR}/gfx_d3d9emu/d3d9emu_queries.cpp"
+	"${SRC_DIR}/gfx_d3d9emu/d3d9emu_resources.cpp"
+	"${SRC_DIR}/gfx_d3d9emu/d3d9emu_shaders.cpp"
+	"${SRC_DIR}/gfx_d3d9emu/d3dx9emu.cpp"
+	"${SRC_DIR}/gfx_d3d9emu/shader_pack.h"
+)
+source_group("gfx_d3d9emu" FILES ${SRC_GFX_D3D9EMU})
+
+set(GFX_D3D9EMU_FILES
+	${SRC_GFX_D3D9EMU}
+)
+
+# ----- src/gfx_backend: the backend contract and its backends (posix and switch, added by CMakeLists.txt) -----
+set(SRC_GFX_BACKEND
+	"${SRC_DIR}/gfx_backend/gb_backend.cpp"
+	"${SRC_DIR}/gfx_backend/gb_backend.h"
+	"${SRC_DIR}/gfx_backend/gb_common.h"
+	"${SRC_DIR}/gfx_backend/gfx_backend.h"
+)
+source_group("gfx_backend" FILES ${SRC_GFX_BACKEND})
+
+set(SRC_GFX_BACKEND_NULL
+	"${SRC_DIR}/gfx_backend/null/gb_null.cpp"
+	"${SRC_DIR}/gfx_backend/null/gb_null.h"
+)
+source_group("gfx_backend/null" FILES ${SRC_GFX_BACKEND_NULL})
+
+set(GFX_BACKEND_NULL_FILES
+	${SRC_GFX_BACKEND}
+	${SRC_GFX_BACKEND_NULL}
+)
+
+set(SRC_GFX_BACKEND_GL
+	"${SRC_DIR}/gfx_backend/gl/gb_gl.cpp"
+	"${SRC_DIR}/gfx_backend/gl/gb_gl.h"
+	"${SRC_DIR}/gfx_backend/gl/gb_gl_device.cpp"
+	"${SRC_DIR}/gfx_backend/gl/gb_gl_functions.h"
+	"${SRC_DIR}/gfx_backend/gl/gb_gl_host.h"
+)
+source_group("gfx_backend/gl" FILES ${SRC_GFX_BACKEND_GL})
+
+set(GFX_BACKEND_GL_FILES
+	${SRC_GFX_BACKEND_GL}
+)
+
 # ----- src/qcommon -----
 set(SRC_QCOMMON
 	"${SRC_DIR}/qcommon/bitarray.h"

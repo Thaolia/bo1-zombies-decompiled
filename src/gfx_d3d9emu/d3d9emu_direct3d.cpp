@@ -1,0 +1,388 @@
+// IDirect3D9Ex: one adapter, standing for the backend's device on the display the platform reports. It answers
+// format and capability questions from what the backend can do, in D3D9's terms.
+
+#include "d3d9emu.h"
+
+#include "d3d9emu_host.h"
+
+#include <cfloat>
+#include <cstdio>
+#include <cstring>
+
+namespace d3d9emu
+{
+namespace
+{
+// The backend is initialised while an IDirect3D9 object exists.
+int s_backendUsers = 0;
+
+bool AcquireBackend()
+{
+    if (s_backendUsers++)
+        return true;
+    if (gb::Init())
+    {
+        const gb::Caps &caps = gb::GetCaps();
+        Logf("d3d9emu: Direct3D 9 on the %s backend (%s)", gb::Name(), caps.device);
+        return true;
+    }
+    s_backendUsers = 0;
+    Logf("d3d9emu: the %s backend has no device", gb::Name());
+    return false;
+}
+
+bool HasFlags(gb::Format format, uint8_t flags)
+{
+    return format != gb::Format::Unknown && (gb::GetCaps().formatFlags[int(format)] & flags) == flags;
+}
+
+bool CheckAdapter(UINT adapter, D3DDEVTYPE type)
+{
+    return adapter == 0 && type == D3DDEVTYPE_HAL;
+}
+
+bool AdapterFormatOk(D3DFORMAT format)
+{
+    return format == D3DFMT_X8R8G8B8;
+}
+
+bool MultiSampleOk(D3DMULTISAMPLE_TYPE type)
+{
+    if (type == D3DMULTISAMPLE_NONE || type == D3DMULTISAMPLE_NONMASKABLE)
+        return true;
+    return (type == D3DMULTISAMPLE_2_SAMPLES || type == D3DMULTISAMPLE_4_SAMPLES ||
+            type == D3DMULTISAMPLE_8_SAMPLES || type == D3DMULTISAMPLE_16_SAMPLES) &&
+           UINT(type) <= gb::GetCaps().maxSamples;
+}
+} // namespace
+
+Direct3D9::Direct3D9() = default;
+
+Direct3D9::~Direct3D9()
+{
+    if (!--s_backendUsers)
+        gb::Shutdown();
+}
+
+UINT Direct3D9::GetAdapterCount()
+{
+    return 1;
+}
+
+HRESULT Direct3D9::GetAdapterIdentifier(UINT adapter, DWORD, D3DADAPTER_IDENTIFIER9 *identifier)
+{
+    if (adapter != 0 || !identifier)
+        return D3DERR_INVALIDCALL;
+    std::memset(identifier, 0, sizeof(*identifier));
+    std::snprintf(identifier->Driver, sizeof(identifier->Driver), "bo1_d3d9emu");
+    std::snprintf(identifier->Description, sizeof(identifier->Description), "%s (Direct3D 9 on %s)",
+                  gb::GetCaps().device, gb::Name());
+    std::snprintf(identifier->DeviceName, sizeof(identifier->DeviceName), "\\\\.\\DISPLAY1");
+    // No PCI vendor: the engine keeps its vendor-specific paths (NVAPI, ATI workarounds) for real cards.
+    identifier->VendorId = 0;
+    identifier->DeviceId = 0;
+    return D3D_OK;
+}
+
+UINT Direct3D9::GetAdapterModeCount(UINT adapter, D3DFORMAT format)
+{
+    if (adapter != 0 || !AdapterFormatOk(format))
+        return 0;
+    return host::DisplayModes(nullptr, 0);
+}
+
+HRESULT Direct3D9::EnumAdapterModes(UINT adapter, D3DFORMAT format, UINT mode, D3DDISPLAYMODE *displayMode)
+{
+    if (adapter != 0 || !AdapterFormatOk(format) || !displayMode)
+        return D3DERR_INVALIDCALL;
+    const uint32_t count = host::DisplayModes(nullptr, 0);
+    if (mode >= count)
+        return D3DERR_INVALIDCALL;
+    std::vector<host::DisplayMode> modes(count);
+    if (host::DisplayModes(modes.data(), count) <= mode)
+        return D3DERR_INVALIDCALL;
+    displayMode->Width = modes[mode].width;
+    displayMode->Height = modes[mode].height;
+    displayMode->RefreshRate = modes[mode].refreshRate;
+    displayMode->Format = D3DFMT_X8R8G8B8;
+    return D3D_OK;
+}
+
+HRESULT Direct3D9::GetAdapterDisplayMode(UINT adapter, D3DDISPLAYMODE *mode)
+{
+    host::DisplayMode desktop;
+    if (adapter != 0 || !mode)
+        return D3DERR_INVALIDCALL;
+    if (!host::DesktopMode(&desktop))
+        return D3DERR_NOTAVAILABLE;
+    mode->Width = desktop.width;
+    mode->Height = desktop.height;
+    mode->RefreshRate = desktop.refreshRate;
+    mode->Format = D3DFMT_X8R8G8B8;
+    return D3D_OK;
+}
+
+HRESULT Direct3D9::CheckDeviceType(UINT adapter, D3DDEVTYPE type, D3DFORMAT adapterFormat, D3DFORMAT backBufferFormat,
+                                   BOOL)
+{
+    if (!CheckAdapter(adapter, type))
+        return D3DERR_INVALIDCALL;
+    if (!AdapterFormatOk(adapterFormat) ||
+        (backBufferFormat != D3DFMT_A8R8G8B8 && backBufferFormat != D3DFMT_X8R8G8B8))
+        return D3DERR_NOTAVAILABLE;
+    return D3D_OK;
+}
+
+HRESULT Direct3D9::CheckDeviceFormat(UINT adapter, D3DDEVTYPE type, D3DFORMAT adapterFormat, DWORD usage,
+                                     D3DRESOURCETYPE resourceType, D3DFORMAT checkFormat)
+{
+    if (!CheckAdapter(adapter, type))
+        return D3DERR_INVALIDCALL;
+    if (!AdapterFormatOk(adapterFormat))
+        return D3DERR_NOTAVAILABLE;
+    // RESZ only exists to be asked for: the resolve it announces is the D3DRS_POINTSIZE code (Device::Resolve).
+    if (checkFormat == FOURCC_RESZ)
+        return usage == D3DUSAGE_RENDERTARGET && resourceType == D3DRTYPE_SURFACE ? D3D_OK : D3DERR_NOTAVAILABLE;
+    const FormatInfo *info = FindFormat(checkFormat);
+    if (!info)
+        return D3DERR_NOTAVAILABLE;
+    // No vertex texture fetch (no zone shader samples in a vertex shader), no autogenerated mipmaps, no sRGB.
+    const DWORD kQueries =
+        D3DUSAGE_QUERY_FILTER | D3DUSAGE_QUERY_POSTPIXELSHADER_BLENDING | D3DUSAGE_QUERY_WRAPANDMIP;
+    if (usage & ~(D3DUSAGE_RENDERTARGET | D3DUSAGE_DEPTHSTENCIL | D3DUSAGE_DYNAMIC | kQueries))
+        return D3DERR_NOTAVAILABLE;
+    if (info->format == gb::Format::Unknown)
+        return usage == D3DUSAGE_RENDERTARGET && resourceType == D3DRTYPE_SURFACE ? D3D_OK : D3DERR_NOTAVAILABLE;
+
+    const bool texture = resourceType == D3DRTYPE_TEXTURE || resourceType == D3DRTYPE_CUBETEXTURE ||
+                         resourceType == D3DRTYPE_VOLUMETEXTURE;
+    if (!texture && resourceType != D3DRTYPE_SURFACE)
+        return D3DERR_NOTAVAILABLE;
+    if (info->depth)
+    {
+        // Depth formats exist as depth-stencil surfaces and, sampled, as 2D textures (hardware shadow maps, INTZ).
+        if (!(usage & D3DUSAGE_DEPTHSTENCIL) || (usage & (D3DUSAGE_RENDERTARGET | D3DUSAGE_DYNAMIC)) ||
+            (texture && resourceType != D3DRTYPE_TEXTURE))
+            return D3DERR_NOTAVAILABLE;
+        const uint8_t flags = gb::FORMAT_DEPTH_TARGET | (texture ? gb::FORMAT_SAMPLED : 0);
+        return HasFlags(info->format, flags) ? D3D_OK : D3DERR_NOTAVAILABLE;
+    }
+    if (usage & D3DUSAGE_DEPTHSTENCIL)
+        return D3DERR_NOTAVAILABLE;
+    if ((usage & D3DUSAGE_RENDERTARGET) && (!info->renderTarget || resourceType == D3DRTYPE_VOLUMETEXTURE ||
+                                            !HasFlags(info->format, gb::FORMAT_COLOR_TARGET)))
+        return D3DERR_NOTAVAILABLE;
+    if (texture && !HasFlags(info->format, gb::FORMAT_SAMPLED))
+        return D3DERR_NOTAVAILABLE;
+    if ((usage & (D3DUSAGE_QUERY_FILTER | D3DUSAGE_QUERY_WRAPANDMIP)) &&
+        !HasFlags(info->format, gb::FORMAT_FILTERABLE))
+        return D3DERR_NOTAVAILABLE;
+    if ((usage & D3DUSAGE_QUERY_POSTPIXELSHADER_BLENDING) && !HasFlags(info->format, gb::FORMAT_COLOR_TARGET))
+        return D3DERR_NOTAVAILABLE;
+    return D3D_OK;
+}
+
+HRESULT Direct3D9::CheckDeviceMultiSampleType(UINT adapter, D3DDEVTYPE type, D3DFORMAT surfaceFormat, BOOL,
+                                              D3DMULTISAMPLE_TYPE multiSample, DWORD *qualityLevels)
+{
+    if (!CheckAdapter(adapter, type))
+        return D3DERR_INVALIDCALL;
+    const FormatInfo *info = FindFormat(surfaceFormat);
+    if (!info || (!info->renderTarget && !info->depth) || !MultiSampleOk(multiSample))
+        return D3DERR_NOTAVAILABLE;
+    if (qualityLevels)
+        *qualityLevels = 1;
+    return D3D_OK;
+}
+
+HRESULT Direct3D9::CheckDepthStencilMatch(UINT adapter, D3DDEVTYPE type, D3DFORMAT adapterFormat,
+                                          D3DFORMAT renderTargetFormat, D3DFORMAT depthStencilFormat)
+{
+    if (!CheckAdapter(adapter, type))
+        return D3DERR_INVALIDCALL;
+    const FormatInfo *color = FindFormat(renderTargetFormat);
+    const FormatInfo *depth = FindFormat(depthStencilFormat);
+    if (!AdapterFormatOk(adapterFormat) || !color || !color->renderTarget || !depth || !depth->depth ||
+        !HasFlags(depth->format, gb::FORMAT_DEPTH_TARGET))
+        return D3DERR_NOTAVAILABLE;
+    return D3D_OK;
+}
+
+HRESULT Direct3D9::GetDeviceCaps(UINT adapter, D3DDEVTYPE type, D3DCAPS9 *caps)
+{
+    if (!CheckAdapter(adapter, type) || !caps)
+        return D3DERR_INVALIDCALL;
+    FillCaps(caps);
+    return D3D_OK;
+}
+
+HMONITOR Direct3D9::GetAdapterMonitor(UINT adapter)
+{
+    return adapter == 0 ? host::AdapterMonitor() : nullptr;
+}
+
+HRESULT Direct3D9::CreateDevice(UINT adapter, D3DDEVTYPE type, HWND focusWindow, DWORD,
+                                D3DPRESENT_PARAMETERS *parameters, IDirect3DDevice9 **device)
+{
+    if (!device)
+        return D3DERR_INVALIDCALL;
+    *device = nullptr;
+    if (!CheckAdapter(adapter, type) || !parameters)
+        return D3DERR_INVALIDCALL;
+    Guard guard(DeviceLock());
+    Device *created = nullptr;
+    const HRESULT hr = Device::Create(this, false, focusWindow, parameters, &created);
+    *device = created;
+    return hr;
+}
+
+HRESULT Direct3D9::CreateDeviceEx(UINT adapter, D3DDEVTYPE type, HWND focusWindow, DWORD,
+                                  D3DPRESENT_PARAMETERS *parameters, D3DDISPLAYMODEEX *fullscreenMode,
+                                  IDirect3DDevice9Ex **device)
+{
+    if (!device)
+        return D3DERR_INVALIDCALL;
+    *device = nullptr;
+    if (!ex || !CheckAdapter(adapter, type) || !parameters || (!parameters->Windowed) != (fullscreenMode != nullptr))
+        return D3DERR_INVALIDCALL;
+    Guard guard(DeviceLock());
+    Device *created = nullptr;
+    const HRESULT hr = Device::Create(this, true, focusWindow, parameters, &created);
+    *device = created;
+    return hr;
+}
+
+void FillCaps(D3DCAPS9 *c)
+{
+    const gb::Caps &backend = gb::GetCaps();
+    std::memset(c, 0, sizeof(*c));
+    c->DeviceType = D3DDEVTYPE_HAL;
+    c->AdapterOrdinal = 0;
+    c->Caps2 = D3DCAPS2_DYNAMICTEXTURES | D3DCAPS2_FULLSCREENGAMMA;
+    c->Caps3 = D3DCAPS3_ALPHA_FULLSCREEN_FLIP_OR_DISCARD | D3DCAPS3_COPY_TO_VIDMEM | D3DCAPS3_COPY_TO_SYSTEMMEM;
+    c->PresentationIntervals = D3DPRESENT_INTERVAL_IMMEDIATE | D3DPRESENT_INTERVAL_ONE;
+    c->DevCaps = D3DDEVCAPS_EXECUTESYSTEMMEMORY | D3DDEVCAPS_EXECUTEVIDEOMEMORY | D3DDEVCAPS_TLVERTEXSYSTEMMEMORY |
+                 D3DDEVCAPS_TLVERTEXVIDEOMEMORY | D3DDEVCAPS_TEXTUREVIDEOMEMORY | D3DDEVCAPS_DRAWPRIMTLVERTEX |
+                 D3DDEVCAPS_CANRENDERAFTERFLIP | D3DDEVCAPS_DRAWPRIMITIVES2 | D3DDEVCAPS_DRAWPRIMITIVES2EX |
+                 D3DDEVCAPS_HWTRANSFORMANDLIGHT | D3DDEVCAPS_HWRASTERIZATION | D3DDEVCAPS_PUREDEVICE;
+    c->PrimitiveMiscCaps = D3DPMISCCAPS_MASKZ | D3DPMISCCAPS_CULLNONE | D3DPMISCCAPS_CULLCW | D3DPMISCCAPS_CULLCCW |
+                           D3DPMISCCAPS_COLORWRITEENABLE | D3DPMISCCAPS_BLENDOP | D3DPMISCCAPS_SEPARATEALPHABLEND |
+                           D3DPMISCCAPS_INDEPENDENTWRITEMASKS | D3DPMISCCAPS_MRTPOSTPIXELSHADERBLENDING;
+    c->RasterCaps = D3DPRASTERCAPS_ZTEST | D3DPRASTERCAPS_ANISOTROPY | D3DPRASTERCAPS_SCISSORTEST |
+                    D3DPRASTERCAPS_SLOPESCALEDEPTHBIAS | D3DPRASTERCAPS_DEPTHBIAS | D3DPRASTERCAPS_MULTISAMPLE_TOGGLE;
+    const DWORD allCompares = D3DPCMPCAPS_NEVER | D3DPCMPCAPS_LESS | D3DPCMPCAPS_EQUAL | D3DPCMPCAPS_LESSEQUAL |
+                              D3DPCMPCAPS_GREATER | D3DPCMPCAPS_NOTEQUAL | D3DPCMPCAPS_GREATEREQUAL |
+                              D3DPCMPCAPS_ALWAYS;
+    c->ZCmpCaps = allCompares;
+    const DWORD blends = D3DPBLENDCAPS_ZERO | D3DPBLENDCAPS_ONE | D3DPBLENDCAPS_SRCCOLOR | D3DPBLENDCAPS_INVSRCCOLOR |
+                         D3DPBLENDCAPS_SRCALPHA | D3DPBLENDCAPS_INVSRCALPHA | D3DPBLENDCAPS_DESTALPHA |
+                         D3DPBLENDCAPS_INVDESTALPHA | D3DPBLENDCAPS_DESTCOLOR | D3DPBLENDCAPS_INVDESTCOLOR |
+                         D3DPBLENDCAPS_SRCALPHASAT | D3DPBLENDCAPS_BOTHSRCALPHA | D3DPBLENDCAPS_BOTHINVSRCALPHA |
+                         D3DPBLENDCAPS_BLENDFACTOR;
+    c->SrcBlendCaps = blends;
+    c->DestBlendCaps = blends;
+    c->AlphaCmpCaps = allCompares;
+    c->ShadeCaps = D3DPSHADECAPS_COLORGOURAUDRGB | D3DPSHADECAPS_ALPHAGOURAUDBLEND;
+    c->TextureCaps = D3DPTEXTURECAPS_PERSPECTIVE | D3DPTEXTURECAPS_ALPHA | D3DPTEXTURECAPS_TEXREPEATNOTSCALEDBYSIZE |
+                     D3DPTEXTURECAPS_NONPOW2CONDITIONAL | D3DPTEXTURECAPS_PROJECTED | D3DPTEXTURECAPS_CUBEMAP |
+                     D3DPTEXTURECAPS_VOLUMEMAP | D3DPTEXTURECAPS_MIPMAP | D3DPTEXTURECAPS_MIPVOLUMEMAP |
+                     D3DPTEXTURECAPS_MIPCUBEMAP;
+    const DWORD filters = D3DPTFILTERCAPS_MINFPOINT | D3DPTFILTERCAPS_MINFLINEAR | D3DPTFILTERCAPS_MINFANISOTROPIC |
+                          D3DPTFILTERCAPS_MIPFPOINT | D3DPTFILTERCAPS_MIPFLINEAR | D3DPTFILTERCAPS_MAGFPOINT |
+                          D3DPTFILTERCAPS_MAGFLINEAR | D3DPTFILTERCAPS_MAGFANISOTROPIC;
+    c->TextureFilterCaps = filters;
+    c->CubeTextureFilterCaps = filters;
+    c->VolumeTextureFilterCaps = filters & ~(D3DPTFILTERCAPS_MINFANISOTROPIC | D3DPTFILTERCAPS_MAGFANISOTROPIC);
+    const DWORD addresses = D3DPTADDRESSCAPS_WRAP | D3DPTADDRESSCAPS_MIRROR | D3DPTADDRESSCAPS_CLAMP |
+                            D3DPTADDRESSCAPS_BORDER | D3DPTADDRESSCAPS_INDEPENDENTUV |
+                            D3DPTADDRESSCAPS_MIRRORONCE;
+    c->TextureAddressCaps = addresses;
+    c->VolumeTextureAddressCaps = addresses;
+    c->LineCaps = D3DLINECAPS_TEXTURE | D3DLINECAPS_ZTEST | D3DLINECAPS_BLEND | D3DLINECAPS_ALPHACMP;
+    c->MaxTextureWidth = backend.maxTextureSize;
+    c->MaxTextureHeight = backend.maxTextureSize;
+    c->MaxVolumeExtent = 2048;
+    c->MaxTextureRepeat = 8192;
+    c->MaxTextureAspectRatio = backend.maxTextureSize;
+    c->MaxAnisotropy = 16;
+    c->MaxVertexW = 1e10f;
+    c->GuardBandLeft = -1e8f;
+    c->GuardBandTop = -1e8f;
+    c->GuardBandRight = 1e8f;
+    c->GuardBandBottom = 1e8f;
+    c->StencilCaps = D3DSTENCILCAPS_KEEP | D3DSTENCILCAPS_ZERO | D3DSTENCILCAPS_REPLACE | D3DSTENCILCAPS_INCRSAT |
+                     D3DSTENCILCAPS_DECRSAT | D3DSTENCILCAPS_INVERT | D3DSTENCILCAPS_INCR | D3DSTENCILCAPS_DECR |
+                     D3DSTENCILCAPS_TWOSIDED;
+    c->FVFCaps = 8; // D3DFVFCAPS_TEXCOORDCOUNTMASK: eight texture coordinate sets
+    c->MaxTextureBlendStages = 8;
+    c->MaxSimultaneousTextures = 8;
+    c->MaxUserClipPlanes = 8;
+    c->MaxPointSize = 1.0f; // no point sprites: a point is one pixel
+    c->MaxPrimitiveCount = 0x7FFFFFFF;
+    c->MaxVertexIndex = 0x7FFFFFFF;
+    c->MaxStreams = gb::MAX_STREAMS;
+    c->MaxStreamStride = 508;
+    c->VertexShaderVersion = D3DVS_VERSION(3, 0);
+    c->MaxVertexShaderConst = 256;
+    c->PixelShaderVersion = D3DPS_VERSION(3, 0);
+    c->PixelShader1xMaxValue = FLT_MAX;
+    c->DevCaps2 = D3DDEVCAPS2_STREAMOFFSET | D3DDEVCAPS2_CAN_STRETCHRECT_FROM_TEXTURES |
+                  D3DDEVCAPS2_VERTEXELEMENTSCANSHARESTREAMOFFSET;
+    c->MasterAdapterOrdinal = 0;
+    c->AdapterOrdinalInGroup = 0;
+    c->NumberOfAdaptersInGroup = 1;
+    c->DeclTypes = D3DDTCAPS_UBYTE4 | D3DDTCAPS_UBYTE4N | D3DDTCAPS_SHORT2N | D3DDTCAPS_SHORT4N |
+                   D3DDTCAPS_USHORT2N | D3DDTCAPS_USHORT4N | D3DDTCAPS_FLOAT16_2 | D3DDTCAPS_FLOAT16_4;
+    c->NumSimultaneousRTs = gb::MAX_COLOR_TARGETS;
+    c->StretchRectFilterCaps =
+        D3DPTFILTERCAPS_MINFPOINT | D3DPTFILTERCAPS_MINFLINEAR | D3DPTFILTERCAPS_MAGFPOINT | D3DPTFILTERCAPS_MAGFLINEAR;
+    c->VS20Caps.Caps = D3DVS20CAPS_PREDICATION;
+    c->VS20Caps.DynamicFlowControlDepth = D3DVS20_MAX_DYNAMICFLOWCONTROLDEPTH;
+    c->VS20Caps.NumTemps = D3DVS20_MAX_NUMTEMPS;
+    c->VS20Caps.StaticFlowControlDepth = D3DVS20_MAX_STATICFLOWCONTROLDEPTH;
+    c->PS20Caps.Caps = D3DPS20CAPS_ARBITRARYSWIZZLE | D3DPS20CAPS_GRADIENTINSTRUCTIONS | D3DPS20CAPS_PREDICATION |
+                       D3DPS20CAPS_NODEPENDENTREADLIMIT | D3DPS20CAPS_NOTEXINSTRUCTIONLIMIT;
+    c->PS20Caps.DynamicFlowControlDepth = D3DPS20_MAX_DYNAMICFLOWCONTROLDEPTH;
+    c->PS20Caps.NumTemps = D3DPS20_MAX_NUMTEMPS;
+    c->PS20Caps.StaticFlowControlDepth = D3DPS20_MAX_STATICFLOWCONTROLDEPTH;
+    c->PS20Caps.NumInstructionSlots = D3DPS20_MAX_NUMINSTRUCTIONSLOTS;
+    c->VertexTextureFilterCaps =
+        D3DPTFILTERCAPS_MINFPOINT | D3DPTFILTERCAPS_MINFLINEAR | D3DPTFILTERCAPS_MAGFPOINT | D3DPTFILTERCAPS_MAGFLINEAR;
+    c->MaxVShaderInstructionsExecuted = 65535;
+    c->MaxPShaderInstructionsExecuted = 65535;
+    c->MaxVertexShader30InstructionSlots = D3DMAX30SHADERINSTRUCTIONS;
+    c->MaxPixelShader30InstructionSlots = D3DMAX30SHADERINSTRUCTIONS;
+}
+} // namespace d3d9emu
+
+using d3d9emu::Direct3D9;
+
+extern "C" {
+
+IDirect3D9 *WINAPI Direct3DCreate9(UINT sdkVersion)
+{
+    if (sdkVersion != D3D_SDK_VERSION)
+        return nullptr;
+    d3d9emu::Guard guard(d3d9emu::DeviceLock());
+    if (!d3d9emu::AcquireBackend())
+        return nullptr;
+    return new Direct3D9();
+}
+
+HRESULT WINAPI Direct3DCreate9Ex(UINT sdkVersion, IDirect3D9Ex **d3d)
+{
+    if (!d3d)
+        return D3DERR_INVALIDCALL;
+    *d3d = nullptr;
+    if (sdkVersion != D3D_SDK_VERSION)
+        return D3DERR_INVALIDCALL;
+    d3d9emu::Guard guard(d3d9emu::DeviceLock());
+    if (!d3d9emu::AcquireBackend())
+        return D3DERR_NOTAVAILABLE;
+    Direct3D9 *object = new Direct3D9();
+    object->ex = true;
+    *d3d = object;
+    return D3D_OK;
+}
+
+} // extern "C"

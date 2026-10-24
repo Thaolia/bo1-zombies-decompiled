@@ -213,6 +213,44 @@ uint32_t NarrowPointer(uint64_t value)
     return static_cast<uint32_t>(value);
 }
 
+std::string AssetName();
+
+// A LEAF_HANDLE integer holds a pointer at runtime. A retail zone can only stream it as 0: any other value would be a
+// 32-bit runtime address, which the 64-bit engine cannot use, so widening refuses it. Narrowing requires the upper
+// half to be the sign extension of the lower one.
+void ConvertHandle(const TypeLayout &type, const Leaf &leaf, uint8_t *at32, uint8_t *at64)
+{
+    const auto where = [&] {
+        return std::string(type.name) + " byte " + std::to_string(leaf.off32) + " (widened integer, asset " +
+               std::to_string(g_asset) + " '" + AssetName() + "')";
+    };
+    if (g_narrow)
+    {
+        int64_t wide;
+        std::memcpy(&wide, at64, 8);
+        if (wide != static_cast<int32_t>(wide))
+        {
+            Fail(where() + ": " + std::to_string(wide) + " is not a sign-extended 4-byte value");
+            return;
+        }
+        const int32_t value = static_cast<int32_t>(wide);
+        std::memcpy(at32, &value, 4);
+    }
+    else
+    {
+        int32_t value;
+        std::memcpy(&value, at32, 4);
+        if (value != 0)
+        {
+            Fail(where() + ": the zone streams " + std::to_string(value) + ", a runtime handle must be 0");
+            return;
+        }
+        const int64_t wide = value;
+        std::memcpy(at64, &wide, 8);
+    }
+    ++g_stats.handles;
+}
+
 // Rescales the value fixups of `type`'s element `element` once its leaves are converted. A distance that is not a
 // whole number of units, or that leaves the elements being converted, means the table describes the field wrongly.
 void FixValues(uint8_t *p32, uint8_t *p64, const TypeLayout &type, uint64_t start, uint64_t end, uint64_t base64,
@@ -298,7 +336,13 @@ void Convert(uint8_t *p32, uint8_t *p64, const TypeLayout &type, uint64_t start,
             }
             if (from != leafBegin || to != leafBegin + leaf.size32)
             {
-                Fail(std::string(type.name) + ": a stream boundary cuts a pointer");
+                Fail(std::string(type.name) + ": a stream boundary cuts a " +
+                     (leaf.kind == LEAF_HANDLE ? "widened integer" : "pointer"));
+                continue;
+            }
+            if (leaf.kind == LEAF_HANDLE)
+            {
+                ConvertHandle(type, leaf, at32, at64);
                 continue;
             }
             // A union of a pointer and 4-byte data is widened like the pointer: its data members read the low 4
@@ -520,7 +564,7 @@ bool Translate(unsigned int *slot, Target &target)
         Fail(std::string(holder ? holder->type->name : "?") + ": a converted pointer slot is not in a known field");
         return false;
     }
-    if (where.leaf->kind == LEAF_BYTES || where.InLeaf() != 0)
+    if (where.leaf->kind == LEAF_BYTES || where.leaf->kind == LEAF_HANDLE || where.InLeaf() != 0)
     {
         Fail(std::string(where.type->name) + ": a converted pointer is not a pointer field");
         return false;
@@ -597,10 +641,12 @@ std::string CheckPointee(const Target &target, const TypeLayout &type, uint64_t 
                            std::to_string(at64 - target.pos64) + ", the pointee reads it at " +
                            std::to_string(want64 - target.pos64);
                 const bool pointer = level.leaf->kind == LEAF_PTR || level.leaf->kind == LEAF_UNION_PTR;
+                const bool handle = level.leaf->kind == LEAF_HANDLE;
                 if (leaf.kind == LEAF_BYTES)
                 {
-                    if (pointer)
-                        return at() + " is in a pointer of " + level.type->name;
+                    if (pointer || handle)
+                        return at() + " is in a " + (pointer ? "pointer" : "widened integer") + " of " +
+                               level.type->name;
                     const uint64_t n = std::min<uint64_t>({left, level.leaf->size32 - level.InLeaf(),
                                                            chunk->addr32 + chunk->size32 - addr});
                     addr += static_cast<uintptr_t>(n);
@@ -609,12 +655,14 @@ std::string CheckPointee(const Target &target, const TypeLayout &type, uint64_t 
                     continue;
                 }
                 const bool same = level.InLeaf() == 0 &&
-                                  (leaf.kind == LEAF_OPAQUE ? level.leaf->kind == LEAF_OPAQUE &&
-                                                                  level.leaf->size32 == leaf.size32 &&
-                                                                  level.leaf->size64 == leaf.size64
-                                                            : pointer);
+                                  (leaf.kind == LEAF_OPAQUE   ? level.leaf->kind == LEAF_OPAQUE &&
+                                                                    level.leaf->size32 == leaf.size32 &&
+                                                                    level.leaf->size64 == leaf.size64
+                                   : leaf.kind == LEAF_HANDLE ? handle
+                                                              : pointer);
                 if (!same)
-                    return at() + " is a pointer of the pointee, not of " + level.type->name;
+                    return at() + " is a " + (leaf.kind == LEAF_HANDLE ? "widened integer" : "pointer") +
+                           " of the pointee, not of " + level.type->name;
                 left = 0;
             }
         }
@@ -647,7 +695,8 @@ bool CopyInput(uintptr_t addr, uint32_t block, uint8_t *dst, size_t size)
     return true;
 }
 
-// Whether a leaf that the loader would follow or decode (a pointer, a union) is not zero in `count` elements.
+// Whether a leaf that the loader would follow or decode (a pointer, a union) is not zero in `count` elements. A
+// widened integer is plain data to the loader; Convert checks its value.
 bool HoldsPointers(const TypeLayout &type, uint64_t count, const uint8_t *bytes)
 {
     if (IsPlainData(type))
@@ -656,7 +705,7 @@ bool HoldsPointers(const TypeLayout &type, uint64_t count, const uint8_t *bytes)
         for (uint32_t i = 0; i < type.leafCount; ++i)
         {
             const Leaf &leaf = type.leaves[i];
-            if (leaf.kind == LEAF_BYTES)
+            if (leaf.kind == LEAF_BYTES || leaf.kind == LEAF_HANDLE)
                 continue;
             const uint8_t *p = bytes + e * type.size32 + leaf.off32;
             if (std::any_of(p, p + leaf.size32, [] (uint8_t b) { return b != 0; }))
@@ -1087,7 +1136,7 @@ std::string DescribeOutputByte(size_t offset)
         const uint64_t rel32 = g_narrow ? chunk.start32 + rel : Map32(*chunk.type, rel + Map64(*chunk.type,
                                                                                                  chunk.start32));
         const Leaf *leaf = LeafAt(*chunk.type, rel32);
-        static const char *const kinds[] = {"bytes", "pointer", "union of pointer", "opaque union"};
+        static const char *const kinds[] = {"bytes", "pointer", "union of pointer", "opaque union", "widened integer"};
         char text[256];
         std::snprintf(text, sizeof(text), "%s (element size %u), byte %u of the element, %s leaf at %u, block %u",
                       chunk.type->name, chunk.type->size32, static_cast<unsigned>(rel32 % chunk.type->size32),

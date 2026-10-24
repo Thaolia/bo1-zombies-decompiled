@@ -199,7 +199,7 @@ int R_GetSModelCacheAllocBits(const XModel *model, unsigned int lod)
     unsigned int minPoolSize = (v6 + 3) / 4; // number of 32-bit words
 
     // compute ceil(log2(minPoolSize))
-    unsigned long index;
+    bo1_ulong index;
     if (minPoolSize == 0)
         return 4; // safety
     if (_BitScanReverse(&index, minPoolSize - 1))

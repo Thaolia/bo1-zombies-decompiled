@@ -2051,7 +2051,7 @@ double    Scr_Vehicle_DamageScale(
 {
     int v9; // xmm0_4
     int integer; // xmm0_4
-    long double v11; // [esp-14h] [ebp-9Ch]
+    double v11; // [esp-14h] [ebp-9Ch]
     float v12; // [esp-8h] [ebp-90h]
     float pointAdjusted; // [esp+8h] [ebp-80h]
     float pointAdjusted_4; // [esp+Ch] [ebp-7Ch]
@@ -2712,7 +2712,7 @@ char __cdecl G_VehicleUpdateField(const char *vehicleInfoName, char *keyValue)
 void __cdecl G_ReloadScrVehicleInfo()
 {
     double v0; // xmm0_8
-    long double v1; // [esp+0h] [ebp-4058h]
+    double v1; // [esp+0h] [ebp-4058h]
     char string[64]; // [esp+8h] [ebp-4050h] BYREF
     char *pszBuffer; // [esp+48h] [ebp-4010h]
     unsigned __int8 *pStruct; // [esp+4Ch] [ebp-400Ch]
@@ -3018,7 +3018,7 @@ int __cdecl G_LoadVehicle(char *name)
 {
     double v2; // xmm0_8
     int AliasId; // eax
-    long double v4; // [esp+0h] [ebp-4070h]
+    double v4; // [esp+0h] [ebp-4070h]
     unsigned __int8 *v5; // [esp+8h] [ebp-4068h]
     char *v6; // [esp+Ch] [ebp-4064h]
     int i; // [esp+14h] [ebp-405Ch]
@@ -6135,7 +6135,7 @@ LABEL_13:
 void __cdecl VEH_UpdateBody(gentity_s *ent)
 {
     float v1; // xmm0_8
-    //long double v2; // [esp+8h] [ebp-18h]
+    //double v2; // [esp+8h] [ebp-18h]
     float v3; // [esp+8h] [ebp-18h]
     scr_vehicle_s *veh; // [esp+18h] [ebp-8h]
     float intensity; // [esp+1Ch] [ebp-4h]

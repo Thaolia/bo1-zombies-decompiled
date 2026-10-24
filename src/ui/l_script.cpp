@@ -73,8 +73,8 @@ void __cdecl PS_CreatePunctuationTable(script_s *script, punctuation_s *punctuat
     punctuation_s *p; // [esp+2Ch] [ebp-4h]
 
     if ( !script->punctuationtable )
-        script->punctuationtable = (punctuation_s **)GetMemory(0x400u);
-    memset((unsigned __int8 *)script->punctuationtable, 0, 0x400u);
+        script->punctuationtable = (punctuation_s **)GetMemory(sizeof(punctuation_s *) * 256);
+    memset((unsigned __int8 *)script->punctuationtable, 0, sizeof(punctuation_s *) * 256);
     for ( i = 0; punctuations[i].p; ++i )
     {
         newp = &punctuations[i];
@@ -401,7 +401,7 @@ int __cdecl PS_ReadName(script_s *script, token_s *token)
     return 1;
 }
 
-void __cdecl NumberValue(char *string, __int16 subtype, unsigned int *intvalue, long double *floatvalue)
+void __cdecl NumberValue(char *string, __int16 subtype, unsigned int *intvalue, double *floatvalue)
 {
     unsigned int dotfound; // [esp+3Ch] [ebp-4h]
     char *stringa; // [esp+48h] [ebp+8h]
@@ -716,7 +716,7 @@ script_s *__cdecl LoadScriptFile(const char *filename)
     length = FS_FOpenFileRead(pathname, &fp);
     if ( !fp )
         return 0;
-    buffer = (script_s *)GetClearedMemory(length + 1201);
+    buffer = (script_s *)GetClearedMemory(sizeof(script_s) + length + 1);
     v4 = filename;
     v3 = buffer;
     do
@@ -754,7 +754,7 @@ script_s *__cdecl LoadScriptMemory(char *ptr, unsigned int length, const char *n
     script_s *v5; // [esp+8h] [ebp-10h]
     script_s *buffer; // [esp+10h] [ebp-8h]
 
-    buffer = (script_s *)GetClearedMemory(length + 1201);
+    buffer = (script_s *)GetClearedMemory(sizeof(script_s) + length + 1);
     v5 = buffer;
     do
     {

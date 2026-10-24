@@ -354,7 +354,7 @@ void __cdecl R_UploadWaterTexture(water_t *water, float floatTime)
 //void __cdecl R_InitWater()
 //{
 //    double v0; // xmm0_8
-//    long double tableIndex; // [esp+0h] [ebp-4h]
+//    double tableIndex; // [esp+0h] [ebp-4h]
 //
 //    LODWORD(tableIndex) = 0;
 //    while ( SLODWORD(tableIndex) < 1024 )

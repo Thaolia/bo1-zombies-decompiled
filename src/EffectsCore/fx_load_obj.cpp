@@ -577,7 +577,7 @@ bool __cdecl FX_ParseGraphRange(
 
 bool __cdecl FX_ParseCurve(const char **parse, int dimCount, float minValue, float maxValue, const FxCurve **shape)
 {
-    long double v6; // st7
+    double v6; // st7
     float v7; // [esp+10h] [ebp-820h]
     float v8; // [esp+14h] [ebp-81Ch]
     float v9; // [esp+18h] [ebp-818h]

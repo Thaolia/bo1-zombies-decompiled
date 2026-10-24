@@ -181,10 +181,11 @@ Walk WalkZone(const uint8_t *body, size_t bodySize, const unsigned blockSize[7],
 void Report(const char *path, const XFile &header, size_t bodySize, const Walk &walk)
 {
     std::printf("%s: %d assets, %zu of %zu body bytes read, %llu chunks, %llu pointers translated, %llu values "
-                "fixed\n",
+                "fixed, %llu handles widened\n",
                 path, walk.assetCount, walk.consumed, bodySize, static_cast<unsigned long long>(walk.stats.chunks),
                 static_cast<unsigned long long>(walk.stats.pointersTranslated),
-                static_cast<unsigned long long>(walk.stats.valuesFixed));
+                static_cast<unsigned long long>(walk.stats.valuesFixed),
+                static_cast<unsigned long long>(walk.stats.handles));
     for (int b = 0; b < 7; ++b)
         std::printf("  block %d %-16s retail %10u, walked to %10u, 64-bit %10u\n", b, kBlockNames[b],
                     header.blockSize[b], walk.stats.end32[b], walk.stats.end64[b]);
@@ -279,8 +280,10 @@ bool Verify(const char *path, const XFile &retail, const uint8_t *retailBody, si
         return false;
     }
     std::printf("  verify: narrowing the IWffs zone gives the retail body back (%zu bytes; %zu bytes outside walked "
-                "union members, %zu of them leftover data; %llu inline pointees equal their retail targets)\n",
-                retailBodySize, deadBytes, deadDiffer, static_cast<unsigned long long>(walk.stats.reinlined));
+                "union members, %zu of them leftover data; %llu inline pointees equal their retail targets; %llu "
+                "handles narrowed)\n",
+                retailBodySize, deadBytes, deadDiffer, static_cast<unsigned long long>(walk.stats.reinlined),
+                static_cast<unsigned long long>(walk.stats.handles));
     return true;
 }
 // The zones the zombies maps load: code and patch zones, the zombie zones, and the menus. A language directory
@@ -365,10 +368,11 @@ bool ConvertZone(const std::string &input, const std::string &output, const Opti
         std::fprintf(stderr, "ffconv: cannot write %s\n", output.c_str());
         return false;
     }
-    std::printf("  %s: %d assets, %llu pointers, %llu values fixed, %llu pointees inline, %zu -> %zu body bytes, %zu "
-                "compressed\n",
+    std::printf("  %s: %d assets, %llu pointers, %llu values fixed, %llu handles widened (all 0), %llu pointees "
+                "inline, %zu -> %zu body bytes, %zu compressed\n",
                 output.c_str(), walk.assetCount, static_cast<unsigned long long>(walk.stats.pointersTranslated),
                 static_cast<unsigned long long>(walk.stats.valuesFixed),
+                static_cast<unsigned long long>(walk.stats.handles),
                 static_cast<unsigned long long>(walk.stats.reinlined), bodySize, walk.output.size(),
                 compressed.size());
     return !options.verify || Verify(output.c_str(), header, body, bodySize, walk.reinlined);

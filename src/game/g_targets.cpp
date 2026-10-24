@@ -357,7 +357,7 @@ char __cdecl G_WorldDirToScreenPos(const gentity_s *player, float fov_x, const f
         return 0;
     horzTan = dirCamera[1] / dirCamera[0];
     vertTan = dirCamera[2] / dirCamera[0];
-    __libm_sse2_tan(*(long double *)dirCamera);
+    __libm_sse2_tan(*(double *)dirCamera);
     tanHalfFovX = (float)(fov_x * 0.017453292) * 0.5;
     tanHalfFovY = tanHalfFovX * 0.75;
     if ( tanHalfFovX <= 0.0

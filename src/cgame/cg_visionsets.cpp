@@ -473,7 +473,7 @@ double __cdecl LerpStepFloat(float from, float to, float fraction, visionSetLerp
 double __cdecl LerpFloat(float from, float to, float fraction, visionSetLerpStyle_t style)
 {
     double v5; // st7
-    long double var4; // [esp+0h] [ebp-4h]
+    double var4; // [esp+0h] [ebp-4h]
 
     iassert(style != VISIONSETLERP_NONE);
 

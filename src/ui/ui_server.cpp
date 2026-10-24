@@ -758,7 +758,7 @@ void __cdecl UI_DrawServerRefreshDate(
     const char *v8; // eax
     char *v9; // eax
     const char *VariantString; // eax
-    long double v11; // [esp+1Ch] [ebp-48Ch] OVERLAPPED BYREF
+    double v11; // [esp+1Ch] [ebp-48Ch] OVERLAPPED BYREF
     int offset; // [esp+64h] [ebp-444h]
     char hackString[1028]; // [esp+68h] [ebp-440h] BYREF
     int replaceCounts[2]; // [esp+470h] [ebp-38h] BYREF

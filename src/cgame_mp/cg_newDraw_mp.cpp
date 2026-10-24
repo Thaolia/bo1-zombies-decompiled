@@ -3620,10 +3620,10 @@ void    CG_DrawPlayerImageSwing(
                 Material *material,
                 float *color)
 {
-    long double v6; // [esp+1Ch] [ebp-48Ch]
-    long double v7; // [esp+1Ch] [ebp-48Ch]
-    long double v8; // [esp+1Ch] [ebp-48Ch]
-    long double v9; // [esp+1Ch] [ebp-48Ch]
+    double v6; // [esp+1Ch] [ebp-48Ch]
+    double v7; // [esp+1Ch] [ebp-48Ch]
+    double v8; // [esp+1Ch] [ebp-48Ch]
+    double v9; // [esp+1Ch] [ebp-48Ch]
     float rankUpColor[4]; // [esp+24h] [ebp-484h] BYREF
     Material *rankUpMaterial; // [esp+34h] [ebp-474h]
     const char *rankUpMaterialName; // [esp+38h] [ebp-470h]
@@ -4586,7 +4586,7 @@ void    CG_DrawPlayerStance(
                 int textStyle)
 {
     double v7; // xmm0_8
-    long double v8; // [esp+1Ch] [ebp-5Ch]
+    double v8; // [esp+1Ch] [ebp-5Ch]
     float v9; // [esp+2Ch] [ebp-4Ch]
     const char *v10; // [esp+30h] [ebp-48h]
     float deltaTime; // [esp+34h] [ebp-44h] BYREF
@@ -4757,7 +4757,7 @@ void __cdecl CG_DrawStanceHintPrints(
     const char *binding; // [esp+248h] [ebp-8h]
     float y; // [esp+24Ch] [ebp-4h]
 
-    memset(standCmds, 0, 24);
+    memset(standCmds, 0, sizeof(standCmds[0]));
     standCmds[1][0] = "gocrouch";
     standCmds[1][1] = "togglecrouch";
     standCmds[1][2] = "lowerstance";
@@ -4889,7 +4889,7 @@ void    CG_DrawCursorhint(
     float w; // [esp+8h] [ebp-194h]
     int h; // [esp+Ch] [ebp-190h]
     int vertAlign; // [esp+10h] [ebp-18Ch]
-    long double v12; // [esp+20h] [ebp-17Ch]
+    double v12; // [esp+20h] [ebp-17Ch]
     float iconWidth; // [esp+2Ch] [ebp-170h]
     float secondaryLength; // [esp+30h] [ebp-16Ch]
     ScreenPlacement *scrPlace; // [esp+34h] [ebp-168h]

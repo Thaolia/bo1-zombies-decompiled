@@ -190,10 +190,10 @@ void __cdecl vectosignedangles(const float *vec, float *angles)
 #if 0
     double v2; // xmm0_8
     double v3; // xmm0_8
-    long double v4; // [esp-10h] [ebp-2Ch]
-    long double v5; // [esp-10h] [ebp-2Ch]
-    long double v6; // [esp-8h] [ebp-24h]
-    long double v7; // [esp-8h] [ebp-24h]
+    double v4; // [esp-10h] [ebp-2Ch]
+    double v5; // [esp-10h] [ebp-2Ch]
+    double v6; // [esp-8h] [ebp-24h]
+    double v7; // [esp-8h] [ebp-24h]
     float v8; // [esp+4h] [ebp-18h]
     float v9; // [esp+8h] [ebp-14h]
     float v10; // [esp+Ch] [ebp-10h]
@@ -266,8 +266,8 @@ double __cdecl vectosignedpitch(const float *vec)
 {
 #if 0
     double v1; // xmm0_8
-    long double v3; // [esp-1Ch] [ebp-2Ch]
-    long double v4; // [esp-14h] [ebp-24h]
+    double v3; // [esp-1Ch] [ebp-2Ch]
+    double v4; // [esp-14h] [ebp-24h]
 
     if ( vec[1] == 0.0 && *vec == 0.0 )
     {

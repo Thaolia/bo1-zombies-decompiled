@@ -272,8 +272,8 @@ int __cdecl R_ShaderConstantSet_CopyToFrontEndDataOut(const ShaderConstantSet *s
 // mod (L43): r_mod_scsShare 1. The frame's set index is 7 bits of the 64-bit draw-surf sort key (XModelDrawSurf_EncodeIndex:
 // bits 16-19 and 22-24; XModelDrawSurf_DecodeIndex), so the 128 slots can't grow without re-packing the key. Instead a
 // set byte-identical to one already copied this frame reuses that slot: same constants, same draw. Off = retail.
-volatile long g_scsFrameStamp = 1; // bumped where shaderConstantSetCount is reset (R_ToggleSmpFrame, r_rendercmds.cpp)
-static volatile long s_scsReadyStamp[128]; // g_scsFrameStamp once slot i is fully copied
+volatile bo1_long g_scsFrameStamp = 1; // bumped where shaderConstantSetCount is reset (R_ToggleSmpFrame, r_rendercmds.cpp)
+static volatile bo1_long s_scsReadyStamp[128]; // g_scsFrameStamp once slot i is fully copied
 
 int __cdecl CopyShaderConstantSetToBackendData(const ShaderConstantSet *scs)
 {
@@ -286,7 +286,7 @@ int __cdecl CopyShaderConstantSetToBackendData(const ShaderConstantSet *scs)
     }
     if ( r_mod_scsShare && r_mod_scsShare->current.enabled && scs ) // mod (L43)
     {
-        const long stamp = g_scsFrameStamp;
+        const bo1_long stamp = g_scsFrameStamp;
         unsigned int count = frontEndDataOut->shaderConstantSetCount;
         if ( count > 128 )
             count = 128;

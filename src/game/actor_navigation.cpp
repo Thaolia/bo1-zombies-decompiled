@@ -6548,7 +6548,7 @@ double  CustomSearchInfo_FindPathWithWidth::EvaluateHeuristic(
 {
 #if 0
     double v4; // xmm0_8
-    long double v6; // [esp-18h] [ebp-3Ch]
+    double v6; // [esp-18h] [ebp-3Ch]
     float v7; // [esp+8h] [ebp-1Ch] BYREF
     float dist; // [esp+Ch] [ebp-18h]
     float *vOrigin; // [esp+10h] [ebp-14h]

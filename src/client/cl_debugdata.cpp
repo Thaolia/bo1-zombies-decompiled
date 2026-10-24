@@ -425,7 +425,7 @@ void __cdecl CL_AddDebugBox(
                 int depthTest,
                 int duration)
 {
-    long double v7; // st7
+    double v7; // st7
     float v8; // [esp+0h] [ebp-9Ch]
     float *v9; // [esp+4h] [ebp-98h]
     unsigned int j; // [esp+1Ch] [ebp-80h]

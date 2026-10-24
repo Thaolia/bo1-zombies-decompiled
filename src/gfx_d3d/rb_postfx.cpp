@@ -904,7 +904,7 @@ void __cdecl RB_BloomStreak(const GfxViewInfo *viewInfo, GfxRenderTargetId *srcR
 void __cdecl RB_SetBlurConstants(float radius, float textureScaler)
 {
   double v2; // xmm0_8
-  long double v3; // [esp+0h] [ebp-A8h]
+  double v3; // [esp+0h] [ebp-A8h]
   float v4; // [esp+0h] [ebp-A8h]
   float v5; // [esp+4h] [ebp-A4h]
   float v6; // [esp+8h] [ebp-A0h]
@@ -1442,13 +1442,13 @@ void __cdecl RB_PoisonFX(const GfxViewInfo *viewInfo)
   double v3; // xmm0_8
   double v4; // xmm0_8
   double v5; // xmm0_8
-  long double v6; // [esp+10h] [ebp-5Ch]
-  long double v7; // [esp+10h] [ebp-5Ch]
-  long double v8; // [esp+10h] [ebp-5Ch]
-  long double v9; // [esp+10h] [ebp-5Ch]
-  long double v10; // [esp+10h] [ebp-5Ch]
-  long double v11; // [esp+10h] [ebp-5Ch]
-  long double v12; // [esp+10h] [ebp-5Ch]
+  double v6; // [esp+10h] [ebp-5Ch]
+  double v7; // [esp+10h] [ebp-5Ch]
+  double v8; // [esp+10h] [ebp-5Ch]
+  double v9; // [esp+10h] [ebp-5Ch]
+  double v10; // [esp+10h] [ebp-5Ch]
+  double v11; // [esp+10h] [ebp-5Ch]
+  double v12; // [esp+10h] [ebp-5Ch]
   float v13; // [esp+1Ch] [ebp-50h]
   float v14; // [esp+1Ch] [ebp-50h]
   float v15; // [esp+20h] [ebp-4Ch]

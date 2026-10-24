@@ -419,8 +419,8 @@ void __cdecl BG_GetSpreadForWeapon(
 {
     float v4; // xmm0_4
     double stackFireAccuracyDecay; // xmm0_8
-    long double v6; // [esp+0h] [ebp-28h]
-    long double v7; // [esp+8h] [ebp-20h]
+    double v6; // [esp+0h] [ebp-28h]
+    double v7; // [esp+8h] [ebp-20h]
     float frac; // [esp+24h] [ebp-4h]
     float fraca; // [esp+24h] [ebp-4h]
 
