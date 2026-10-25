@@ -10,6 +10,7 @@
 #include <win32/win_main.h>
 
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <cstdarg>
 #include <cstdio>
@@ -151,6 +152,15 @@ int main(int, char **)
     mkdir("sdmc:/switch", 0777);
     mkdir(kDataDir, 0777);
     BootLog("=== BO1 Zombies (Switch) boot === built %s %s", __DATE__, __TIME__);
+
+    // The desktop builds run with the working directory set to the install folder, and the engine depends on it: it
+    // opens a few files before the filesystem is up (localization.txt in Win_InitLocalization, read with a path
+    // relative to the cwd via FileWrapper_Open), and fs_basepath defaults to Sys_Cwd(). There is no launcher to set
+    // the cwd on the console, so set it to the data dir here; without it the language never resolves (the zone path
+    // becomes zone\(null)\...) and fs_basepath comes out empty (the search path is //main).
+    const int cdrc = chdir(kDataDir);
+    char cwdbuf[256];
+    BootLog("chdir(%s) -> %d; cwd = %s", kDataDir, cdrc, getcwd(cwdbuf, sizeof(cwdbuf)) ? cwdbuf : "(getcwd failed)");
 
     const AppletType at = appletGetAppletType();
     BootLog("applet type = %d (%s)", (int)at, AppletTypeName(at));
