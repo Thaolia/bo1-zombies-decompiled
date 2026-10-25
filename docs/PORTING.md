@@ -91,6 +91,8 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-24 | The GL backend's calls that act on a bound target (storage, uploads, parameters) go through `EditTexture`, which binds on the upload unit and makes it active | The binding cache skipped `glActiveTexture` when the upload unit already held the texture, so an upload after a draw went to the draw's last unit: Kino's model lighting atlas (a volume locked when lighting changes) kept its first contents and every model drew black; a 2D upload would have overwritten another texture silently |
 | 2026-10-24 | The normaliser clamps each COLOR output (`io_10_#`) of a vertex shader to [0, 1] at the end of `main`, next to `bo1_pos_fixup` | D3D9 clamps COLOR-semantic interpolators to [0, 1] at the vertex output before interpolation; MojoShader passed them through `gl_FrontColor`/`gl_Color` (clamped by default in compatibility GL) and the rename to core-profile varyings dropped it. 63 of 356 vertex shaders compute a COLOR output that can leave [0, 1] (negatives, products), so it is not a no-op; `gb_gl_test` fails without it (a 2-to-0 gradient reads white at the middle, not grey) |
 | 2026-10-24 | The controller is `SDL_GameController` (`win32_gamepad.cpp`): the video thread reads one open pad into a snapshot each pump, the XInput entry points read it under a lock; the SDL->XInput map is a pure inline function (`win32_gamepad.h`) tested by `tests/platform/gamepad_test.cpp` | The engine polls XInput and applies its own dead zones, so the layer only translates; factoring the map pure lets it be tested without a device, and the snapshot keeps the engine's reads off the video thread |
+| 2026-10-24 | The engine's full-screen window (WS_POPUP + WS_EX_TOPMOST, `r_fullscreen 1`) maps to SDL desktop full screen (`SDL_WINDOW_FULLSCREEN_DESKTOP`); the borderless windowed mode (no WS_EX_TOPMOST) is unchanged | Desktop full screen covers the display with no mode switch to restore, and Present already scales the game's back buffer to the drawable; exclusive full screen would mean a D3D9 device mode switch the frontend does not do |
+| 2026-10-25 | `Bo1_PosixPath` (posix file layer) resolves paths case-insensitively, component by component, with an exact-path fast path | Windows' file system is case-insensitive and the engine relies on it (`zone/Common` vs ffconv's `zone/common`); a case-sensitive FS (ext4, the Switch SD) broke zone loading. Resolving at the one choke point fixes every file op without touching the engine |
 | 2026-10-24 | All streamed sounds are MS-ADPCM, so the SDL2 audio backend needs only PCM and MS-ADPCM decode, no WMA/ffmpeg | An inventory of every `.wav` in the install's iwds (29 103 files, format field at offset 28 of the Treyarch stream header) found 29 102 MS-ADPCM and 1 PCM16, 0 WMA; loaded sounds are PCM or MS-ADPCM too (`snd_driver_xaudio2.cpp` branches). xWMA was the only thing pulling in ffmpeg |
 | 2026-10-24 | A headless run renders on the null backend unless `BO1_GFX_BACKEND=gl` asks for GL (then under SDL's offscreen driver for tests) | The headless client's `bo1_clientCommands` (times after the client is active) and back buffer screenshots are what the win64 comparisons use; absolute times do not survive llvmpipe's slow loads |
 
@@ -695,8 +697,19 @@ Base: upstream commit `102f699` (2026-10-03).
     - Gamepad (2026-10-24): `SDL_GameController` behind the XInput API (decision above); the mapping is unit-tested
       (`gamepad_test`, fail-first confirmed) and a headless GL run opens the subsystem without a crash and reports no
       device on a machine with no pad. Real-controller input needs a pad on a display (hand-to-user).
-    - Open (rest of 4b): SDL2 audio (PCM + MS-ADPCM only, no ffmpeg -- inventory above), fullscreen (needs a real
-      display to verify); for GL, the GLSL version for Mesa 20.1 on the Switch (`docs/RENDERER.md`).
+    - Fullscreen (2026-10-24): `r_fullscreen 1` becomes SDL desktop full screen (decision above). Under the
+      offscreen driver it is a no-op, but a windowed client with `r_fullscreen 1 r_borderless 0` reaches the
+      full-screen window path, creates the window and renders Kino without a crash; the actual display coverage
+      needs a real display (hand-to-user). The borderless and headless paths are unchanged.
+    - Open (rest of 4b): SDL2 audio (PCM + MS-ADPCM only, no ffmpeg -- inventory above); for GL, the GLSL version
+      for Mesa 20.1 on the Switch (`docs/RENDERER.md`).
+    - Case-sensitive filesystems (found testing on ext4 2026-10-25, fixed same day): the engine opens zones with
+      fixed casing (`DB_BuildOSPath_Unlocalized` -> `zone\Common\`, `DB_BuildOSPath` -> `zone\<language>\`) while
+      ffconv writes `zone/common` and `zone/English`. On /mnt/c (9p, case-insensitive) it worked; on ext4 (and the
+      Switch SD) it did not. Fixed in `Bo1_PosixPath` (`win32_files.cpp`): every file op resolves each existing path
+      component to its real case (the exact path is tried first, so a matching case costs one `stat`); a component
+      that does not exist is kept, so writes keep their intended case. Verified on the ext4 run with no symlinks:
+      `common_zombie` loads (it had failed before).
 - **5**: Kino plays 10 rounds docked and handheld with no crash, RAM logged every round, target 30 fps at 720p
   docked. Render-thread CPU time is recorded here to decide on phase 7.
   - Switch constraints from `.claude/rules/switch-homebrew.md` (learned on another libnx port) that this plan must

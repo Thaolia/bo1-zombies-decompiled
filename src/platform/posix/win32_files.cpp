@@ -13,6 +13,8 @@
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
+#include <dirent.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -257,6 +259,30 @@ Bo1Find::~Bo1Find()
         closedir(dir);
 }
 
+// A directory entry of `dir` whose name equals `name` ignoring case, or empty when there is none.
+static std::string MatchIgnoringCase(const std::string &dir, const std::string &name)
+{
+    DIR *d = opendir(dir.empty() ? "." : dir.c_str());
+    if (!d)
+        return std::string();
+    std::string found;
+    for (dirent *e = readdir(d); e; e = readdir(d))
+    {
+        if (!strcasecmp(e->d_name, name.c_str()))
+        {
+            found = e->d_name;
+            break;
+        }
+    }
+    closedir(d);
+    return found;
+}
+
+// The engine spells paths as Windows' case-insensitive file system accepts them; a case-sensitive one (ext4, the
+// Switch SD) does not. Convert '\\' to '/', then resolve each existing component to its real case as Windows would
+// (e.g. the engine's `zone/Common` to the `zone/common` on disk). A component that does not exist is kept as given,
+// so a new file or directory keeps its intended case. The exact path is tried first, so a matching case costs one
+// stat and nothing lists a directory.
 std::string Bo1_PosixPath(const char *path)
 {
     std::string converted = path;
@@ -265,7 +291,40 @@ std::string Bo1_PosixPath(const char *path)
         if (c == '\\')
             c = '/';
     }
-    return converted;
+    struct stat st;
+    if (converted.empty() || lstat(converted.c_str(), &st) == 0)
+        return converted;
+    std::string result = converted[0] == '/' ? "/" : ".";
+    bool stopped = false;
+    for (size_t i = 0; i < converted.size();)
+    {
+        while (i < converted.size() && converted[i] == '/')
+            ++i;
+        if (i >= converted.size())
+            break;
+        const size_t slash = converted.find('/', i);
+        const std::string comp = converted.substr(i, slash == std::string::npos ? std::string::npos : slash - i);
+        i = slash == std::string::npos ? converted.size() : slash;
+        const std::string sep = result.back() == '/' ? "" : "/";
+        if (!stopped)
+        {
+            const std::string candidate = result + sep + comp;
+            if (lstat(candidate.c_str(), &st) == 0)
+            {
+                result = candidate;
+                continue;
+            }
+            const std::string match = MatchIgnoringCase(result, comp);
+            if (!match.empty())
+            {
+                result = result + sep + match;
+                continue;
+            }
+            stopped = true;
+        }
+        result = result + sep + comp;
+    }
+    return result;
 }
 
 extern "C" {

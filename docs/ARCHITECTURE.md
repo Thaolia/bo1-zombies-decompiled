@@ -213,7 +213,11 @@ time.
     close messages. Each thread has its own message queue, as on Windows: the engine makes its window on the render
     thread, which pumps it each frame. Monitors are SDL's displays (`HMONITOR` = display + 1). A headless run keeps
     its windows hidden, as the Windows headless client stays on a private desktop: the messages are the same, and a
-    9Ex `Present` reports the window occluded. SDL video starts at the first display or window call, so the
+    9Ex `Present` reports the window occluded. The engine's full-screen window (`r_fullscreen 1`: a WS_POPUP with
+    WS_EX_TOPMOST) becomes an SDL desktop full-screen window (`SDL_WINDOW_FULLSCREEN_DESKTOP`), which covers the
+    display without a mode switch; the game renders at its own size and Present scales to the drawable. The
+    borderless windowed mode (`r_borderless 1`, WS_POPUP, no WS_EX_TOPMOST) stays a plain borderless window. SDL
+    video starts at the first display or window call, so the
     dedicated server never opens it; SDL reads events on the thread that started it, so video the GL backend started
     for the engine's first Direct3D object (`Sys_DetectVideoCard`, on the main thread) stops with that object when no
     window exists (`Bo1_VideoRelease`), and the render thread, which makes and pumps the windows, starts it again.

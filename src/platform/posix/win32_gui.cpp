@@ -36,6 +36,16 @@ constexpr WPARAM kVkF4 = 0x73;
 constexpr WPARAM kScClose = 0xF060;
 constexpr WPARAM kSizeRestored = 0, kSizeMinimized = 1, kSizeMaximized = 2;
 constexpr DWORD kWsCaption = 0x00C00000, kWsVisible = 0x10000000, kWsMinimize = 0x20000000;
+constexpr DWORD kWsExTopmost = 0x00000008;
+
+// The engine's full-screen window (r_init.cpp R_CreateWindow): a borderless WS_POPUP with WS_EX_TOPMOST, at the
+// chosen resolution. Mapped to SDL desktop full screen (the window covers the display at its current mode; the game
+// renders at its own size and Present scales to the drawable), so there is no display-mode switch to restore. The
+// borderless windowed mode the engine also has (exStyle 0) stays a plain borderless window.
+bool WantsFullscreen(DWORD style, DWORD exStyle)
+{
+    return (exStyle & kWsExTopmost) && !(style & kWsCaption);
+}
 constexpr UINT kSwpNoSize = 0x1, kSwpNoMove = 0x2, kSwpNoZOrder = 0x4, kSwpNoActivate = 0x10, kSwpShowWindow = 0x40,
                kSwpHideWindow = 0x80;
 constexpr int kSwHide = 0, kSwShowMinimized = 2, kSwMaximize = 3, kSwShowNoActivate = 4, kSwShow = 5,
@@ -266,6 +276,7 @@ void Deactivate(HWND hwnd, bool minimized)
 void Show(HWND hwnd)
 {
     SDL_Window *sdl;
+    bool fullscreen = false;
     {
         Lock lock(L().lock);
         Window *w = Find(hwnd);
@@ -274,9 +285,13 @@ void Show(HWND hwnd)
         w->visible = true;
         w->style |= kWsVisible;
         sdl = w->sdl;
+        fullscreen = WantsFullscreen(w->style, w->exStyle);
     }
     if (sdl && !Headless())
+    {
+        SDL_SetWindowFullscreen(sdl, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
         SDL_ShowWindow(sdl);
+    }
     Send(hwnd, kWmShowWindow, TRUE, 0);
 }
 
@@ -624,6 +639,8 @@ HWND CreateWindowExA(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName, D
             Uint32 flags = SDL_WINDOW_HIDDEN;
             if (!(dwStyle & kWsCaption))
                 flags |= SDL_WINDOW_BORDERLESS;
+            if (WantsFullscreen(dwStyle, dwExStyle))
+                flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
             if (L().glWindows)
                 flags |= SDL_WINDOW_OPENGL;
             w->sdl = SDL_CreateWindow(w->title.c_str(), X, Y, std::max(nWidth, 1), std::max(nHeight, 1), flags);
