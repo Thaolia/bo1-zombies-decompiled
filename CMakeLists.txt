@@ -237,7 +237,8 @@ else()
     # Windows-only sources the posix/switch platform layer replaces (docs/PORTING.md, phase 4):
     # - win_syscon.cpp (the Win32 console window; posix_syscon.cpp is the terminal) and win_mini_dumper.cpp (dbghelp
     #   minidumps, token privileges; posix_main.cpp keeps its started flag);
-    # - XAudio2: snd_driver_absent.cpp implements sound/snd_driver.h (no audio device) until the SDL2 backend.
+    # - XAudio2: snd_driver_sdl2.cpp implements sound/snd_driver.h with a software mixer on an SDL2 device (RAM voices;
+    #   streaming and reverb deferred). It falls back to 'nosnd' when no device opens (headless, no hardware).
     # The rest of win32/ and CubeMapGenLib build on the Win32 layer of src/platform/posix.
     set_source_files_properties(
         "${SRC_DIR}/win32/win_syscon.cpp"
@@ -313,7 +314,20 @@ else()
         target_link_libraries(gamepad_test PRIVATE SDL2::SDL2)
         target_compile_options(gamepad_test PRIVATE -Wall -Wextra
                                $<$<CXX_COMPILER_ID:Clang>:-Wno-nonportable-include-path>)
-        message(STATUS "BO1: posix renders through the D3D9 frontend on the GL backend (null in headless runs); no sound yet (docs/PORTING.md, phase 4)")
+        # The MS-ADPCM decoder test (docs/PORTING.md, phase 4b): the pure decoder against ffmpeg's adpcm_ms. The build
+        # step makes the vectors with ffmpeg; ./adpcm_test <adpcm.wav> <reference.s16le> in the build folder.
+        add_executable(adpcm_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/platform/adpcm_test.cpp"
+                       "${SRC_DIR}/platform/posix/snd_adpcm.cpp")
+        target_include_directories(adpcm_test PRIVATE "${SRC_DIR}")
+        target_compile_options(adpcm_test PRIVATE -Wall -Wextra)
+        # The software mixer's math (docs/PORTING.md, phase 4b): the voice send matrices and their application, against
+        # a computed reference, no device. ./snd_mix_test [out.wav] in the build folder.
+        add_executable(snd_mix_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/platform/snd_mix_test.cpp"
+                       "${SRC_DIR}/platform/posix/snd_mix.cpp")
+        target_include_directories(snd_mix_test PRIVATE "${SRC_DIR}")
+        target_link_libraries(snd_mix_test PRIVATE m)
+        target_compile_options(snd_mix_test PRIVATE -Wall -Wextra)
+        message(STATUS "BO1: posix renders through the D3D9 frontend on the GL backend (null in headless runs); sound is a software mixer on SDL2, RAM voices only (docs/PORTING.md, phase 4)")
     else()
         message(WARNING "BO1: the ${BO1_PLATFORM} build is a work in progress and is expected to fail (docs/PORTING.md)")
     endif()

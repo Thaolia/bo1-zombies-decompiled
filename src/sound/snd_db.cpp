@@ -1,6 +1,7 @@
 #include "snd_db.h"
 #include "snd.h"
 
+#include <cstddef>
 #include <cstring>
 
 const char *CATEGORY_IDS[5] =
@@ -106,35 +107,33 @@ const snd_csv_entry_t SND_GROUP_FIELDS[6] =
 
 const snd_csv_entry_t SND_ALIAS_FIELDS[53] =
 {
-  { "vol_min", 44u, true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
-  { "vol_max", 46u, true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
-  { "pitch_min", 50u, true, SND_CSV_CENTS, -2400.0, 1200.0, 0u, NULL },
-  { "pitch_max", 52u, true, SND_CSV_CENTS, -2400.0, 1200.0, 0u, NULL },
-  { "dist_min", 56u, true, SND_CSV_USHORT, 0.0, 65535.0, 0u, NULL },
-  { "dist_max", 58u, true, SND_CSV_USHORT, 0.0, 65535.0, 0u, NULL },
-  { "dist_reverb_max", 60u, true, SND_CSV_USHORT, 0.0, 65535.0, 0u, NULL },
-  { "probability", 70u, true, SND_CSV_NORM_BYTE, 0.0, 1.0, 0u, NULL },
-  { "envelop_min", 62u, true, SND_CSV_USHORT, 0.0, 0.0, 0u, NULL },
-  { "envelop_max", 64u, true, SND_CSV_USHORT, 0.0, 0.0, 0u, NULL },
-  { "envelop_percentage", 66u, true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
-  { "center_send", 42u, true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
-  { "reverb_send", 40u, true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
-  { "start_delay", 38u, true, SND_CSV_USHORT, 0.0, 65535.0, 0u, NULL },
-  { "min_priority_threshold", 68u, true, SND_CSV_NORM_BYTE, 0.0, 1.0, 0u, NULL },
-  { "max_priority_threshold", 69u, true, SND_CSV_NORM_BYTE, 0.0, 1.0, 0u, NULL },
-  { "team_vol_mod", 48u, true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
-  { "team_pitch_mod", 54u, true, SND_CSV_CENTS, -2400.0, 1200.0, 0u, NULL },
-  { "occlusion_level", 71u, true, SND_CSV_NORM_BYTE, 0.0, 1.0, 0u, NULL },
-  { "occlusion_wet_dry", 72u, true, SND_CSV_NORM_BYTE, 0.0, 1.0, 0u, NULL },
-  { "move_time", 36u, true, SND_CSV_USHORT, 0.0, 65535.0, 0u, NULL },
-  { "duck", 24u, true, SND_CSV_HASH, 0.0, 0.0, 0u, NULL },
-  { "min_priority", 73u, true, SND_CSV_BYTE, 0.0, 128.0, 0u, NULL },
-  { "max_priority", 74u, true, SND_CSV_BYTE, 0.0, 128.0, 0u, NULL },
-  { "limit_count", 80u, true, SND_CSV_BYTE, 0.0, 128.0, 0u, NULL },
-  { "entity_limit_count", 81u, true, SND_CSV_BYTE, 0.0, 128.0, 0u, NULL },
-  {
-    "volume_falloff_curve",
-    76u,
+  { "vol_min", offsetof(snd_alias_t, volMin), true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
+  { "vol_max", offsetof(snd_alias_t, volMax), true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
+  { "pitch_min", offsetof(snd_alias_t, pitchMin), true, SND_CSV_CENTS, -2400.0, 1200.0, 0u, NULL },
+  { "pitch_max", offsetof(snd_alias_t, pitchMax), true, SND_CSV_CENTS, -2400.0, 1200.0, 0u, NULL },
+  { "dist_min", offsetof(snd_alias_t, distMin), true, SND_CSV_USHORT, 0.0, 65535.0, 0u, NULL },
+  { "dist_max", offsetof(snd_alias_t, distMax), true, SND_CSV_USHORT, 0.0, 65535.0, 0u, NULL },
+  { "dist_reverb_max", offsetof(snd_alias_t, distReverbMax), true, SND_CSV_USHORT, 0.0, 65535.0, 0u, NULL },
+  { "probability", offsetof(snd_alias_t, probability), true, SND_CSV_NORM_BYTE, 0.0, 1.0, 0u, NULL },
+  { "envelop_min", offsetof(snd_alias_t, envelopMin), true, SND_CSV_USHORT, 0.0, 0.0, 0u, NULL },
+  { "envelop_max", offsetof(snd_alias_t, envelopMax), true, SND_CSV_USHORT, 0.0, 0.0, 0u, NULL },
+  { "envelop_percentage", offsetof(snd_alias_t, envelopPercentage), true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
+  { "center_send", offsetof(snd_alias_t, centerSend), true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
+  { "reverb_send", offsetof(snd_alias_t, reverbSend), true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
+  { "start_delay", offsetof(snd_alias_t, startDelay), true, SND_CSV_USHORT, 0.0, 65535.0, 0u, NULL },
+  { "min_priority_threshold", offsetof(snd_alias_t, minPriorityThreshold), true, SND_CSV_NORM_BYTE, 0.0, 1.0, 0u, NULL },
+  { "max_priority_threshold", offsetof(snd_alias_t, maxPriorityThreshold), true, SND_CSV_NORM_BYTE, 0.0, 1.0, 0u, NULL },
+  { "team_vol_mod", offsetof(snd_alias_t, teamVolMod), true, SND_CSV_DBSPL, 0.0, 100.0, 0u, NULL },
+  { "team_pitch_mod", offsetof(snd_alias_t, teamPitchMod), true, SND_CSV_CENTS, -2400.0, 1200.0, 0u, NULL },
+  { "occlusion_level", offsetof(snd_alias_t, occlusionLevel), true, SND_CSV_NORM_BYTE, 0.0, 1.0, 0u, NULL },
+  { "occlusion_wet_dry", offsetof(snd_alias_t, occlusionWetDry), true, SND_CSV_NORM_BYTE, 0.0, 1.0, 0u, NULL },
+  { "move_time", offsetof(snd_alias_t, fluxTime), true, SND_CSV_USHORT, 0.0, 65535.0, 0u, NULL },
+  { "duck", offsetof(snd_alias_t, duck), true, SND_CSV_HASH, 0.0, 0.0, 0u, NULL },
+  { "min_priority", offsetof(snd_alias_t, minPriority), true, SND_CSV_BYTE, 0.0, 128.0, 0u, NULL },
+  { "max_priority", offsetof(snd_alias_t, maxPriority), true, SND_CSV_BYTE, 0.0, 128.0, 0u, NULL },
+  { "limit_count", offsetof(snd_alias_t, limitCount), true, SND_CSV_BYTE, 0.0, 128.0, 0u, NULL },
+  { "entity_limit_count", offsetof(snd_alias_t, entityLimitCount), true, SND_CSV_BYTE, 0.0, 128.0, 0u, NULL },
+  { "volume_falloff_curve", offsetof(snd_alias_t, dryCurve),
     true,
     SND_CSV_ENUM_BYTE,
     0.0,
@@ -142,9 +141,7 @@ const snd_csv_entry_t SND_ALIAS_FIELDS[53] =
     0u,
     CURVES
   },
-  {
-    "reverb_falloff_curve",
-    77u,
+  { "reverb_falloff_curve", offsetof(snd_alias_t, wetCurve),
     true,
     SND_CSV_ENUM_BYTE,
     0.0,
@@ -152,9 +149,7 @@ const snd_csv_entry_t SND_ALIAS_FIELDS[53] =
     0u,
     CURVES
   },
-  {
-    "volume_min_falloff_curve",
-    78u,
+  { "volume_min_falloff_curve", offsetof(snd_alias_t, dryMinCurve),
     true,
     SND_CSV_ENUM_BYTE,
     0.0,
@@ -162,9 +157,7 @@ const snd_csv_entry_t SND_ALIAS_FIELDS[53] =
     0u,
     CURVES
   },
-  {
-    "reverb_min_falloff_curve",
-    79u,
+  { "reverb_min_falloff_curve", offsetof(snd_alias_t, wetMinCurve),
     true,
     SND_CSV_ENUM_BYTE,
     0.0,
@@ -172,14 +165,12 @@ const snd_csv_entry_t SND_ALIAS_FIELDS[53] =
     0u,
     CURVES
   },
-  { "pan", 75u, true, SND_CSV_ENUM_BYTE, 0.0, 0.0, 0u, PANS },
-  { "snapshot", 82u, true, SND_CSV_ENUM_BYTE, 0.0, 0.0, 0u, SNAPSHOT_GROUPS },
-  { "context_type", 28u, true, SND_CSV_HASH, 0.0, 0.0, 0u, NULL },
-  { "context_value", 32u, true, SND_CSV_HASH, 0.0, 0.0, 0u, NULL },
-  { "limit_type", 20u, true, SND_CSV_ENUM_BITS, 2.0, 25.0, 0u, LIMIT_TYPES },
-  {
-    "entity_limit_type",
-    20u,
+  { "pan", offsetof(snd_alias_t, pan), true, SND_CSV_ENUM_BYTE, 0.0, 0.0, 0u, PANS },
+  { "snapshot", offsetof(snd_alias_t, snapshotGroup), true, SND_CSV_ENUM_BYTE, 0.0, 0.0, 0u, SNAPSHOT_GROUPS },
+  { "context_type", offsetof(snd_alias_t, contextType), true, SND_CSV_HASH, 0.0, 0.0, 0u, NULL },
+  { "context_value", offsetof(snd_alias_t, contextValue), true, SND_CSV_HASH, 0.0, 0.0, 0u, NULL },
+  { "limit_type", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 2.0, 25.0, 0u, LIMIT_TYPES },
+  { "entity_limit_type", offsetof(snd_alias_t, flags),
     true,
     SND_CSV_ENUM_BITS,
     2.0,
@@ -187,9 +178,7 @@ const snd_csv_entry_t SND_ALIAS_FIELDS[53] =
     0u,
     LIMIT_TYPES
   },
-  {
-    "randomize_type",
-    20u,
+  { "randomize_type", offsetof(snd_alias_t, flags),
     true,
     SND_CSV_FLAG_BITS,
     3.0,
@@ -197,17 +186,15 @@ const snd_csv_entry_t SND_ALIAS_FIELDS[53] =
     0u,
     RANDOMIZE_TYPES
   },
-  { "move_type", 20u, true, SND_CSV_ENUM_BITS, 3.0, 22.0, 0u, MOVE_TYPES },
-  { "type", 20u, true, SND_CSV_ENUM_BITS, 2.0, 14.0, 0u, LOAD_TYPES },
-  { "group", 20u, true, SND_CSV_ENUM_BITS, 6.0, 16.0, 0u, GROUPS },
-  { "real_delay", 20u, true, SND_CSV_ENUM_BITS, 1.0, 2.0, 0u, NO_YES },
-  { "distance_lpf", 20u, true, SND_CSV_ENUM_BITS, 1.0, 3.0, 0u, NO_YES },
-  { "doppler", 20u, true, SND_CSV_ENUM_BITS, 1.0, 4.0, 0u, NO_YES },
-  { "is_big", 20u, true, SND_CSV_ENUM_BITS, 1.0, 5.0, 0u, NO_YES },
-  { "loop", 20u, true, SND_CSV_ENUM_BITS, 1.0, 0.0, 0u, LOOP_TYPES },
-  {
-    "spatialized",
-    20u,
+  { "move_type", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 3.0, 22.0, 0u, MOVE_TYPES },
+  { "type", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 2.0, 14.0, 0u, LOAD_TYPES },
+  { "group", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 6.0, 16.0, 0u, GROUPS },
+  { "real_delay", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 1.0, 2.0, 0u, NO_YES },
+  { "distance_lpf", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 1.0, 3.0, 0u, NO_YES },
+  { "doppler", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 1.0, 4.0, 0u, NO_YES },
+  { "is_big", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 1.0, 5.0, 0u, NO_YES },
+  { "loop", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 1.0, 0.0, 0u, LOOP_TYPES },
+  { "spatialized", offsetof(snd_alias_t, flags),
     true,
     SND_CSV_ENUM_BITS,
     1.0,
@@ -215,13 +202,13 @@ const snd_csv_entry_t SND_ALIAS_FIELDS[53] =
     0u,
     SPATIALIZED_TYPES
   },
-  { "futz", 20u, true, SND_CSV_ENUM_BITS, 1.0, 6.0, 0u, NO_YES },
-  { "music", 20u, true, SND_CSV_ENUM_BITS, 1.0, 8.0, 0u, NO_YES },
-  { "timescale", 20u, true, SND_CSV_ENUM_BITS, 1.0, 10.0, 0u, NO_YES },
-  { "pause", 20u, true, SND_CSV_ENUM_BITS, 1.0, 7.0, 0u, NO_YES },
-  { "stop_on_death", 20u, true, SND_CSV_ENUM_BITS, 1.0, 9.0, 0u, NO_YES },
-  { "bus", 20u, true, SND_CSV_ENUM_BITS, 2.0, 12.0, 0u, BUS_IDS },
-  { "voice_limit", 20u, true, SND_CSV_ENUM_BITS, 1.0, 11.0, 0u, NO_YES }
+  { "futz", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 1.0, 6.0, 0u, NO_YES },
+  { "music", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 1.0, 8.0, 0u, NO_YES },
+  { "timescale", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 1.0, 10.0, 0u, NO_YES },
+  { "pause", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 1.0, 7.0, 0u, NO_YES },
+  { "stop_on_death", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 1.0, 9.0, 0u, NO_YES },
+  { "bus", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 2.0, 12.0, 0u, BUS_IDS },
+  { "voice_limit", offsetof(snd_alias_t, flags), true, SND_CSV_ENUM_BITS, 1.0, 11.0, 0u, NO_YES }
 };
 
 const snd_csv_entry_t SND_SNAPSHOT_GROUP_FIELDS[1] =

@@ -195,7 +195,7 @@ bool IsPlainData(const TypeLayout &type)
            type.leaves[0].size32 == type.size32 && type.fixupCount == 0;
 }
 
-uint64_t WidenPointer(uint32_t value)
+constexpr uint64_t WidenPointer(uint32_t value)
 {
     if (value == 0xFFFFFFFFu)
         return DB_FF64_FOLLOWS;
@@ -204,7 +204,7 @@ uint64_t WidenPointer(uint32_t value)
     return value;
 }
 
-uint32_t NarrowPointer(uint64_t value)
+constexpr uint32_t NarrowPointer(uint64_t value)
 {
     if (value == DB_FF64_FOLLOWS)
         return 0xFFFFFFFFu;
@@ -212,6 +212,29 @@ uint32_t NarrowPointer(uint64_t value)
         return 0xFFFFFFFEu;
     return static_cast<uint32_t>(value);
 }
+
+// The sentinel widen/narrow is the hinge between the retail stream and the 64-bit one: the retail inline markers
+// (0xFFFFFFFF "the data follows", 0xFFFFFFFE "follows, with an insert pointer") must widen to the exact 64-bit
+// values the loader tests a pointer slot against, and narrow back unchanged. The loader compares a widened slot with
+// `(T*)-1` / `(T*)-2` (db_load.cpp: Load_snd_alias_t, Load_SoundFileRef, ...), so the sentinels must be the 64-bit
+// all-ones / all-ones-but-one patterns, not the zero-extended 32-bit ones. These round-trip checks run at every
+// ffconv build so the encoding can never silently drift.
+static_assert(DB_FF64_FOLLOWS == static_cast<uint64_t>(-1), "the inline sentinel must be 64-bit (T*)-1, not a zero-extended 0xFFFFFFFF");
+static_assert(DB_FF64_FOLLOWS_INSERT == static_cast<uint64_t>(-2), "the insert sentinel must be 64-bit (T*)-2");
+static_assert(WidenPointer(0xFFFFFFFFu) == DB_FF64_FOLLOWS, "0xFFFFFFFF widens to the follows sentinel");
+static_assert(WidenPointer(0xFFFFFFFEu) == DB_FF64_FOLLOWS_INSERT, "0xFFFFFFFE widens to the insert sentinel");
+static_assert(NarrowPointer(DB_FF64_FOLLOWS) == 0xFFFFFFFFu, "the follows sentinel narrows back to 0xFFFFFFFF");
+static_assert(NarrowPointer(DB_FF64_FOLLOWS_INSERT) == 0xFFFFFFFEu, "the insert sentinel narrows back to 0xFFFFFFFE");
+static_assert(NarrowPointer(WidenPointer(0xFFFFFFFFu)) == 0xFFFFFFFFu, "round-trip: the follows sentinel");
+static_assert(NarrowPointer(WidenPointer(0xFFFFFFFEu)) == 0xFFFFFFFEu, "round-trip: the insert sentinel");
+static_assert(NarrowPointer(WidenPointer(0u)) == 0u, "round-trip: a null slot");
+static_assert(NarrowPointer(WidenPointer(0x00ABCDEFu)) == 0x00ABCDEFu, "round-trip: an ordinary slot value");
+// A union of a pointer and 4-byte data is widened through its pointer member; the data members read the low 4 bytes,
+// so widening must leave those untouched for every value, the sentinels included (~0ull and ~1ull keep 0xFFFFFFFF /
+// 0xFFFFFFFE in their low word).
+static_assert(static_cast<uint32_t>(WidenPointer(0xFFFFFFFFu)) == 0xFFFFFFFFu, "widen keeps the low 32 bits: follows");
+static_assert(static_cast<uint32_t>(WidenPointer(0xFFFFFFFEu)) == 0xFFFFFFFEu, "widen keeps the low 32 bits: insert");
+static_assert(static_cast<uint32_t>(WidenPointer(0x12345678u)) == 0x12345678u, "widen keeps the low 32 bits: data");
 
 std::string AssetName();
 

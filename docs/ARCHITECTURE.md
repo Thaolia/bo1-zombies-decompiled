@@ -46,7 +46,11 @@ not.
 - MSVC-only code stays behind `#if defined(_MSC_VER)` (x87 asm, SEH, `dxerr.h`) with a portable twin when the engine
   needs the result: `qcommon/msg_round.h` reproduces the x87 snapshot rounding bit for bit (`tests/msg_round`).
 - Sound: the engine includes `sound/snd_driver.h` (driver API) and `sound/snd_dsp_types.h` (DSP structs). Only
-  `snd_driver_xaudio2*.cpp` see XAudio2; a phase 4 backend implements the same `snd_driver.h`.
+  `snd_driver_xaudio2*.cpp` see XAudio2; on posix `snd_driver_sdl2.cpp` implements the same `snd_driver.h` as a
+  software mixer on an SDL2 device. The engine still owns the voice table and computes each voice's speaker map and
+  send levels; the driver turns that into samples — the MS-ADPCM/PCM decode (`snd_adpcm`) and the send matrices
+  (`snd_mix`, ported from `SDXA2_UpdateVoiceSends`) are factored out pure and unit-tested. RAM voices only so far;
+  streamed voices, the reverb bus and the master DSP are deferred (`docs/PORTING.md`, phase 4b step 4).
 
 ## ffconv (phase 2)
 `tools/ffconv` is a 32-bit Windows tool (MinGW, `tools/ffconv/CMakePresets.json`) that turns the retail zones into
@@ -181,7 +185,7 @@ time.
   name, as the MSVC CRT does. Replaced: `win_syscon.cpp` by `posix_syscon.cpp` (the terminal: console text on stdout
   without colour codes, from the main thread only as in the console window; stdin lines become commands),
   `win_mini_dumper.cpp` (its filter writes nothing in this tree; `posix_main.cpp` keeps the started flag), the XAudio2
-  driver by `snd_driver_absent.cpp` (no audio device, so the engine starts as with `nosnd`) until the SDL2 backend.
+  driver by `snd_driver_sdl2.cpp` (a software mixer on an SDL2 device; it falls back to `nosnd` when no device opens).
   Direct3D 9 is `src/gfx_d3d9emu` on a `gfx_backend` (`docs/RENDERER.md`); its host (displays, windows, the
   `shaders.pack` path next to `zone/`, screenshot files, the console) is `posix_d3d9host.cpp`. The GL backend's host
   (`posix_glhost.cpp`) makes an SDL2 OpenGL 4.3 core context on a hidden window of its own; once it exists the window
@@ -221,7 +225,7 @@ time.
     dedicated server never opens it; SDL reads events on the thread that started it, so video the GL backend started
     for the engine's first Direct3D object (`Sys_DetectVideoCard`, on the main thread) stops with that object when no
     window exists (`Bo1_VideoRelease`), and the render thread, which makes and pumps the windows, starts it again.
-    Still without a device: the sound mixer (until the SDL2 audio backend);
+    Sound is a software mixer on an SDL2 device (`snd_driver_sdl2.cpp`), or `nosnd` when none opens;
   - input (`win32_input.cpp`): SDL's keyboard, text and mouse events become the messages Windows posts. Key messages
     carry the virtual-key code (by the layout for the keys that type letters, as Windows assigns it), the set 1 scan
     code of the key's position and the extended-key flag, which `MapKey` reads (scan code 0x29 opens the console,
