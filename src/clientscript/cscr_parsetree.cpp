@@ -65,7 +65,18 @@ sval_u *__cdecl Scr_AllocNode(scriptInstance_t inst, int size)
     {
         __debugbreak();
     }
-    return (sval_u *)Hunk_UserAlloc(g_allocNodeUser[inst], sizeof(sval_u) * size, alignof(sval_u), 0);
+    sval_u *node = (sval_u *)Hunk_UserAlloc(g_allocNodeUser[inst], sizeof(sval_u) * size, alignof(sval_u), 0);
+    // The builders write 32-bit fields (type/stringValue/intValue) into union slots and rely on the rest of each slot
+    // being zero: true on the 32-bit reference, where sizeof(sval_u)==4 and the write covers the whole slot, but not on
+    // 64-bit, where sval_u is 8 bytes (the `node` pointer) and a 4-byte write leaves the high half whatever the hunk
+    // held. A list terminator written as `node[1].stringValue = 0` then reads back as `node[1].node = high<<32`; on
+    // x86-64 fresh hunk pages happen to read zero (benign, NULL terminator), on AArch64 reused node memory does not, so
+    // Scr_CalcLocalVarsFormalParameterListInternal walks off a 0x2'00000000 "next" and derefs NULL. Zero the node so
+    // every unwritten half is defined, matching the reference. The guard folds away on 32-bit (4 > 4 is false), so the
+    // reference build's codegen is unchanged.
+    if (sizeof(sval_u) > sizeof(unsigned int))
+        memset(node, 0, sizeof(sval_u) * size);
+    return node;
 }
 
 sval_u __cdecl node1(scriptInstance_t inst, ParseToken_t type, sval_u val1)
