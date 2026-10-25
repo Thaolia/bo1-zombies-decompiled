@@ -51,7 +51,15 @@ bool Open()
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     if (getenv("BO1_GL_DEBUG"))
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+#if defined(__SWITCH__)
+    // SDL2-switch supports exactly one window (the console screen); the engine's later game window therefore fails to
+    // create ("Switch only supports one window") and the backend ends up with no window to present to -- the frame is
+    // drawn but never shown. Make this single context window the real, shown, screen-sized display, and route
+    // MakeCurrent/DrawableSize/Swap (below) to it so the backend's frame reaches the screen.
+    s_window = SDL_CreateWindow("BO1Zombies", 0, 0, 1280, 720, SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP);
+#else
     s_window = SDL_CreateWindow("", 0, 0, 1, 1, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+#endif
     if (!s_window)
     {
         Fail("no OpenGL window");
@@ -72,7 +80,12 @@ bool Open()
 
 bool MakeCurrent(void *window)
 {
+#if defined(__SWITCH__)
+    (void)window; // one window on Switch: always the single display window
+    return SDL_GL_MakeCurrent(s_window, s_context) == 0;
+#else
     return SDL_GL_MakeCurrent(window ? static_cast<SDL_Window *>(window) : s_window, s_context) == 0;
+#endif
 }
 
 void ReleaseCurrent()
@@ -87,7 +100,11 @@ void *ProcAddress(const char *name)
 
 void DrawableSize(void *window, int *width, int *height)
 {
+#if defined(__SWITCH__)
+    SDL_GL_GetDrawableSize(s_window, width, height); // one window on Switch: measure the single display window
+#else
     SDL_GL_GetDrawableSize(static_cast<SDL_Window *>(window), width, height);
+#endif
 }
 
 void SetSwapInterval(int interval)
@@ -97,7 +114,12 @@ void SetSwapInterval(int interval)
 
 void Swap(void *window)
 {
+#if defined(__SWITCH__)
+    (void)window; // one window on Switch: present the single display window
+    SDL_GL_SwapWindow(s_window);
+#else
     SDL_GL_SwapWindow(static_cast<SDL_Window *>(window));
+#endif
 }
 
 void Close()
