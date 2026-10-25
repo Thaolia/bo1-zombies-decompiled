@@ -232,7 +232,14 @@ void __cdecl GamerProfile_UpdateDvarsFromProfile(int controllerIndex)
                 || (zombietron_discovered_override && zombietron_discovered_override->current.enabled)));
         Dvar_SetBool((dvar_s *)zombiefive_discovered, gamerSettings[controllerIndex].zombiefive_discovered
             || (zombiefive_discovered_override && zombiefive_discovered_override->current.enabled));
+#if defined(__SWITCH__)
+        // The console has no keyboard/mouse, so the gamepad is always the input device. Enable it regardless of the
+        // profile (gpad_enabled defaults off on PC, and this profile apply would otherwise override a launch-time
+        // +set back to the profile value). Set here, after the profile apply, so nothing in it overrides it back.
+        Dvar_SetBool((dvar_s *)gpad_enabled, 1);
+#else
         Dvar_SetBool((dvar_s *)gpad_enabled, gamerSettings[controllerIndex].gpadEnabled);
+#endif
         Dvar_SetBool((dvar_s *)input_invertPitch, gamerSettings[controllerIndex].invertPitch);
         Dvar_SetFloat((dvar_s *)input_viewSensitivity, gamerSettings[controllerIndex].viewSensitivity);
         Dvar_SetInt((dvar_s *)team_indicator, gamerSettings[controllerIndex].team_indicator);

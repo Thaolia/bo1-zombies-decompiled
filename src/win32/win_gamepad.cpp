@@ -109,7 +109,11 @@ void GPad_InitAll()
                                                 "thumbstick_default",
                                                 1u,
                                                 "Game pad stick configuration");
+#if defined(__SWITCH__)
+    gpad_enabled = _Dvar_RegisterBool("gpad_enabled", 1, 1u, "Game pad enabled"); // console has no KBM: on by default
+#else
     gpad_enabled = _Dvar_RegisterBool("gpad_enabled", 0, 1u, "Game pad enabled");
+#endif
     gpad_present = _Dvar_RegisterBool("gpad_present", 0, 0x40u, "Game pad present");
     for ( portIndex = 0; portIndex < 1; ++portIndex )
     {

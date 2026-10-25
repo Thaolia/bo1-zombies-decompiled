@@ -210,6 +210,12 @@ void __cdecl IN_Frame()
         CL_SP_HeadlessMouseTest(); // p1 c30 TEST SWITCH bo1_mousetest: scripted mouse deltas only
         return;
     }
+#if defined(__SWITCH__)
+    // Single-window console: the app is always the foreground and active while it runs, and there is no mouse. The
+    // gates below key off SDL window focus, which the game window never has here (it has no SDL window -- "Switch only
+    // supports one window"), so poll the gamepads directly instead of behind the mouse/foreground checks.
+    IN_GamepadsMove();
+#else
     if ( s_wmv.mouseInitialized )
     {
         if ( in_appactive )
@@ -224,6 +230,7 @@ void __cdecl IN_Frame()
             IN_DeactivateMouse();
         }
     }
+#endif
 }
 
 void IN_GamepadsMove()
