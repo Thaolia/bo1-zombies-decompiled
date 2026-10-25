@@ -304,7 +304,7 @@ bool Normalize(const MOJOSHADER_parseData &parsed, bool pixel, const std::set<Us
     }
 
     std::ostringstream out;
-    out << "#version 460 core\n";
+    out << "#version 430 core\n";
     out << "// Translated from D3D9 bytecode by ffconv (MojoShader + ff_glsl.cpp); see docs/RENDERER.md.\n";
     if (pixel)
         out << "layout(std140, binding = 1) uniform BO1PixelConstants\n{\n    vec4 ps_c_reg[256];\n"
