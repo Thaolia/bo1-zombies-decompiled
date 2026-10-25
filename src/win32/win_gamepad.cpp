@@ -572,7 +572,11 @@ double __cdecl GPad_GetStick(int portIndex, GamePadStick stick)
     {
         __debugbreak();
     }
-    return s_gamePads[portIndex].sticks[stick];
+    // `stick` carries GPAD_STICK_MASK (0x40000000); the real index is the low bits (GPAD_LX..GPAD_RY = 0..3). On
+    // 32-bit the mask fell off the `* sizeof(double)` byte offset through truncation, so this indexed sticks[0..3];
+    // on 64-bit it must be masked off explicitly (as GPad_GetStickChangedToPressedState does with `& 0xBFFFFFFF`),
+    // or `sticks[0x40000000]` is a ~4 GB out-of-bounds read -- the crash on a gamepad-equipped 64-bit target.
+    return s_gamePads[portIndex].sticks[stick & 0xBFFFFFFF];
 }
 
 bool __cdecl GPad_IsStickPressed(int portIndex, GamePadStick stick, GamePadStickDir stickDir)
