@@ -152,6 +152,10 @@ int main(int, char **)
     // Make the data dir so even a first boot on a fresh SD can leave its log (EEXIST is fine).
     mkdir("sdmc:/switch", 0777);
     mkdir(kDataDir, 0777);
+    // Start each launch with a fresh log instead of appending to every prior run: truncate it once here, before any
+    // BootLog, so the switch_main and engine (Switch_DebugLog) "ab" writes all land in the new file.
+    if (FILE *fresh = std::fopen(kBootLogPath, "wb"))
+        std::fclose(fresh);
     BootLog("=== BO1 Zombies (Switch) boot === built %s %s", __DATE__, __TIME__);
 
     // The desktop builds run with the working directory set to the install folder, and the engine depends on it: it
