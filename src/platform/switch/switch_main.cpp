@@ -14,6 +14,7 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 namespace
@@ -161,6 +162,24 @@ int main(int, char **)
     const int cdrc = chdir(kDataDir);
     char cwdbuf[256];
     BootLog("chdir(%s) -> %d; cwd = %s", kDataDir, cdrc, getcwd(cwdbuf, sizeof(cwdbuf)) ? cwdbuf : "(getcwd failed)");
+
+    // Optional bring-up override: a file sdmc:/switch/bo1zm/gfx.cfg holding "null" or "gl" selects the graphics
+    // backend (the dispatcher reads BO1_GFX_BACKEND) without a rebuild. Absent, the default applies (GL when it gets
+    // a context). Lets the console be exercised headlessly (null) past the slow first-boot shader compile.
+    if (FILE *gf = std::fopen("sdmc:/switch/bo1zm/gfx.cfg", "rb"))
+    {
+        char v[16] = {};
+        const size_t n = std::fread(v, 1, sizeof(v) - 1, gf);
+        std::fclose(gf);
+        for (size_t i = 0; i < n; ++i)
+            if (v[i] == '\r' || v[i] == '\n' || v[i] == ' ')
+                v[i] = 0;
+        if (v[0])
+        {
+            setenv("BO1_GFX_BACKEND", v, 1);
+            BootLog("gfx.cfg -> BO1_GFX_BACKEND=%s", v);
+        }
+    }
 
     const AppletType at = appletGetAppletType();
     BootLog("applet type = %d (%s)", (int)at, AppletTypeName(at));
