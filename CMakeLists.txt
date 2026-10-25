@@ -285,6 +285,39 @@ else()
             add_custom_target(iwffs_layout_check DEPENDS "${BO1_LAYOUT_STAMP}")
             add_dependencies(BO1Zombies iwffs_layout_check)
         endif()
+    elseif(BO1_PLATFORM STREQUAL "switch")
+        # Switch (devkitA64 + libnx) reuses the posix SDL2 + Win32-shim layer; the /proc and x86 deltas are
+        # #if defined(__SWITCH__) in the shared files and the libnx entry/romfs live in src/platform/switch. Null
+        # backend this session (docs/PORTING.md, phase 5): GL (EGL on nwindowGetDefault) and the .nro come next.
+        target_sources(BO1Zombies PRIVATE ${PLATFORM_POSIX_FILES} ${PLATFORM_SWITCH_FILES}
+                       ${GFX_D3D9EMU_FILES} ${GFX_BACKEND_NULL_FILES})
+        # The desktop entry (posix_main.cpp) is replaced by the libnx one (src/platform/switch/switch_main.cpp).
+        set_source_files_properties("${SRC_DIR}/platform/posix/posix_main.cpp" PROPERTIES HEADER_FILE_ONLY ON)
+        # aarch64 has no x86 SSE header: src/platform/switch/include/xmmintrin.h forwards to sse2neon (NEON).
+        target_include_directories(BO1Zombies PRIVATE "${SRC_DIR}/platform/switch/include")
+        target_include_directories(BO1Zombies SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/sse2neon")
+        # newlib gates GNU extensions (fopencookie, ...) on _GNU_SOURCE, which must precede every header, so it goes
+        # on the command line rather than in a source file (the forced -include compat.h would beat a #define).
+        target_compile_definitions(BO1Zombies PRIVATE _GNU_SOURCE)
+        # SDL2 from the devkitPro portlibs (its pkg-config pulls EGL/glapi/drm_nouveau/libnx/pthread).
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(BO1_SDL2 REQUIRED sdl2)
+        target_include_directories(BO1Zombies SYSTEM PRIVATE ${BO1_SDL2_INCLUDE_DIRS})
+        target_link_libraries(BO1Zombies PRIVATE ${BO1_SDL2_LDFLAGS})
+        # D3DXSaveSurfaceToFileA's image encoders (third_party/stb), for that one file, as on posix.
+        set_source_files_properties("${SRC_DIR}/gfx_d3d9emu/d3dx9emu.cpp" PROPERTIES
+                                    COMPILE_OPTIONS "-isystem;${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb")
+        # Package the linked ELF into a runnable .nro (nacp metadata + icon). The game data lives on the SD card
+        # (sdmc:/switch/bo1zm/), not in romfs, so there is no --romfsdir.
+        find_program(BO1_ELF2NRO elf2nro REQUIRED HINTS "$ENV{DEVKITPRO}/tools/bin")
+        find_program(BO1_NACPTOOL nacptool REQUIRED HINTS "$ENV{DEVKITPRO}/tools/bin")
+        add_custom_command(TARGET BO1Zombies POST_BUILD
+            COMMAND "${BO1_NACPTOOL}" --create "BO1 Zombies" "bo1-zombies-decompiled (Switch port)" "0.1"
+                    "${CMAKE_BINARY_DIR}/BO1Zombies.nacp"
+            COMMAND "${BO1_ELF2NRO}" "$<TARGET_FILE:BO1Zombies>" "${CMAKE_BINARY_DIR}/$<CONFIG>/BO1Zombies.nro"
+                    "--icon=$ENV{DEVKITPRO}/libnx/default_icon.jpg" "--nacp=${CMAKE_BINARY_DIR}/BO1Zombies.nacp"
+            COMMENT "Packaging BO1Zombies.nro (data stays on the SD card)"
+            VERBATIM)
     endif()
     # The run folder, as the Visual Studio generator makes it: the program next to the copied main/ and mods/.
     set_target_properties(BO1Zombies PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")

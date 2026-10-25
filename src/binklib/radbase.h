@@ -192,6 +192,20 @@
         #endif
       #endif
 
+  #elif defined(__SWITCH__)
+
+      // aarch64 + libnx. Bink is stubbed on the console (binklib is header-only here), so this only needs the modern
+      // GCC/ELF model -- empty __far / __pascal and the right pointer width -- not the x86/MMX specifics. __RADX64__
+      // is set only to pick the 64-bit pointer typedefs (U32=int, SINTa/UINTa=__int64), which are correct on aarch64;
+      // no x64 code is generated because binklib's sources are not compiled.
+      #define __RADLINUX__
+      #define __RAD32__
+      #define __RAD64__
+      #define __RADX64__
+      #define __RADLITTLEENDIAN__
+      #define RADINLINE inline
+      #define RADRESTRICT __restrict
+
   #elif defined(linux)
 
       #define __RADLINUX__

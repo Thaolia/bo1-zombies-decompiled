@@ -10,7 +10,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/resource.h>
+#if !defined(__SWITCH__) // newlib (Switch) has no syscall()/gettid
 #include <sys/syscall.h>
+#endif
 #include <time.h>
 #include <ucontext.h>
 #include <unistd.h>
@@ -18,6 +20,10 @@
 #include <map>
 #include <mutex>
 #include <vector>
+
+#ifndef PTHREAD_STACK_MIN // devkitA64 newlib does not define it; 16 KiB is a safe floor for a thread stack
+#define PTHREAD_STACK_MIN 0x4000
+#endif
 
 namespace
 {
@@ -34,12 +40,22 @@ std::map<DWORD, Bo1Thread *> &Threads()
 }
 
 // SuspendThread interrupts the target with this signal; the handler records the context and waits for ResumeThread.
+// newlib (Switch) has no real-time signals or SA_SIGINFO sigaction, so the signal-based suspend is desktop-only; a
+// real console suspend (svcSetThreadActivity / svcGetThreadContext3) is a boot-milestone task (docs/PORTING.md).
+#if !defined(__SWITCH__)
 const int BO1_SUSPEND_SIGNAL = SIGRTMIN + 1;
+#endif
 std::once_flag s_suspendHandlerOnce;
 
 DWORD CurrentKernelThreadId()
 {
+#if defined(__SWITCH__)
+    // No kernel gettid on the console (and no /proc to match it to); a per-thread-unique value is all the engine
+    // needs for GetCurrentThreadId.
+    return (DWORD)(uintptr_t)pthread_self();
+#else
     return (DWORD)syscall(SYS_gettid);
+#endif
 }
 
 timespec DeadlineAfter(DWORD milliseconds)
@@ -147,6 +163,7 @@ void Bo1_CaptureContext(CONTEXT *context, const ucontext_t *uc)
 namespace
 {
 
+#if !defined(__SWITCH__)
 void SuspendSignalHandler(int, siginfo_t *, void *ucontext)
 {
     const int savedErrno = errno;
@@ -169,6 +186,12 @@ void InstallSuspendHandler()
     sigemptyset(&action.sa_mask);
     sigaction(BO1_SUSPEND_SIGNAL, &action, nullptr);
 }
+#else
+// No signal-based suspend on the console; CreateThread still calls this once, so it must exist as a no-op.
+void InstallSuspendHandler()
+{
+}
+#endif
 
 struct ThreadStart
 {
@@ -546,6 +569,7 @@ DWORD SuspendThread(HANDLE hThread)
     const int previous = thread->suspendCount.fetch_add(1);
     const bool interrupt = previous == 0 && thread->started;
     pthread_mutex_unlock(&thread->gateMutex);
+#if !defined(__SWITCH__)
     if (interrupt)
     {
         if (pthread_kill(thread->thread, BO1_SUSPEND_SIGNAL))
@@ -557,6 +581,11 @@ DWORD SuspendThread(HANDLE hThread)
         while (sem_wait(&thread->suspendAck) && errno == EINTR)
             ;
     }
+#else
+    // The console has no signal-based interrupt yet: the count is tracked but the target is not actually stopped
+    // (GetThreadContext then reads an empty context, which its callers already guard against). (docs/PORTING.md)
+    (void)interrupt;
+#endif
     return (DWORD)previous;
 }
 
@@ -641,6 +670,11 @@ BOOL SetThreadPriority(HANDLE hThread, int nPriority)
         Bo1_SetLastError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
+#if defined(__SWITCH__)
+    // Per-thread priority is set with svcSetThreadPriority at the boot milestone; record the value for now.
+    thread->priority = nPriority;
+    return TRUE;
+#else
     const int nice = nPriority >= 15 ? -15 : nPriority <= -15 ? 19 : -nPriority * 2;
     if (setpriority(PRIO_PROCESS, (id_t)thread->id, nice))
     {
@@ -649,6 +683,7 @@ BOOL SetThreadPriority(HANDLE hThread, int nPriority)
     }
     thread->priority = nPriority;
     return TRUE;
+#endif
 }
 
 DWORD_PTR SetThreadAffinityMask(HANDLE hThread, DWORD_PTR dwThreadAffinityMask)
@@ -659,6 +694,12 @@ DWORD_PTR SetThreadAffinityMask(HANDLE hThread, DWORD_PTR dwThreadAffinityMask)
         Bo1_SetLastError(ERROR_INVALID_HANDLE);
         return 0;
     }
+#if defined(__SWITCH__)
+    // Core affinity is a per-thread svcSetThreadCoreMask at the boot milestone; applications run on cores 0-2, so
+    // report that as the previous mask (non-zero means success).
+    (void)dwThreadAffinityMask;
+    return 0x7;
+#else
     cpu_set_t previous;
     CPU_ZERO(&previous);
     if (pthread_getaffinity_np(thread->thread, sizeof(previous), &previous))
@@ -682,6 +723,7 @@ DWORD_PTR SetThreadAffinityMask(HANDLE hThread, DWORD_PTR dwThreadAffinityMask)
             mask |= (DWORD_PTR)1 << cpu;
     }
     return mask;
+#endif
 }
 
 // Linux has no ideal-processor hint: the call fails, as Windows reports it when the hint cannot be set.
@@ -754,7 +796,25 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
             deadline.tv_sec += 1;
             deadline.tv_nsec -= 1000000000L;
         }
-        const int error = pthread_mutex_timedlock(&mutex->mutex, &deadline);
+        int error;
+#if defined(__SWITCH__)
+        // newlib has no pthread_mutex_timedlock; poll trylock until the deadline (millisecond granularity is fine for
+        // the engine's timed waits on a mutex).
+        while ((error = pthread_mutex_trylock(&mutex->mutex)) == EBUSY)
+        {
+            struct timespec now;
+            clock_gettime(CLOCK_REALTIME, &now);
+            if (now.tv_sec > deadline.tv_sec || (now.tv_sec == deadline.tv_sec && now.tv_nsec >= deadline.tv_nsec))
+            {
+                error = ETIMEDOUT;
+                break;
+            }
+            const struct timespec nap = {0, 1000000L}; // 1 ms
+            nanosleep(&nap, nullptr);
+        }
+#else
+        error = pthread_mutex_timedlock(&mutex->mutex, &deadline);
+#endif
         return !error ? WAIT_OBJECT_0 : error == ETIMEDOUT ? WAIT_TIMEOUT : WAIT_FAILED;
     }
     default:

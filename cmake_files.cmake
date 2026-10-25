@@ -2376,6 +2376,17 @@ set(PLATFORM_POSIX_FILES
 	${SRC_PLATFORM_POSIX}
 )
 
+# ----- src/platform/switch (switch only; reuses the posix layer, added by CMakeLists.txt) -----
+set(SRC_PLATFORM_SWITCH
+	"${SRC_DIR}/platform/switch/switch_libc_stubs.cpp"
+	"${SRC_DIR}/platform/switch/switch_main.cpp"
+)
+source_group("platform/switch" FILES ${SRC_PLATFORM_SWITCH})
+
+set(PLATFORM_SWITCH_FILES
+	${SRC_PLATFORM_SWITCH}
+)
+
 # ----- src/gfx_d3d9emu: the D3D9 frontend (posix and switch, added by CMakeLists.txt) -----
 set(SRC_GFX_D3D9EMU
 	"${SRC_DIR}/gfx_d3d9emu/d3d9emu.h"

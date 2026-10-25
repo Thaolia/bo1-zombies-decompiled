@@ -4044,6 +4044,10 @@ static void G_ModSvProfSamplePc(int cat)
     if (!ok || !ctx.Rip)
         return;
     const uintptr_t pc = ctx.Rip;
+#elif defined(__aarch64__)
+    if (!ok || !ctx.Pc)
+        return;
+    const uintptr_t pc = ctx.Pc;
 #else
     if (!ok || !ctx.Eip)
         return;

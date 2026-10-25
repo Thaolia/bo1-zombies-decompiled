@@ -4,7 +4,9 @@
 
 #include <ShlObj.h>
 #include <XInput.h>
+#if !defined(__SWITCH__) // no dynamic loader on the console
 #include <dlfcn.h>
+#endif
 #include <dsound.h>
 #include <dxerr9.h>
 #include <errno.h>
@@ -14,10 +16,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__SWITCH__)
+#include <malloc.h> // memalign: no mmap/mprotect on the console (libnx maps all memory as heap)
+#else
 #include <sys/mman.h>
-#include <sys/resource.h>
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
+#endif
+#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -26,6 +32,32 @@
 #include <mutex>
 #include <string>
 #include <vector>
+
+#if defined(__SWITCH__)
+// newlib hides the CPU-time clock ids behind a feature macro (their values are still 2/3) and ships no timegm.
+#ifndef CLOCK_PROCESS_CPUTIME_ID
+#define CLOCK_PROCESS_CPUTIME_ID 2
+#endif
+#ifndef CLOCK_THREAD_CPUTIME_ID
+#define CLOCK_THREAD_CPUTIME_ID 3
+#endif
+namespace
+{
+// Seconds since the Unix epoch from a UTC broken-down time (proleptic Gregorian), standing in for the missing timegm.
+time_t timegm(struct tm *tm)
+{
+    static const int cumulativeDays[12] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+    const long year = 1900 + tm->tm_year;
+    const int month = ((tm->tm_mon % 12) + 12) % 12;
+    time_t days = (year - 1970) * 365 + (year - 1969) / 4 - (year - 1901) / 100 + (year - 1601) / 400;
+    days += cumulativeDays[month];
+    if (month > 1 && ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0))
+        days += 1;
+    days += tm->tm_mday - 1;
+    return ((days * 24 + tm->tm_hour) * 60 + tm->tm_min) * 60 + tm->tm_sec;
+}
+} // namespace
+#endif
 
 namespace
 {
@@ -73,12 +105,16 @@ const SIZE_T ALLOCATION_GRANULARITY = 64 * 1024;
 
 SIZE_T PageSize()
 {
-    static const SIZE_T size = (SIZE_T)sysconf(_SC_PAGESIZE);
-    return size;
+    const long size = sysconf(_SC_PAGESIZE);
+    return size > 0 ? (SIZE_T)size : 0x1000; // newlib may not know the key; 4 KiB is the Switch page
 }
 
 int PosixProtection(DWORD protect)
 {
+#if defined(__SWITCH__)
+    (void)protect;
+    return 0; // the console has no page protection; the value is unused (no mprotect)
+#else
     switch (protect & 0xFF)
     {
     case PAGE_NOACCESS:
@@ -93,6 +129,7 @@ int PosixProtection(DWORD protect)
     default:
         return PROT_READ | PROT_WRITE;
     }
+#endif
 }
 
 std::map<uintptr_t, Reservation>::iterator FindReservation(uintptr_t address)
@@ -106,6 +143,12 @@ std::map<uintptr_t, Reservation>::iterator FindReservation(uintptr_t address)
 
 void *ReserveAligned(SIZE_T size, int prot)
 {
+#if defined(__SWITCH__)
+    // libnx already maps all of the application's memory as the heap, so there is no reserve-without-commit: an
+    // aligned allocation is both. Protection is a no-op, so `prot` is ignored.
+    (void)prot;
+    return memalign(ALLOCATION_GRANULARITY, size);
+#else
     const SIZE_T padded = size + ALLOCATION_GRANULARITY;
     char *raw = (char *)mmap(nullptr, padded, prot, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (raw == MAP_FAILED)
@@ -117,6 +160,7 @@ void *ReserveAligned(SIZE_T size, int prot)
     if (raw + padded > end)
         munmap(end, raw + padded - end);
     return aligned;
+#endif
 }
 
 long ReadProcStatusKb(const char *field)
@@ -141,11 +185,15 @@ long ReadProcStatusKb(const char *field)
 
 HMODULE ExecutableModule()
 {
+#if defined(__SWITCH__)
+    return (HMODULE)1; // one statically-linked module on the console; callers only need a stable non-null token
+#else
     static HMODULE module = []() -> HMODULE {
         Dl_info info;
         return dladdr((void *)&ExecutableModule, &info) ? (HMODULE)info.dli_fbase : nullptr;
     }();
     return module;
+#endif
 }
 
 // The process command line as Windows keeps it: the arguments joined by spaces, those with spaces or quotes quoted.
@@ -192,6 +240,7 @@ std::string ReadCommandLine()
 std::atomic<LPTOP_LEVEL_EXCEPTION_FILTER> s_exceptionFilter{nullptr};
 std::atomic<UINT> s_errorMode{0};
 
+#if !defined(__SWITCH__)
 // The structured exception Windows raises for the fault a crash signal reports.
 DWORD ExceptionCodeFromSignal(int signal, int code)
 {
@@ -251,6 +300,13 @@ void InstallCrashHandlers()
     for (int signal : {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTRAP})
         sigaction(signal, &action, nullptr);
 }
+#else
+// newlib (Switch) has no SA_SIGINFO sigaction/siginfo/getcontext; libnx has its own crash reporting. The engine's
+// exception-filter path is a boot-milestone task (docs/PORTING.md, phase 5); installing handlers is a no-op for now.
+void InstallCrashHandlers()
+{
+}
+#endif
 
 // GlobalAlloc blocks keep their size in front of the data, for GlobalSize.
 const SIZE_T GLOBAL_HEADER = 16;
@@ -302,10 +358,14 @@ void RaiseException(DWORD dwExceptionCode, DWORD dwExceptionFlags, DWORD nNumber
     const LPTOP_LEVEL_EXCEPTION_FILTER filter = s_exceptionFilter.load();
     if (filter)
     {
+        CONTEXT context;
+#if defined(__SWITCH__)
+        memset(&context, 0, sizeof(context)); // no getcontext on the console; the filter here only reports
+#else
         ucontext_t uc;
         getcontext(&uc);
-        CONTEXT context;
         Bo1_CaptureContext(&context, &uc);
+#endif
         EXCEPTION_RECORD record = {};
         record.ExceptionCode = dwExceptionCode;
         record.ExceptionFlags = dwExceptionFlags;
@@ -429,8 +489,12 @@ DWORD GetPriorityClass(HANDLE hProcess)
         Bo1_SetLastError(ERROR_INVALID_HANDLE);
         return 0;
     }
+#if defined(__SWITCH__)
+    return NORMAL_PRIORITY_CLASS; // per-thread priority via svcSetThreadPriority at the boot milestone
+#else
     const int nice = getpriority(PRIO_PROCESS, 0);
     return nice < 0 ? HIGH_PRIORITY_CLASS : NORMAL_PRIORITY_CLASS;
+#endif
 }
 
 BOOL SetPriorityClass(HANDLE hProcess, DWORD dwPriorityClass)
@@ -440,6 +504,10 @@ BOOL SetPriorityClass(HANDLE hProcess, DWORD dwPriorityClass)
         Bo1_SetLastError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
+#if defined(__SWITCH__)
+    (void)dwPriorityClass;
+    return TRUE; // no process-wide priority on the console (per-thread via libnx, boot milestone)
+#else
     const int nice = dwPriorityClass == HIGH_PRIORITY_CLASS ? -10 : dwPriorityClass == ABOVE_NORMAL_PRIORITY_CLASS ? -5 : 0;
     if (setpriority(PRIO_PROCESS, 0, nice))
     {
@@ -447,10 +515,23 @@ BOOL SetPriorityClass(HANDLE hProcess, DWORD dwPriorityClass)
         return FALSE;
     }
     return TRUE;
+#endif
 }
 
 BOOL GetProcessAffinityMask(HANDLE hProcess, PDWORD_PTR lpProcessAffinityMask, PDWORD_PTR lpSystemAffinityMask)
 {
+#if defined(__SWITCH__)
+    // Applications get cores 0-2 (core 3 is the system's); core pinning is per-thread (svcSetThreadCoreMask) at the
+    // boot milestone (switch-homebrew.md).
+    if (hProcess != BO1_PSEUDO_PROCESS)
+    {
+        Bo1_SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+    *lpProcessAffinityMask = 0x7;
+    *lpSystemAffinityMask = 0x7;
+    return TRUE;
+#else
     cpu_set_t set;
     CPU_ZERO(&set);
     if (hProcess != BO1_PSEUDO_PROCESS || sched_getaffinity(0, sizeof(set), &set))
@@ -469,12 +550,22 @@ BOOL GetProcessAffinityMask(HANDLE hProcess, PDWORD_PTR lpProcessAffinityMask, P
     *lpProcessAffinityMask = mask;
     *lpSystemAffinityMask = system;
     return TRUE;
+#endif
 }
 
 // Linux affinity is per thread: the mask applies to the calling thread and is inherited by the threads it creates,
 // which is how the engine uses it (once, at startup, before its worker threads exist).
 BOOL SetProcessAffinityMask(HANDLE hProcess, DWORD_PTR dwProcessAffinityMask)
 {
+#if defined(__SWITCH__)
+    (void)dwProcessAffinityMask;
+    if (hProcess != BO1_PSEUDO_PROCESS)
+    {
+        Bo1_SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+    return TRUE; // per-thread core mask via svcSetThreadCoreMask at the boot milestone
+#else
     cpu_set_t set;
     CPU_ZERO(&set);
     for (int cpu = 0; cpu < (int)(sizeof(DWORD_PTR) * 8); ++cpu)
@@ -488,6 +579,7 @@ BOOL SetProcessAffinityMask(HANDLE hProcess, DWORD_PTR dwProcessAffinityMask)
         return FALSE;
     }
     return TRUE;
+#endif
 }
 
 BOOL GetProcessTimes(HANDLE hProcess, LPFILETIME lpCreationTime, LPFILETIME lpExitTime, LPFILETIME lpKernelTime,
@@ -716,7 +808,7 @@ LPVOID VirtualAlloc(LPVOID lpAddress, SIZE_T dwSize, DWORD flAllocationType, DWO
         }
         const SIZE_T size = (dwSize + page - 1) & ~(page - 1);
         const bool commit = (flAllocationType & MEM_COMMIT) != 0;
-        void *base = ReserveAligned(size, commit ? PosixProtection(flProtect) : PROT_NONE);
+        void *base = ReserveAligned(size, commit ? PosixProtection(flProtect) : 0); // PROT_NONE is 0; 0 also suits switch
         if (!base)
         {
             Bo1_SetLastError(ERROR_NOT_ENOUGH_MEMORY);
@@ -736,7 +828,12 @@ LPVOID VirtualAlloc(LPVOID lpAddress, SIZE_T dwSize, DWORD flAllocationType, DWO
         }
         const uintptr_t first = (uintptr_t)lpAddress & ~(uintptr_t)(page - 1);
         const uintptr_t last = ((uintptr_t)lpAddress + dwSize + page - 1) & ~(uintptr_t)(page - 1);
+#if defined(__SWITCH__)
+        // The memory is already committed (memalign gave real pages) and has no per-page protection: just bounds-check.
+        if (last > it->first + it->second.size)
+#else
         if (last > it->first + it->second.size || mprotect((void *)first, last - first, PosixProtection(flProtect)))
+#endif
         {
             Bo1_SetLastError(ERROR_INVALID_PARAMETER);
             return nullptr;
@@ -766,7 +863,11 @@ BOOL VirtualFree(LPVOID lpAddress, SIZE_T dwSize, DWORD dwFreeType)
             Bo1_SetLastError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
+#if defined(__SWITCH__)
+        free((void *)it->first); // the memalign'd base
+#else
         munmap((void *)it->first, it->second.size);
+#endif
         Reservations().erase(it);
         return TRUE;
     }
@@ -781,8 +882,13 @@ BOOL VirtualFree(LPVOID lpAddress, SIZE_T dwSize, DWORD dwFreeType)
             return FALSE;
         }
         // Decommitted pages read back as zero once committed again, as on Windows.
+#if !defined(__SWITCH__)
         madvise((void *)first, last - first, MADV_DONTNEED);
         mprotect((void *)first, last - first, PROT_NONE);
+#else
+        // No decommit on the console: the pages stay mapped (they are not zeroed, but the engine only relies on that
+        // for guard regions it re-commits, which is acceptable for bring-up). (docs/PORTING.md, phase 5)
+#endif
         for (uintptr_t p = first; p < last; p += page)
             it->second.committed[(p - it->first) / page] = false;
         return TRUE;
@@ -832,6 +938,16 @@ SIZE_T VirtualQuery(LPCVOID lpAddress, PMEMORY_BASIC_INFORMATION lpBuffer, SIZE_
 
 BOOL GlobalMemoryStatusEx(LPMEMORYSTATUSEX lpBuffer)
 {
+#if defined(__SWITCH__)
+    // libnx maps all of the application's memory as heap, so svcGetInfo(UsedMemorySize) equals the total; real use is
+    // mallinfo().uordblks (switch-homebrew.md). The total is the application-mode budget; svcGetInfo refines it at the
+    // boot milestone. This only needs to let the engine's pre-allocation checks pass.
+    const DWORDLONG total = 3ull * 1024 * 1024 * 1024; // ~3 GiB in application mode
+    const DWORDLONG used = (DWORDLONG)(size_t)mallinfo().uordblks;
+    const DWORDLONG available = total > used ? total - used : 0;
+    lpBuffer->ullTotalPageFile = total;
+    lpBuffer->ullAvailPageFile = available;
+#else
     struct sysinfo info;
     if (sysinfo(&info))
     {
@@ -841,11 +957,12 @@ BOOL GlobalMemoryStatusEx(LPMEMORYSTATUSEX lpBuffer)
     const DWORDLONG unit = info.mem_unit ? info.mem_unit : 1;
     const DWORDLONG total = (DWORDLONG)info.totalram * unit;
     const DWORDLONG available = ((DWORDLONG)info.freeram + info.bufferram) * unit;
+    lpBuffer->ullTotalPageFile = total + (DWORDLONG)info.totalswap * unit;
+    lpBuffer->ullAvailPageFile = available + (DWORDLONG)info.freeswap * unit;
+#endif
     lpBuffer->dwMemoryLoad = total ? (DWORD)(100 - available * 100 / total) : 0;
     lpBuffer->ullTotalPhys = total;
     lpBuffer->ullAvailPhys = available;
-    lpBuffer->ullTotalPageFile = total + (DWORDLONG)info.totalswap * unit;
-    lpBuffer->ullAvailPageFile = available + (DWORDLONG)info.freeswap * unit;
     lpBuffer->ullTotalVirtual = 0x7FFFFFFE0000ull; // user address space of a 64-bit process, as on Windows x64
     lpBuffer->ullAvailVirtual = lpBuffer->ullTotalVirtual;
     lpBuffer->ullAvailExtendedVirtual = 0;
@@ -957,6 +1074,12 @@ BOOL GetModuleHandleExA(DWORD dwFlags, LPCSTR lpModuleName, HMODULE *phModule)
 {
     if (dwFlags & GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS)
     {
+#if defined(__SWITCH__)
+        // One statically-linked module: any address belongs to it.
+        (void)lpModuleName;
+        *phModule = ExecutableModule();
+        return TRUE;
+#else
         Dl_info info;
         if (dladdr(lpModuleName, &info) && info.dli_fbase)
         {
@@ -966,6 +1089,7 @@ BOOL GetModuleHandleExA(DWORD dwFlags, LPCSTR lpModuleName, HMODULE *phModule)
         *phModule = nullptr;
         Bo1_SetLastError(ERROR_MOD_NOT_FOUND);
         return FALSE;
+#endif
     }
     *phModule = GetModuleHandleA(lpModuleName);
     return *phModule != nullptr;
@@ -977,6 +1101,14 @@ DWORD GetModuleFileNameA(HMODULE hModule, LPSTR lpFilename, DWORD nSize)
 {
     char path[4096];
     ssize_t length;
+#if defined(__SWITCH__)
+    // One statically-linked module on the console; report a fixed path. The engine only splits it for sibling data
+    // dirs and crash-report module names, and romfs/sdmc provide the data instead. (docs/PORTING.md, phase 5)
+    (void)hModule;
+    static const char kExe[] = "sdmc:/switch/bo1zm/BO1Zombies.nro";
+    length = (ssize_t)strnlen(kExe, sizeof(path) - 1);
+    memcpy(path, kExe, (size_t)length);
+#else
     if (!hModule || hModule == ExecutableModule())
         length = readlink("/proc/self/exe", path, sizeof(path) - 1);
     else
@@ -991,6 +1123,7 @@ DWORD GetModuleFileNameA(HMODULE hModule, LPSTR lpFilename, DWORD nSize)
         length = (ssize_t)strnlen(info.dli_fname, sizeof(path) - 1);
         memcpy(path, info.dli_fname, (size_t)length);
     }
+#endif
     if (length <= 0 || !nSize)
     {
         Bo1_SetLastError(ERROR_INVALID_PARAMETER);
@@ -1020,7 +1153,13 @@ HMODULE LoadLibraryA(LPCSTR)
 
 FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 {
+#if defined(__SWITCH__)
+    void *symbol = nullptr; // the console statically links everything; no runtime symbol lookup
+    (void)hModule;
+    (void)lpProcName;
+#else
     void *symbol = hModule == ExecutableModule() ? dlsym(RTLD_DEFAULT, lpProcName) : nullptr;
+#endif
     if (!symbol)
         Bo1_SetLastError(ERROR_PROC_NOT_FOUND);
     return (FARPROC)symbol;

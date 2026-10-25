@@ -90,8 +90,10 @@ int WSAGetLastError(void)
         return WSAENOPROTOOPT;
     case EPROTONOSUPPORT:
         return WSAEPROTONOSUPPORT;
+#ifdef ESOCKTNOSUPPORT // aarch64 newlib (Switch) does not define it; the error never arises there
     case ESOCKTNOSUPPORT:
         return WSAESOCKTNOSUPPORT;
+#endif
     case EOPNOTSUPP:
         return WSAEOPNOTSUPP;
     case EPFNOSUPPORT:
@@ -119,7 +121,9 @@ int WSAGetLastError(void)
         return WSAEISCONN;
     case ENOTCONN:
         return WSAENOTCONN;
+#ifdef ESHUTDOWN // aarch64 newlib (Switch) does not define it; EPIPE still maps to WSAESHUTDOWN
     case ESHUTDOWN:
+#endif
     case EPIPE:
         return WSAESHUTDOWN;
     case ETOOMANYREFS:

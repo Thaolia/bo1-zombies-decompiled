@@ -1,5 +1,8 @@
 #include "snd_dsp.h"
 #include <universal/com_math.h>
+#if defined(__SWITCH__)
+#include <xmmintrin.h> // aarch64: _mm_prefetch/_MM_HINT_T0 via the sse2neon shim; x86 gets them transitively
+#endif
 #include "snd.h"
 
 void __cdecl SND_DspMul(unsigned int count, const float *a, const float *b, float *c)

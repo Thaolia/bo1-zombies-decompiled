@@ -2,6 +2,10 @@
 // (the engine builds them with '\', FS_ReplaceSeparators) and are converted at this boundary. Share modes are not
 // enforced: no other process opens the engine's files.
 
+#if defined(__SWITCH__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE // newlib hides fopencookie behind __GNU_VISIBLE; the custom text stream needs it
+#endif
+
 #include "win32_handles.h"
 
 #include <direct.h>
@@ -20,6 +24,14 @@
 
 #include <string>
 #include <vector>
+
+// fopencookie's seek callback takes off_t* on newlib (Switch, without __LARGE64_FILES) but off64_t* on glibc; the
+// custom text stream's seek matches whichever the platform's cookie_io_functions_t expects.
+#if defined(__SWITCH__)
+using Bo1CookieOff = off_t;
+#else
+using Bo1CookieOff = off64_t;
+#endif
 
 namespace
 {
@@ -212,7 +224,7 @@ ssize_t TextWrite(void *cookie, const char *buffer, size_t size)
     return (ssize_t)size;
 }
 
-int TextSeek(void *cookie, off64_t *offset, int whence)
+int TextSeek(void *cookie, Bo1CookieOff *offset, int whence)
 {
     TextStream *stream = static_cast<TextStream *>(cookie);
     if (stream->pending != EOF)
@@ -224,7 +236,7 @@ int TextSeek(void *cookie, off64_t *offset, int whence)
     stream->atCtrlZ = false;
     if (fseeko(stream->raw, (off_t)*offset, whence))
         return -1;
-    *offset = (off64_t)ftello(stream->raw);
+    *offset = (Bo1CookieOff)ftello(stream->raw);
     return 0;
 }
 

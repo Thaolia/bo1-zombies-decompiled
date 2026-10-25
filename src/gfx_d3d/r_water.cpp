@@ -1,5 +1,8 @@
 #include "r_water.h"
 #include "r_material.h"
+#if defined(__SWITCH__)
+#include <xmmintrin.h> // aarch64: _mm_prefetch/_MM_HINT_T0 via the sse2neon shim; x86 gets them transitively
+#endif
 #include <universal/q_shared.h>
 #include "r_image_load_common.h"
 #include "r_image.h"
