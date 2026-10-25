@@ -54,9 +54,11 @@ bool Open()
 #if defined(__SWITCH__)
     // SDL2-switch supports exactly one window (the console screen); the engine's later game window therefore fails to
     // create ("Switch only supports one window") and the backend ends up with no window to present to -- the frame is
-    // drawn but never shown. Make this single context window the real, shown, screen-sized display, and route
-    // MakeCurrent/DrawableSize/Swap (below) to it so the backend's frame reaches the screen.
-    s_window = SDL_CreateWindow("BO1Zombies", 0, 0, 1280, 720, SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP);
+    // drawn but never shown. Make this single context window the real, shown display and route MakeCurrent/
+    // DrawableSize/Swap (below) to it so the backend's frame reaches the screen. Size it 1280x720 in both modes (not
+    // FULLSCREEN_DESKTOP, which takes the native mode -- 1080p docked): the game already renders at 720p, so a 720p
+    // framebuffer presents 1:1 and the console's compositor scales it to the TV, sparing the docked upscale.
+    s_window = SDL_CreateWindow("BO1Zombies", 0, 0, 1280, 720, SDL_WINDOW_OPENGL);
 #else
     s_window = SDL_CreateWindow("", 0, 0, 1, 1, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
 #endif
