@@ -1,0 +1,9 @@
+BO1 Zombies — Nintendo Switch homebrew port
+
+The game data is NOT inside this NRO. Stage it on the SD card at:
+    sdmc:/switch/bo1zm/
+(the converted AArch64 IWffs zones plus the Steam install's main/*.iwd).
+
+This romfs is embedded so that romfsInit() succeeds: a homebrew NRO with no
+romfs makes Ryujinx throw on OpenDataStorageByCurrentProcess. The build id is
+logged at start-up (see boot.log on the SD card), per switch-homebrew.md.

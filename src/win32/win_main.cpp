@@ -1422,6 +1422,24 @@ void __cdecl Sys_OpenURL(const char *url, int doexit)
 #endif
 }
 
+#if defined(__SWITCH__)
+#include <cstdio>
+// Bring-up diagnostic: tee the engine's console output and fatal errors to the SD boot log. libnx routes printf
+// nowhere and OutputDebugStringA is a no-op on this target, so this is the only window into where start-up goes.
+// Opened once, flushed per line, so a hang (e.g. the GetMessage wait in Sys_Error) or a crash still leaves the
+// lines on disk. newlib's FILE ops are internally locked, so cross-thread Com_Printf lines interleave but never
+// corrupt.
+static void Switch_DebugLog(const char *s)
+{
+    static std::FILE *f = std::fopen("sdmc:/switch/bo1zm/boot.log", "ab");
+    if (f)
+    {
+        std::fputs(s, f);
+        std::fflush(f);
+    }
+}
+#endif
+
 void    Sys_Error(char *error, ...)
 {
     char string[4100]; // [esp+20h] [ebp-1008h] BYREF
@@ -1434,6 +1452,12 @@ void    Sys_Error(char *error, ...)
     com_errorEntered = 1;
     Sys_SuspendOtherThreads();
     _vsnprintf(string, 0x1000u, error, va);
+
+#if defined(__SWITCH__)
+    Switch_DebugLog("*** Sys_Error: ");
+    Switch_DebugLog(string);
+    Switch_DebugLog("\n");
+#endif
 
     // zombies: headless ends here - no error console, no message box, and no FixWindowsDesktop (it resets the
     // display mode and the desktop gamma ramp)
@@ -1529,6 +1553,9 @@ int enable_OutputDebugString = 1;
 
 void __cdecl Sys_Print(char *msg)
 {
+#if defined(__SWITCH__)
+    Switch_DebugLog(msg);
+#endif
     if ( enable_OutputDebugString )
         OutputDebugStringA(msg);
     Conbuf_AppendTextInMainThread(msg);

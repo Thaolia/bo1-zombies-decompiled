@@ -9,6 +9,9 @@
 
 #include <win32/win_main.h>
 
+#include <sys/stat.h>
+
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
 
@@ -31,12 +34,70 @@ bool __cdecl Sys_IsMiniDumpStarted()
 
 namespace
 {
+const char *const kDataDir = "sdmc:/switch/bo1zm";
+const char *const kBootLogPath = "sdmc:/switch/bo1zm/boot.log";
 // The console has no command line, so the engine's start-up arguments come from an optional text file on the SD card
 // the user can edit without rebuilding (e.g. "+set bo1_zombies 1 +devmap zombie_cosmodrome"). Absent or empty, the
 // default boots straight into solo zombies; the front-end command that lands on the map-select menu is pinned later.
 const char *const kLaunchConfigPath = "sdmc:/switch/bo1zm/launch.cfg";
+// Presence-only bring-up override: with this file on the SD card the engine runs even outside application mode, so a
+// directly-loaded NRO (as an emulator loads it) can be exercised past the refusal screen. Hardware behaviour without
+// the file is unchanged: applet mode is refused.
+const char *const kAllowAppletPath = "sdmc:/switch/bo1zm/allow_applet";
 const char *const kDefaultArgs = "+set bo1_zombies 1";
 char s_commandLine[1024];
+
+// Append one line to the SD boot log and echo it to stdout (an emulator captures stdout to its own log). Each call
+// reopens and closes the file so a crash later in start-up still leaves every breadcrumb on disk. Best-effort: a
+// missing or read-only SD path just means no file, never a failure.
+void BootLog(const char *fmt, ...)
+{
+    char line[512];
+    va_list ap;
+    va_start(ap, fmt);
+    std::vsnprintf(line, sizeof(line), fmt, ap);
+    va_end(ap);
+    std::printf("[bo1zm] %s\n", line);
+    std::fflush(stdout);
+    FILE *f = std::fopen(kBootLogPath, "ab");
+    if (f)
+    {
+        std::fprintf(f, "%s\n", line);
+        std::fclose(f);
+    }
+}
+
+const char *AppletTypeName(AppletType t)
+{
+    switch (t)
+    {
+    case AppletType_None:
+        return "None";
+    case AppletType_Default:
+        return "Default";
+    case AppletType_Application:
+        return "Application";
+    case AppletType_SystemApplet:
+        return "SystemApplet";
+    case AppletType_LibraryApplet:
+        return "LibraryApplet";
+    case AppletType_OverlayApplet:
+        return "OverlayApplet";
+    case AppletType_SystemApplication:
+        return "SystemApplication";
+    default:
+        return "?";
+    }
+}
+
+bool FileExists(const char *path)
+{
+    FILE *f = std::fopen(path, "rb");
+    if (!f)
+        return false;
+    std::fclose(f);
+    return true;
+}
 
 char *LoadLaunchArgs()
 {
@@ -86,16 +147,34 @@ void ShowAppletModeMessage()
 
 int main(int, char **)
 {
-    if (!InApplicationMode())
+    // Make the data dir so even a first boot on a fresh SD can leave its log (EEXIST is fine).
+    mkdir("sdmc:/switch", 0777);
+    mkdir(kDataDir, 0777);
+    BootLog("=== BO1 Zombies (Switch) boot === built %s %s", __DATE__, __TIME__);
+
+    const AppletType at = appletGetAppletType();
+    BootLog("applet type = %d (%s)", (int)at, AppletTypeName(at));
+
+    const bool allowApplet = FileExists(kAllowAppletPath);
+    if (!InApplicationMode() && !allowApplet)
     {
+        BootLog("not application mode and no allow_applet sentinel -> refusal screen");
         ShowAppletModeMessage();
         return 0;
     }
+    if (!InApplicationMode())
+        BootLog("applet mode, but allow_applet present -> continuing (bring-up)");
 
-    romfsInit(); // romfs:/ holds the data the build packs into the .nro (converted zones stay on the SD card)
+    const Result rrc = romfsInit(); // romfs:/ holds no data here (data stays on the SD card); log whether it mounted
+    BootLog("romfsInit -> 0x%x%s", rrc, R_SUCCEEDED(rrc) ? " (mounted)" : " (none; data from SD)");
 
-    const int rc = WinMain(GetModuleHandleA(nullptr), nullptr, LoadLaunchArgs(), 10 /* SW_SHOWDEFAULT */);
+    char *const args = LoadLaunchArgs();
+    BootLog("launch args = \"%s\"", args);
+    BootLog("entering WinMain");
+    const int rc = WinMain(GetModuleHandleA(nullptr), nullptr, args, 10 /* SW_SHOWDEFAULT */);
+    BootLog("WinMain returned %d", rc);
 
-    romfsExit();
+    if (R_SUCCEEDED(rrc))
+        romfsExit();
     return rc;
 }

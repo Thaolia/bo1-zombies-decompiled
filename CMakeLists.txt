@@ -308,15 +308,25 @@ else()
         set_source_files_properties("${SRC_DIR}/gfx_d3d9emu/d3dx9emu.cpp" PROPERTIES
                                     COMPILE_OPTIONS "-isystem;${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb")
         # Package the linked ELF into a runnable .nro (nacp metadata + icon). The game data lives on the SD card
-        # (sdmc:/switch/bo1zm/), not in romfs, so there is no --romfsdir.
+        # (sdmc:/switch/bo1zm/), not in romfs; the embedded romfs (switch/romfs) holds only a version file so that
+        # romfsInit() succeeds -- a homebrew NRO with no romfs makes Ryujinx throw on OpenDataStorageByCurrentProcess.
         find_program(BO1_ELF2NRO elf2nro REQUIRED HINTS "$ENV{DEVKITPRO}/tools/bin")
         find_program(BO1_NACPTOOL nacptool REQUIRED HINTS "$ENV{DEVKITPRO}/tools/bin")
+        find_program(BO1_PYTHON3 NAMES python3 python REQUIRED)
+        # GCC 16's libgcc carries guarded GCS/SME/SVE instructions in its unwinder that never run on the Tegra X1
+        # (Cortex-A57, ARMv8.0) but abort Ryujinx's ARM JIT when it translates the unwind path. Patch them to NOP on
+        # the linked ELF before packaging (switch-homebrew.md); the script is idempotent and verifies every site.
         add_custom_command(TARGET BO1Zombies POST_BUILD
             COMMAND "${BO1_NACPTOOL}" --create "BO1 Zombies" "bo1-zombies-decompiled (Switch port)" "0.1"
                     "${CMAKE_BINARY_DIR}/BO1Zombies.nacp"
+            COMMAND "${BO1_PYTHON3}" "${CMAKE_CURRENT_SOURCE_DIR}/switch/tools/patch_ryujinx_mrs.py"
+                    "$<TARGET_FILE:BO1Zombies>"
+                    "--objdump=$ENV{DEVKITPRO}/devkitA64/bin/aarch64-none-elf-objdump"
+                    "--readelf=$ENV{DEVKITPRO}/devkitA64/bin/aarch64-none-elf-readelf" --apply
             COMMAND "${BO1_ELF2NRO}" "$<TARGET_FILE:BO1Zombies>" "${CMAKE_BINARY_DIR}/$<CONFIG>/BO1Zombies.nro"
                     "--icon=$ENV{DEVKITPRO}/libnx/default_icon.jpg" "--nacp=${CMAKE_BINARY_DIR}/BO1Zombies.nacp"
-            COMMENT "Packaging BO1Zombies.nro (data stays on the SD card)"
+                    "--romfsdir=${CMAKE_CURRENT_SOURCE_DIR}/switch/romfs"
+            COMMENT "Patching libgcc GCS/SME for Ryujinx, then packaging BO1Zombies.nro (data stays on the SD card)"
             VERBATIM)
     endif()
     # The run folder, as the Visual Studio generator makes it: the program next to the copied main/ and mods/.
