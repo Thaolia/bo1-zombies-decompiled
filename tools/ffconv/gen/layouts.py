@@ -16,6 +16,12 @@ the DirectX SDK headers it copies): the tables must equal the --target64 ones, o
 
     tools/ffconv/gen/layouts.py --check-target64 x86_64-linux-gnu --posix-dxsdk BUILD/dxsdk --stamp FILE
 
+--check-switch does the same for the Nintendo Switch ABI: it parses db_load.cpp as the devkitA64 + libnx build
+compiles it (aarch64-none-elf, AAPCS64/LP64, the devkitA64 newlib + libstdc++ headers and libnx/portlibs) and
+checks that layout against --target64's. It needs --devkitpro (the devkitPro root) besides --posix-dxsdk and --stamp.
+
+    tools/ffconv/gen/layouts.py --check-switch --devkitpro /opt/devkitpro --posix-dxsdk BUILD/dxsdk --stamp FILE
+
 A type the tables cannot describe (a base class, a size that differs for another reason than pointers or a listed
 widened integer) stops the generator with its name: ffconv must never guess a layout. A union mixing pointers with
 wider data becomes an opaque leaf, which ffconv rejects if the loader ever streams it as a whole.
@@ -83,6 +89,34 @@ def parse_posix(target, posix_dxsdk):
     errors = [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]
     if errors:
         raise LayoutError(f'{target}: {errors[0]} ({len(errors)} errors)')
+    return tu
+
+
+def parse_switch(devkitpro, posix_dxsdk):
+    """db_load.cpp as the Switch build compiles it: aarch64-none-elf (AAPCS64/LP64), the devkitA64 newlib and
+    libstdc++ headers plus libnx/portlibs, no host system includes. Models the real devkitA64 GCC ABI (its struct
+    layout follows AAPCS64 like clang's), so the streamed types the check flattens are the ones the console reads."""
+    sr = os.path.join(devkitpro, 'devkitA64/aarch64-none-elf')
+    cxx = os.path.join(sr, 'include/c++')
+    try:
+        ver = sorted(os.listdir(cxx))[-1]  # the one libstdc++ version devkitA64 ships
+    except OSError as e:
+        raise LayoutError(f'devkitA64 libstdc++ headers not found under {cxx}: {e}')
+    posix = os.path.join(ROOT, 'src/platform/posix')
+    res = resource_dir()
+    args = ['-x', 'c++', '-std=gnu++20', '--target=aarch64-none-elf', '-include',
+            os.path.join(ROOT, 'src/platform/compat.h'), '-w', '-DBO1_MP', '-DBO1_OFFLINE', '-DSTEAM_API_NODLL',
+            '-D__RADINEXE__', '-D__SWITCH__', '-D_GNU_SOURCE', f'-I{ROOT}', f'-I{ROOT}/src', f'-I{ROOT}/src/libs',
+            f'-I{ROOT}/src/platform/switch/include', f'-I{posix}/include', f'-I{posix}/include_cased',
+            f'-I{posix_dxsdk}', '-nostdinc', '-isystem', f'{cxx}/{ver}', '-isystem', f'{cxx}/{ver}/aarch64-none-elf',
+            '-isystem', f'{cxx}/{ver}/backward', '-isystem', f'{res}/include', '-isystem',
+            os.path.join(devkitpro, 'libnx/include'), '-isystem', os.path.join(devkitpro, 'portlibs/switch/include'),
+            '-isystem', os.path.join(ROOT, 'third_party/sse2neon'), '-isystem', f'{sr}/include', '-ferror-limit=0',
+            '-resource-dir', res]
+    tu = ci.Index.create().parse(os.path.join(ROOT, 'src/database/db_load.cpp'), args=args)
+    errors = [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]
+    if errors:
+        raise LayoutError(f'aarch64-none-elf: {errors[0]} ({len(errors)} errors)')
     return tu
 
 
@@ -388,28 +422,37 @@ def main():
     parser.add_argument('--dxsdk', default='/mnt/c/SDKs/DXSDK_Jun10/DXSDK')
     parser.add_argument('--depfile', help='write the headers the parses read, for the build to rerun on a change')
     parser.add_argument('--check-target64', help='a posix 64-bit target whose tables must equal --target64\'s')
-    parser.add_argument('--posix-dxsdk', help='with --check-target64: the D3D9 headers the posix build copied')
-    parser.add_argument('--stamp', help='with --check-target64: touched when the tables are equal')
+    parser.add_argument('--check-switch', action='store_true',
+                        help='check the Switch ABI (devkitA64 aarch64-none-elf) against --target64 instead')
+    parser.add_argument('--devkitpro', default=os.environ.get('DEVKITPRO', '/opt/devkitpro'),
+                        help='with --check-switch: the devkitPro root (its devkitA64 headers and libnx)')
+    parser.add_argument('--posix-dxsdk', help='with --check-*: the D3D9 headers the posix/switch build copied')
+    parser.add_argument('--stamp', help='with --check-*: touched when the tables are equal')
     opts = parser.parse_args()
-    if bool(opts.out) == bool(opts.check_target64) or (opts.check_target64 and not (opts.posix_dxsdk and opts.stamp)):
-        parser.error('give either --out, or --check-target64 with --posix-dxsdk and --stamp')
+    if sum((bool(opts.out), bool(opts.check_target64), bool(opts.check_switch))) != 1:
+        parser.error('give exactly one of --out, --check-target64, --check-switch')
+    checking = opts.check_target64 or opts.check_switch
+    if checking and not (opts.posix_dxsdk and opts.stamp):
+        parser.error('--check-target64 / --check-switch need --posix-dxsdk and --stamp')
     tu32, tu64 = parse(opts.target32, opts.dxsdk), parse(opts.target64, opts.dxsdk)
+    label = opts.check_target64 or 'aarch64-none-elf (Switch)'
     try:
         tables = build(tu32, tu64)
-        if opts.check_target64:
-            tu_check = parse_posix(opts.check_target64, opts.posix_dxsdk)
+        if checking:
+            tu_check = parse_posix(opts.check_target64, opts.posix_dxsdk) if opts.check_target64 \
+                else parse_switch(opts.devkitpro, opts.posix_dxsdk)
             checked = build(tu32, tu_check)
     except LayoutError as e:
         print(f'layouts.py: {e}', file=sys.stderr)
         return 1
-    if opts.check_target64:
+    if checking:
         differ = sorted(set(tables) ^ set(checked)) + [n for n in tables if n in checked and tables[n] != checked[n]]
         if differ:
-            print(f'layouts.py: {len(differ)} streamed types lay out differently on {opts.check_target64} than on '
+            print(f'layouts.py: {len(differ)} streamed types lay out differently on {label} than on '
                   f'{opts.target64}, so its build cannot read those zones: {", ".join(differ[:20])}', file=sys.stderr)
             return 1
         with open(opts.stamp, 'w', encoding='utf-8') as f:
-            f.write(f'{len(tables)} streamed types lay out the same on {opts.check_target64} and {opts.target64}\n')
+            f.write(f'{len(tables)} streamed types lay out the same on {label} and {opts.target64}\n')
         if opts.depfile:
             write_depfile(opts.depfile, opts.stamp, (tu32, tu64, tu_check))
         return 0

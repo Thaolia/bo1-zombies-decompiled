@@ -328,6 +328,23 @@ else()
                     "--romfsdir=${CMAKE_CURRENT_SOURCE_DIR}/switch/romfs"
             COMMENT "Patching libgcc GCS/SME for Ryujinx, then packaging BO1Zombies.nro (data stays on the SD card)"
             VERBATIM)
+        # The console reads the same win64 IWffs zones ffconv emits: before linking, the layout generator checks
+        # that every streamed struct lays out on the Switch ABI (devkitA64 aarch64-none-elf, AAPCS64/LP64) exactly
+        # as on the win64 target the zones are written for, and names any that do not. It is the x86-64 build's
+        # check (lines above) for the Switch ABI, so a later `long`/`long double`/bitfield change that would make
+        # the zones unreadable on the console fails the build here instead of silently (docs/PORTING.md, phase 2/5).
+        set(BO1_LAYOUT_STAMP_SWITCH "${CMAKE_BINARY_DIR}/iwffs_layouts_switch.stamp")
+        add_custom_command(
+            OUTPUT "${BO1_LAYOUT_STAMP_SWITCH}"
+            COMMAND "${BO1_PYTHON3}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/ffconv/gen/layouts.py"
+                    --check-switch --devkitpro "$ENV{DEVKITPRO}" --dxsdk "${DXSDK_DIR}"
+                    --posix-dxsdk "${CMAKE_BINARY_DIR}/dxsdk"
+                    --stamp "${BO1_LAYOUT_STAMP_SWITCH}" --depfile "${BO1_LAYOUT_STAMP_SWITCH}.d"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tools/ffconv/gen/layouts.py" "${SRC_DIR}/database/db_load.cpp"
+            DEPFILE "${BO1_LAYOUT_STAMP_SWITCH}.d"
+            COMMENT "Checking the IWffs struct layouts on the Switch ABI")
+        add_custom_target(iwffs_layout_check_switch DEPENDS "${BO1_LAYOUT_STAMP_SWITCH}")
+        add_dependencies(BO1Zombies iwffs_layout_check_switch)
     endif()
     # The run folder, as the Visual Studio generator makes it: the program next to the copied main/ and mods/.
     set_target_properties(BO1Zombies PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
