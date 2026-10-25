@@ -306,9 +306,24 @@ std::string Bo1_PosixPath(const char *path)
     struct stat st;
     if (converted.empty() || lstat(converted.c_str(), &st) == 0)
         return converted;
-    std::string result = converted[0] == '/' ? "/" : ".";
+    // The root to resolve from: a POSIX-absolute path starts with '/', and a devoptab device ("sdmc:/...",
+    // "romfs:/...", libnx/newlib) with its "name:" prefix, which never starts with '/'. Everything else is relative
+    // to the working directory. Without the device case a prefixed path resolved from "." (e.g. the wildcard
+    // Sys_ListFiles builds for the iwd scan), mangling "sdmc:" and leaving SD directory listings empty.
+    std::string result;
+    size_t i = 0;
+    const size_t colon = converted.find(':');
+    if (colon != std::string::npos && colon < converted.find('/'))
+    {
+        result = converted.substr(0, colon + 1);
+        i = colon + 1;
+    }
+    else
+    {
+        result = converted[0] == '/' ? "/" : ".";
+    }
     bool stopped = false;
-    for (size_t i = 0; i < converted.size();)
+    for (; i < converted.size();)
     {
         while (i < converted.size() && converted[i] == '/')
             ++i;
