@@ -51,7 +51,7 @@ NET_IPSocket
 ====================
 */
 // ADD: from kcod4. This is to replace the shitty demonware net
-unsigned int __cdecl NET_IPSocket(const char *net_interface, int port)
+SOCKET __cdecl NET_IPSocket(const char *net_interface, int port)
 {
     const char *v2; // eax
     const char *v4; // eax
@@ -60,7 +60,7 @@ unsigned int __cdecl NET_IPSocket(const char *net_interface, int port)
     sockaddr address; // [esp+0h] [ebp-24h] BYREF
     int _true; // [esp+18h] [ebp-Ch] BYREF
     int i; // [esp+1Ch] [ebp-8h] BYREF
-    unsigned int newsocket; // [esp+20h] [ebp-4h]
+    SOCKET newsocket; // [esp+20h] [ebp-4h] (64-bit: pointer-sized)
 
     _true = 1;
     i = 1;
@@ -990,7 +990,7 @@ void __cdecl Sys_Listen_f()
     }
 }
 
-unsigned int __cdecl NET_TCPIPSocket(char *net_interface, int port, int type)
+SOCKET __cdecl NET_TCPIPSocket(char *net_interface, int port, int type)
 {
     const char *v3; // eax
     const char *v5; // eax
@@ -999,7 +999,7 @@ unsigned int __cdecl NET_TCPIPSocket(char *net_interface, int port, int type)
     sockaddr_in address; // [esp+4h] [ebp-20h] BYREF
     int err; // [esp+18h] [ebp-Ch]
     int _true; // [esp+1Ch] [ebp-8h] BYREF
-    unsigned int newsocket; // [esp+20h] [ebp-4h]
+    SOCKET newsocket; // [esp+20h] [ebp-4h] (64-bit: pointer-sized)
 
     _true = 1;
     if ( net_interface )

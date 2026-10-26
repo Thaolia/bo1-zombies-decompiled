@@ -40,4 +40,8 @@ folder> +devmap zombie_theater` for the windowed client, with `+set bo1_headless
 `BO1_GL_DEBUG=1` logs OpenGL's debug messages. Converted zones from before 2026-10-24 need a new `shaders.pack`
 (`ffconv` again).
 
+A dedicated zombies server (work in progress, branch `server`) is the same program started with `+set bo1_server 1`
+on Windows or Linux: no window, listening on UDP on every interface, `server.cfg` for its settings. Clients join with
+`connect <address>:<port>`, and `tools/server_status.py <address>` shows the map and players. See `docs/SERVER.md`.
+
 French version: `README.fr.md`.

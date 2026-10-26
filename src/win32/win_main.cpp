@@ -72,8 +72,15 @@ SysInfo sys_info;
 // mouse or gamepad reads and no cursor moves, no focus change, no "display required" power request, and no
 // DirectDraw exclusive mode for the video memory probe. Screenshots read the game's own back buffer, never the
 // screen (r_screenshot.cpp).
+//
+// zombies: bo1_server - '+set bo1_server 1': the dedicated zombies server (docs/PORTING.md, phase 8). It runs with every
+// bo1_headless guard (no window, no dialog, no sound, fatal errors exit) but serves the network: it does not force
+// net_ip, whose default "localhost" NET_IPSocket binds to every interface. It starts with server defaults
+// (bo1_zombies 1, sv_maxclients 4) that the caller's +set values override, then execs server.cfg; an exec runs after
+// every startup +set, so server.cfg overrides both.
 static bool s_headless;
 static bool s_headlessClient;
+static bool s_server;
 static const dvar_t *bo1_autoquit;
 static int s_autoquitStartMs;
 
@@ -2358,8 +2365,9 @@ int __stdcall WinMain(HINSTANCE__ *hInstance, HINSTANCE__ *hPrevInstance, char *
     //jpeg_decompress_struct *SCRIPT_DEBUGGER_SMOKE_TEST_SUCCESS_EXIT_CODE; // [esp+0h] [ebp-4h]
 
     // zombies: decide headless first, before anything can open a window
-    s_headless = Sys_CmdlineIntValue(lpCmdLine, "bo1_headless") != 0;
-    s_headlessClient = s_headless && Sys_CmdlineIntValue(lpCmdLine, "bo1_headless_client") != 0;
+    s_server = Sys_CmdlineIntValue(lpCmdLine, "bo1_server") != 0;
+    s_headless = s_server || Sys_CmdlineIntValue(lpCmdLine, "bo1_headless") != 0;
+    s_headlessClient = s_headless && !s_server && Sys_CmdlineIntValue(lpCmdLine, "bo1_headless_client") != 0;
     if ( s_headless )
     {
         typedef HRESULT(__stdcall *WerSetFlags_t)(DWORD);
@@ -2434,7 +2442,8 @@ int __stdcall WinMain(HINSTANCE__ *hInstance, HINSTANCE__ *hPrevInstance, char *
             InitTiming();
             Sys_FindInfo();
             g_wv.hInstance = hInstance;
-            I_strncpyz(sys_cmdline, lpCmdLine, 1024);
+            I_strncpyz(sys_cmdline, s_server ? "+set bo1_zombies 1 +set sv_maxclients 4 +exec server.cfg " : "", 1024);
+            I_strncat(sys_cmdline, 1024, lpCmdLine);
             // x6: the headless settings below must always fit (a cut '+set dedicated 1' or '+set r_aaSamples 1' changes
             // what runs); a caller line too long for them loses its tail instead (headless.ps1 refuses such lines)
             if ( s_headless && strlen(sys_cmdline) > 1024 - 1 - 96 )
@@ -2465,11 +2474,18 @@ int __stdcall WinMain(HINSTANCE__ *hInstance, HINSTANCE__ *hPrevInstance, char *
                 // D3DSWAPEFFECT_COPY swap chain); appended last so these win over the caller's values
                 // p1: '+set bo1_headless_aa <2..16>' keeps multisampling for performance runs at the player's
                 // settings (the swap chain stays DISCARD, so bo1_shots screenshots do not work in that mode)
+                // phase 8: '+set bo1_headless_lan 1' keeps net_ip as the caller sets it (default: every interface), for
+                // a headless client of a dedicated server reached through a LAN address; a 127.0.0.1 socket cannot send there
                 const int aa = Sys_CmdlineIntValue(lpCmdLine, "bo1_headless_aa");
+                const bool lan = Sys_CmdlineIntValue(lpCmdLine, "bo1_headless_lan") != 0;
                 char suffix[96];
-                sprintf_s(suffix, " +set logfile 2 +set net_ip 127.0.0.1 +set r_fullscreen 0 +set r_aaSamples %i",
-                    aa >= 2 && aa <= 16 ? aa : 1);
+                sprintf_s(suffix, " +set logfile 2%s +set r_fullscreen 0 +set r_aaSamples %i",
+                    lan ? "" : " +set net_ip 127.0.0.1", aa >= 2 && aa <= 16 ? aa : 1);
                 I_strncat(sys_cmdline, 1024, suffix);
+            }
+            else if ( s_server )
+            {
+                I_strncat(sys_cmdline, 1024, " +set dedicated 1 +set logfile 2");
             }
             else if ( s_headless )
             {
@@ -2514,7 +2530,11 @@ int __stdcall WinMain(HINSTANCE__ *hInstance, HINSTANCE__ *hPrevInstance, char *
 
             PrintWorkingDir();
             if ( s_headlessClient )
-                Com_Printf(16, "bo1_headless_client: listen server + local client, window on the private desktop only, no sound, no input, logfile 2, net_ip 127.0.0.1\n");
+                Com_Printf(16, "bo1_headless_client: listen server + local client, window on the private desktop only, no sound, no input, logfile 2, net_ip %s\n",
+                    Dvar_GetString("net_ip"));
+            else if ( s_server )
+                Com_Printf(16, "bo1_server: dedicated zombies server, no windows, logfile 2, net_ip %s, net_port %i\n",
+                    Dvar_GetString("net_ip"), Dvar_GetInt("net_port"));
             else if ( s_headless )
                 Com_Printf(16, "bo1_headless: dedicated, no windows, logfile 2, net_ip 127.0.0.1\n");
             else

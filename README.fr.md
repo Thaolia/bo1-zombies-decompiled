@@ -53,3 +53,8 @@ bo1_headless 1` pour le serveur dédié (et `+set bo1_headless_client 1` pour le
 `BO1_GFX_BACKEND=null` force le backend qui ne dessine rien, et `BO1_GL_DEBUG=1` écrit les messages de debug
 d'OpenGL dans le log. Les zones converties avant le 2026-10-24 ont besoin d'un nouveau `shaders.pack` (relancer
 `ffconv`).
+
+## Serveur dédié zombies (en cours, branche `server`)
+C'est le même programme lancé avec `+set bo1_server 1`, sous Windows ou Linux : pas de fenêtre, écoute UDP sur toutes
+les interfaces, réglages dans `server.cfg`. Les clients se connectent avec `connect <adresse>:<port>`, et
+`tools/server_status.py <adresse>` affiche la map et les joueurs. Détails (en anglais) : `docs/SERVER.md`.

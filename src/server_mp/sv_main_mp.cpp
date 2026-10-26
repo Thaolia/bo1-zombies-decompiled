@@ -758,6 +758,32 @@ void __cdecl SVC_Info(netadr_t from, bdSecurityID *secID, bool quick)
     }
 }
 
+// zombies: Quake 3's getstatus (Black Ops removed it with getinfo), for the dedicated server (docs/PORTING.md,
+// phase 8): "statusResponse", the serverinfo string, then one line per connected client: number, score (points),
+// ping, client state, quoted name. Answered at most every 50 ms so that the reply cannot be used as a flood amplifier.
+static void SV_StatusRequest(netadr_t from)
+{
+    static int lastTime;
+    char status[4096];
+    char line[128];
+
+    const int time = Sys_Milliseconds();
+    if ( lastTime && time - lastTime < 50 )
+        return;
+    lastTime = time;
+    Com_sprintf(status, sizeof(status), "statusResponse\n%s\n", Dvar_InfoString(0, 4));
+    for ( int i = 0; i < com_maxclients->current.integer; ++i )
+    {
+        const client_t *cl = &svs.clients[i];
+        if ( cl->header.state < CS_CONNECTED )
+            continue;
+        Com_sprintf(line, sizeof(line), "%i %i %i %i \"%s\"\n", i,
+            cl->header.state == CS_ACTIVE ? G_GetClientScore(i) : 0, cl->ping, cl->header.state, cl->name);
+        I_strncat(status, sizeof(status), line);
+    }
+    NET_OutOfBandPrint(NS_SERVER, from, status);
+}
+
 void __cdecl SV_ConnectionlessPacket(netadr_t from, msg_t *msg)
 {
     char *fromAddr; // [esp+0h] [ebp-41Ch]
@@ -817,6 +843,10 @@ void __cdecl SV_ConnectionlessPacket(netadr_t from, msg_t *msg)
     else if (!I_stricmp(c, "getchallenge"))
     {
         SV_GetChallenge(from);
+    }
+    else if (!I_stricmp(c, "getstatus"))
+    {
+        SV_StatusRequest(from);
     }
     else if ( !I_stricmp(c, "connect") )
     {

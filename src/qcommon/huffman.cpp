@@ -89,9 +89,16 @@ nodetype *__cdecl Huff_initNode(huff_t *huff, int ch, int weight)
     return tnode;
 }
 
+// The message Huffman tree must be the same on every platform: a client decodes with its own tree what the server
+// encoded with its. qsort's order for equal weights is up to each C library (MSVC, glibc and newlib differ), so equal
+// weights fall back to the nodes' creation order, their place in huff->nodeList.
 int __cdecl nodeCmp(const void *left, const void *right)
 {
-    return (*(nodetype *const *)left)->weight - (*(nodetype *const *)right)->weight;
+    const nodetype *l = *(nodetype *const *)left;
+    const nodetype *r = *(nodetype *const *)right;
+    if ( l->weight != r->weight )
+        return l->weight - r->weight;
+    return l < r ? -1 : l > r;
 }
 
 void __cdecl Huff_BuildFromData(huff_t *huff, const int *msg_hData)

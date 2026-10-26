@@ -116,6 +116,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-26 | **The loading-screen checkerboard is fixed** (64-bit builds): `Window_Paint` draws the map's `loadscreen_<map>` material where a window's background is `$levelbriefing`, black when the map has none (`ui_shared.cpp`, under `#if defined(_WIN64) \|\| !defined(_WIN32)`) | Traced on Ryujinx/deko3d by logging every large 2D quad with its caller chain: the full-screen checkerboard is the window background of the `connect` menu (`UI_DrawMapLevelshot` → `Menu_Paint`), the material `$levelbriefing`, whose only image is `default` — `images/default.iwi` in `iw_04.iwd`, the 16x16 checkerboard. Nothing in the decompiled engine puts a level image into it, and the menu has no `WINDOW_STYLE_LOADSCREEN` (7) item, the path that draws the material `UI_SetLoadingScreenMaterial` resolves (`loadscreen_zombie_theater` is found, not default). The fix shows that material, the Kino artwork, instead. The 32-bit reference runs the same code on the same data, so it should show the checkerboard too (not observed); it keeps the decompiled behaviour (`codediff.py`: `ui_shared.cpp` identical). Not a ffconv or backend problem: the earlier "missing materials" verdict (deko3d notes) had the right screen but the wrong asset |
 | 2026-10-26 | A dedicated-server project starts on branch `server` (worktree `../BO-Zombies_switch_server`), phase 8 below: a dedicated zombies server (Linux and Windows, curses console), win64 and Switch clients joining over UDP by IP from `launch.cfg`, client logs sent to the server, admin commands, join in progress, then more than 4 players | The engine is the MP build with the SP zombies grafted on, so the Quake 3 UDP connect path (`connect`, `getchallenge`, `SV_DirectConnect`, netchan) is already there without DemonWare; only a client of a *remote* server had never been run |
 | 2026-10-26 | Fixes that make a path work which was broken in the reference too (a remote `connect` from the menu) may change `win32-msvc` behaviour, without a guard | Agreed with the user. 64-bit fixes and port code still keep the 32-bit code identical (`codediff`) |
+| 2026-10-27 | The message Huffman tree is built with a total order: equal weights fall back to node creation order (`huffman.cpp`, `nodeCmp`) | `qsort` leaves the order of equal elements to each C library, so MSVC, glibc and newlib built different trees and a client decoded garbage from a server of another platform (a win64 client of the Linux server misread a script mover's origin, then crashed on a dynent id). It changes the compressed bits on every build, `win32-msvc` included; both ends run the same code, nothing else reads them |
 
 ## Phases
 | # | Phase | Status |
@@ -129,7 +130,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | in progress: the devkitA64 + libnx build compiles, links and packages `BO1Zombies.nro` (null backend), reusing the posix SDL2/Win32-shim layer with a thin `src/platform/switch/` and `#if defined(__SWITCH__)` deltas. **Boots on Ryujinx 1.1.1375**: the libnx entry runs (applet type = Application), romfs mounts, the engine's `WinMain` runs ~30 s with no crash (SD `boot.log`). Prereqs fixed: the libgcc GCS/SME NOP patch (`switch/tools/patch_ryujinx_mrs.py`, POST_BUILD) for Ryujinx's JIT, and a one-file embedded romfs (`switch/romfs`) so `romfsInit` does not crash the emulator. With the converted zones staged on the SD, the engine **loads the pre-gfx code zones** (`en_code_pre_gfx_mp`, `code_pre_gfx_mp`) — the ffconv AArch64 path proven end to end — and runs `FS_Startup`. Four fixes got there: the GCS/SME NOP patch and embedded romfs (boot), `chdir` to the install dir (language + `fs_basepath`), a `pread` EOF fix for libnx's past-EOF `lseek` (zone read-ahead), and reading the win64 IWffs ABI tag (layout-identical, `--check-switch`). With the iwds staged and a `device:`-prefix fix in `Bo1_PosixPath`, it then boots through FS_Startup (103814 iwd files), R_Init, the frontend, and `+devmap zombie_theater` into a **map load** (common_zombie 78 MB, the Kino zones) — before crashing part way through `en_zombie_theater` on a guest invalid memory access (a 64-bit bug in the zombie map asset stream, to debug on the posix x86-64 build). Then GL (EGL on nwindow) and audio |
 | 6 | Stabilisation, all base maps, docs | todo |
 | 7 | (optional) deko3d backend behind the same `gfx_backend.h` | in progress: opt-in on the Switch build (`gfx.cfg` = deko3d, `shaders.dksh` from uam); renders the main menu's 3D scene and Kino in game with its HUD on Ryujinx (2026-10-26, see the deko3d notes below); not yet run on the console in game |
-| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP, see "Dedicated server (phase 8)" |
+| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; see "Dedicated server (phase 8)" |
 
 ## Verification per phase
 - **0**: the `win32-msvc` preset still builds and `Play.bat` reaches the zombies menu and plays Kino der Toten.
@@ -1661,3 +1662,32 @@ the merged tree reaches `CA_ACTIVE` 4 times in 240 s (3 game overs) and quits no
 script runtime errors in retail `maps/_zombiemode.gsc` (`chalk_one_up`, line 3785: `huds[0]` removed before
 `MoveOverTime`), a race between the game over and the round change printed with `developer 1`; the earlier run (2
 game overs) had none. To compare against a listen-server run before blaming the remote path.
+
+**Step 1, the `bo1_server` mode (2026-10-27).** Operator's guide: `docs/SERVER.md`.
+
+- `+set bo1_server 1` (`win_main.cpp`) runs with every `bo1_headless` guard (no window, dialog or sound; fatal errors
+  exit) but serves the network: it does not force `net_ip`, whose default `localhost` `NET_IPSocket` binds as
+  `INADDR_ANY`. It starts with `+set bo1_zombies 1 +set sv_maxclients 4 +exec server.cfg` before the caller's line
+  (the caller's `+set` values override the defaults; `server.cfg`, an exec, runs after every startup `+set` and wins
+  over both) and ends with `+set dedicated 1 +set logfile 2`. `onlinegame` stays 0 (headless zombies).
+- `getstatus` (`sv_main_mp.cpp`, `SV_StatusRequest`): Quake 3's text reply, serverinfo plus one line per client
+  (number, points from `G_GetClientScore`, ping, state, name), at most one answer per 50 ms. `tools/server_status.py`
+  sends it.
+- 64-bit: `NET_IPSocket` and `NET_TCPIPSocket` returned the socket as `unsigned int`; now `SOCKET` (`codediff`
+  identical).
+- Test only: `+set bo1_headless_lan 1` keeps a headless client's `net_ip` as given, so it can reach a LAN address (a
+  socket bound to 127.0.0.1 gets `WSAENETUNREACH` there).
+- Verified: the Windows server binds `0.0.0.0:29060` (`netstat`), execs `server.cfg`, answers `getstatus` from Windows
+  and from WSL (another host for it); a win64 client joins it through `192.168.1.194` and shows in `getstatus` as
+  `#0 Player: 500 points, ping 51, active`, quits normally. The Linux server (`linux64-clang`, ext4 mirror, data on
+  ext4) binds `0.0.0.0:29070`, answers from WSL and Windows, and a win64 client joins it through `172.23.3.156`:
+  active, in game (screenshot), quits normally.
+- That last case first crashed the client in `DynEnt_GetClientEntity` (a dynent id past the model list). Byte dumps of
+  the gamestate showed both servers' messages identical up to the failing entity, and per-field traces showed the
+  client reading a script mover's origin wrongly only from the Linux server: the Huffman tree (decision above). The
+  netfield tables (2249 rows) and the map center are identical on both servers. The other `qsort` calls are local to
+  one process (server snapshot order, client HUD, physics, stats), so they cannot break the protocol.
+- Known, not fixed yet: on Linux `console_mp.log` stops mid-line after the first client's gamestate (the rest stays
+  buffered); stdout keeps the lines. The curses console (step 3) will take the server's output.
+- Rule kept from the run: before each rebuild, stop the test servers and clients, Linux ones by their executable
+  (`.claude/rules/server-test-processes.md`): three stale Linux servers once kept port 29070.

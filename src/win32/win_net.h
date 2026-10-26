@@ -40,7 +40,7 @@ void __cdecl NET_InitDebug();
 int NET_InitDebugStreams();
 void __cdecl NET_Init();
 void __cdecl Sys_Listen_f();
-unsigned int __cdecl NET_TCPIPSocket(char *net_interface, int port, int type);
+SOCKET __cdecl NET_TCPIPSocket(char *net_interface, int port, int type);
 int __cdecl NET_Select(unsigned int socket);
 void __cdecl Sys_DebugSocketError(const char *message);
 int __cdecl Sys_IsRemoteDebugServer();
