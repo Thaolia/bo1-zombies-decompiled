@@ -68,6 +68,9 @@ if(NOT MSVC)
     # (*(_DWORD *)&...), its signed arithmetic is the instructions' own (it wraps), and it may test a pointer it has
     # already dereferenced. MSVC never optimises on any of those; GCC and clang must not either.
     target_compile_options(BO1Zombies PRIVATE -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks)
+    # MSVC's char is signed. The AArch64 ABI makes it unsigned in GCC and clang, which turns every negative char of
+    # the engine (a font glyph's y0, drawing text 256 scaled pixels too low) into a value above 127.
+    target_compile_options(BO1Zombies PRIVATE -fsigned-char)
     # Without LTC_SOURCE, libtomcrypt's rand_prime.c calls libtommath's mp_read_unsigned_bin/mp_prime_is_prime through
     # implicit declarations, as the MSVC build does. GCC 14+ and clang 16+ reject those by default.
     set_source_files_properties("${SRC_DIR}/libs/libtomcrypt-1.17/src/math/rand_prime.c"
