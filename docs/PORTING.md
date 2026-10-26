@@ -111,6 +111,9 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-25 | The crash was **not** the loader: the Ryujinx fault PC maps to `GPad_GetStick` (win_gamepad.cpp:575), called from `IN_GamepadsMove` — a gamepad-input 64-bit bug the headless posix/win64 builds never hit (no controller polled). `GamePadStick` carries `GPAD_STICK_MASK` (0x40000000) in its values (`GPAD_LX..GPAD_RY` = 0x40000000..3); `GPad_GetStick` indexed `sticks[stick]` with the mask still set. On 32-bit the mask fell off the `* sizeof(double)` offset by truncation (→ sticks[0..3]); on 64-bit `sticks[0x40000000]` is a ~4 GB out-of-bounds read. Fixed by masking the index (`stick & 0xBFFFFFFF`), as the sibling `GPad_GetStickChangedToPressedState` already does — byte-identical on MSVC-32, correct on 64-bit, no `#if` | With it, **Kino loads fully on Ryujinx**: `common_zombie`, `en_zombie_theater`, `zombie_theater` (105 MB) all load and the engine reaches `Game Initialization`. The next crash is in the **GSC script compiler** (`Scr_CalcLocalVarsFormalParameterListInternal`, cscr_compiler.cpp:1297 — a NULL deref during script compile), again Switch-specific (the posix x86-64 build compiled the same scripts and reached `sv_running 1`). Cause found 2026-10-25 (two rows down): uninitialised parse-node memory — **not** codepos width and **not** stack depth |
 | 2026-10-25 | The GL (Mesa) backend is enabled on the Switch build and **renders on Ryujinx**: a real GL 4.3 core context (NV120 / Mesa 20.1 / nouveau), "Direct3D 9 on the gl backend", frames presented and textures uploaded. ffconv now emits GLSL 4.30 (the Switch Mesa caps there; 4.60 was rejected) and the staged `shaders.pack` is patched 4.60→4.30 in place. A `gfx.cfg` file picks the backend without a rebuild. **Shader cache: not feasible on GL/Mesa** — `GL_NUM_PROGRAM_BINARY_FORMATS` is 0 (nouveau advertises `GL_ARB_get_program_binary` but provides no format) and the portlibs' Mesa has no transparent disk cache, so neither glGetProgramBinary nor an env-var cache works. The compile of 13704 shaders makes the first boot very slow on Ryujinx's emulated Mesa | The perf path for shaders is therefore the **deko3d + uam** route (phase 7: offline compilation to DKSH, no runtime compile), or cutting the shader count, not a GL cache. ⚠ The GSC-crash re-diagnosis attempted here (libnx `armGetTls`, stack overflow, runaway recursion, "the parser builds a malformed AST") was **wrong** and is superseded by the next row: SP was constant across runs (not ~0) and a depth/cycle instrumentation of `Scr_CalcLocalVars*` never fired, so it is not recursion at all — it is a NULL deref from uninitialised parse-node memory |
 | 2026-10-25 | **GSC compiler crash fixed — uninitialised parse-node memory, not recursion.** `sval_u` (cscr_debugger.h) is a union whose largest member is `sval_u *node` (8 bytes on 64-bit; the `// sizeof=0x4` comment is the stale 32-bit size). The parse-tree builders write 32-bit fields into 8-byte slots and rely on the rest being zero: a list terminator is `node[1].stringValue = 0` (`linked_list_end`/`append_node`, cscr_parsetree.cpp), which zeroes only the low 4 bytes of the slot and leaves the high 4 whatever `Hunk_UserAlloc` last held. `Scr_CalcLocalVarsFormalParameterListInternal` walks the list reading that slot as `node[1].node` (8 bytes): on x86-64 fresh hunk pages read back zero → `next` is NULL → the walk ends; on AArch64 reused node memory left the high half non-zero → `next` came back `0x2'00000000` → the walk dereferenced NULL (fault at 0x0). **Fix:** `Scr_AllocNode` zeroes the node block, guarded `if (sizeof(sval_u) > sizeof(unsigned int))` so the branch folds away on the 32-bit reference | Diagnosed by instrumenting the formal-parameter walk (per-cell pointer log + null guards) on the null backend: the culprit was the 2nd function parameter list in `codescripts/struct.gsc`, `next = 0x200000000` — the exact signature of a 4-byte-low-zeroed 8-byte slot (`0x2 << 32`). Verified on the null backend **with and without** the unrelated `-fsigned-char` probe (which was my first, wrong hypothesis and was reverted): no `InvalidMemoryRegionException`, the compile completes, `zombie_theater` reaches `Game Initialization` and runs zombies rounds (`mus_zombie_round_start`, perks revive jingle, `mus_zombie_game_over`, 130+ s of server sim time). `codediff` on cscr_parsetree.cpp vs mingw32-gcc is **identical** (the guard removes the fix from the 32-bit reference codegen). Family note: the same 4-byte-into-8-byte pattern also appears as full-`sval_u` copies of partially-constructed temporaries (`node2_`, `prepend_node`, `append_node`, `node[k] = val`) — benign by type-consistency (a value stored is read back as its own type, never reinterpreted as `.node`) and not observed on `zombie_theater`, but unverified on the other five maps. **Verified null-backend only**; the fix is in the backend-independent compiler so it carries to GL. Next: GL smoke test of the fixed build + the "AI couldn't find path to goal" question (likely no player target in a headless run, unconfirmed) |
+| 2026-10-26 | Decompiled byte shuffles read their bytes through `Float4Byte(v, i)` (`com_math.h`): 84 reads in `fx_convert.cpp`, `fx_beam.cpp` and `r_water_sim.cpp` that were `v.unitVec[0].array[i]` with a computed `i` up to 15 (fx_beam's `beamDot` reads, upstream, already index a separate vector with `i - 16`) | `PackedUnitVec::array` is 4 bytes, so GCC takes any index above 3 as out of bounds. In `Byte4PackVertexColor` devkitA64 GCC then computed and stored only the red channel and packed stack garbage, usually 0, as G, B and alpha, so every UI and HUD vertex colour had alpha 0 (invisible menus and HUD, on GL and deko3d alike). Disassembly after the fix shows all four channels stored. `codediff.py` on mingw32-gcc: `fx_beam.cpp` identical; in `fx_convert.cpp` only `Byte4PackVertexColor` (i686 GCC also dropped channels 1-3: the base loads one float, the new code four), `FX_SampleVisualState` (it called the full function twice instead of inlining the truncated one) and one constant-pool offset in `FX_ConvertElemDef`; in `r_water_sim.cpp`, `ReadValue` now copies all 48 bytes of its `v5[3]` instead of 4. MSVC never exploited the bound, so the reference is unchanged. No other `.array[<computed>]` read is left in `src/` (grep) |
+| 2026-10-26 | Every GCC/clang build of the engine passes `-fsigned-char` (`CMakeLists.txt`, with the other MSVC-semantics flags) | MSVC's `char` is signed; the AArch64 ABI makes it unsigned in GCC, so each negative `char` of the engine read back above 127 on the Switch. Found through the HUD: `Glyph::y0` (`r_font.h`) is a `char`, glyph tops are negative, so every line of text was drawn 256 × font scale lower than on PC (the score text at y 830-849 of a 720-line frame, under the screen, where the win64 reference draws it at ~677). With the flag the score `500` sits on its brush and the round tally shows, as in the win64 reference. x86 targets already default to signed `char`, so the flag changes nothing there; it was first tried (and reverted, as unrelated) for the GSC crash (2026-10-25 row) |
+| 2026-10-26 | **The loading-screen checkerboard is fixed** (64-bit builds): `Window_Paint` draws the map's `loadscreen_<map>` material where a window's background is `$levelbriefing`, black when the map has none (`ui_shared.cpp`, under `#if defined(_WIN64) \|\| !defined(_WIN32)`) | Traced on Ryujinx/deko3d by logging every large 2D quad with its caller chain: the full-screen checkerboard is the window background of the `connect` menu (`UI_DrawMapLevelshot` → `Menu_Paint`), the material `$levelbriefing`, whose only image is `default` — `images/default.iwi` in `iw_04.iwd`, the 16x16 checkerboard. Nothing in the decompiled engine puts a level image into it, and the menu has no `WINDOW_STYLE_LOADSCREEN` (7) item, the path that draws the material `UI_SetLoadingScreenMaterial` resolves (`loadscreen_zombie_theater` is found, not default). The fix shows that material, the Kino artwork, instead. The 32-bit reference runs the same code on the same data, so it should show the checkerboard too (not observed); it keeps the decompiled behaviour (`codediff.py`: `ui_shared.cpp` identical). Not a ffconv or backend problem: the earlier "missing materials" verdict (deko3d notes) had the right screen but the wrong asset |
 
 ## Phases
 | # | Phase | Status |
@@ -123,7 +126,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 4 | Portable platform layer + D3D9-emu frontend + GL backend on Linux x86_64 | in progress: 4a, the Linux x86-64 dedicated server runs Kino and Moon headless with the win64 log (22 differing lines, all platform facts); 4b step 1, the D3D9 frontend on the null backend and the SDL2 window layer: the Linux headless client plays Kino until the game over, its log against win64's explained line by line; 4b step 2, keyboard, mouse and clipboard, checked by scripted input on an offscreen window; 4b step 3, the GL 4.3 backend: Kino renders on llvmpipe, checked against the contract by `gb_gl_test` and against win64 by screenshots; 4b step 4, sound: a software mixer on SDL2 (RAM voices; streaming/reverb deferred), its MS-ADPCM decoder and send matrices verified offline (`adpcm_test` vs ffmpeg, `snd_mix_test` vs a computed reference), the live device and threading smoke-tested headless with a dummy driver — audible playback is on hardware |
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | in progress: the devkitA64 + libnx build compiles, links and packages `BO1Zombies.nro` (null backend), reusing the posix SDL2/Win32-shim layer with a thin `src/platform/switch/` and `#if defined(__SWITCH__)` deltas. **Boots on Ryujinx 1.1.1375**: the libnx entry runs (applet type = Application), romfs mounts, the engine's `WinMain` runs ~30 s with no crash (SD `boot.log`). Prereqs fixed: the libgcc GCS/SME NOP patch (`switch/tools/patch_ryujinx_mrs.py`, POST_BUILD) for Ryujinx's JIT, and a one-file embedded romfs (`switch/romfs`) so `romfsInit` does not crash the emulator. With the converted zones staged on the SD, the engine **loads the pre-gfx code zones** (`en_code_pre_gfx_mp`, `code_pre_gfx_mp`) — the ffconv AArch64 path proven end to end — and runs `FS_Startup`. Four fixes got there: the GCS/SME NOP patch and embedded romfs (boot), `chdir` to the install dir (language + `fs_basepath`), a `pread` EOF fix for libnx's past-EOF `lseek` (zone read-ahead), and reading the win64 IWffs ABI tag (layout-identical, `--check-switch`). With the iwds staged and a `device:`-prefix fix in `Bo1_PosixPath`, it then boots through FS_Startup (103814 iwd files), R_Init, the frontend, and `+devmap zombie_theater` into a **map load** (common_zombie 78 MB, the Kino zones) — before crashing part way through `en_zombie_theater` on a guest invalid memory access (a 64-bit bug in the zombie map asset stream, to debug on the posix x86-64 build). Then GL (EGL on nwindow) and audio |
 | 6 | Stabilisation, all base maps, docs | todo |
-| 7 | (optional) deko3d backend behind the same `gfx_backend.h` | todo |
+| 7 | (optional) deko3d backend behind the same `gfx_backend.h` | in progress: opt-in on the Switch build (`gfx.cfg` = deko3d, `shaders.dksh` from uam); renders the main menu's 3D scene and Kino in game with its HUD on Ryujinx (2026-10-26, see the deko3d notes below); not yet run on the console in game |
 
 ## Verification per phase
 - **0**: the `win32-msvc` preset still builds and `Play.bat` reaches the zombies menu and plays Kino der Toten.
@@ -859,3 +862,321 @@ Base: upstream commit `102f699` (2026-10-03).
   `R_Cinematic_*` uses it.
 - Memory: PMem 328 MB (`universal/physicalmemory.cpp:30`), Hunk 15 MB, total ≈ 350–600 MB.
 - `*_mp` directories are required: zombies runs on the MP code paths.
+
+## Map-load crash on console = runtime shader-compile storm, OOM-killed (2026-10-25)
+`+devmap zombie_theater` on hardware does not hard-crash on a bad asset: it dies of OOM during the GL backend's
+shader compile. Instrumenting the build lane (`gb_gl_device.cpp` `Compile`/`Link`/`ServeBuilds`, logged as
+`gl build:`) showed, over one run:
+- shader count climbed to **7207 and was still climbing** when the console killed the process (the zone streams
+  thousands of techset shader variants; `CreateShader` compiles each one eagerly and never dedups);
+- per-compile cost **uniform ~20 ms, worst single only 56 ms** -> no pathological shader, no hang, no loop;
+- total compile time **143 s and not finished**; the render thread meanwhile only drew the 8-draw loading plaque
+  (`0 new pipelines, 0 links`), so the frontend perf counters hid the whole storm;
+- **heap grew monotonically 580 -> 2537 MB (~0.27 MB/shader)**; projected to ~10 000 shaders that is ~3.3 GB,
+  past the application-mode budget -> the console kills it. That kill is the "erreur switch" the user saw.
+
+Root cause is eager runtime GLSL compilation of the map's entire shader database on nouveau, in both time and
+memory. `CreateShader` (`gb_gl.cpp`) does `new Shader` + eager `QueueBuild`; the zone references the whole pack and
+every referenced shader is compiled at load, drawn or not.
+
+Dedup ruled out by a static measurement of `shaders.pack` (`BO1GLSL1`, 13704 entries = **356 vertex, 13348
+pixel**): **13682 of 13704 sources are byte-distinct** (only 22 duplicates), and two same-size pixel shaders differ
+in constants, samplers, inputs and body -- genuinely different shaders, not trivial variants. So the 13704 are
+real and unique; dedup by source (or trivial normalisation) saves nothing. The only lever is **lazy compilation**:
+compile a shader only when a drawn pipeline first needs it, so only the on-screen working set compiles, not all
+13704. Caveats: lazy compile defers memory rather than bounding it (a full match may still climb toward the
+ceiling -> may need LRU eviction of compiled programs later), and the first gameplay frame triggers a burst of
+`ProgramFor` links on the render thread (a multi-second first-frame stall instead of an upfront OOM). `DestroyShader`
+has no refcount, which a shader cache would have to respect.
+
+Kill mechanism pinned by the Atmosphere crash reports (2026-10-25, build 23:10): two `BO1Zombies` Data Aborts,
+Fault Address **0x0**, both **inside Mesa's GLSL compiler on the backend thread**, exactly in the storm --
+`DeviceMain -> ServeBuilds -> _mesa_glsl_compile_shader -> glcpp_preprocess -> _mesa_string_buffer_append_len ->
+memcpy` and `_mesa_glsl_compile_shader -> ... -> _mesa_set_clone`. Mesa does not check its `ralloc` returns; under
+heap pressure (the ~2.5 GB of already-compiled shaders plus a shader's transient compile peak) a `ralloc` returned
+NULL and the next deref faulted at a near-null offset. So it is **CPU-heap OOM**, not GPU memory and not a
+watchdog -- fragmentation and Mesa's transient compile allocations put the real ceiling below 3.2 GB. Lazy compile
+is the fix: keeping the resident compiled set to the drawn working set leaves Mesa headroom on every compile.
+Interim fix is lazy compile (Phase 5 "shader cache"); the definitive answer is Phase 7 deko3d with offline DKSH.
+
+**Lazy compile implemented (2026-10-26, build 00:07):** `CreateShader` (`gb_gl.cpp`) now stores the GLSL in the
+`Shader` instead of queueing an eager compile; the backend compiles a shader on demand inside `Link` (`gb_gl_device.cpp`),
+the first time a drawn program needs it, and frees the source afterwards. `Build` carries only a program now. So
+only the on-screen working set compiles, not all ~13k. Trade-offs as noted: ~126 MB of un-drawn shader sources sit
+resident until `DestroyShader`, and the first gameplay frame serialises a burst of compile+link on the render
+thread (one-time multi-second stall instead of an OOM). No change to the win32/D3D9 reference (GL backend is
+posix/switch only). Awaiting a hardware run to confirm the map loads and the `gl build:` count stays in the hundreds.
+
+
+## deko3d port started (2026-10-26)
+Pre-scaffold gate (advisor): does `uam` (deko3d's offline compiler, `/opt/devkitpro/tools/bin/uam`) accept the exact
+GLSL ffconv emits? **Yes.** Extracted shaders straight from `shaders.pack` (`#version 430 core`, std140 UBO at
+binding 0, explicit `layout(location/binding)`): a 202-shader even sample across the pack compiled **202/202** to
+valid `DKSH` (vert 1024 B, a pixel 3584 B). So the GLSL-with-explicit-bindings groundwork pays off: the deko3d
+shader path needs no translator rework, only an `ffconv --dksh` step that runs this same `uam` offline.
+
+Plan (vertical slice first, "never debug two unknowns at once"): 1) `src/gfx_backend/deko3d/` skeleton filling the
+`Backend` table (gb_backend.h), wired into the dispatcher (`BO1_GFX_BACKEND=deko3d`) and the switch CMake only;
+2) device -> queue -> memblock pools -> swapchain -> BeginPass/Clear -> Present with a hand-compiled test shader,
+mirroring `/opt/devkitpro/examples/switch/graphics/deko3d`; 3) only then the uam/ffconv DKSH *pack* pipeline (the
+big piece). deko3d shrinks the shader memory footprint (no runtime Mesa compile, lean DKSH) but does not zero it:
+13704 DKSH still have a code-size cost, so lazy *loading* of DKSH will still matter. The null backend (Phase 4
+harness) is the correctness oracle. Still want the lazy-compile hardware boot.log: its drawn working-set count
+scopes whether deko3d is the Phase-7 perf project or more urgent.
+
+**Scaffold compiles and links (2026-10-26):** `src/gfx_backend/deko3d/{gb_deko3d.h,gb_deko3d.cpp}` fills the `Backend` table, wired into the
+dispatcher (`BO1_GFX_BACKEND=deko3d`, guarded by `BO1_GB_DEKO3D`) and the switch CMake (links `libdeko3d`). `Init`
+brings up the real `DkDevice` + graphics `DkQueue` and fills `GetCaps`; every rendering/resource call is a no-op /
+returns null for now (device-init milestone -- draws nothing yet). Verified: the switch build compiles `gb_deko3d.o`
+and links the ELF with `dkDeviceCreate`/`dkQueueCreate` resolved, NRO packaged; default backend stays GL, deko3d is
+opt-in. Next: the device->swapchain(nwindowGetDefault)->BeginPass/Clear->Present slice with a hand-compiled DKSH,
+then the uam/ffconv DKSH pack pipeline and lazy DKSH loading.
+
+**Lazy compile confirmed on hardware (2026-10-26):** `+devmap zombie_theater` now **loads and reaches gameplay** -- no crash, no OOM.
+The lazy compile collapsed the storm to its real drawn working set: **413 shaders compiled / 263 programs linked**
+(not 13704), compile 5.3 s, heap ~1.7 GB stable (well under the ceiling). `CL_InitCGame: 1.76 s` and
+`playsound mus_zombie_round_start` prove it is in-map at round start. This also rescopes deko3d: the GL path is
+playable, so deko3d is the Phase-7 perf project (the remaining ~16.8 s of link time at load + GL driver CPU cost),
+not an emergency. Open: ~1.7 GB heap for menu+413 shaders is high (links hold compiled programs); the asset-miss
+flood (menu_map_zombie_theater, hud_zombie_theater.txt, ...) persists but does not stop the load.
+
+**deko3d render slice #1 (2026-10-26):** `gb_deko3d.cpp` now implements memory (per-resource DkMemBlock), real `CreateBuffer`/
+`CreateTexture` (so the frontend's device init succeeds and reaches Present), and a swapchain on
+`nwindowGetDefault()` whose `Present` clears the acquired framebuffer to teal and shows it (pre-recorded per-slot
+command lists, deko_basic pattern -- no per-frame command memory rewrite). Draws stay skipped (`GetPipeline` null,
+guarded by the frontend), so with `BO1_GFX_BACKEND=deko3d` the engine runs and the screen is a flipping solid teal:
+proof the device->swapchain->cmdbuf->queue->present chain works on hardware, independent of the engine's rendering.
+Window ownership: `switch_main.cpp` sets `SDL_VIDEODRIVER=dummy` when deko3d is selected so SDL does not grab
+`nwindowGetDefault()` (GL path unaffected). Compiles and links. Untested on hardware yet -- the risk is exactly
+that SDL/nwindow coexistence; the log (`device up` / `swapchain WxH` / `dkSwapchainCreate failed`) will say. Next
+after it presents: the pass/pipeline path (DKSH from an `ffconv --dksh` pack, lazy-loaded) and Present copying the
+engine's real image onto the framebuffer.
+
+**deko3d slice test #1 result (2026-10-26):** On hardware the deko3d backend **selected and its device came up** (`d3d9emu: Direct3D 9 on
+the deko3d backend (deko3d (Tegra X1, Maxwell))`), proving the backend plugs in. But R_Init aborted: `No valid
+resolutions of 800 x 600 or above found`. Cause: `SDL_VIDEODRIVER=dummy` (set so deko3d can own nwindow) publishes
+no display modes, and `host::DisplayModes`/`DesktopMode` (posix_d3d9host.cpp) read them from SDL. Fix: when SDL has
+no modes, report the console's fixed modes (1280x720, 1920x1080) -- both >= 800x600, so R_Init proceeds. GL path
+unaffected (SDL gives it real modes). Re-test pending to reach the teal present.
+
+**deko3d slice test #2 (2026-10-26):** Resolution fix worked -- R_Init advanced to `Pixel shader version is 3.0`, then
+`Com_ERROR: r_rendertarget.cpp(1821) CreateDepthStencilSurface failed HRESULT 0x8876086c` (D3DERR_INVALIDCALL). No
+new Atmosphere creport, so it is the engine's own error, not a fault. INVALIDCALL comes from CreateStorage's
+validation (a null CreateTexture would be OUTOFVIDEOMEMORY), and that validation's only backend-specific input is
+GetCaps -- GL passes the same engine code. My deko3d caps were hand-guessed: depth formats lacked FORMAT_SAMPLED
+(GL sets it) and maxSamples was 8 though the slice has no MSAA. Fix: deko3d GetCaps now mirrors GL's formatFlags and
+reports maxSamples=1. Also instrumented CreateStorage to log any RT/DS rejection with its inputs + caps
+(d3d9emu_resources.cpp), so if caps was not the cause the next log names the exact failing check. Re-test pending.
+
+**deko3d present slice WORKS (2026-10-26):** `BO1_GFX_BACKEND=deko3d` now boots to a flipping teal screen on both Ryujinx and the
+user's console. The whole chain is validated: device, memory, buffers/textures, swapchain on nwindowGetDefault,
+command buffer, queue, present -- and SDL/nwindow coexistence (SDL on its dummy video driver, deko3d owns nwindow).
+The 0x0 depth-stencil crash was a cascade from that dummy driver: SDL_INIT_VIDEO has no usable driver, so
+Bo1_VideoReady() is false and every SDL-backed display query returned nothing, leaving the engine's render
+resolution 0 (r_init.cpp derives it from the monitor rect, clamped to the adapter-native size). Fix: on __SWITCH__
+the display shims report the console's fixed 1280x720 regardless of SDL -- DisplayCount() returns 1, DisplayBounds()
+and GetSystemMetrics() give 1280x720, plus the earlier DisplayModes/DesktopMode fallbacks (posix_d3d9host.cpp). The
+GL path has a real SDL display and is untouched. Iterated entirely on Ryujinx (~20-60s/run, no Mesa shader compile
+on deko3d), confirmed on hardware by the user. Next: the real render path -- pass/pipeline state from DKSH (an
+`ffconv --dksh` pack run through uam), then Present copying the engine's frame onto the framebuffer, so the game
+draws instead of a clear colour.
+
+**deko3d: DKSH pack + present-copy (2026-10-26):** `ffconv --dksh` = `tools/ffconv/gen/make_dksh_pack.py`: reads the BO1GLSL1 pack, runs uam
+on each shader, writes a `BO1DKSH1` pack (same entry layout, DKSH payload + a NUL byte so the existing reader's
+check passes) -- **13692/13704 compiled**, 70.6 MB, 12 vertex shaders rejected by uam (their draws skip). d3d9emu
+loads `shaders.dksh` instead of `shaders.pack` on deko3d (ShaderPack accepts the second magic; host::ShaderPackPath
+picks by backend). The deko3d backend now: loads DKSH into a GPU code pool (CreateShader), records passes with their
+load-clears into a per-frame command buffer (BeginPass/Clear/EndPass, fence-recycled), and Present blits the
+engine's finished image onto the swapchain framebuffer (no more hardcoded teal). Verified on Ryujinx: the DKSH pack
+loads (`shaders.pack holds 13692 shaders`), CL_InitCGame reached, no GPU fault from the frame/present path. Draws
+are still skipped (GetPipeline null), so the screen shows the passes' clears, not geometry. Next: the draw path --
+pipelines bound from the DKSH shaders (vertex attrib state, UBOs at bindings 0/1, texture+sampler descriptor sets),
+so geometry renders. The `missing TECHNIQUE_DEPTH_PREPASS` spam is that unbuilt draw path, not a missing asset.
+
+**Damier (missing materials) verdict (2026-10-26):** The map-load "Could not load" flood is 3537 misses: 3233 xanim (MP animations, no
+checkerboard), 116 material, 91 image, the rest fx/rawfile/menu. Of the 116 missing materials, ~114 are MP / HUD /
+customization / code assets solo zombies references but never draws (`$..._donotremove`, `$ps3_*`, `ammo_counter_*`,
+`compass*`/`compassping_*`, `killicon*`/`headicon*`, `mtl_c_gen_facepaint_0..24`, `demo_*`, `lagometer`, ...): the
+same flood retail produces without the MP fastfiles, not a ffconv gap, and not rendered so no visible damier. The
+user confirmed the checkerboard is **only on the loading screen**, not the world or HUD -- so the real culprits are
+the loading-screen cosmetics (`loadscreen_frontend`, `menu_map_zombie_theater`), plus two genuinely-zombies
+full-screen overlays that would show during events if hit (`zombie_electric_shock_overlay`,
+`zombie_transporter_overlay`). World surfaces load fine. Fix is scoped to converting/loading those loadscreen (and
+overlay) assets, or a plain-background mitigation for the load screen -- cosmetic, lower priority than the deko3d
+draw path.
+
+**deko3d draw pipeline (2026-10-26, in progress):** Implemented the full draw path in `gb_deko3d.cpp`: `CreateShader` loads DKSH into a GPU
+code pool; `GetPipeline` builds and caches a pipeline from a `PipelineDesc` (vertex attrib state, blend/color/
+depth-stencil/rasterizer state, all translated from the contract enums); `AllocUniforms` is a per-frame bump ring
+wrapped in one Buffer; `Draw`/`DrawIndexed` bind shaders + states + vertex/index buffers + the two UBOs (vertex at
+binding 0, pixel at binding 1) + textures and issue the draw; passes bind the engine's real targets and `Present`
+blits the finished image. Textures are bound to a single placeholder image+sampler for now (geometry/lighting render;
+per-material texture descriptor sets are next). Compiles and links.
+
+Debugged on Ryujinx with the **debug deko3d lib (libdeko3dd)** -- it validates state and names problems via
+`svcOutputDebugString` (which survives an abort that loses buffered virtual-SD writes; the guest's stdout is not
+captured). Two bugs fixed: (1) sparse vertex-attribute locations left gaps at `DkVtxAttribSize` 0 (invalid) -- fill
+gaps with a valid fixed attribute; (2) **Maxwell/deko3d cannot render to the packed 16-bit colour formats**
+(`DkImageFormat_RGB565_Unorm`, a B5G6R5 1024x2048 render target here) -- `dk_image.cpp:353 "specified format does not
+support DkImageFlags_UsageRender"`; `CreateTexture` now substitutes `RGBA8_Unorm` for a render target in those
+formats. After both fixes all R_Init render targets create cleanly (BGRA8, RGBA16, Z24S8, downsampled bloom RTs).
+
+Still open: the draw path reaches R_Init material registration but does not reach `CL_InitCGame` (no assert, no
+Atmosphere fatal) -- likely a draw in an R_Init loading frame faults the GPU, so the next frame's `dkFenceWait(-1)`
+hangs. Next: give `dkFenceWait` a timeout (so a GPU hang does not freeze the app) and/or log around the first Draw/
+Present to find the faulting draw; then per-material texture descriptor sets for correct colours. Default backend
+stays GL (playable); deko3d is opt-in and in progress.
+
+**deko3d draw-fault cracked + pipeline proven end-to-end (2026-10-26):** The "hang after the first draw" was never a GPU
+fault. The engine busy-waits on `IDirect3DQuery9::GetData` for occlusion and timestamp queries (`rb_sky.cpp:128`,
+`rb_corona.cpp:552`, superflare, pixelcost: `while (hr == S_FALSE) Sleep(0)`), and the deko3d backend returned
+`CreateQuery = nullptr` / `QueryResult = false`, so `GetData` stayed `S_FALSE` forever -- the render thread spun in
+engine code the moment the world's sky/coronas drew (no backend log, no fence wait, which is how it was diagnosed:
+zero "fence wait" lines in an 18 s freeze = stuck mid-frame in the frontend, not on a GPU fence). Fix: queries now
+report *ready* (a real `Query` handle storing its type; `QueryResult` returns a nonzero occlusion count so flares read
+as visible, or `armTicksToNs` for timestamps). Not real `DkCounter`s yet -- TODO. After the fix the full game runs on
+Ryujinx: menu presents at ~23 fps (1 draw/frame), the world loads and presents continuously (~860 draws/frame,
+present index climbs with the cumulative draw counter -- confirmed candidate "many frames present", not "one frame
+stuck"); one first-world-frame fence timeout was a one-off GPU warmup on the emulator (none on reruns).
+
+The present/blit path is correct (presented image 1280x720 BGRA8, swapchain 1280x720, 1:1 blit). Verified by a
+backend framebuffer dump (`Present` copies the presented image to a buffer and writes `sdmc:/switch/bo1zm/frame.ppm`,
+since Ryujinx's GL/Vulkan surface is not host-screenshottable -- CopyFromScreen grabbed the wrong window, PrintWindow
+gave black on the GPU surface). The dump showed **pure black**. Root cause of the black screen: **`UploadTexture` is a
+no-op and every texture binding points at a single uninitialised (black) 1x1 placeholder**, so every textured sample
+is black -- including the world's final composite pass, which samples a scene RT *through* a texture binding. Proof
+the rest of the pipeline is sound: filling the placeholder **white** turned the dump **red** with a white UI bar, and
+the user watching live saw the **loading screen render correctly (white loading bar on a blue background)**. So
+depth/blend/raster/viewport/present all work; simple screens (solid-colour quads) render right, the world is a
+full-screen quad sampling the uniform-white placeholder (-> red) hiding the real scene underneath. Next (the real
+remaining renderer work): per-draw texture binding (a descriptor pool -- each `Texture`/`Sampler` gets a persistent
+descriptor id, handles via `dkMakeTextureHandle`, bound per draw with `dkCmdBufBindTextures`, un-uploaded textures
+falling back to the white placeholder) and a working `UploadTexture` (staging buffer + `dkCmdBufCopyBufferToImage`,
+block-aligned for BCn -- `MapFormat` already maps BC1/2/3). Debug scaffolding still in `gb_deko3d.cpp` (PPM dump,
+white placeholder, per-draw/present logs, 2 s fence timeout) -- remove once geometry is correct. Default backend
+stays GL (playable); deko3d is opt-in and in progress.
+
+**deko3d renders the main-menu 3D scene end to end on Ryujinx (2026-10-26).** With `launch.cfg` = `+set bo1_zombies 1`
+the game sits at the main menu, whose background is the 3D interrogation room of the `frontend` zone (no
+`zombie_theater` is loaded -- an earlier note here called this Kino; it is not). That scene now reaches the screen
+with real textures, lighting, sun/spot shadows, the depth prepass, transparent effects and the bloom/composite chain
+(captured with the backend frame dump, `frame_*.ppm`). What it took, each found by a per-pass trace of one frame
+(target, draws, first draw's state, bound textures, clears, blits -- `s_frameTrace`) and per-pass PPM captures:
+
+- **`UploadTexture`** is real: the pixels are repacked tight into a 32 MB staging block (as the GL backend does) and
+  copied with `dkCmdBufCopyBufferToImage` on a dedicated command buffer, submit + wait per upload (load is slower;
+  batch later). Its memory is added **once**: `dkCmdBufClear` keeps it (deko3d's console example adds memory once).
+- **Ryujinx DMA overrun**: an upload crashed Ryujinx with `InvalidMemoryRegionException: Not mapped:
+  va=0xFFFFFFFFFFFFFFFF` (the PTE-unmapped sentinel) in `DmaClass.DmaCopy`, a few hundred uploads in, at a point that
+  moved with timing. Its DMA copy into a block-linear image read-modify-writes a GOB-rounded destination range, which
+  for a small mip in the mip tail runs past a tightly sized memory block into an unmapped page. Every texture block now
+  has 64 KiB of slack (`kTexSlack`; ~2600 textures here, so ~160 MB -- trim once measured, it is for Ryujinx).
+- **Descriptor pools**: each texture and sampler gets a persistent descriptor id at creation; a draw binds handles from
+  them (`dkMakeTextureHandle`). A render target's descriptor points at its own image (post passes sample it); a sampled
+  texture points at a white 1x1 placeholder until its first upload, then at its image.
+- **Formats**: sampled BGRA8/BGRX8 textures are stored as `DkImageFormat_BGRA8/BGRX8_Unorm` (D3D's byte order; render
+  targets stay RGBA8). `TextureDesc::swizzle` is applied in the image view (L8 -> RRR1, A8 -> 000R, A8L8 -> RRRG, depth
+  -> RRRR, as GL's `GL_TEXTURE_SWIZZLE_RGBA`); without it luminance textures read (L,0,0) and the scene had a red cast.
+- **Caches**: each frame starts with an Image + Descriptors + Shader + L2 invalidate (descriptors are rewritten by the
+  CPU, the uniform ring and dynamic buffers are rewritten), uploads invalidate L2 before copying from the reused
+  staging block, and `EndPass` invalidates the image cache (a later pass samples what this one rendered), as deko3d's
+  deferred-shading example does before reading its G-buffer.
+- **`Clear`** honours its rects (each becomes the scissor) and every colour target of the pass; a pass's own size, not
+  the swapchain's, sets its load-clear viewport. **Scissor**: with the pipeline's scissor test off (`RasterState::
+  scissor`), the draw scissor covers the pass -- deko3d always scissors, and the frontend fills the rect from D3D9's
+  scissor rect regardless, as GL ignores it then.
+- **`Blit` (D3D9 StretchRect)** was a no-op: the engine resolves the scene (colour and depth) into the textures its
+  post passes sample, 8 blits a frame, so every post pass read an empty texture and the frame came out black although
+  the lit pass held the full scene. Now `dkCmdBufCopyImage` (depth, or equal size and format) or `dkCmdBufBlitImage`
+  (scaling / conversion), recorded in order with full barriers around it.
+- **Buffer renaming**: a frame is recorded whole and submitted at `Present`, so `UploadBuffer`'s in-place `memcpy`
+  let later uploads overwrite data earlier draws of the same frame still needed. The engine's dynamic tess ring (1 MB,
+  NOOVERWRITE appends) wraps ~3 times a frame with DISCARD, and everything drawn before the last wrap read the wrong
+  vertices -- large stretched orange triangles across the screen. Each buffer now has a small pool of stores: a draw
+  marks the current store read by this frame (frame serials, `s_frameSerial` / `s_completedSerial`), and Discard or
+  Ordered on a store recorded or running work reads switches to a free store (Ordered copies the old contents first);
+  NoOverwrite writes in place. ~2-4 renames a frame here. Destroyed buffers and textures free their memory once the
+  GPU is past the frame (`s_pendingFree`, drained after BeginFrame's fence wait or by `WaitIdle`), as the contract asks.
+
+Still open then: the menu's 2D UI (6 draws in the last pass: text and images over the scene) did not show although
+its draws ran with their data in the right store and a full scissor (the loading screen's 2D did show) -- solved
+below: an engine bug, not the backend. Not done yet: depth bias (`RasterState::depthBias`), the packed 16-bit formats' channel order, `ReadTexture`,
+real occlusion/timestamp queries, batched uploads. Debug scaffolding to remove before shipping: frame dumps, the
+one-frame trace, per-upload logs, the 2 s fence timeout. Default backend stays GL.
+
+**deko3d runs Kino der Toten in game, HUD included, on Ryujinx (2026-10-26).** With `launch.cfg` = `+set bo1_zombies 1
++devmap zombie_theater` the theater lobby, its staircase and banners, the lighting, the post-processing chain, the
+zombies (glowing eyes) and the M1911 viewmodel reach the screen at ~10.8 fps on Ryujinx (~3300 draws a frame), with no
+crash in 5 minutes. Frames are checked against the win64 D3D9 reference (`x64_kino_20s.jpg`: crosshair, score brush at
+the bottom right, round tally at the bottom left). Found on the way:
+
+- **The invisible UI was an engine bug** (affecting GL too): `Byte4PackVertexColor` packed every UI/HUD vertex colour
+  with alpha 0, because devkitA64 GCC exploited an out-of-bounds byte read of the decompiled shuffle. Fixed with
+  `Float4Byte` (decision row of 2026-10-26). The trace of the last pass's raw vertices (`ff790100` for the score
+  brush) is how it was read.
+- **Text 256 scaled pixels too low**: `char` is unsigned on AArch64 and `Glyph::y0` is a negative `char`; the build now
+  passes `-fsigned-char` (decision row). After it, the score `500` sits on its brush and the round tally shows.
+- **Ryujinx swaps red and blue in D3DCOLOR vertex colours**: `UByte4NBGRA` maps to `DkVtxAttribState::isBgra`, which
+  libdeko3d copies unchanged into the Maxwell vertex-attribute register (bit 31, the bit nouveau sets for B8G8R8A8
+  vertex formats). Ryujinx 1.1.1375 ignores that bit: its `VertexAttribState` only unpacks the buffer index, constant
+  flag, offset and format (`UnpackBufferIndex`/`UnpackIsConstant`/`UnpackOffset`/`UnpackFormat`, no BGRA accessor in
+  `Ryujinx.exe`). So on the emulator the red score brush, the round tally and the zombies' eye glow come out blue. The
+  backend is kept as the hardware expects it; **to confirm on the console**.
+- **Depth bias** is implemented: a biased pipeline sets `depthBiasEnableMask` and each of its draws records
+  `dkCmdBufSetDepthBias(depthBias × 2^24 (2^16 for D16), 0, slopeScaledDepthBias)`, the units of GL's
+  `glPolygonOffset` (libdeko3d doubles the constant factor, as nouveau does for GL's units: `fadd s8, s8, s8` in
+  `dkCmdBufSetDepthBias`).
+- **SD writes fail on Ryujinx once a map is loaded**: every write returns EIO (errno 5), the engine's own `boot.log`
+  stops there too. The backend's frame dumps therefore go out through `svcOutputDebugString` as hex lines
+  (`IMG WxH label` / `IMGD` / `IMGEND`, the frame 4× downscaled plus the two bottom corners at full resolution) and are
+  rebuilt into PPMs on the PC. The GL runs on the console had in-map `boot.log` lines, so this looks emulator-only.
+
+- **Loading screens and the main menu**: with the `$levelbriefing` fix (decision row of 2026-10-26) the Kino load
+  shows its artwork and the boot load a black background under the tips box; the main menu ("Press Any Key", the
+  title art, the copyright line) renders whole on deko3d.
+
+Open: the ammo counter and the weapon d-pad icon at the bottom right, which the win64 reference draws (`8 / 24` at
+55 s), do not show on deko3d; the materials they need are missing on win64 too, so that is not the cause (not
+investigated further yet). Not done yet: the packed 16-bit formats' channel order (B5G6R5 is used, as shadow-pass
+colour targets and one sampled 512x2048 texture), `ReadTexture`, real occlusion/timestamp queries, batched uploads,
+descriptor-id reuse (the pools leak ids of destroyed textures), trimming `kTexSlack` (a Ryujinx need). Debug
+scaffolding to remove before shipping: the timed frame dumps and the one-frame trace (they only run when
+`sdmc:/switch/bo1zm/deko3d_debug` exists, so the console build skips them), per-upload logs, the 2 s fence timeout.
+Default backend stays GL; `gfx.cfg` = `deko3d` selects deko3d.
+
+**First console run of deko3d: the process dies right after init (2026-10-26, NRO `e402e66b`).** The user's
+`boot.log` (menu launch, `gfx.cfg` = `deko3d`) matches the Ryujinx one of the same NRO line for line, numbers masked,
+up to `--- Common Initialization Complete ---`, and stops there. On Ryujinx the next line is `Loaded fastfile
+'patch_mp'`, about 5 s later, while the render thread draws the first menu frames: the console dies within those.
+No Atmosphère crash report yet. What the log could not show, and what changed to show it:
+
+- **None of the backend's lines reached the SD.** The engine opens `boot.log` once and keeps the handle; the console's
+  FS gives a file one write handle at a time, so the backend's per-line `fopen("ab")` failed from the engine's first
+  print on. Ryujinx behaves the same: 1 `[gb-deko3d]` line in its SD log, 13 663 on `svcOutputDebugString`. Every
+  writer now goes through one process-wide `Switch_BootLogWrite` (`switch_main.cpp`: one `FILE *`, a mutex, `fflush`
+  per write), used by `BootLog`, the engine's `Switch_DebugLog` (`win_main.cpp`, `#if __SWITCH__`) and the backend.
+  Checked on Ryujinx: 270 backend lines in the SD log of a menu run.
+- **The build stamp lied**: `built Oct 26 2026 06:57:49` was `switch_main.cpp`'s `__DATE__`, for an NRO linked at
+  08:05:48. The packaging step now writes the link time to `romfs:/build.txt` (`CMakeLists.txt`) and the first lines
+  log it (`build 2026-10-26 12:38:04 +0100`).
+- **Memory figures**: `device up`, `swapchain` and the `Present` lines log the heap in use (`mallinfo`; deko3d allocates
+  its blocks there) and the live `DkMemBlock`s. On Ryujinx: heap 401 MB at device creation, 990 MB at the first
+  Present, 1193 MB on the menu after 82 s; **1384 live blocks at the first Present, 2860 (437 MB) on the menu, 11 210
+  (636 MB) in Kino**. A failed `dkMemBlockCreate` is logged with those counts. Each block is an nvmap handle and a GPU
+  mapping that nvservices books in the 8 MiB of transfer memory libnx gives it (`__nx_nv_transfermem_size` =
+  `0x00800000` in the ELF), a limit Ryujinx does not emulate: one block per texture and per buffer store is the
+  leading suspect, not a proven cause (texture creation already returns null on a failed block, and the engine logged
+  no error).
+- **A GPU fault would hang silently**: each texture upload ended in `dkQueueWaitIdle`, which never returns once the
+  queue faults, and the loader thread holds the frontend lock meanwhile. Uploads and `WaitIdle` now wait on a fence in
+  2 s steps (`WaitQueue`), log each step with `dkQueueIsInErrorState`, and give up only on a faulted queue. Gotcha met
+  on the way: `dkQueueSignalFence`'s `flush` flushes the GPU caches and does not submit; without a `dkQueueFlush` the
+  first version timed out on every upload with an idle GPU. With the flush, Kino loads and plays on Ryujinx (2544
+  frames in 184 s, no stall logged).
+
+Also seen, not known to be linked to the crash: with `SDL_VIDEODRIVER=dummy` nothing calls `appletMainLoop()` (only
+SDL's Switch video driver does, `SDL_switchvideo.o`), so on the deko3d path the applet messages (HOME, exit requests)
+go unserviced; and the posix window layer ignores `SDL_QUIT`, so a console exit request reaches the engine on neither
+backend. Next: the console
+`boot.log` and crash report of the diagnostic NRO (`ff02e8a5`, build 12:38:04); then, whatever they show, suballocate
+textures and buffer stores from large blocks instead of one block each.
