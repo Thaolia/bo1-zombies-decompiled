@@ -76,6 +76,19 @@ const dvar_s *aim_scale_view_axis;
 const dvar_s *aim_assist_script_disable;
 const dvar_s *aim_assist_min_target_distance;
 
+// mod: the retail PC build hard-wires the aim assist off (AimAssist_PlayerDisabledAutoAim always says the player turned
+// it off, which blocks slowdown and lock-on). bo1_aimassist 1 lets it run with a game pad: on by default on the
+// Switch, off on PC so the reference build keeps retail's behaviour unless asked (+set bo1_aimassist 1).
+const dvar_s *bo1_aimassist;
+#if defined(__SWITCH__)
+constexpr bool kAimAssistDefault = true;
+#else
+constexpr bool kAimAssistDefault = false;
+#endif
+// The three aim-assist switches are player settings (+set in launch.cfg or the config): not cheat-protected (retail
+// 0x80, refused and reset without sv_cheats) and not reset when a game starts (retail 0x1000, G_InitGame's
+// Dvar_ResetDvars), which wiped a launch-time `+set aim_lockon_enabled 1` at every map load.
+constexpr unsigned __int16 kAimSwitchFlags = 0;
 
 void __cdecl AimAssist_Init(int localClientNum)
 {
@@ -118,6 +131,9 @@ void AimAssist_UpdateMeleeRangeDefault()
 void AimAssist_RegisterDvars()
 {
     const dvar_s *result; // eax
+
+    bo1_aimassist = _Dvar_RegisterBool("bo1_aimassist", kAimAssistDefault, 0,
+                                       "mod: game pad aim assist (slowdown, lock-on), off in the retail PC build");
 
     aim_aimAssistRangeScale = _Dvar_RegisterFloat(
                                                             "aim_aimAssistRangeScale",
@@ -188,7 +204,7 @@ void AimAssist_RegisterDvars()
     aim_slowdown_enabled = _Dvar_RegisterBool(
                                                      "aim_slowdown_enabled",
                                                      1,
-                                                     0x1080u,
+                                                     kAimSwitchFlags,
                                                      "Slowdown the turn rate when the cross hair passes over a target");
     aim_slowdown_debug = _Dvar_RegisterBool("aim_slowdown_debug", 0, 0x1080u, "Turn on debugging info for aim slowdown");
     aim_slowdown_region_width = _Dvar_RegisterFloat(
@@ -254,7 +270,7 @@ void AimAssist_RegisterDvars()
                                              100.0,
                                              0x1080u,
                                              "The rate in degrees per second that the auto aim will converge to its target");
-    aim_autoaim_enabled = _Dvar_RegisterBool("aim_autoaim_enabled", 0, 0x1080u, "Turn on auto aim");
+    aim_autoaim_enabled = _Dvar_RegisterBool("aim_autoaim_enabled", 0, kAimSwitchFlags, "Turn on auto aim");
     aim_autoaim_debug = _Dvar_RegisterBool("aim_autoaim_debug", 0, 0x1080u, "Turn on auto aim debugging");
     aim_autoaim_region_width = _Dvar_RegisterFloat(
                                                              "aim_autoaim_region_width",
@@ -311,7 +327,7 @@ void AimAssist_RegisterDvars()
     aim_lockon_enabled = _Dvar_RegisterBool(
                                                  "aim_lockon_enabled",
                                                  0,
-                                                 0x1080u,
+                                                 kAimSwitchFlags,
                                                  "Aim lock on helps the player to stay on target");
     aim_lockon_debug = _Dvar_RegisterBool("aim_lockon_debug", 0, 0x1080u, "Turn on debugging info for aim lock on");
     aim_lockon_deflection = _Dvar_RegisterFloat(
@@ -517,8 +533,8 @@ centity_s *__cdecl CG_GetEntity(int localClientNum, int entityIndex)
 
 char __cdecl AimAssist_PlayerDisabledAutoAim()
 {
-    Demo_IsPlaying();
-    return 1;
+    // Retail: `Demo_IsPlaying(); return 1;`. A demo replays recorded angles, so it keeps the assist off.
+    return Demo_IsPlaying() || !bo1_aimassist || !bo1_aimassist->current.enabled;
 }
 
 void __cdecl AimAssist_UpdateScreenTargets(
