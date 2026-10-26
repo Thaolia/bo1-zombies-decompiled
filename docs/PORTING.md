@@ -1162,11 +1162,9 @@ No Atmosphère crash report yet. What the log could not show, and what changed t
 - **Memory figures**: `device up`, `swapchain` and the `Present` lines log the heap in use (`mallinfo`; deko3d allocates
   its blocks there) and the live `DkMemBlock`s. On Ryujinx: heap 401 MB at device creation, 990 MB at the first
   Present, 1193 MB on the menu after 82 s; **1384 live blocks at the first Present, 2860 (437 MB) on the menu, 11 210
-  (636 MB) in Kino**. A failed `dkMemBlockCreate` is logged with those counts. Each block is an nvmap handle and a GPU
-  mapping that nvservices books in the 8 MiB of transfer memory libnx gives it (`__nx_nv_transfermem_size` =
-  `0x00800000` in the ELF), a limit Ryujinx does not emulate: one block per texture and per buffer store is the
-  leading suspect, not a proven cause (texture creation already returns null on a failed block, and the engine logged
-  no error).
+  (636 MB) in Kino**. Each block is an nvmap handle and a GPU mapping that nvservices books in the 8 MiB of transfer
+  memory libnx gives it (`__nx_nv_transfermem_size` = `0x00800000` in the ELF), a limit Ryujinx does not emulate.
+  A failed `dkMemBlockCreate` never returns null in the release library: it aborts (below).
 - **A GPU fault would hang silently**: each texture upload ended in `dkQueueWaitIdle`, which never returns once the
   queue faults, and the loader thread holds the frontend lock meanwhile. Uploads and `WaitIdle` now wait on a fence in
   2 s steps (`WaitQueue`), log each step with `dkQueueIsInErrorState`, and give up only on a faulted queue. Gotcha met
@@ -1177,6 +1175,31 @@ No Atmosphère crash report yet. What the log could not show, and what changed t
 Also seen, not known to be linked to the crash: with `SDL_VIDEODRIVER=dummy` nothing calls `appletMainLoop()` (only
 SDL's Switch video driver does, `SDL_switchvideo.o`), so on the deko3d path the applet messages (HOME, exit requests)
 go unserviced; and the posix window layer ignores `SDL_QUIT`, so a console exit request reaches the engine on neither
-backend. Next: the console
-`boot.log` and crash report of the diagnostic NRO (`ff02e8a5`, build 12:38:04); then, whatever they show, suballocate
-textures and buffer stores from large blocks instead of one block each.
+backend. The console run of the diagnostic NRO came next.
+
+**Second console run (NRO `ff02e8a5`, build 12:38:04): the first frame is presented, then the process dies.** The
+backend's lines now reach the SD, and they match the Ryujinx run of the same NRO line for line: the same 2000+
+uploads, the same render targets, `GetPipeline #0`, the loading screen's pass and its one draw, then `Present #0` (1332
+live blocks, 296 MB; heap 970.5 MB). On Ryujinx `BeginPass #2` and `Present #1` follow; on the console the log ends.
+No 2 s GPU-wait line, no failed block: a fast death, not a hang.
+
+Why nothing is logged: **the release `libdeko3d.a` never calls `cbDebug`** (only `libdeko3dd` does). Every error goes
+to `dk::detail::RaiseError(DkResult)`, which is `diagAbortWithResult(MAKERESULT(359, result))`: an immediate
+`svcBreak`, error `2359-<DkResult>` on screen. Its callers (relocations in the archive): `dkMemBlockCreate` and
+`Device::allocMem`, `CmdBuf::requestCmdMem`, `dkQueueSubmitCommands`, `Queue::flush` (which also aborts once
+`Queue::checkError` has seen a GPU channel error notification, the queue's state 2), `Queue::waitFence`,
+`dkQueueAcquireImage`/`dkQueuePresentImage`/`Swapchain::acquireImage`/`presentImage`, `dkSwapchainCreate`. Right after
+the `Present #0` line the frame calls `dkQueueAcquireImage`, the blit, `dkQueueSubmitCommands` and
+`dkQueuePresentImage`; the next frame flushes the queue again. So the console run died in one of those or on the
+first flush after a GPU fault of frame 0.
+
+`diagAbortWithResult` is weak in libnx, so `switch_main.cpp` now defines it: it writes `*** abort: result 0x..
+(module 359, description N), frames: ...` (the frame-record chain as ELF offsets) to `boot.log` and to
+`svcOutputDebugString`, then breaks as libnx does. Checked on Ryujinx with a temporary 4 GB `MakeBlock` at the 100th
+Present: `result 0x767 (module 359, description 3)` (`DkResult_OutOfMemory`) and 10 frames that `addr2line` turns into
+`RaiseError` < `Device::allocMem` < `MemBlock::initialize` < `dkMemBlockCreate` < `MakeBlock` < `Present` <
+`d3d9emu::Device::PresentFrame` < `RB_SwapBuffers` < `RB_EndFrame` < `R_IssueRenderCommands`, the same as Ryujinx's own
+guest stack trace. (Ryujinx itself dies on the break and drops its unflushed SD writes, hence the debug-string copy; the
+console kept every line written before its abort.) Next: the console run of that NRO (`c2e15a43`, build 12:55:23); its
+abort line names the failing call. Whatever it is, textures and buffer stores should come from large suballocated
+blocks instead of one block each.

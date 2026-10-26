@@ -161,6 +161,34 @@ extern "C" void Switch_BootLogWrite(const char *text)
     }
 }
 
+extern "C" char _start[]; // libnx's crt0 entry, the module's first byte: ELF address 0
+
+// libnx's diagAbortWithResult is weak; this one logs, then breaks as libnx's does. The release libdeko3d aborts
+// through it on any error (its RaiseError: a failed block allocation, a swapchain acquire or present that fails, a
+// queue flushed after a GPU fault), so without it the console's log just stops. The frames are the return addresses
+// of the frame-record chain as ELF offsets (addr2line on the .elf, minus 4 for the call).
+extern "C" NX_NORETURN void diagAbortWithResult(Result res)
+{
+    char line[512];
+    int n = std::snprintf(line, sizeof(line), "*** abort: result 0x%x (module %u, description %u), frames:", res,
+                          unsigned(R_MODULE(res)), unsigned(R_DESCRIPTION(res)));
+    const uintptr_t base = reinterpret_cast<uintptr_t>(_start);
+    const uintptr_t *fp = static_cast<const uintptr_t *>(__builtin_frame_address(0));
+    for (int i = 0; i < 10 && fp && !(reinterpret_cast<uintptr_t>(fp) & 15) && n < int(sizeof(line)) - 24; ++i)
+    {
+        n += std::snprintf(line + n, sizeof(line) - n, " 0x%lx", static_cast<unsigned long>(fp[1] - base));
+        const uintptr_t *next = reinterpret_cast<const uintptr_t *>(fp[0]);
+        if (next <= fp || reinterpret_cast<uintptr_t>(next) - reinterpret_cast<uintptr_t>(fp) > (1u << 20))
+            break;
+        fp = next;
+    }
+    std::snprintf(line + n, sizeof(line) - n, "\n");
+    Switch_BootLogWrite(line);
+    svcOutputDebugString(line, std::strlen(line)); // an emulator dies on the break and loses its unflushed SD writes
+    svcBreak(BreakReason_Panic, reinterpret_cast<uintptr_t>(&res), sizeof(res));
+    __builtin_unreachable();
+}
+
 int main(int, char **)
 {
     // Make the data dir so even a first boot on a fresh SD can leave its log (EEXIST is fine).
