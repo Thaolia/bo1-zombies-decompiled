@@ -189,6 +189,37 @@ extern "C" NX_NORETURN void diagAbortWithResult(Result res)
     __builtin_unreachable();
 }
 
+namespace
+{
+bool s_psmTried = false, s_psmUp = false;
+} // namespace
+
+// The battery charge for the on-screen counter (cl_scrn_mp.cpp), or -1 without the psm service. Each query is an IPC
+// call, so the value is refreshed every 5 s rather than every frame.
+extern "C" int Switch_BatteryPercent()
+{
+    static int percent = -1;
+    static u64 lastTick = 0;
+    if (!s_psmTried)
+    {
+        s_psmTried = true;
+        const Result rc = psmInitialize();
+        s_psmUp = R_SUCCEEDED(rc);
+        BootLog("psmInitialize -> 0x%x", rc);
+    }
+    if (!s_psmUp)
+        return -1;
+    const u64 now = armGetSystemTick();
+    if (percent < 0 || armTicksToNs(now - lastTick) >= 5000000000ull)
+    {
+        u32 charge = 0;
+        if (R_SUCCEEDED(psmGetBatteryChargePercentage(&charge)))
+            percent = int(charge);
+        lastTick = now;
+    }
+    return percent;
+}
+
 int main(int, char **)
 {
     // Make the data dir so even a first boot on a fresh SD can leave its log (EEXIST is fine).
@@ -269,6 +300,8 @@ int main(int, char **)
     const int rc = WinMain(GetModuleHandleA(nullptr), nullptr, args, 10 /* SW_SHOWDEFAULT */);
     BootLog("WinMain returned %d", rc);
 
+    if (s_psmUp)
+        psmExit();
     if (R_SUCCEEDED(rrc))
         romfsExit();
     return rc;

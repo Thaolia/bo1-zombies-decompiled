@@ -70,8 +70,13 @@ void __cdecl SCR_Init()
     scr_initialized = 1;
 }
 
+#if defined(__SWITCH__)
+extern "C" int Switch_BatteryPercent(); // switch_main.cpp; -1 without the psm service
+#endif
+
 // mod: bo1_fpscounter 1 draws a small FPS number at the top left (like Steam's overlay counter), in the console
 // font, which every map loads. Off by default; not in the retail exe. Averages real frame times over 500 ms.
+// On the Switch it is on by default and shows the battery level too, at the top right in fluorescent green.
 static void CL_DrawModFpsCounter()
 {
     static const dvar_t *bo1_fpscounter;
@@ -79,7 +84,11 @@ static void CL_DrawModFpsCounter()
     static int windowFrames;
     static int shownFps;
     if (!bo1_fpscounter)
+#if defined(__SWITCH__)
+        bo1_fpscounter = _Dvar_RegisterBool("bo1_fpscounter", 1, 0, "mod: FPS counter and battery level at the top right");
+#else
         bo1_fpscounter = _Dvar_RegisterBool("bo1_fpscounter", 0, 0, "mod: small FPS counter at the top left");
+#endif
     if (!bo1_fpscounter->current.enabled || !cls.consoleFont)
         return;
     const unsigned int now = Sys_Milliseconds();
@@ -95,9 +104,21 @@ static void CL_DrawModFpsCounter()
         windowStart = now;
         windowFrames = 0;
     }
+#if defined(__SWITCH__)
+    static const float fpsColor[4] = { 0.22f, 1.0f, 0.08f, 1.0f };
+    const int battery = Switch_BatteryPercent();
+    char *text = battery >= 0 ? va("%i FPS  %i%%", shownFps, battery) : va("%i FPS", shownFps);
+    const float h = (float)R_TextHeight(cls.consoleFont);
+    const float x = (float)cls.vidConfig.displayWidth - (float)R_TextWidth(text, 0, cls.consoleFont) - 6.0f;
+    // Twice over: the small console font's strokes are mostly antialiased edge texels, which leave the green at half
+    // strength; a second pass takes their coverage from 1/2 to 3/4.
+    for (int pass = 0; pass < 2; ++pass)
+        R_AddCmdDrawText(text, 0x7FFFFFFF, cls.consoleFont, x, 4.0f + h, 1.0f, 1.0f, 0.0f, fpsColor, 3);
+#else
     static const float fpsColor[4] = { 0.95f, 0.9f, 0.2f, 1.0f };
     const float h = (float)R_TextHeight(cls.consoleFont);
     R_AddCmdDrawText(va("%i", shownFps), 0x7FFFFFFF, cls.consoleFont, 6.0f, 4.0f + h, 1.0f, 1.0f, 0.0f, fpsColor, 3);
+#endif
 }
 
 void __cdecl CL_DrawScreen(int localClientNum)

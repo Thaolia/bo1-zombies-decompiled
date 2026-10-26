@@ -1441,3 +1441,12 @@ code copy, no 255-register header, one world trace at 100 s with `deko3d_debug`)
 DKSH, vertex shaders included, and the `attribute gap` check stays. Cost not measured yet: the log has no frame-rate
 line. Next: an on-screen frame rate and battery level (asked by the user), measure the cost of the rescheduling, then
 re-enable Zcull and measure (it is still off from the investigation).
+
+**On-screen frame rate and battery (asked by the user).** On the Switch, the `bo1_fpscounter` mod counter
+(`cl_scrn_mp.cpp`, averaged over 500 ms) is on by default and draws `<fps> FPS  <battery>%` at the top right in
+fluorescent green (0.22, 1, 0.08), in the console font, over game and menus alike; PC keeps the mod's top-left yellow
+counter, off by default (`codediff` identical). The text is drawn twice: the small font's strokes are mostly
+antialiased edge texels, which left the green at half strength (measured (8, 128, 24) in a capture) and now reach 3/4
+((8, 160, 32) to (16, 208, 40)). The battery comes from `Switch_BatteryPercent` (`switch_main.cpp`): `psmInitialize`
+at the first call (logged), the charge re-read every 5 s (an IPC call), `psmExit` after `WinMain`. The `deko3d_debug`
+frame dumps add a full-resolution top-right crop. Checked on Ryujinx: `51 FPS  100%` at the top right.
