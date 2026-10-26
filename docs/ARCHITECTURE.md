@@ -265,3 +265,20 @@ time.
 ## Runtime data on the Switch
 `sdmc:/switch/bo1zm/`: converted `zone/` from `ffconv`, `main/*.iwd` from the user's install, and the shader
 cache. The app must run in application mode (title takeover). Applet mode only gives about 400 MB.
+
+## Client of a remote server (phase 8)
+
+The zombies game is a listen server: the menu itself runs a local server (`frontend`), and a map normally loads in
+the same process as its client, which then reads the server's state directly (actor animtrees, `zombiemode`, script
+handles). A client of a remote dedicated server has none of that, so three paths differ when `com_sv_running` is 0:
+
+- `CL_Connect_f` kills the menu's local server first: while one runs, `Com_ServerPacketEvent` gives every UDP packet
+  to it, and the remote server's replies never reach the client.
+- `CL_ParseGamestate` sets `zombiemode` & co. from the gamestate's map name (`Com_SetGameModeDvarsForMap`) before the
+  baselines, which the server encoded with the zombies netfield tables.
+- `CGScr_LoadScriptsAndAnims` compiles, for an SP level, the same server scripts as the server's `GScr_LoadScripts`
+  and in the same order (`GScr_SP_LoadScripts(inst, compileOnly = true)`), so that the snapshot animtree indices
+  resolve, and finds the actors' `generic_human` tree for `G_SP_GetActorAnims`. `compileOnly` keeps no handles and
+  writes no hunk file data.
+
+Status and the server's own layers (bind, curses console, admin commands, logs): `docs/PORTING.md`, phase 8.

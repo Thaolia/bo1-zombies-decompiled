@@ -273,15 +273,39 @@ static void *__cdecl GScr_SP_HunkNameAlloc(int size)
 // GScr_SetScriptsForPathNode and the pathnode loader read. The human/dog branch (non-zombiemode
 // "dog"/"hound" aitypes load the dog animscripts) and the misc_turret / misc_mg42 branch (the turret
 // weapon's animscript) are not ported: Five has neither.
-static void GScr_SP_LoadEntityScripts(scriptInstance_t inst)
+// compileOnly: the client of a remote server compiles these scripts only so that its animtree indices match the
+// server's (CGScr_LoadScriptsAndAnims). It keeps no handles and leaves the hunk's file data alone: that table belongs
+// to a local server, and entries made in the client's low hunk outlive it (Hunk_Clear then walks freed memory).
+struct GScr_SP_SeenNames
+{
+    char names[256][64];
+    int count;
+
+    // true the first time a name is seen; past the table's size every name counts as new (a recompile, not a skip)
+    bool FirstSeen(const char *name)
+    {
+        for ( int i = 0; i < count; ++i )
+            if ( !strcmp(names[i], name) )
+                return false;
+        if ( count < (int)ARRAY_COUNT(names) )
+            I_strncpyz(names[count++], name, sizeof(names[0]));
+        return true;
+    }
+};
+
+static void GScr_SP_LoadEntityScripts(scriptInstance_t inst, bool compileOnly)
 {
     static SpawnVar spawnVar;
+    static GScr_SP_SeenNames seenAITypes;
+    static GScr_SP_SeenNames seenAnimscripts;
     const char *classname;
     const char *animscript;
     char filename[64];
     AITypeScript *typeScript;
     int func;
 
+    seenAITypes.count = 0;
+    seenAnimscripts.count = 0;
     while ( G_ParseSpawnVars(&spawnVar) )
     {
         G_SpawnString(&spawnVar, "classname", "", &classname);
@@ -289,10 +313,20 @@ static void GScr_SP_LoadEntityScripts(scriptInstance_t inst)
         {
             const char *aitype = classname + 6;
 
+            Com_sprintf(filename, sizeof(filename), "aitype/%s", aitype);
+            if ( compileOnly )
+            {
+                if ( seenAITypes.FirstSeen(aitype) )
+                {
+                    GScr_LoadScriptAndLabel(inst, filename, "main", 1);
+                    GScr_LoadScriptAndLabel(inst, filename, "precache", 1);
+                    GScr_LoadScriptAndLabel(inst, filename, "spawner", 1);
+                }
+                continue;
+            }
             if ( Hunk_FindDataForFile(0, aitype) )
                 continue;
             typeScript = (AITypeScript *)Hunk_AllocLow(sizeof(AITypeScript), "GScr_SP_LoadEntityScripts", 5);
-            Com_sprintf(filename, sizeof(filename), "aitype/%s", aitype);
             typeScript->main = GScr_LoadScriptAndLabel(inst, filename, "main", 1);
             typeScript->precache = GScr_LoadScriptAndLabel(inst, filename, "precache", 1);
             typeScript->spawner = GScr_LoadScriptAndLabel(inst, filename, "spawner", 1);
@@ -301,9 +335,17 @@ static void GScr_SP_LoadEntityScripts(scriptInstance_t inst)
         else if ( !I_stricmp(classname, "node_negotiation_begin") )
         {
             G_SpawnString(&spawnVar, "animscript", "", &animscript);
-            if ( !*animscript || Hunk_FindDataForFile(1, animscript) )
+            if ( !*animscript )
                 continue;
             Com_sprintf(filename, sizeof(filename), "animscripts/traverse/%s", animscript);
+            if ( compileOnly )
+            {
+                if ( seenAnimscripts.FirstSeen(animscript) )
+                    GScr_LoadScriptAndLabel(inst, filename, "main", 1);
+                continue;
+            }
+            if ( Hunk_FindDataForFile(1, animscript) )
+                continue;
             func = GScr_LoadScriptAndLabel(inst, filename, "main", 1);
             Hunk_SetDataForFile(1, animscript, (void *)(intptr_t)func, GScr_SP_HunkNameAlloc);
         }
@@ -316,7 +358,7 @@ static void GScr_SP_LoadEntityScripts(scriptInstance_t inst)
 }
 
 // zombies: GScr_LoadScripts, SP 0x00580370, after codescripts/delete and codescripts/struct.
-void GScr_SP_LoadScripts(scriptInstance_t inst)
+void GScr_SP_LoadScripts(scriptInstance_t inst, bool compileOnly)
 {
     char filename[64];
     const char *mapname;
@@ -366,7 +408,7 @@ void GScr_SP_LoadScripts(scriptInstance_t inst)
         }
     }
 
-    GScr_SP_LoadEntityScripts(inst);
+    GScr_SP_LoadEntityScripts(inst, compileOnly);
 }
 
 // zombies: SP 0x0049CC70, first loop. Runs in G_InitGame after Path_InitPaths, before the actors'

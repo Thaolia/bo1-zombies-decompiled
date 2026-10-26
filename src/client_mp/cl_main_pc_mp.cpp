@@ -365,8 +365,10 @@ void __cdecl CL_Connect_f()
         clc = CL_GetLocalClientConnection(0);
         clc->serverMessage[0] = 0;
         server = Cmd_Argv(1);
-        if ( !strcmp(server, "localhost") )
-            SV_KillLocalServer();
+        // zombies: the main menu runs a local listen server (frontend), and while it runs Com_ServerPacketEvent hands
+        // every UDP packet to SV_PacketEvent, which drops the remote server's challengeResponse. Kill it for any
+        // address, as the party connect path above does.
+        SV_KillLocalServer();
         cl_serverLoadingMap = 0;
         g_waitingForServer = 0;
         FS_DisablePureCheck(0);

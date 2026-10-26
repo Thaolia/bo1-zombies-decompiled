@@ -38,8 +38,9 @@ void G_SP_RegisterLevelDvars();
 void G_SP_UpdateSkillDvars();
 
 // GScr_LoadScripts, SP 0x00580370, from GScr_LoadConsts on (the codescripts/delete and
-// codescripts/struct handles are loaded by the caller exactly as in MP).
-void GScr_SP_LoadScripts(scriptInstance_t inst);
+// codescripts/struct handles are loaded by the caller exactly as in MP). compileOnly: a remote server's client
+// compiling the same scripts for its animtree indices only (no aitype / traverse hunk data).
+void GScr_SP_LoadScripts(scriptInstance_t inst, bool compileOnly = false);
 
 // SP 0x0049CC70, first loop: for every actor / actor spawner entity, run its aitype's `spawner`
 // function on spawners and each aitype's `precache` function once.

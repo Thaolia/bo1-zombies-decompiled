@@ -385,7 +385,7 @@ void __cdecl Hunk_AddData(int type, void *data, void *(__cdecl *alloc)(int))
     {
         __debugbreak();
     }
-    fileData = (fileData_s *)alloc(9);
+    fileData = (fileData_s *)alloc(offsetof(fileData_s, name)); // 64-bit: was the 32-bit literal 9
     if ( !Hunk_DataOnHunk((unsigned __int8 *)fileData)
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\universal\\com_memory.cpp",

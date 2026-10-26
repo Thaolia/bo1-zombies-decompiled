@@ -387,6 +387,10 @@ void __cdecl CL_ParseGamestate(int localClientNum, msg_t *msg)
     clc->serverCommandSequence = MSG_ReadLong(msg);
     MSG_ReadString(msg, mapname, 0x20u);
     MSG_ReadString(msg, gametype, 0x20u);
+    // zombies: the baselines below use the zombiemode netfield tables; a listen server's client already has the
+    // level's zombiemode, a remote server's client only gets it from Com_LoadLevelFastFiles after this gamestate.
+    if ( !com_sv_running->current.enabled )
+        Com_SetGameModeDvarsForMap(mapname);
     serverConfigStringChecksum = MSG_ReadLong(msg);
     party = 1;
     if ( CCS_ShouldLoadConstConfigStrings(1) )

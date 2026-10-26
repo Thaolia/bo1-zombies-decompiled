@@ -76,7 +76,7 @@ void __cdecl UI_ScreenshotDecompressCallback(void *data)
     int hr; // [esp+Ch] [ebp-10h]
     _D3DLOCKED_RECT rect; // [esp+14h] [ebp-8h] BYREF
 
-    s_image = (GfxImage *)Z_VirtualAlloc(52, "TempImage", 23);
+    s_image = (GfxImage *)Z_VirtualAlloc(sizeof(GfxImage), "TempImage", 23); // 64-bit: was the 32-bit literal 52
     Image_Create2DTexture_PC(s_image, *((_WORD *)data + 2), *((_WORD *)data + 4), 1u, 0, *((_D3DFORMAT *)data + 3));
     if ( r_logFile && r_logFile->current.integer )
         RB_LogPrint("s_image->texture.map->LockRect(0, &rect, 0, 0x00002000L)\n");

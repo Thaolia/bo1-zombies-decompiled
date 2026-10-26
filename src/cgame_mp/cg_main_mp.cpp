@@ -3799,6 +3799,28 @@ int CGScr_LoadScriptsAndAnims()
     functions.address = address;
     mapname = Dvar_GetString("mapname");
     gametype = Dvar_GetString("g_gametype");
+    if ( Com_IsSPLevel() )
+    {
+        // zombies: an SP level of a remote server. The animtree indices in the snapshots are those of the server's
+        // script load (GScr_LoadScripts: codescripts, then the SP list, SP 0x00580370), so compile the same scripts in
+        // the same order, then find the actors' tree as the server does (G_InitGame). Without a local server this
+        // client's copy is the only one the actor code reads (G_SP_GetActorAnims).
+        Scr_BeginLoadScripts(SCRIPTINSTANCE_SERVER, 0);
+        CGScr_LoadScriptAndLabel(SCRIPTINSTANCE_SERVER, "codescripts/delete", "main", &functions);
+        CGScr_LoadScriptAndLabel(SCRIPTINSTANCE_SERVER, "codescripts/struct", "initstructs", &functions);
+        CGScr_LoadScriptAndLabel(SCRIPTINSTANCE_SERVER, "codescripts/struct", "createstruct", &functions);
+        CGScr_LoadScriptAndLabel(SCRIPTINSTANCE_SERVER, "codescripts/struct", "findstruct", &functions);
+        G_ResetEntityParsePoint();
+        GScr_SP_LoadScripts(SCRIPTINSTANCE_SERVER, true);
+        G_ResetEntityParsePoint();
+        Scr_PostCompileScripts(SCRIPTINSTANCE_SERVER);
+        Scr_EndLoadScripts(SCRIPTINSTANCE_SERVER);
+        Scr_PrecacheAnimTrees(SCRIPTINSTANCE_SERVER, (void *(__cdecl *)(int))Hunk_AllocXAnimCreate, 0, 1);
+        BG_LoadAnim(mapname);
+        G_SP_FindActorAnimTree();
+        BG_PostLoadAnim(mapname);
+        return functions.count;
+    }
     CGScr_LoadScripts(mapname, gametype, &functions);
     BG_LoadAnim(mapname);
     BG_PostLoadAnim(mapname);

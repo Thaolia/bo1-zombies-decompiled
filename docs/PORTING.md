@@ -114,6 +114,8 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-26 | Decompiled byte shuffles read their bytes through `Float4Byte(v, i)` (`com_math.h`): 84 reads in `fx_convert.cpp`, `fx_beam.cpp` and `r_water_sim.cpp` that were `v.unitVec[0].array[i]` with a computed `i` up to 15 (fx_beam's `beamDot` reads, upstream, already index a separate vector with `i - 16`) | `PackedUnitVec::array` is 4 bytes, so GCC takes any index above 3 as out of bounds. In `Byte4PackVertexColor` devkitA64 GCC then computed and stored only the red channel and packed stack garbage, usually 0, as G, B and alpha, so every UI and HUD vertex colour had alpha 0 (invisible menus and HUD, on GL and deko3d alike). Disassembly after the fix shows all four channels stored. `codediff.py` on mingw32-gcc: `fx_beam.cpp` identical; in `fx_convert.cpp` only `Byte4PackVertexColor` (i686 GCC also dropped channels 1-3: the base loads one float, the new code four), `FX_SampleVisualState` (it called the full function twice instead of inlining the truncated one) and one constant-pool offset in `FX_ConvertElemDef`; in `r_water_sim.cpp`, `ReadValue` now copies all 48 bytes of its `v5[3]` instead of 4. MSVC never exploited the bound, so the reference is unchanged. No other `.array[<computed>]` read is left in `src/` (grep) |
 | 2026-10-26 | Every GCC/clang build of the engine passes `-fsigned-char` (`CMakeLists.txt`, with the other MSVC-semantics flags) | MSVC's `char` is signed; the AArch64 ABI makes it unsigned in GCC, so each negative `char` of the engine read back above 127 on the Switch. Found through the HUD: `Glyph::y0` (`r_font.h`) is a `char`, glyph tops are negative, so every line of text was drawn 256 × font scale lower than on PC (the score text at y 830-849 of a 720-line frame, under the screen, where the win64 reference draws it at ~677). With the flag the score `500` sits on its brush and the round tally shows, as in the win64 reference. x86 targets already default to signed `char`, so the flag changes nothing there; it was first tried (and reverted, as unrelated) for the GSC crash (2026-10-25 row) |
 | 2026-10-26 | **The loading-screen checkerboard is fixed** (64-bit builds): `Window_Paint` draws the map's `loadscreen_<map>` material where a window's background is `$levelbriefing`, black when the map has none (`ui_shared.cpp`, under `#if defined(_WIN64) \|\| !defined(_WIN32)`) | Traced on Ryujinx/deko3d by logging every large 2D quad with its caller chain: the full-screen checkerboard is the window background of the `connect` menu (`UI_DrawMapLevelshot` → `Menu_Paint`), the material `$levelbriefing`, whose only image is `default` — `images/default.iwi` in `iw_04.iwd`, the 16x16 checkerboard. Nothing in the decompiled engine puts a level image into it, and the menu has no `WINDOW_STYLE_LOADSCREEN` (7) item, the path that draws the material `UI_SetLoadingScreenMaterial` resolves (`loadscreen_zombie_theater` is found, not default). The fix shows that material, the Kino artwork, instead. The 32-bit reference runs the same code on the same data, so it should show the checkerboard too (not observed); it keeps the decompiled behaviour (`codediff.py`: `ui_shared.cpp` identical). Not a ffconv or backend problem: the earlier "missing materials" verdict (deko3d notes) had the right screen but the wrong asset |
+| 2026-10-26 | A dedicated-server project starts on branch `server` (worktree `../BO-Zombies_switch_server`), phase 8 below: a dedicated zombies server (Linux and Windows, curses console), win64 and Switch clients joining over UDP by IP from `launch.cfg`, client logs sent to the server, admin commands, join in progress, then more than 4 players | The engine is the MP build with the SP zombies grafted on, so the Quake 3 UDP connect path (`connect`, `getchallenge`, `SV_DirectConnect`, netchan) is already there without DemonWare; only a client of a *remote* server had never been run |
+| 2026-10-26 | Fixes that make a path work which was broken in the reference too (a remote `connect` from the menu) may change `win32-msvc` behaviour, without a guard | Agreed with the user. 64-bit fixes and port code still keep the 32-bit code identical (`codediff`) |
 
 ## Phases
 | # | Phase | Status |
@@ -127,6 +129,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | in progress: the devkitA64 + libnx build compiles, links and packages `BO1Zombies.nro` (null backend), reusing the posix SDL2/Win32-shim layer with a thin `src/platform/switch/` and `#if defined(__SWITCH__)` deltas. **Boots on Ryujinx 1.1.1375**: the libnx entry runs (applet type = Application), romfs mounts, the engine's `WinMain` runs ~30 s with no crash (SD `boot.log`). Prereqs fixed: the libgcc GCS/SME NOP patch (`switch/tools/patch_ryujinx_mrs.py`, POST_BUILD) for Ryujinx's JIT, and a one-file embedded romfs (`switch/romfs`) so `romfsInit` does not crash the emulator. With the converted zones staged on the SD, the engine **loads the pre-gfx code zones** (`en_code_pre_gfx_mp`, `code_pre_gfx_mp`) — the ffconv AArch64 path proven end to end — and runs `FS_Startup`. Four fixes got there: the GCS/SME NOP patch and embedded romfs (boot), `chdir` to the install dir (language + `fs_basepath`), a `pread` EOF fix for libnx's past-EOF `lseek` (zone read-ahead), and reading the win64 IWffs ABI tag (layout-identical, `--check-switch`). With the iwds staged and a `device:`-prefix fix in `Bo1_PosixPath`, it then boots through FS_Startup (103814 iwd files), R_Init, the frontend, and `+devmap zombie_theater` into a **map load** (common_zombie 78 MB, the Kino zones) — before crashing part way through `en_zombie_theater` on a guest invalid memory access (a 64-bit bug in the zombie map asset stream, to debug on the posix x86-64 build). Then GL (EGL on nwindow) and audio |
 | 6 | Stabilisation, all base maps, docs | todo |
 | 7 | (optional) deko3d backend behind the same `gfx_backend.h` | in progress: opt-in on the Switch build (`gfx.cfg` = deko3d, `shaders.dksh` from uam); renders the main menu's 3D scene and Kino in game with its HUD on Ryujinx (2026-10-26, see the deko3d notes below); not yet run on the console in game |
+| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP, see "Dedicated server (phase 8)" |
 
 ## Verification per phase
 - **0**: the `win32-msvc` preset still builds and `Play.bat` reaches the zombies menu and plays Kino der Toten.
@@ -1450,3 +1453,57 @@ antialiased edge texels, which left the green at half strength (measured (8, 128
 ((8, 160, 32) to (16, 208, 40)). The battery comes from `Switch_BatteryPercent` (`switch_main.cpp`): `psmInitialize`
 at the first call (logged), the charge re-read every 5 s (an IPC call), `psmExit` after `WinMain`. The `deko3d_debug`
 frame dumps add a full-resolution top-right crop. Checked on Ryujinx: `51 FPS  100%` at the top right.
+
+## Dedicated server (phase 8)
+
+Plan (steps): 0 prove that a client of a remote server plays; 1 a `bo1_server` mode bound to the network (not
+loopback), `server.cfg`, `getstatus`; 2 clients: `launch.cfg` on PC and Switch, Switch sockets, connect beyond the LAN,
+silent reconnect; 3 the curses console (ncurses on Linux, PDCurses on Windows) inside the server process; 4 admin
+commands (`zm_*`: god, revive, respawn, points, perks, starting points, reset, map and mods) through the engine and a
+`mods/admin` script mod; 5 client logs sent to the server over UDP, one file per player; 6 join in progress;
+7 more than 4 players. Work happens in `../BO-Zombies_switch_server` (branch `server`); before every rebuild the test
+servers and clients are stopped (`.claude/rules/server-test-processes.md`).
+
+**Step 0, a remote client plays (2026-10-26).** Setup, all win64-msvc: a dedicated server
+(`tools/headless.ps1 -Zombies -Commands "+set sv_maxclients 4 +devmap zombie_theater"`, slot 0, `127.0.0.1:29060`)
+and a headless client in another process (`-Client`, slot 1) that boots to the main menu and then runs
+`connect 127.0.0.1:29060` (`+set bo1_clientCommands "2000:connect 127.0.0.1:29060"`). `127.0.0.1` is a real UDP
+socket (`NA_IP`), not the in-process loopback. Five fixes got the client in game:
+
+- **The menu's local server swallowed the reply.** The zombies main menu runs a listen server (`frontend`), and
+  while one runs `Com_ServerPacketEvent` hands every UDP packet to `SV_PacketEvent`, which drops the remote server's
+  `challengeResponse`: the client sat in `CA_CONNECTING`. `CL_Connect_f` now kills the local server for any address
+  (it did only for `localhost`), as the party connect path already did (`cl_main_pc_mp.cpp`).
+- **`zombiemode` was 0 while the client parsed the gamestate.** Both ends pick the zombies netfield tables (actor,
+  script mover, origin bits) from `zombiemode`, which `Com_LoadLevelFastFiles` sets from the map name. A remote
+  server's client loads the map only after the gamestate, so it read the baselines with the MP tables: `bad command
+  byte 134` after the 881 configstrings (all identical on both sides), 30 times out of 30. The map-name logic is now
+  `Com_SetGameModeDvarsForMap` (`common.cpp`), also called by `CL_ParseGamestate` when no local server runs.
+- **The client compiled the MP server scripts.** Without a local server, `CG_Init` compiles the server's scripts
+  itself (`CGScr_LoadScriptsAndAnims`) so that the animtree indices in the snapshots resolve; that path named the MP
+  scripts (`maps/mp/_destructible`, the MP gametype) and failed. For an SP level it now compiles what the server's
+  `GScr_LoadScripts` does, in the same order (codescripts, then `GScr_SP_LoadScripts`), then `BG_LoadAnim`,
+  `G_SP_FindActorAnimTree`, `BG_PostLoadAnim`: the actors get the client's own `generic_human` tree. The SP list's
+  aitype and traverse scripts are compiled in a new `compileOnly` mode that keeps no `AITypeScript` and writes no hunk
+  file data (that table belongs to a local server).
+- **64-bit: `Hunk_AddData` allocated its node with the 32-bit size.** `alloc(9)` is `offsetof(fileData_s, name)` on
+  32-bit (17 on 64-bit), so the next allocation overwrote the node's `next`: `Hunk_Clear` then followed a pointer made of
+  two 32-bit halves (`0x1CF2A1201C0C65E0`, found with a temporary check of every node) and crashed at quit and at
+  disconnect. Every remote client hit it (the client-side animtrees go through `Hunk_AddData`). Now
+  `alloc(offsetof(fileData_s, name))`; `codediff` identical.
+- **Same family, inventoried.** The struct-cast allocations with a literal size were measured with clang for
+  `i686-` and `x86_64-pc-windows-msvc` (method of phase 3): `cgScriptMover_s` 96, `cLinkInfo_s` 72,
+  `ClientTagCache` 96, `AimTargetCache` 8, `GfxLight` 368 are the same on both; `XModel` (380 for 252/328) and the
+  path buffers are large enough. `GfxImage` is 52 on 32-bit and 72 on 64-bit: `ui_screenshot.cpp` allocated 52, now
+  `sizeof(GfxImage)` (`codediff` identical). `ui_shared_obj.cpp` allocates 8 bytes for a `focusItemDef_s` (24 on
+  32-bit already) in the raw `.menu` loader that the fastfile build never runs: left as retail, noted here.
+  `tools/litsizes.py` misses this family (it looks for multiples of a 32-bit size; 9 and 52 are an `offsetof` and a
+  non-pointer struct).
+
+Result: the client goes `CA_SENDINGSTATS` → `CA_LOADING` → `CA_ACTIVE` on `zombie_theater` with the world, view
+model and HUD (500 points). With the player in god mode on the server (`bo1_testclient_god 1`) zombies walk up and
+attack, drawn and animated on the client (screenshots). Without it the idle player dies, the server shows the game
+over, restarts the map, and the client follows each `map_restart` back to `CA_ACTIVE` (3 times in 240 s); the server
+log has no script error, and the client quits normally (exit 0). Not covered yet: the inactivity kick a server
+gives an idle client (it crashed in `Hunk_Clear` before the `Hunk_AddData` fix, not rerun since), a client on another machine of
+the LAN (the dedicated mode still binds `127.0.0.1`: step 1), and a log comparison against a listen-server run.

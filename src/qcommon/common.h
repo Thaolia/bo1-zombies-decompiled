@@ -200,6 +200,7 @@ void Com_LoadUiFastFile();
 void __cdecl Com_LoadMapLoadingScreenFastFile(const char *mapName);
 void __cdecl Com_UnloadLevelFastFiles();
 void __cdecl Com_LoadLevelFastFiles(char *mapName);
+void Com_SetGameModeDvarsForMap(const char *mapName); // zombies: zombiemode & co. from the map name
 char *__cdecl Com_GetLevelSharedFastFile(char *mapName);
 void Com_LoadCommonFastFile();
 void __cdecl Com_LoadFrontEnd();
