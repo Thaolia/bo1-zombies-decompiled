@@ -16,6 +16,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
+
+extern "C" void Switch_BootLogWrite(const char *text);
 
 namespace
 {
@@ -49,9 +52,7 @@ const char *const kAllowAppletPath = "sdmc:/switch/bo1zm/allow_applet";
 const char *const kDefaultArgs = "+set bo1_zombies 1";
 char s_commandLine[1024];
 
-// Append one line to the SD boot log and echo it to stdout (an emulator captures stdout to its own log). Each call
-// reopens and closes the file so a crash later in start-up still leaves every breadcrumb on disk. Best-effort: a
-// missing or read-only SD path just means no file, never a failure.
+// Append one line to the SD boot log and echo it to stdout (an emulator captures stdout to its own log).
 void BootLog(const char *fmt, ...)
 {
     char line[512];
@@ -61,12 +62,9 @@ void BootLog(const char *fmt, ...)
     va_end(ap);
     std::printf("[bo1zm] %s\n", line);
     std::fflush(stdout);
-    FILE *f = std::fopen(kBootLogPath, "ab");
-    if (f)
-    {
-        std::fprintf(f, "%s\n", line);
-        std::fclose(f);
-    }
+    char out[sizeof(line) + 1];
+    std::snprintf(out, sizeof(out), "%s\n", line);
+    Switch_BootLogWrite(out);
 }
 
 const char *AppletTypeName(AppletType t)
@@ -147,16 +145,32 @@ void ShowAppletModeMessage()
 }
 } // namespace
 
+// The one writer of the SD boot log, for switch_main, the engine (Switch_DebugLog) and the deko3d backend. Horizon's
+// FS lets a single handle write a file: while the engine held its own "ab" handle, every other fopen of boot.log
+// failed, so the backend's lines never reached the SD. Opened on first use and flushed per write, so a crash keeps
+// every line written; the mutex serialises the engine's and the backend's threads.
+extern "C" void Switch_BootLogWrite(const char *text)
+{
+    static std::mutex lock;
+    const std::lock_guard<std::mutex> guard(lock);
+    static FILE *const f = std::fopen(kBootLogPath, "ab");
+    if (f)
+    {
+        std::fputs(text, f);
+        std::fflush(f);
+    }
+}
+
 int main(int, char **)
 {
     // Make the data dir so even a first boot on a fresh SD can leave its log (EEXIST is fine).
     mkdir("sdmc:/switch", 0777);
     mkdir(kDataDir, 0777);
-    // Start each launch with a fresh log instead of appending to every prior run: truncate it once here, before any
-    // BootLog, so the switch_main and engine (Switch_DebugLog) "ab" writes all land in the new file.
+    // Start each launch with a fresh log instead of appending to every prior run: truncate it once here, before the
+    // first BootLog opens the shared writer.
     if (FILE *fresh = std::fopen(kBootLogPath, "wb"))
         std::fclose(fresh);
-    BootLog("=== BO1 Zombies (Switch) boot === built %s %s", __DATE__, __TIME__);
+    BootLog("=== BO1 Zombies (Switch) boot ===");
 
     // The desktop builds run with the working directory set to the install folder, and the engine depends on it: it
     // opens a few files before the filesystem is up (localization.txt in Win_InitLocalization, read with a path
@@ -200,6 +214,18 @@ int main(int, char **)
 
     const Result rrc = romfsInit(); // romfs:/ holds no data here (data stays on the SD card); log whether it mounted
     BootLog("romfsInit -> 0x%x%s", rrc, R_SUCCEEDED(rrc) ? " (mounted)" : " (none; data from SD)");
+    // Which NRO wrote this log: the link time the build packs into romfs (CMakeLists.txt), not a compile-time
+    // __DATE__, which only changes when this file recompiles.
+    if (FILE *bf = std::fopen("romfs:/build.txt", "rb"))
+    {
+        char stamp[64] = {};
+        const size_t n = std::fread(stamp, 1, sizeof(stamp) - 1, bf);
+        std::fclose(bf);
+        stamp[n && stamp[n - 1] == '\n' ? n - 1 : n] = '\0';
+        BootLog("build %s", stamp);
+    }
+    else
+        BootLog("build (no romfs:/build.txt)");
 
     char *const args = LoadLaunchArgs();
     BootLog("launch args = \"%s\"", args);

@@ -321,6 +321,8 @@ else()
         # Package the linked ELF into a runnable .nro (nacp metadata + icon). The game data lives on the SD card
         # (sdmc:/switch/bo1zm/), not in romfs; the embedded romfs (switch/romfs) holds only a version file so that
         # romfsInit() succeeds -- a homebrew NRO with no romfs makes Ryujinx throw on OpenDataStorageByCurrentProcess.
+        # A copy of it in the build tree also gets build.txt, the link time, which switch_main logs first: two NROs
+        # can have the same size, and a __DATE__ only changes with its own file (switch-homebrew.md).
         find_program(BO1_ELF2NRO elf2nro REQUIRED HINTS "$ENV{DEVKITPRO}/tools/bin")
         find_program(BO1_NACPTOOL nacptool REQUIRED HINTS "$ENV{DEVKITPRO}/tools/bin")
         find_program(BO1_PYTHON3 NAMES python3 python REQUIRED)
@@ -334,9 +336,14 @@ else()
                     "$<TARGET_FILE:BO1Zombies>"
                     "--objdump=$ENV{DEVKITPRO}/devkitA64/bin/aarch64-none-elf-objdump"
                     "--readelf=$ENV{DEVKITPRO}/devkitA64/bin/aarch64-none-elf-readelf" --apply
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/switch/romfs"
+                    "${CMAKE_BINARY_DIR}/romfs"
+            COMMAND "${BO1_PYTHON3}" -c
+                    "import datetime, sys; open(sys.argv[1], 'w').write(datetime.datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S %z') + '\\n')"
+                    "${CMAKE_BINARY_DIR}/romfs/build.txt"
             COMMAND "${BO1_ELF2NRO}" "$<TARGET_FILE:BO1Zombies>" "${CMAKE_BINARY_DIR}/$<CONFIG>/BO1Zombies.nro"
                     "--icon=$ENV{DEVKITPRO}/libnx/default_icon.jpg" "--nacp=${CMAKE_BINARY_DIR}/BO1Zombies.nacp"
-                    "--romfsdir=${CMAKE_CURRENT_SOURCE_DIR}/switch/romfs"
+                    "--romfsdir=${CMAKE_BINARY_DIR}/romfs"
             COMMENT "Patching libgcc GCS/SME for Ryujinx, then packaging BO1Zombies.nro (data stays on the SD card)"
             VERBATIM)
         # The console reads the same win64 IWffs zones ffconv emits: before linking, the layout generator checks

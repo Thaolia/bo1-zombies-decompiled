@@ -1423,20 +1423,14 @@ void __cdecl Sys_OpenURL(const char *url, int doexit)
 }
 
 #if defined(__SWITCH__)
-#include <cstdio>
 // Bring-up diagnostic: tee the engine's console output and fatal errors to the SD boot log. libnx routes printf
 // nowhere and OutputDebugStringA is a no-op on this target, so this is the only window into where start-up goes.
-// Opened once, flushed per line, so a hang (e.g. the GetMessage wait in Sys_Error) or a crash still leaves the
-// lines on disk. newlib's FILE ops are internally locked, so cross-thread Com_Printf lines interleave but never
-// corrupt.
+// The log has one writer for the whole process (switch_main.cpp), flushed per write, so a hang (e.g. the GetMessage
+// wait in Sys_Error) or a crash still leaves the lines on disk: the console's FS refuses a second write handle.
+extern "C" void Switch_BootLogWrite(const char *text);
 static void Switch_DebugLog(const char *s)
 {
-    static std::FILE *f = std::fopen("sdmc:/switch/bo1zm/boot.log", "ab");
-    if (f)
-    {
-        std::fputs(s, f);
-        std::fflush(f);
-    }
+    Switch_BootLogWrite(s);
 }
 #endif
 
