@@ -1139,7 +1139,8 @@ Open: the ammo counter and the weapon d-pad icon at the bottom right, which the 
 55 s), do not show on deko3d; the materials they need are missing on win64 too, so that is not the cause (not
 investigated further yet). Not done yet: the packed 16-bit formats' channel order (B5G6R5 is used, as shadow-pass
 colour targets and one sampled 512x2048 texture), `ReadTexture`, real occlusion/timestamp queries, batched uploads,
-descriptor-id reuse (the pools leak ids of destroyed textures), trimming `kTexSlack` (a Ryujinx need). Debug
+descriptor-id reuse (the pools leak ids of destroyed textures), trimming `kTexSlack` (a Ryujinx need; done
+below: one tail per image block). Debug
 scaffolding to remove before shipping: the timed frame dumps and the one-frame trace (they only run when
 `sdmc:/switch/bo1zm/deko3d_debug` exists, so the console build skips them), per-upload logs, the 2 s fence timeout.
 Default backend stays GL; `gfx.cfg` = `deko3d` selects deko3d.
@@ -1203,3 +1204,240 @@ guest stack trace. (Ryujinx itself dies on the break and drops its unflushed SD 
 console kept every line written before its abort.) Next: the console run of that NRO (`c2e15a43`, build 12:55:23); its
 abort line names the failing call. Whatever it is, textures and buffer stores should come from large suballocated
 blocks instead of one block each.
+
+**Third console run (NRO `c2e15a43`, build 12:55:23): `dkMemBlockCreate` fails at ~1332 live blocks.** The log ends
+with `*** abort: result 0x367 (module 359, description 1)`, error `2359-0001` (`DkResult_Fail`); its frames, and the
+Atmosphère report's stack (`crash/02582020888_...log`, the same return addresses), resolve to `RaiseError` <
+`dkMemBlockCreate` (`dk_memblock.cpp:167`) < `MakeBlock` < `gb::deko3d::CreateTexture` < `d3d9emu::CreateStorage` <
+`Device::CreateTexture` < `Image_Create2DTexture_PC` < `Image_Setup` < `Image_SetupFromFile` < `Image_LoadDxtc`: the
+loader thread creating a DXT texture while the first menu frame is presented, with 1331 blocks (296 MB) live. Both
+console runs died at that count (1332 and 1331) with only 296 MB in blocks, so the console limits the *number* of
+blocks (each `MemBlock::initialize` is an `nvMapCreate` and an `nvAddressSpaceMap` in nvservices), not their size.
+
+**Fix: textures and buffer stores are suballocated** (`gb_deko3d.cpp`, `Allocate`/`Release`), as deko3d's own sample
+framework (`CMemPool`: images `GpuCached | Image` in 16 MiB blocks, data in 8 MiB) does. An image pool of 64 MiB
+chunks and a data pool (`CpuUncached | GpuCached`) of 16 MiB chunks, first fit at the layout's alignment
+(`dkImageLayoutGetAlignment`, `DK_UNIFORM_BUF_ALIGNMENT` for buffers) over a coalesced free list per chunk; a range
+larger than half a chunk gets its own block; an emptied chunk goes back unless it is the pool's last; ranges still go
+through `s_pendingFree`, so memory is reused only after the GPU finished the frame that read it. Ryujinx's 64 KiB
+image slack (its GOB-rounded DMA read-modify-write) moves from every texture to the end of each image block. On
+Ryujinx: **14 live blocks at the first Present instead of 1384, 17 on the menu after 57 s instead of 2860, 30 in Kino
+after 207 s instead of 11 210**; block memory in Kino 488 MB instead of 636 MB, heap 1343 MB instead of 1462 MB; the
+loading artwork, the in-game frame and the HUD captured at 30 s and 150 s render as before. Next: the console run of
+this NRO (`9e340f07`, build 13:07:47).
+
+**Fourth console run (NRO `9e340f07`, build 13:07:47, `+devmap zombie_theater`): Kino plays on the console.** No
+abort in 120 s: 29 live blocks (484 MB), heap 1339 MB, about 40 fps on the loading screen (8 draws) and **about 20
+fps in game** (frames 1728 to 2896 between 62 s and 119 s, ~5700 draws a frame); the cap is 60 (the swapchain's
+default swap interval 1 on the 60 Hz screen; `com_maxfps` is 85). The user's photo shows the score `500` in **red**,
+so the vertex-attribute BGRA bit works on the hardware (Ryujinx alone shows it blue), and the ammo counter `8 / 24`
+with the d-pad weapon icon, which Ryujinx did not draw. Two problems:
+
+- **No controller input, only HOME and capture** (which the system handles). SDL2-switch has no dummy video driver:
+  `libSDL2.a` holds only `SWITCH_bootstrap`, so with `SDL_VIDEODRIVER=dummy` (`switch_main.cpp`, deko3d path)
+  `SDL_InitSubSystem(SDL_INIT_VIDEO)` fails, the window layer has no video thread and its `Pump` returned at once:
+  no SDL events, no `Bo1_GamepadPump`, and no `appletMainLoop` (the Switch video driver's pump called it). Fix
+  (`win32_gui.cpp`, `#if __SWITCH__`): without video, the first thread that pumps calls `appletMainLoop` (never again
+  once it returned false; the exit request becomes a `WM_CLOSE` to the active window, which the engine quits on),
+  drains SDL's events and refreshes the controller. `win32_gamepad.cpp` now logs `gamepad: opened '...'`, a detach,
+  or `no game controller (N joysticks)` once. On Ryujinx: `gamepad: opened 'Switch Controller'`.
+- **Purple-blue specks over the 3D scene** (short vertical dashes, spread over walls, floor and ceiling; the HUD is
+  clean). Ryujinx's captures show none. Not explained yet. The `deko3d_debug` captures were emulator-only (`LogImage`
+  wrote its pixel lines to `svcOutputDebugString`, which reaches nothing on a console without a debugger): they now go
+  to the SD `boot.log` as well, every frame dump adds a full-resolution centre crop, and the one-frame trace runs at
+  100 s (in game on a `+devmap` console launch) and copies a full-resolution centre crop of every 16:9 pass (scene
+  and post-processing chain, 24 passes on Kino) so the pass that adds the specks can be named. Checked on Ryujinx:
+  the crops decode (`log_images.py`) and show the scene and the final frame. Next: the console `boot.log` of NRO
+  `42628491` (build 13:25:31) with `deko3d_debug` on the SD.
+
+**Fifth console run (NRO `42628491`, build 13:25:31, `deko3d_debug` on): the controller works, the specks are tiles.**
+`gamepad: opened 'Switch Controller'`, and the pad drives the game, except inside the menu START opens. The user saw
+no specks with the GL backend, and they flicker and move with the view. The trace's full-resolution crops place them
+in **pass 04, the first pass that draws the lit scene**: solid blue rectangles of 4x8, 8x8 and 4x16 pixels
+(`con1img/09_pass_04`), the same in every later pass; the 150 s frame also has dark olive ones. Whole small tiles of
+the lit pass missing, showing what the target held before, only on the GPU (Ryujinx's crops are clean) and only with
+deko3d: the signature of Zcull, Maxwell's coarse per-tile depth cull, culling tiles on a summary that does not match
+the depth buffer being tested (BO1 renders to several depth buffers: scene, viewmodel, shadow maps). Ryujinx does not
+emulate Zcull and nouveau's GL does not enable it; deko3d's queue defaults enable it. **Fix, to confirm on the
+console: the queue is made with `DkQueueFlags_DisableZcull`** (`gb_deko3d.cpp`, `Init`); per-pixel early depth still
+runs after the depth prepass. If the frame rate suffers, the alternative is Zcull on with
+`DkInvalidateFlags_Zcull` whenever the depth target changes. (The trace frame's last passes, 21 to 23, came out white
+on the console: a white flash in game at that moment, or another bug; the 150 s dump is a normal frame.)
+
+**Menus with a pad.** The PC menus step between items on the arrow keys (`Menu_HandleKey`: 154/155 previous/next,
+A/Start/Enter accept, B/Escape back) and have no case for the d-pad (`K_DPAD_*`, 20-23) or the left stick
+(`K_APAD_*`, 28-31), which only the console menus handled; item focus follows the mouse. `CL_GamepadButtonEvent`
+(`cl_gamepad.cpp`) now hands the UI the arrow key for each pad direction, `#if !defined(_WIN32)` only (an identity on
+Windows: `codediff` vs mingw32-gcc identical). In game the pad keys keep their bindings; only `UI_KeyEvent` sees the
+arrows. To confirm on the console with the NRO `16809ec3` (build 13:51:05).
+
+**Sixth console run (NRO `16809ec3`, build 13:51:05, Zcull off): the specks remain, so not Zcull.** The trace's pass 04
+crop still has them. Measured on the two console crops: in every speck the red and green channels hold the scene's
+own value (~30-38) and **only blue is 255**, so these pixels are drawn, with one wrong channel (pass 02 cleared the
+target to (128, 191, 255), a different colour); and of the 56 blobs of the second crop, **50 are solid 4x8
+rectangles at x and y multiples of 4 on the screen**: one Maxwell warp's 32 pixels. A whole warp gets a wrong blue,
+which changes from frame to frame. Ruled out on the way: temporaries read before they are written (a scan of the
+13 704 shaders that merges if/else branches finds none, and every pixel shader writes all of `oC0`). Every draw of
+the lit pass samples the shadow map (`1024x2048` Z24S8 through a compare sampler, `sampler2DShadow`), and in a dark
+theatre lit by blue moonlight, a shadow test that says "lit" adds mostly blue: the next run turns the shadow maps off
+(`+set sm_enable 0`, checked on Ryujinx: the shadow passes go and the lit pass becomes pass 02) to tell a shadow
+fault from a general one. The deko3d queue keeps Zcull off for now.
+
+**Controller face buttons by their labels.** SDL2-switch names the face buttons by position as on an Xbox pad (its
+A is the console's bottom B, its X the console's left Y). The game binds `BUTTON_X` to `+usereload` (use, rebuild,
+buy) and `BUTTON_Y` to `weapnext` (`buttons_default.cfg`), and its prompts name the letter: the player pressed the
+Joy-Con's X to rebuild and got a weapon switch, while the left Y rebuilt. On the Switch, `Bo1_MapGamepadState`
+(`win32_gamepad.h`) now maps by the printed letters (Joy-Con A, B, X, Y to the game's A, B, X, Y), which also puts
+menu confirm on the right-hand A as on Nintendo's consoles. The desktop mapping is unchanged (`gamepad_test`
+passes). NRO `a6a8da49`, build 14:29:35.
+
+**Seventh console run (NRO `a6a8da49`, build 14:29:35, `+set sm_enable 0`).** The START menu works with the pad;
+the specks remain **without shadow maps**, so the shadow test is ruled out too; the user asked for Y = reload and
+L = switch weapon; and the game froze at the end of round 1.
+
+- **The freeze is a 64-bit bug in the physics.** At `mus_zombie_round_over` the log has `contact manifold intersect
+  poly poly failed`, then 25 403 `contact manifold failure` and no frame after: `intersect_poly_poly`
+  (`phys_contact_manifold.cpp`) counted its bridges as `((char *)b - (char *)list_bridge) >> 4` and advanced its
+  allocator by `16 * num_bridges`. A `bridge` holds a `phys_vec2` and two pointers: 16 bytes on 32 bits, **24** on 64
+  (clang, x86-64 and AArch64 alike), so the count came out 1.5 times too large, odd counts took the "failed" branch,
+  and the arc walk looped over garbage bridges for ever. Now `b - list_bridge` and `sizeof(bridge)`. Same build on
+  win64 and Linux: the bug was there too, only never reached in their runs. `codediff` vs mingw32-gcc: same
+  subtraction and `sar $4`, only the register and stack-slot choice and the jump offsets after it change.
+- **The same family elsewhere** (a pointer difference divided by a 32-bit element size, which `tools/litsizes.py`
+  cannot see because it is not a call argument; inventoried with a regex over `src/` and `tl/`, 22 hits, each element
+  measured): `r_staticmodelcache.cpp` divided by 8 a difference of `static_model_leaf_t`, a union with two pointers
+  (16 bytes on 64 bits), and `cm_trace.cpp` divided by 96 a difference of `cbrush_t` (104 bytes on 64 bits), the
+  `index_hint` a trace then uses as `&brushes[*index_hint]`, i.e. another brush. Both now divide by
+  `(ptrdiff_t)sizeof(...)`, which keeps the signed division: `codediff` identical. The other hits are elements without
+  pointers (`FxTrail` 8, `FxTrailElem` 32, `FxElemContainer` 48, `FxUniqueHandleDb::Node` 16, `gitem_s` 4, `mnode_t`
+  4) or byte offsets by design (`FX_EffectToHandle`'s `/ 4`).
+- **Controls**: `Cmd_ExecFromFastFile` (`cmd.cpp`, `#if __SWITCH__`) lays the console's bindings over every
+  `buttons_*.cfg` it runs (the profile and the menus run `buttons_default.cfg` again during play): `BUTTON_Y` =
+  `+reload`, `BUTTON_LSHLDR` = `weapnext`, and the tactical grenade (`+smoke`, monkey bombs) that L threw goes to
+  `DPAD_DOWN`; X keeps `+usereload`. `codediff` identical.
+- **Specks, next experiment** (`deko3d_debug` only): the one-frame trace now runs four times (100, 112, 124, 136 s),
+  the last three with a family of sampled textures (never a render target) replaced for that frame by a white
+  placeholder of the same type (1x1 RGBA8 2D, cube or volume): cubes, volumes, then every sampled texture. The pass
+  crops of each trace show whether the specks follow a texture family or none. Also checked and ruled out: deko3d
+  forces 6 layers for a `DkImageType_Cubemap` whatever `dimensions[2]` says (`dkImageLayoutInitialize`), so the
+  cube textures are whole; and the Maxwell code uam makes for a lit shader (`uam -r`) turns the D3D9 `rsq`/`rcp`
+  ternaries into selects and waits on every MUFU result and on all barriers at `EXIT`.
+
+**Eighth console run (NRO `5bafdabc`, build 14:57:27): the specks do not follow the cube or 3D textures.** Three of
+the four traces ran (normal, no cube, no 3D); the lit pass (pass 02 here, no shadow pass in that frame) has its blue
+4x8 specks in all three (3113, 3492 and 3227 blue pixels in the 320x180 crop) although the neutralisation worked (the
+viewmodel goes white without its cube reflection). The user saw a freeze on a white screen with the HUD: the traces'
+pixel lines, one SD flush per 480 characters for ~20 crops a trace, stalled the game, and the traced frame's
+post-processing comes out white on the console (as in the earlier captures; not seen in normal frames). Next build:
+the traces are cumulative (100, 106, 112, 118 s: normal; no sampled texture; and no sampled colour render target;
+and the default sampler everywhere), capture only the screen-sized passes up to pass 6, write 7680 hex characters a
+line to the SD (16 times fewer flushes) and 480 a line to the debug string, and use **dark grey** (0x40) placeholders:
+white ones shade the world magenta, whose saturated blue would hide a blue speck. Checked on Ryujinx: four traces,
+no saturated blue in the neutralised crops (means 31-62 per channel). NRO `51814624`, build 15:17:41.
+
+**Ninth console run (NRO `51814624`, build 15:17:41): the specks do not follow the textures or the samplers.** The
+four traces ran. Blue pixels in the 320x180 crop of the lit pass: 825 (normal), 785 (no sampled texture), 640 (and no
+sampled colour target), 62 (and the default sampler everywhere). The last count misleads: that crop has **light grey
+4x8 tiles** where the others have blue ones. Whole warps still compute a wrong colour; only the colour changes with
+what they sample. The round-end freeze is gone, but a ~3.5 s pause remains at the end of a round (cause unknown, not
+the streamed sounds, which do not play yet). The user also reports missing gunfire sounds and asked again for the pad
+layout, which had not taken.
+
+Ruled out since, offline on `shaders.dksh` (scripts decode the DKSH: header `<6I>` magic, header size, control size,
+code size, programs offset, count; code after the control section at the program's entrypoint; Maxwell control words
+of 21 bits per instruction: stall, yield, write barrier, read barrier, wait mask, reuse; operand fields from envytools'
+`gm107.c`):
+- **Scoreboard hazards in uam's code.** A first scan reported 11 280 pixel shaders reading a texture result before
+  waiting on its barrier. That was the scan's own decoding: a `TEXS` writes 1 to 4 registers depending on its
+  component selector (bits 50-52) and on whether its second destination (bits 28-35) is RZ, and a `TEX` writes one
+  register per enabled component (mask at bits 31-34), not always 4. With exact destinations, exact `TEXS`/`TEX`
+  source registers (yuzu's assignment by texture type, lod and depth-compare), conversions that read Rb only (`RRO`,
+  `F2F`, `I2F`...) and `SHFL` writing one register, a linear scan of all 13 692 shaders finds **no** read-after-write,
+  write-after-read or write-after-write hazard on any variable-latency result, and no barrier pending at `EXIT`.
+  Every opcode family that takes a write barrier takes one every time.
+- **Scratch memory.** Every DKSH program header has `per_warp_scratch_sz` 0: no shader spills to local memory, so the
+  queue's per-warp scratch size (2 KiB by default, never checked by deko3d for graphics) cannot overflow.
+- **Uniform branches.** No `BRA.U` in any shader; 1 889 pixel shaders branch on a per-thread predicate, which is
+  correct per thread.
+- **Stale caches.** The frame's first barrier drops the texture, descriptor, shader and constant caches and L2
+  (`DkInvalidateFlags_Shader` includes the constant cache, deko3d `gpu_base.cpp`), and the CPU only writes uniforms,
+  descriptors and dynamic buffers while the GPU is idle (the frame waits for the previous one's fence). Descriptor
+  ids are never reused. Images are not hardware-compressed; the tiled cache is never enabled.
+- **Interpolants the vertex shader does not write.** Stages are compiled apart, so a pixel shader reading an
+  attribute its vertex shader leaves unwritten would read whatever the SM's attribute storage holds (GL's linker
+  turns it into a constant). `GetPipeline` now compares the program headers' attribute masks (a vertex shader's
+  output map, a pixel shader's input map) and logs `attribute gap: ...` once per pair. On Ryujinx, 200 s of Kino
+  (3.39 M draws, the same pairs as on the console): masks read correctly (vertex `f` per attribute, pixel `3`/`f`),
+  **no gap**.
+
+**Controls, second try.** The first hook never ran: no start-up config binds the pad (`default_mp_controls.cfg` only
+sets the `gpad_*` dvars). `buttons_default.cfg` runs when the profile is saved from the dvars (`Updating profile 0
+from dvars`, e.g. after the in-game menu), and the game then writes the bindings into `players/config.cfg`, which
+the next launches exec from disk. `cmd.cpp` (`#if __SWITCH__`) now lays the console's layout over any exec, from a
+fastfile or from disk, whose text binds a pad key (`BUTTON_`), and logs `pad layout after <file>: ...`. Checked on
+Ryujinx with pad bindings added to its `config.cfg`: `pad layout after config.cfg: Y +reload, L weapnext, X
++usereload, d-pad down +smoke`, and the game wrote these bindings back into `config.cfg`. `codediff` vs mingw32-gcc:
+`cmd.cpp` identical.
+
+**Specks, next experiment** (`deko3d_debug` only). The traces now test two families of causes instead of texture
+families: 100 s normal; 106 s **serialised** (before each draw, a barrier that waits for the previous primitives and
+drops the texture, descriptor, shader, constant and L2 caches); 112 s **low occupancy** (each pixel shader is bound
+through a CPU copy of its DKSH control section whose program header declares 255 registers, which leaves room for ~8
+warps per SM instead of ~60; same code, deko3d's separate `control` pointer); 118 s both. If the tiles vanish when
+serialised, something crosses draws; if they vanish at low occupancy, warps of one draw interfere (a hardware
+resource sized by state uam or deko3d programs, e.g. the fragment register `0x0d8` that uam itself does not fully
+understand). The placeholder textures are gone. Checked on Ryujinx: the four traces run, no fence timeout, the crops
+show the scene. NRO `b496c377`, build 16:17:20.
+
+**Tenth console run (NRO `b496c377`, build 16:17:20): the tiles come from warps of one draw sharing an SM.** The
+user confirms the pad layout (Y reload, L switch weapon, d-pad down monkey bombs, X use); the log has `pad layout
+after config.cfg: Y +reload, L weapnext, X +usereload, d-pad down +smoke`. The player stood still through the four
+traces, so the lit-pass crops (320x180) compare pixel for pixel:
+
+| trace | blue pixels | pixels off the cleanest crop by more than 30 |
+|---|---|---|
+| normal | 168 | 207 |
+| serialised | 182 | 221 |
+| low occupancy (255 registers declared) | 0 | 28 |
+| serialised and low occupancy | 0 | 0 (the reference) |
+
+Serialising draws changes nothing, so no draw disturbs a later one; fewer warps per SM removes the tiles. Every
+shader's code stays within its declared register count (a scan of the highest register each program touches: equal
+to `num_gprs - 1` for 13 657 programs, `num_gprs - 2` for 35), so warps do not overwrite each other's registers. What is
+left is per-SM state programmed for fragment programs. uam writes `0x087F6080` to 3D register `0x0360` (the DKSH
+fragment header's `param_d8`, method `0x0d8` in deko3d's `cmd_bind_common.cpp`) for all 13 348 pixel shaders, a
+value its source marks "TODO: figure out"; Mesa 20.1's `nvc0_fragprog_validate` writes `0x20164010` (and `0x20` to
+`0x0364`, as deko3d does) for every fragment program, and the GL path never showed the tiles on this console. The
+backend now binds every pixel shader through a CPU copy of its DKSH control section with `param_d8 = 0x20164010`
+(`InitPatchedShader`, `gb_deko3d.cpp`) and logs `pixel shaders bind with 0x0360 = 0x20164010` once. The traces test
+it: 100 s normal (nouveau's value), 106 s uam's value, 112 s low occupancy, 118 s normal again. The serialised
+experiment is gone. Checked on Ryujinx (which never showed the tiles): the scene renders, the four traces run. NRO `c2a5a3ae`, build 16:42:06.
+
+**Eleventh console run (NRO `c2a5a3ae`, build 16:42:06): register `0x0360` is not the cause.** Blue pixels in the
+lit-pass crop: 541 with nouveau's `0x20164010`, 790 with uam's `0x087F6080`, **2** at low occupancy, 562 with
+nouveau's value again (the view moved a little between the first trace and the others). The value is back to uam's
+(no patch). Ruled out on the way, offline: every `IPA` of every pixel shader reads an attribute component its input
+map declares, with the declared interpolation mode (531 144 `IPA`; the others read position, `0x70`-`0x7c`); every
+program header's local-memory and call-return-stack sizes are 0, and branch nesting is at most 3.
+
+**The schedules differ.** uam's Maxwell emitter is Mesa's with `fincs-edit`s in `SchedDataCalculatorGM107` and
+`TargetGM107::canDualIssue`. Mesa 20.1 (the GL path) never dual-issues (`canDualIssue`: "TODO, return false"); uam
+pairs an ALU instruction with the next TEX/IPA/MUFU/branch/memory instruction (stall 0 + yield): 522 536 pairs in the
+pack, mostly `FFMA`/`FMUL` + `IPA`, at all three positions of a control group. uam also takes the next instruction in
+layout order across basic blocks to decide whether a barrier-setting instruction needs 2 cycles; Mesa takes 2 at
+every block end. `CreateShader` now rewrites each DKSH's control words before placing the code
+(`UseMesaSchedule`, `gb_deko3d.cpp`): stall 0 becomes 1 without the yield (no dual issue), and any instruction that
+sets a dependency barrier gets at least 2. This only delays issue. Offline twin over the pack: 784 970 control words
+change, none keeps a stall of 0 or a barrier under 2 cycles. Traces: 100 s normal (rescheduled), 106 s uam's own
+schedule (a second copy of the code, `deko3d_debug` only), 112 s low occupancy, 118 s normal again. Checked on
+Ryujinx: the scene renders, the traces run. NRO `20bb6871`, build 16:56:49.
+
+**Twelfth console run (NRO `20bb6871`, build 16:56:49): uam's dual issue was the cause; the specks are gone.** The
+user saw no speck in play. Blue pixels in the lit-pass crop: **0** rescheduled (the 16 white ones are a zombie's eyes),
+**1 109** with uam's own schedule, 0 at low occupancy, 0 rescheduled again. Whole warps computed a wrong colour when a
+dual-issued pair (mostly `FFMA`/`FMUL` + `IPA`) ran on a busy SM; fewer warps per SM hid it, and neither Ryujinx
+(no dual issue) nor GL (Mesa never dual-issues) could show it. The experiments are gone from the backend (no second
+code copy, no 255-register header, one world trace at 100 s with `deko3d_debug`); `UseMesaSchedule` stays for every
+DKSH, vertex shaders included, and the `attribute gap` check stays. Cost not measured yet: the log has no frame-rate
+line. Next: an on-screen frame rate and battery level (asked by the user), measure the cost of the rescheduling, then
+re-enable Zcull and measure (it is still off from the investigation).

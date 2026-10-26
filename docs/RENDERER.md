@@ -147,8 +147,10 @@ does not compile.
 result to GLSL 4.60 core without extensions (`tools/ffconv/src/ff_glsl.cpp`). Every shader of the zombies zones is
 vs_3_0 or ps_3_0 and only uses float constants (`c#`) and samplers (`s#`); none samples in a vertex shader.
 
-The GL backend compiles this GLSL with mesa. A deko3d backend would compile the same GLSL offline with `uam` into
-DKSH (`ffconv --dksh`).
+The GL backend compiles this GLSL with mesa. The deko3d backend uses the same GLSL compiled offline by `uam` into
+DKSH (`tools/ffconv/gen/make_dksh_pack.py`), and rewrites each program's control words when it loads it
+(`UseMesaSchedule`): uam dual-issues where Mesa never does, which corrupts whole warps on the console under load
+(`docs/PORTING.md`, phase 7, twelfth console run).
 
 ### Shader interface
 A shader is found by the FNV-1a 64 hash of its D3D9 bytecode (`ShaderPack_Hash`). The device only receives a pointer:

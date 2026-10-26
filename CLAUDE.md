@@ -35,7 +35,9 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
 - After any 64-bit fix in a `.cpp`, run `tools/codediff.py build/mingw32-gcc <files>`. "identical" is the goal; read
   and explain every remaining difference before keeping the edit.
 - A literal byte count (`Hunk_UserAlloc(hunk, 73728, ...)`, `memset(p, 0, 0x8D388)`) is a 32-bit `sizeof` in disguise.
-  Write `sizeof`/`offsetof` instead; `tools/litsizes.py` lists the ones it can see.
+  Write `sizeof`/`offsetof` instead; `tools/litsizes.py` lists the ones it can see. It cannot see a pointer difference
+  scaled by a literal (`((char *)b - (char *)base) >> 4`, `/ 96`, `p + 16 * n`): measure the element on both targets
+  and write `b - base` or `/ (ptrdiff_t)sizeof(T)` (keeps the signed division the 32-bit code compiles to).
 - Write `double`, never `long double`: MSVC compiles it as `double`, GCC and clang as 80-bit x87 (x86-64) or 128-bit
   soft-float (AArch64), which changes struct layouts, results and speed.
 - A decompiled byte shuffle (vec_perm / pshufb) that reads `v.unitVec[0].array[i]` with a computed `i` above 3 is out
@@ -68,6 +70,9 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
   (`docs/RENDERER.md`, contract).
 - After a change to `gfx_backend.h`, `src/gfx_backend/` or the shader interface, run `d3d9emu_test` and
   `SDL_VIDEODRIVER=offscreen gb_gl_test` from the Linux build folder; both must pass.
+- deko3d binds every DKSH only after `UseMesaSchedule` (`gb_deko3d.cpp`) rewrote uam's control words: uam's dual issue
+  makes whole warps compute a wrong colour on the console once many warps share an SM (Ryujinx never shows it). Never
+  bind uam's control words as they are, and judge any shader-code change on the console, not on the emulator.
 
 ## Workflow
 - Changes touching 5+ files: work in a sibling `git worktree` (`../BO-Zombies_switch_new`) and let the user compare
