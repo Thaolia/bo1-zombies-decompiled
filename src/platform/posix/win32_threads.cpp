@@ -21,10 +21,6 @@
 #include <mutex>
 #include <vector>
 
-#ifndef PTHREAD_STACK_MIN // devkitA64 newlib does not define it; 16 KiB is a safe floor for a thread stack
-#define PTHREAD_STACK_MIN 0x4000
-#endif
-
 namespace
 {
 thread_local Bo1Thread *t_self = nullptr;
@@ -504,8 +500,19 @@ HANDLE CreateThread(LPSECURITY_ATTRIBUTES, SIZE_T dwStackSize, LPTHREAD_START_RO
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    if (dwStackSize)
-        pthread_attr_setstacksize(&attr, dwStackSize < PTHREAD_STACK_MIN ? PTHREAD_STACK_MIN : dwStackSize);
+    // Windows takes dwStackSize as the stack's initial commit: the thread still grows up to the exe's reserve (1 MiB,
+    // the MSVC /STACK default; a larger size rounds the reserve up to a MiB multiple). A pthread stack is fixed at
+    // creation, so the job-queue workers' 0x10000 and devkitA64's default (0 here, 128 KiB in libnx) would cap 64-bit
+    // frames far below what the Windows threads get. Give every thread at least the Windows reserve.
+    const size_t windowsReserve = size_t(1) << 20;
+    size_t stackSize = (dwStackSize + windowsReserve - 1) & ~(windowsReserve - 1);
+    if (stackSize < windowsReserve)
+        stackSize = windowsReserve;
+    size_t defaultSize = 0;
+    pthread_attr_getstacksize(&attr, &defaultSize); // glibc: RLIMIT_STACK (8 MiB)
+    if (defaultSize > stackSize)
+        stackSize = defaultSize;
+    pthread_attr_setstacksize(&attr, stackSize);
     const int error = pthread_create(&thread->thread, &attr, ThreadTrampoline, &start);
     pthread_attr_destroy(&attr);
     if (error)

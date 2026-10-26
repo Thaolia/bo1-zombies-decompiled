@@ -1985,7 +1985,7 @@ void __cdecl Ragdoll_RemoveConstraintsForRope(int rope_id)
     }
 }
 
-int __cdecl Ragdoll_GetRBForBone(int entnum, unsigned int boneName)
+intptr_t __cdecl Ragdoll_GetRBForBone(int entnum, unsigned int boneName)
 {
     for (RagdollBody *body : g_ragdoll_body_pool)
     {

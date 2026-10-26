@@ -147,17 +147,26 @@ void ShowAppletModeMessage()
 
 // The one writer of the SD boot log, for switch_main, the engine (Switch_DebugLog) and the deko3d backend. Horizon's
 // FS lets a single handle write a file: while the engine held its own "ab" handle, every other fopen of boot.log
-// failed, so the backend's lines never reached the SD. Opened on first use and flushed per write, so a crash keeps
-// every line written; the mutex serialises the engine's and the backend's threads.
+// failed, so the backend's lines never reached the SD. Opened on first use and flushed per write; the mutex serialises
+// the engine's and the backend's threads. fflush only hands the bytes to the FS service, which commits them on
+// fsFileFlush or close: a console run that ended in a crash kept its log only up to a minute before it (no line of the
+// lag or the crash). Committing costs an SD write, so it happens at most once a second.
 extern "C" void Switch_BootLogWrite(const char *text)
 {
     static std::mutex lock;
     const std::lock_guard<std::mutex> guard(lock);
     static FILE *const f = std::fopen(kBootLogPath, "ab");
+    static u64 lastCommit;
     if (f)
     {
         std::fputs(text, f);
         std::fflush(f);
+        const u64 now = armGetSystemTick();
+        if (now - lastCommit >= armGetSystemTickFreq())
+        {
+            fsync(fileno(f));
+            lastCommit = now;
+        }
     }
 }
 

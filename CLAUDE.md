@@ -51,6 +51,8 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
 - When a 64-bit crash reveals a bug family (a 32-bit stride, a 4-byte view, a casted call), inventory the whole tree
   for it before moving on: `tools/ptrcasts.py`, `tools/litsizes.py`, or a replay of the `mingw64-clang` compile commands
   with one clang warning (`-Wfortify-source`, `-Wcast-function-type-mismatch`; method in `docs/PORTING.md`, phase 3).
+  A pointer id returned or stored as `int` (a ragdoll's rigid body: crash on shooting a corpse) shows with
+  `-Wshorten-64-to-32`, kept to the warnings whose source type is `intptr_t`/`uintptr_t`.
 - Asset structs from fastfiles are only ever native-64 after `ffconv`. Never add runtime 32→64 patching to
   `db_load.cpp`: a 64-bit build reads `IWffs` zones whose stream `ffconv` already widened, with the same `Load_*`
   traversal. Stream rules shared by both sides (alignment, pointer encoding) live in `src/database/db_ff64.h` only.

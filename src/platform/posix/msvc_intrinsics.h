@@ -130,7 +130,13 @@ template <typename T> static inline unsigned char _BitScanForward(T *index, uint
 static inline uint64_t __rdtsc()
 {
     uint64_t ticks;
+#if defined(__SWITCH__)
+    // Horizon lets user code read the physical counter only (libnx's armGetSystemTick): cntvct_el0 traps on the
+    // console, and the bo1_frameperf profiler crashed the game at its first frame there. Ryujinx emulates both.
+    __asm__ volatile("mrs %0, cntpct_el0" : "=r"(ticks));
+#else
     __asm__ volatile("mrs %0, cntvct_el0" : "=r"(ticks));
+#endif
     return ticks;
 }
 #endif

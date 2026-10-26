@@ -284,14 +284,16 @@ void __cdecl FX_FreeMarkTriGroups(FxMarksSystem *marksSystem, FxMark *mark)
 
 FxTriGroupPool *__cdecl FX_TriGroupFromHandle(FxMarksSystem *marksSystem, unsigned int handle)
 {
-    if ( handle >= 0x6000
+    // Handles are byte offsets into the pool: its stride is the union's size, which a pointer member makes
+    // arch-dependent.
+    if ( handle >= sizeof(marksSystem->triGroups)
         && !Assert_MyHandler(
                     "c:\\projects_pc\\cod\\codsrc\\src\\effectscore\\fx_marks.h",
                     212,
                     0,
                     "handle doesn't index FX_TRI_GROUP_LIMIT * sizeof( FxTriGroup )\n\t%i not in [0, %i)",
                     handle,
-                    24576) )
+                    (int)sizeof(marksSystem->triGroups)) )
     {
         __debugbreak();
     }
@@ -321,14 +323,15 @@ void __cdecl FX_FreeMarkPointGroups(FxMarksSystem *marksSystem, FxMark *mark)
 
 FxPointGroupPool *__cdecl FX_PointGroupFromHandle(FxMarksSystem *marksSystem, unsigned int handle)
 {
-    if ( handle >= 0x19800
+    // 1536 * 68 bytes in 32-bit, 1536 * 72 in 64-bit (the union's pointer member aligns it to 8).
+    if ( handle >= sizeof(marksSystem->pointGroups)
         && !Assert_MyHandler(
                     "c:\\projects_pc\\cod\\codsrc\\src\\effectscore\\fx_marks.h",
                     237,
                     0,
                     "handle doesn't index FX_POINT_GROUP_LIMIT * sizeof( FxPointGroup )\n\t%i not in [0, %i)",
                     handle,
-                    104448) )
+                    (int)sizeof(marksSystem->pointGroups)) )
     {
         __debugbreak();
     }
@@ -1130,14 +1133,14 @@ int __cdecl FX_TriGroupToHandle(FxMarksSystem *marksSystem, FxTriGroup *group)
     if ( !group && !Assert_MyHandler("c:\\projects_pc\\cod\\codsrc\\src\\effectscore\\fx_marks.h", 200, 0, "%s", "group") )
         __debugbreak();
     handle = (char *)group - (char *)marksSystem->triGroups;
-    if ( handle >= 0x6000
+    if ( handle >= sizeof(marksSystem->triGroups)
         && !Assert_MyHandler(
                     "c:\\projects_pc\\cod\\codsrc\\src\\effectscore\\fx_marks.h",
                     203,
                     0,
                     "handle doesn't index FX_TRI_GROUP_LIMIT * sizeof( FxTriGroup )\n\t%i not in [0, %i)",
                     handle,
-                    24576) )
+                    (int)sizeof(marksSystem->triGroups)) )
     {
         __debugbreak();
     }
@@ -1201,14 +1204,14 @@ int __cdecl FX_PointGroupToHandle(FxMarksSystem *marksSystem, FxPointGroup *grou
     if ( !group && !Assert_MyHandler("c:\\projects_pc\\cod\\codsrc\\src\\effectscore\\fx_marks.h", 225, 0, "%s", "group") )
         __debugbreak();
     handle = (char *)group - (char *)marksSystem->pointGroups;
-    if ( handle >= 0x19800
+    if ( handle >= sizeof(marksSystem->pointGroups)
         && !Assert_MyHandler(
                     "c:\\projects_pc\\cod\\codsrc\\src\\effectscore\\fx_marks.h",
                     228,
                     0,
                     "handle doesn't index FX_POINT_GROUP_LIMIT * sizeof( FxPointGroup )\n\t%i not in [0, %i)",
                     handle,
-                    104448) )
+                    (int)sizeof(marksSystem->pointGroups)) )
     {
         __debugbreak();
     }

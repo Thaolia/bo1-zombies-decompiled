@@ -1454,6 +1454,154 @@ antialiased edge texels, which left the green at half strength (measured (8, 128
 at the first call (logged), the charge re-read every 5 s (an IPC call), `psmExit` after `WinMain`. The `deko3d_debug`
 frame dumps add a full-resolution top-right crop. Checked on Ryujinx: `51 FPS  100%` at the top right.
 
+**Aim assist settings from `launch.cfg` (asked by the user).** `+set aim_slowdown_enabled 1 +set aim_lockon_enabled
+1` had no effect. The three aim-assist switches are registered with flags `0x1080`:
+- `0x80`, cheat-protected: refused without `sv_cheats`, and reset by `Dvar_SetCheatState`;
+- `0x1000`: `G_InitGame` resets every such dvar at each game start (`Dvar_ResetDvars(0x1000u)`), after the
+  command line ran.
+
+Lock-on was therefore always back to 0 in game. Slowdown was already on by default (pitch and yaw scaled to 0.4 over
+a target).
+
+On the Switch, `aim_slowdown_enabled`, `aim_lockon_enabled` and `aim_autoaim_enabled` are now registered without these
+flags (`kAimSwitchFlags`, `aim_assist.cpp`); PC keeps `0x1080` (`codediff` identical). Checked on Ryujinx with the
+user's `launch.cfg`: after the map loads, `slowdown 1 lockon 1 autoaim 0`.
+
+The rest of the chain is wired: zombies are targets (eType 17 with `EF_AIM_ASSIST`), the target lists are filled
+each frame, and the pad path calls `AimAssist_UpdateGamePadInput`. That path does not run on Ryujinx without input,
+so a console run checks the assist itself, through a diagnostic line every 2 s of pad input (`aim: weap ... range
+... targets ... on screen ... slowdown ... lockon ...`).
+
+**Aim assist: the retail PC build hard-wires it off.** The console run's diagnostic lines (build 17:48:28) show the
+chain working up to the last gate:
+- `targets 2 on screen 2`, with the nearest zombie at 0.07 from the crosshair;
+- the weapon's assist range is 3200, and the three switches are at 1;
+- but `assistOff 1`: `AimAssistPlayerState::targetAssistDisabled` comes from `AimAssist_PlayerDisabledAutoAim`,
+  which the PC exe compiles to `Demo_IsPlaying(); return 1;`. That one result blocks slowdown, lock-on and (line
+  1650) auto aim.
+
+Now a mod dvar decides: `bo1_aimassist` (on by default on the Switch, off on PC, where `+set bo1_aimassist 1` turns
+it on). Since the user asked for PC too, the three switches lose their `0x1080` flags on every platform, so a PC
+player can set them without cheats.
+
+`codediff` against mingw32-gcc, function by function: 6 of 49 functions differ.
+- Intended: `RegisterDvars` (the new dvar, flags `0x1080 → 0`), `PlayerDisabledAutoAim` (reads the dvar) and
+  `BackupPlayerState` (stores its result instead of the constant 1).
+- `ApplyAutoAim`: GCC had removed the whole auto-aim body as dead under the constant; it is back, and still skipped
+  while `bo1_aimassist` is 0.
+- `AddToTargetList` and `ApplyAutoMelee`: only jump offsets, alignment padding and global addresses moved by the new
+  global.
+
+With default settings PC behaves as retail. win64-msvc builds. NRO `46a17975`, build 18:08:35, for the console check.
+
+**Aim assist works on the console; a new 1 fps stretch, and a profiler crash.** With build 18:08:35 the diagnostic
+shows `assistOff 0` and slowdown catching zombies (`active 1 ent 747`); the user feels slowdown, lock-on and ADS
+snap. But from 137 s to ~200 s the game ran at ~1 fps (16 frames per 11-16 s of `Present` lines), around the end of
+round 1 (`mus_zombie_round_over` at 150 s), with the GPU idle by the user's overlay: CPU-bound. The run before the
+aim-assist change (build 17:10) ended round 1 at 151 s with no slow stretch. Cause unknown so far.
+
+`+set bo1_frameperf 200` (the engine's frame profiler, `BO1_FRAMEHITCH` lines per slow frame) crashed the console
+right after `Com_Init` ("Huffman Took", the first frame), with no deko3d abort line, while it ran on Ryujinx. The
+profiler's zones read `__rdtsc`, which `posix/msvc_intrinsics.h` implemented on AArch64 as `mrs cntvct_el0`:
+Horizon lets user code read the physical counter only (libnx's `armGetSystemTick` reads `cntpct_el0`), so the virtual
+one traps on hardware. The crashing ELF held 2 030 such reads, all in `PROF_SCOPED` zones, which only run with the
+profiler on. The Switch now reads `cntpct_el0` (none of `cntvct_el0` left in the ELF); Ryujinx still reports
+`BO1_FRAMEHITCH` lines. NRO build 19:06:39.
+
+**The 1 fps stretch is the impact-mark system.** With build 19:06:39 and `bo1_frameperf 200`, round 1 ended at
+115 s with no slow frame. In round 2, at level time 99.9 s, one bullet impact took 988 ms to generate:
+`FX_SpawnEffect → FX_CreateImpactMark → R_MarkFragments_Go → markfragments worldbrushes`, a scope that includes the
+mark's allocation callback. From the next frame on, `fx_marks_draw` (`FX_GenerateMarkVertsForWorld`, on a worker or on
+the main thread when it assists) took 820-920 ms every frame for ~25 s of level time (~1 fps), then 680 ms. When it
+dropped to 0, `Mark verts` (marks on static and dynamic models) took ~190 ms per frame instead. Generation against door
+brushes (`markfragments entbrushes`) cost 163 ms for 4 calls, and one impact took 4.9 s. So the slowness follows
+particular marks from list to list, through generation and drawing alike. Every loop in these paths is bounded
+(256 marks, 255 tris and 765 points per mark, a 6144-vertex mark buffer), so reading the code has not explained a
+cost in the hundreds of ms.
+
+Ruled out by reading:
+- the asserts: a fired one breaks into the debugger, it cannot slow the game down;
+- lock contention: the `CRITSECT_ALLOC_MARK` users never overlap the draw (`g_markThread` would assert);
+- an invalid `std::sort` comparator;
+- 32-bit sizes in the worker commands (`sizeof(FxCmd)`);
+- uncached memory: the world vertices come from the zone and the mark vertex buffer is `Z_VirtualAlloc`'d;
+- starvation of one core: the main thread runs the draw just as slowly when it assists, while its other scopes stay
+  normal.
+
+Found on the way, a 64-bit bug: the tri- and point-group handles are byte offsets into pools whose stride is a union
+with a pointer member. That stride is 24 bytes for tri groups on both widths, and 68 → 72 bytes for point groups.
+`FX_PointGroupFromHandle`/`ToHandle` still checked the 32-bit limit `0x19800` (1536 × 68), so a point group past index
+1450 would have broken into the debugger. The four checks now compare against `sizeof(marksSystem->triGroups)` and
+`sizeof(marksSystem->pointGroups)`, which equal the old constants in 32-bit (`codediff` identical on `fx_marks.cpp`
+and `r_marks.cpp`).
+
+To catch the slow marks, a TEMP Switch-only instrumentation logs `markdiag:` lines (at most 400):
+- the world-mark list when it takes over 20 ms: visits, drawn, cull time, mark-buffer use;
+- any single mark draw over 2 ms, split into reserve/tris and lights/scene/expand, with the mark's fields and
+  material;
+- `FX_AllocAndConstructMark` over 5 ms, split into sort, lock, tri and point allocation, LRU frees, link and copy;
+- `worldbrushes`/`entbrushes` over 20 ms: box query, surface loop, callback, surface and triangle counts;
+- any `R_MarkFragments_Go` over 50 ms.
+
+NRO build 19:57:43 (`c648113a`) for the console run.
+
+**The instrumented run lost its end; thread stacks smaller than on Windows.** The user's run of build 19:57:43 lagged
+in round 2, then crashed, but its SD log stops at 180 s, ~40 s into round 2, at ~30 fps. It holds no `markdiag:` line,
+no slow frame and no abort line. `Switch_BootLogWrite` flushes each line, but `fflush` only hands the bytes to the FS
+service, which commits them on `fsFileFlush` or close. The writer now calls `fsync` (libnx `fsdev_fsync` →
+`fsFileFlush`) at most once a second.
+
+The crash's cause is not known yet (it needs Atmosphère's crash report). A difference found while looking for it:
+- **Windows**: `CreateThread`'s `dwStackSize` is the stack's initial commit, and the thread grows up to the exe's
+  reserve (1 MiB, the MSVC default; this tree sets no `/STACK`).
+- **posix layer, before**: it gave that size to `pthread_attr_setstacksize` as the whole stack. The job-queue workers
+  (`0x10000`) had 64 KiB, and the threads created with 0 had devkitA64's default, which libnx's
+  `__syscall_thread_create` sets to 128 KiB.
+- **Largest frames in the ELF**: `Sys_ListFiles` takes 132 KiB of frame alone, `BG_LoadWeaponVariantDefFile` 83 KiB
+  and `Demo_WriteServerCommands` 70 KiB. Gameplay frames stay under 4 KiB (`G_RunFrame` 3.8 KiB).
+- **Now**: every posix thread gets at least the Windows reserve, 1 MiB, or the size rounded up to a MiB multiple, or
+  the platform default when larger (glibc's 8 MiB).
+
+**The crash: shooting a ragdoll truncated its physics id.** Atmosphère's report for the run of build 19:57:43 shows a
+data abort at `0x4bc89360` on the main thread, with SP near the top of a 1 MiB stack, so not an overflow. Heap
+addresses there are `0x3d4bc8xxxx`: this one lost its high 32 bits. The chain, symbolised with that build's ELF:
+`CG_FireWeapon → BulletTrace_Start → FireBulletPenetrate → DynEntCl_EntityImpactEvent → Phys_ObjAddForce`
+(`phys_main.cpp:1961`, the read of `Phys_GetUserData(id)->body`). In `DynEntCl_EntityImpactEvent`, a bullet that hits
+a ragdoll (a dead zombie's body) asks `Ragdoll_GetRBForBone` for the bone's rigid body. `RagdollBone::rigidBody` is an
+`intptr_t` holding the `PhysObjUserData` pointer, but the function returned `int` into an `int id`. Both are now
+`intptr_t`. `syntax_check` is clean on mingw32-gcc and mingw32-clang for the header's 11 includers, and `codediff`
+is identical on `ragdoll_update.cpp` and `DynEntity_client.cpp`.
+
+Inventory of the family: the `mingw64-clang` compile commands were replayed from the ext4 mirror with `-fsyntax-only
+-Wno-everything -Wshorten-64-to-32` over the 761 engine files, keeping the conversions whose source is
+`intptr_t`/`uintptr_t`. That is 12 sites, the ragdoll one included, which proves the filter catches the bug:
+- **`live_stats.cpp:1527`**, a real one: `v17` (`unsigned int`) took `(uintptr_t)&name[strlen(name) + 1]`, then
+  `memcpy(v14, v15, v17 - (uintptr_t)v15)` took a ~2^64 length. It is a milestone ticker on rank-up, never seen in
+  zombies. Now `uintptr_t`; `codediff` identical.
+- **Benign**:
+  - the four hunk `commitSize` values in `com_memory.cpp` (differences of addresses inside one hunk);
+  - the frame count in `snd_radverb.cpp:338`;
+  - `track_userhunk_alloc`'s position argument (its body is commented out);
+  - the three `Scr_ReadUnsigned` reads into `unsigned int` counters and case values in `cscr_vm.cpp`, which the
+    emitter wrote from 32-bit values.
+
+The replay's other errors are the two XAudio2 files (posix and Switch have no XAudio2) and the known
+`cl_keys.cpp:1241` (see phase 3). In the new ELF, `Ragdoll_GetRBForBone` loads its result with `ldr x0` where build
+19:57:43 had `ldr w0`. win64-msvc builds. NRO build 20:57:15 (`4f24887a`): this fix, the posix stack reserve, the log
+`fsync`, and the `markdiag` instrumentation for the lag.
+
+Console run of build 20:57:15 (user: "ça semble bon"): Kino from boot to level time 137 s, 25-30 fps throughout, the
+round-2 start at 106 s included. No slow frame after loading, no `markdiag:` line, no crash, no crash report. The log
+ends at 190 s of uptime without "Shutdown complete", which suggests the game was closed from HOME. The lag has not
+come back in the ~30 s of round 2 this log covers. The instrumentation stays until a longer run either shows it or
+rules it out.
+
+The user shot corpses in that run without a crash. Committed without the temporary diagnostics. The aim-assist lines
+are removed: the assist is confirmed on the console. The `markdiag` instrumentation stays out of the commits, as a
+working-tree change in `fx_marks.cpp` and `r_marks.cpp`, until a longer console run shows the lag or rules it out.
+Before the merge: win32-msvc and win64-msvc build, and the Switch builds in the committed state (no `markdiag:` or
+`aim:` string, no `cntvct_el0`).
+
 ## Dedicated server (phase 8)
 
 Plan (steps): 0 prove that a client of a remote server plays; 1 a `bo1_server` mode bound to the network (not
@@ -1507,3 +1655,9 @@ over, restarts the map, and the client follows each `map_restart` back to `CA_AC
 log has no script error, and the client quits normally (exit 0). Not covered yet: the inactivity kick a server
 gives an idle client (it crashed in `Hunk_Clear` before the `Hunk_AddData` fix, not rerun since), a client on another machine of
 the LAN (the dedicated mode still binds `127.0.0.1`: step 1), and a log comparison against a listen-server run.
+
+Merged into `switch` with phase 5's work (2026-10-26): `win32-msvc` and `win64-msvc` build; the same client run on
+the merged tree reaches `CA_ACTIVE` 4 times in 240 s (3 game overs) and quits normally. That run's server log shows 3
+script runtime errors in retail `maps/_zombiemode.gsc` (`chalk_one_up`, line 3785: `huds[0]` removed before
+`MoveOverTime`), a race between the game over and the round change printed with `developer 1`; the earlier run (2
+game overs) had none. To compare against a listen-server run before blaming the remote path.
