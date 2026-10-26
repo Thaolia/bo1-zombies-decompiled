@@ -1424,7 +1424,9 @@ void phys_contact_manifold_process::intersect_poly_poly()
         } while (bridge_i <= total_verts);
     }
 
-    int num_bridges = (int)((char *)b - (char *)list_bridge) >> 4;
+    // A bridge holds two pointers: 16 bytes on 32 bits, 24 on 64. The decompiled `>> 4` and `16 *` miscounted them
+    // on 64 bits, and the arc walk below then looped on garbage (the console froze at the end of a round).
+    int num_bridges = (int)(b - list_bridge);
 
     if (num_bridges % 2)
     {
@@ -1445,7 +1447,7 @@ void phys_contact_manifold_process::intersect_poly_poly()
 
         // Advance allocator past the bridge array we just filled
         char *temp_ptr = m_allocator.m_buffer_cur;
-        m_allocator.m_buffer_cur = temp_ptr + 16 * num_bridges;
+        m_allocator.m_buffer_cur = temp_ptr + sizeof(bridge) * num_bridges;
         iassert(m_allocator.m_buffer_cur <= m_allocator.m_buffer_end);
         iassert(temp_ptr == (char *)list_bridge);
 

@@ -3561,7 +3561,7 @@ int __cdecl CM_SightTracePoint(int oldHitNum, const float *start, const float *e
             if ( (brushmask & *(unsigned int *)&prim->tree->materialIndex) != 0 )
             {
                 // mod: mapkit brushes live outside cm.brushes: number them past it (CM_Mapkit_SightTrace)
-                hitNum = CM_SightTraceThroughBrush(&tw, prim->brush, CM_Mapkit_IsBrush(prim->brush) ? cm.numBrushes : ((char *)prim->tree - (char *)cm.brushes) / 96, &trace);
+                hitNum = CM_SightTraceThroughBrush(&tw, prim->brush, CM_Mapkit_IsBrush(prim->brush) ? cm.numBrushes : ((char *)prim->tree - (char *)cm.brushes) / (ptrdiff_t)sizeof(cbrush_t), &trace);
                 if ( hitNum )
                     return hitNum;
             }
@@ -4861,7 +4861,7 @@ void __cdecl trace_point_vs_env(
                 fraction = trace->fraction;
                 trace_point_through_brush(start, dir, &trace->fraction, v12, trace->normal.vec.v, &trace->sflags);
                 if ( fraction > trace->fraction && !CM_Mapkit_IsBrush(prim->brush) ) // mod: mapkit brushes have no index
-                    *index_hint = ((char *)prim->tree - (char *)pClipMap->brushes) / 96;
+                    *index_hint = ((char *)prim->tree - (char *)pClipMap->brushes) / (ptrdiff_t)sizeof(cbrush_t); // 96 on 32 bits, 104 on 64
             }
         }
         else
@@ -5066,7 +5066,7 @@ void __cdecl trace_sphere_vs_env(
                 fraction = trace->fraction;
                 trace_sphere_through_brush(start, dir, &trace->fraction, radius, brush, trace->normal.vec.v, &trace->sflags, NULL);
                 if ( fraction > trace->fraction && !CM_Mapkit_IsBrush(prim->brush) ) // mod: mapkit brushes have no index
-                    *index_hint = ((char *)prim->tree - (char *)pClipMap->brushes) / 96;
+                    *index_hint = ((char *)prim->tree - (char *)pClipMap->brushes) / (ptrdiff_t)sizeof(cbrush_t); // 96 on 32 bits, 104 on 64
             }
         }
         else
