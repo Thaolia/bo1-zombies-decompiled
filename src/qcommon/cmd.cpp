@@ -1340,6 +1340,33 @@ void __cdecl Cmd_Exec_f()
     }
 }
 
+#if defined(__SWITCH__)
+#include <ui/keycodes.h>
+
+// The console's pad layout, laid over every config that binds pad buttons: default_mp_controls.cfg at start-up, and
+// buttons_default.cfg and its variants, which the profile and the menus run again during play. As asked for on the
+// console: Y reloads and L switches weapon; the tactical grenade (monkey bombs) that L threw moves to the d-pad's
+// down; X keeps use/reload (buy, rebuild).
+static bool Switch_BindsPad(const char *text)
+{
+    return text && strstr(text, "BUTTON_");
+}
+
+static void Switch_ApplyPadLayout(int localClientNum, int controllerIndex, const char *filename)
+{
+    char layout[] = "bind BUTTON_Y \"+reload\"\n"
+                    "bind BUTTON_LSHLDR \"weapnext\"\n"
+                    "bind DPAD_DOWN \"+smoke\"\n";
+    Cbuf_ExecuteBuffer(localClientNum, controllerIndex, layout);
+    const char *y = Key_GetBinding(localClientNum, K_BUTTON_Y, 0);
+    const char *l = Key_GetBinding(localClientNum, K_BUTTON_LSHLDR, 0);
+    const char *x = Key_GetBinding(localClientNum, K_BUTTON_X, 0);
+    const char *d = Key_GetBinding(localClientNum, K_DPAD_DOWN, 0);
+    Com_Printf(16, "pad layout after %s: Y %s, L %s, X %s, d-pad down %s\n", filename, y ? y : "-", l ? l : "-",
+               x ? x : "-", d ? d : "-");
+}
+#endif
+
 char __cdecl Cmd_ExecFromDisk(int localClientNum, int controllerIndex, const char *filename)
 {
     char *text; // [esp+0h] [ebp-4h] BYREF
@@ -1348,7 +1375,14 @@ char __cdecl Cmd_ExecFromDisk(int localClientNum, int controllerIndex, const cha
     if ( text )
     {
         Com_Printf(16, "execing %s from disk\n", filename);
+#if defined(__SWITCH__)
+        const bool padBinds = Switch_BindsPad(text);
+#endif
         Con_Restricted_ExecuteBuf(localClientNum, controllerIndex, text);
+#if defined(__SWITCH__)
+        if (padBinds)
+            Switch_ApplyPadLayout(localClientNum, controllerIndex, filename);
+#endif
         FS_FreeFile(text);
         return 1;
     }
@@ -1388,7 +1422,14 @@ char __cdecl Cmd_ExecFromFastFile(int localClientNum, int controllerIndex, char 
     if ( !rawfile )
         return 0;
     Com_Printf(16, "execing %s from fastfile\n", filename);
+#if defined(__SWITCH__)
+    const bool padBinds = Switch_BindsPad(rawfile->buffer);
+#endif
     Cbuf_ExecuteBuffer(localClientNum, controllerIndex, (char *)rawfile->buffer);
+#if defined(__SWITCH__)
+    if (padBinds)
+        Switch_ApplyPadLayout(localClientNum, controllerIndex, filename);
+#endif
     return 1;
 }
 

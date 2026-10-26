@@ -39,10 +39,20 @@ inline void Bo1_MapGamepadState(const Uint8 buttons[SDL_CONTROLLER_BUTTON_MAX],
         SDL_GameControllerButton sdl;
         unsigned short bit;
     } kButtons[] = {
+#if defined(__SWITCH__)
+        // SDL2-switch names the face buttons by position, as on an Xbox pad (its A is the console's bottom B, its X
+        // the console's left Y), while the game's prompts name the letter to press ("press X to rebuild"): a player
+        // pressed the console's X and got the Xbox Y. Map by the letters printed on the Joy-Cons instead.
+        {SDL_CONTROLLER_BUTTON_B, BO1_XINPUT_A},
+        {SDL_CONTROLLER_BUTTON_A, BO1_XINPUT_B},
+        {SDL_CONTROLLER_BUTTON_Y, BO1_XINPUT_X},
+        {SDL_CONTROLLER_BUTTON_X, BO1_XINPUT_Y},
+#else
         {SDL_CONTROLLER_BUTTON_A, BO1_XINPUT_A},
         {SDL_CONTROLLER_BUTTON_B, BO1_XINPUT_B},
         {SDL_CONTROLLER_BUTTON_X, BO1_XINPUT_X},
         {SDL_CONTROLLER_BUTTON_Y, BO1_XINPUT_Y},
+#endif
         {SDL_CONTROLLER_BUTTON_BACK, BO1_XINPUT_BACK},
         {SDL_CONTROLLER_BUTTON_START, BO1_XINPUT_START},
         {SDL_CONTROLLER_BUTTON_LEFTSTICK, BO1_XINPUT_LEFT_THUMB},

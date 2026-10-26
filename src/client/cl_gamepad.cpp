@@ -546,6 +546,33 @@ void __cdecl CL_GamepadResetMenuScrollTime(int localClientNum, int key, int down
     }
 }
 
+// The key a menu gets for a pad key. The PC menus (Menu_HandleKey) step between items on the arrow keys and have no
+// case for the d-pad or the left stick, which only the console menus handled, and their focus follows the mouse: on
+// a console with no mouse a pad opened a menu but could not move in it. Off Windows, each direction is its arrow key.
+static inline int CL_GamepadMenuKey(int key)
+{
+#if !defined(_WIN32)
+    switch (key)
+    {
+    case K_DPAD_UP:
+    case K_APAD_UP:
+        return K_UPARROW;
+    case K_DPAD_DOWN:
+    case K_APAD_DOWN:
+        return K_DOWNARROW;
+    case K_DPAD_LEFT:
+    case K_APAD_LEFT:
+        return K_LEFTARROW;
+    case K_DPAD_RIGHT:
+    case K_APAD_RIGHT:
+        return K_RIGHTARROW;
+    default:
+        break;
+    }
+#endif
+    return key;
+}
+
 void __cdecl CL_GamepadButtonEvent(
                 int localClientNum,
                 int controllerIndex,
@@ -786,7 +813,7 @@ void __cdecl CL_GamepadButtonEvent(
                                     else if ( cls.uiStarted && !i )
                                     {
                                         //BLOPS_NULLSUB();
-                                        UI_KeyEvent(localClientNum, key, v15);
+                                        UI_KeyEvent(localClientNum, CL_GamepadMenuKey(key), v15);
                                     }
                                 }
                                 else
@@ -805,7 +832,7 @@ void __cdecl CL_GamepadButtonEvent(
                                         Cbuf_AddText(localClientNum, cmd);
                                     }
                                     if ( (LocalClientUIGlobals->keyCatchers & 0x10) != 0 && cls.uiStarted && !i )
-                                        UI_KeyEvent(localClientNum, key, 0);
+                                        UI_KeyEvent(localClientNum, CL_GamepadMenuKey(key), 0);
                                     if ( i == 1 )
                                         return;
                                 }
