@@ -8354,6 +8354,28 @@ void __cdecl Window_Paint(
                 flags = Window_GetDynamicFlags(dc->contextIndex, w);
                 Fade(&flags, &w->backColor[3], fadeClamp, &w->nextTime, (int)fadeCycle, 1, fadeAmount, fadeInAmount, dc);
                 Window_SetDynamicFlags(dc->contextIndex, w, flags);
+#if defined(_WIN64) || !defined(_WIN32)
+                // The "connect" menu zombies loads fills its window with $levelbriefing, whose only image is the 16x16
+                // checkerboard images/default.iwi: nothing in this engine puts a level image into it. Show the map's
+                // loadscreen material there (UI_SetLoadingScreenMaterial resolved it), the artwork the retail loading
+                // screen shows, or black when there is none -- loadscreen_frontend, too, only holds that placeholder
+                // image. The 32-bit reference keeps the decompiled behaviour.
+                if (!strcmp(Material_GetName(w->background), "$levelbriefing"))
+                {
+                    const float briefingColor[4] = {1.0f, 1.0f, 1.0f, w->backColor[3]};
+                    Material *briefing = sharedUiInfo.loadingScreen;
+                    if (briefing && (!briefing->textureCount || !briefing->textureTable[0].u.image ||
+                                     !strcmp(briefing->textureTable[0].u.image->name, "default")))
+                        briefing = nullptr;
+                    if (briefing)
+                        UI_DrawHandlePic(scrPlace, fillRect.x, fillRect.y, fillRect.w, fillRect.h, origRect->horzAlign,
+                                         origRect->vertAlign, briefingColor, briefing);
+                    else
+                        UI_FillRect(scrPlace, fillRect.x, fillRect.y, fillRect.w, fillRect.h, origRect->horzAlign,
+                                    origRect->vertAlign, colorBlack);
+                    break;
+                }
+#endif
                 if (w->rotation == 0.0)
                     UI_DrawHandlePic(
                         scrPlace,
