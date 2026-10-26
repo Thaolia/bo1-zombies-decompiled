@@ -1661,10 +1661,10 @@ void __cdecl Byte4PackVertexColor(const float *from, unsigned __int8 *to)
     v14[1] = inted;
     v14[2] = NATIVE_VERTEX_PERM;
     p_permed = &permed;
-    permed.unitVec[0].array[0] = v14[0].unitVec[0].array[NATIVE_VERTEX_PERM.unitVec[0].array[3]];
-    permed.unitVec[0].array[1] = v14[0].unitVec[0].array[NATIVE_VERTEX_PERM.unitVec[0].array[2]];
-    permed.unitVec[0].array[2] = v14[0].unitVec[0].array[NATIVE_VERTEX_PERM.unitVec[0].array[1]];
-    permed.unitVec[0].array[3] = v14[0].unitVec[0].array[NATIVE_VERTEX_PERM.unitVec[0].array[0]];
+    permed.unitVec[0].array[0] = Float4Byte(v14[0], NATIVE_VERTEX_PERM.unitVec[0].array[3]);
+    permed.unitVec[0].array[1] = Float4Byte(v14[0], NATIVE_VERTEX_PERM.unitVec[0].array[2]);
+    permed.unitVec[0].array[2] = Float4Byte(v14[0], NATIVE_VERTEX_PERM.unitVec[0].array[1]);
+    permed.unitVec[0].array[3] = Float4Byte(v14[0], NATIVE_VERTEX_PERM.unitVec[0].array[0]);
     *(unsigned int *)to = permed.u[0];
 }
 

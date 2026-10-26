@@ -38,6 +38,9 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
   Write `sizeof`/`offsetof` instead; `tools/litsizes.py` lists the ones it can see.
 - Write `double`, never `long double`: MSVC compiles it as `double`, GCC and clang as 80-bit x87 (x86-64) or 128-bit
   soft-float (AArch64), which changes struct layouts, results and speed.
+- A decompiled byte shuffle (vec_perm / pshufb) that reads `v.unitVec[0].array[i]` with a computed `i` above 3 is out
+  of bounds: GCC and clang then compute only lane 0 (vertex colours lost their alpha). Read it with
+  `Float4Byte(v, i)` (`src/universal/com_math.h`).
 - A block aligned below its type's `alignof` (an align(64) struct from a 4-aligned `Hunk_UserAlloc`) takes
   `BO1_ALLOC_ALIGN(retail, T)`, and the size sum that reserves it `BO1_ALLOC_SLACK`: GCC and clang copy over-aligned
   types with aligned vector moves, MSVC never does. `tools/overaligned.py` lists the candidates.

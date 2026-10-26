@@ -65,6 +65,15 @@ inline void Float4Store(void *p, const float4 &v)
     memcpy(p, &v, sizeof(v));
 }
 
+// Byte `index` (0-15) of `v`. The decompiled byte shuffles (vec_perm / pshufb) read it as `v.unitVec[0].array[index]`,
+// past the end of a 4-byte array: GCC takes that as out of bounds and drops the other components' computation (a
+// packed vertex colour then kept only red, with stack garbage, usually 0, as alpha). A char pointer carries no such
+// bound, so the bytes are read as MSVC reads them.
+inline unsigned char Float4Byte(const float4 &v, unsigned int index)
+{
+    return reinterpret_cast<const unsigned char *>(&v)[index];
+}
+
 union float4x3 {
     union {
         float4 x;
