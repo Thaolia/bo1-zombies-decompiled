@@ -15,11 +15,15 @@
 
 #include <malloc.h>
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
+#include <map>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 extern "C" void Switch_BootLogWrite(const char *text); // switch_main.cpp
@@ -113,6 +117,135 @@ void FreeBlock(DkMemBlock block)
     --s_blocksLive;
     s_blockBytes -= dkMemBlockGetSize(block);
     dkMemBlockDestroy(block);
+}
+
+// Textures and buffer stores take ranges of a few large blocks, not a block each. Every DkMemBlock is an nvmap handle
+// and a GPU mapping in nvservices: the console refuses new ones past ~1330 live (dkMemBlockCreate fails, and the
+// release library aborts), where Ryujinx has no limit and the main menu alone held 2860 (docs/PORTING.md). First fit
+// over each chunk's coalesced free list, as deko3d's sample framework (CMemPool) does; a range too big to share gets
+// a block of its own.
+struct Pool;
+struct Chunk
+{
+    Pool *pool = nullptr;
+    DkMemBlock mem = nullptr;
+    uint32_t live = 0;                 // ranges handed out
+    std::map<uint32_t, uint32_t> free; // offset -> size, no two adjacent
+};
+
+struct Pool
+{
+    uint32_t flags;
+    uint32_t chunkSize;
+    std::vector<Chunk *> chunks;
+};
+
+struct Range
+{
+    DkMemBlock mem = nullptr;
+    uint32_t offset = 0, size = 0;
+    Chunk *chunk = nullptr; // null: the range owns `mem`
+};
+
+// Ryujinx's DMA copy into an image read-modify-writes a GOB-rounded range that can run past the image's end
+// (switch-homebrew.md); past the end of a block that is an unmapped page and kills the emulator, so every block that
+// holds images keeps this much unused at its end. Inside a chunk the overrun rewrites a neighbour's bytes with
+// themselves.
+constexpr uint32_t kImageTail = 64 << 10;
+
+Pool s_imagePool = {DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image, 64u << 20, {}};
+Pool s_dataPool = {DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached, 16u << 20, {}};
+
+Range Allocate(Pool &pool, uint32_t size, uint32_t alignment)
+{
+    const uint32_t tail = (pool.flags & DkMemBlockFlags_Image) ? kImageTail : 0;
+    Range r;
+    r.size = size;
+    if (size > pool.chunkSize / 2)
+    {
+        r.mem = MakeBlock(size + tail, pool.flags);
+        return r;
+    }
+    for (int pass = 0; pass < 2; ++pass)
+    {
+        for (Chunk *c : pool.chunks)
+            for (auto it = c->free.begin(); it != c->free.end(); ++it)
+            {
+                const uint32_t start = AlignUp(it->first, alignment);
+                const uint32_t end = it->first + it->second;
+                if (start >= end || end - start < size)
+                    continue;
+                const uint32_t at = it->first;
+                c->free.erase(it);
+                if (start > at)
+                    c->free.emplace(at, start - at);
+                if (end > start + size)
+                    c->free.emplace(start + size, end - (start + size));
+                ++c->live;
+                r.mem = c->mem;
+                r.offset = start;
+                r.chunk = c;
+                return r;
+            }
+        // Nothing fits: a new chunk, which the second pass finds (the range is at most half of it).
+        Chunk *c = new Chunk();
+        c->pool = &pool;
+        c->mem = MakeBlock(pool.chunkSize + tail, pool.flags);
+        c->free.emplace(0u, pool.chunkSize);
+        pool.chunks.push_back(c);
+    }
+    return r;
+}
+
+void Release(const Range &r)
+{
+    if (!r.mem)
+        return;
+    if (!r.chunk)
+    {
+        FreeBlock(r.mem);
+        return;
+    }
+    Chunk *c = r.chunk;
+    uint32_t at = r.offset, size = r.size;
+    auto next = c->free.lower_bound(at);
+    if (next != c->free.end() && at + size == next->first)
+    {
+        size += next->second;
+        next = c->free.erase(next);
+    }
+    if (next != c->free.begin())
+    {
+        const auto prev = std::prev(next);
+        if (prev->first + prev->second == at)
+        {
+            at = prev->first;
+            size += prev->second;
+            c->free.erase(prev);
+        }
+    }
+    c->free.emplace(at, size);
+    // An empty chunk goes back, except a pool's last one, which the next allocation would only make again.
+    Pool &pool = *c->pool;
+    if (--c->live == 0 && pool.chunks.size() > 1)
+    {
+        FreeBlock(c->mem);
+        pool.chunks.erase(std::find(pool.chunks.begin(), pool.chunks.end(), c));
+        delete c;
+    }
+}
+
+void ReleasePools()
+{
+    for (Pool *pool : {&s_imagePool, &s_dataPool})
+    {
+        for (Chunk *c : pool->chunks)
+        {
+            FreeBlock(c->mem);
+            delete c;
+        }
+        pool->chunks.clear();
+    }
 }
 
 // dkQueueWaitIdle that says why it waits. After a GPU fault the queue's work never completes, so an unbounded wait
@@ -294,7 +427,7 @@ void MapAttrib(AttribType t, DkVtxAttribSize *size, DkVtxAttribType *type, bool 
 // recorded or running work still reads (Upload::Discard / Upload::Ordered), as a D3D9 driver does.
 struct BufferStore
 {
-    DkMemBlock mem = nullptr;
+    Range mem;
     DkGpuAddr gpu = 0;
     uint8_t *cpu = nullptr;
     uint32_t busySerial = 0; // the last frame that recorded a read of this store
@@ -302,8 +435,7 @@ struct BufferStore
 
 struct Buffer : gb::Buffer
 {
-    DkMemBlock mem = nullptr; // the current store, which draws bind
-    DkGpuAddr gpu = 0;
+    DkGpuAddr gpu = 0; // the current store's, which draws bind
     uint32_t size = 0;
     BufferType type = BufferType::Vertex;
     mutable std::vector<BufferStore> stores; // empty for the uniform ring, which manages its own memory
@@ -312,7 +444,7 @@ struct Buffer : gb::Buffer
 
 struct Texture : gb::Texture
 {
-    DkMemBlock mem = nullptr;
+    Range mem;
     DkImage image = {};
     DkImageLayout layout = {};
     TextureDesc desc = {};
@@ -325,6 +457,10 @@ struct Shader : gb::Shader
 {
     DkShader shader = {};
     bool valid = false;
+    uint64_t hash = 0;
+    // Generic attribute components from the Maxwell program header (bit 4*attr+comp): written by a vertex shader,
+    // read by a pixel shader.
+    uint64_t attrMask[2] = {};
 };
 
 struct Sampler : gb::Sampler
@@ -375,7 +511,7 @@ Swapchain *s_swapchain = nullptr;
 // Frame serials: the frame being recorded (or last recorded), and the last one the GPU is known to have finished
 // (BeginFrame waits for the previous frame). Memory the engine frees waits in s_pendingFree until that point.
 uint32_t s_frameSerial = 0, s_completedSerial = 0;
-std::vector<DkMemBlock> s_pendingFree;
+std::vector<Range> s_pendingFree;
 uint32_t s_renames = 0; // buffer renames so far (logged with Present)
 
 void MarkRead(const Buffer *b)
@@ -471,17 +607,26 @@ DkMemBlock s_dumpMem = nullptr;
 bool s_dumpPending = false, s_dumpBgra = false;
 uint32_t s_dumpW = 0, s_dumpH = 0, s_dumpLabel = 0, s_dumpIdx = 0;
 // Seconds since the first Present at which the presented image is dumped, and the one-frame trace runs. Both only
-// run when sdmc:/switch/bo1zm/deko3d_debug exists: each stalls a frame, and only an emulator's log receives what
-// they print.
+// run when sdmc:/switch/bo1zm/deko3d_debug exists: each stalls a frame. The trace wants a world frame: a console
+// launched with +devmap is in game ~60 s after its first Present, Ryujinx ~120 s.
 const uint32_t kDumpAt[] = {15, 30, 150, 210, 270};
-constexpr uint32_t kTraceAt = 20;
 bool s_debugCaptures = false;
+// When the one-frame traces run; the label names their pass crops. To compare a change on the console in one run,
+// add a trace and switch the change on for that frame only (BindDraw sees s_frameTrace and the trace index).
+struct TraceRun
+{
+    uint32_t at;
+    const char *what;
+};
+const TraceRun kTraces[] = {{100, "world"}};
+uint32_t s_traceIdx = 0;
+const char *s_traceWhat = "";
 
 // The current pass's attachment size and colour-target count (Clear covers them), and a one-frame trace of a world
 // frame's passes, draws and clears (debug).
 uint32_t s_passW = 0, s_passH = 0, s_passColors = 0;
 int s_passIdx = 0, s_passDraws = 0;
-bool s_frameTrace = false, s_frameTraceDone = false;
+bool s_frameTrace = false;
 
 // The colour target of a few passes of the traced frame, copied out and written as PPMs after its Present (debug).
 struct PassCap
@@ -490,16 +635,33 @@ struct PassCap
     int pass;
     bool bgra;
 };
-constexpr uint32_t kPassCapSize = 4 * 1280 * 720 * 4;
+constexpr uint32_t kPassCapSize = 96u << 20; // every 16:9 pass of the traced frame, RGBA16 ones at 8 bytes a texel
 DkMemBlock s_passCapMem = nullptr;
 std::vector<PassCap> s_passCaps;
 uint32_t s_passCapNext = 0;
 bool s_passCapPending = false;
 const Texture *s_passColor0 = nullptr;
 
-// Dumps go out through svcOutputDebugString, as hex lines between "IMG WxH label" and "IMGEND label", downscaled 4x:
-// on Ryujinx every SD write fails with EIO once a map is loaded (the engine's own boot.log stops there too), while
-// the debug string always reaches the emulator's log. Reassemble on the PC.
+// Dumps go out as hex lines between "IMG WxH label" and "IMGEND label", downscaled 4x unless cropped, to both logs:
+// on Ryujinx SD writes can fail with EIO once a map is loaded while the debug string reaches the emulator's log; on a
+// console the debug string reaches nothing and the SD boot log has them. Reassemble on the PC.
+void EmitImageLine(char *line, int n, int prefix)
+{
+    // The debug string in pieces of 80 pixels, as an emulator's log takes them; the SD one line at a time, which
+    // keeps the flushes per image few enough that a capture does not stall the game for long.
+    char piece[512];
+    std::memcpy(piece, line, size_t(prefix));
+    for (int at = prefix; at < n; at += 480)
+    {
+        const int len = n - at < 480 ? n - at : 480;
+        std::memcpy(piece + prefix, line + at, size_t(len));
+        svcOutputDebugString(piece, size_t(prefix + len));
+    }
+    line[n] = '\n';
+    line[n + 1] = '\0';
+    Switch_BootLogWrite(line);
+}
+
 void LogImage(const char *label, const uint8_t *px, uint32_t w, uint32_t h, bool bgra, uint32_t bpp = 4,
               uint32_t kStep = 4, uint32_t x0 = 0, uint32_t y0 = 0, uint32_t cw = 0, uint32_t chgt = 0)
 {
@@ -509,7 +671,7 @@ void LogImage(const char *label, const uint8_t *px, uint32_t w, uint32_t h, bool
     const uint32_t hi = bpp == 8 ? 1 : 0, ch = bpp == 8 ? 2 : 1; // RGBA16: keep each channel's high byte
     Log("IMG %ux%u %s", ow, oh, label);
     static const char hex[] = "0123456789abcdef";
-    char line[512];
+    char line[8192];
     const int prefix = snprintf(line, sizeof(line), "[gb-deko3d] IMGD ");
     int n = prefix;
     for (uint32_t y = 0; y < oh; ++y)
@@ -522,14 +684,14 @@ void LogImage(const char *label, const uint8_t *px, uint32_t w, uint32_t h, bool
                 line[n++] = hex[c >> 4];
                 line[n++] = hex[c & 15];
             }
-            if (n > 480)
+            if (n >= prefix + 7680)
             {
-                svcOutputDebugString(line, size_t(n));
+                EmitImageLine(line, n, prefix);
                 n = prefix;
             }
         }
     if (n > prefix)
-        svcOutputDebugString(line, size_t(n));
+        EmitImageLine(line, n, prefix);
     Log("IMGEND %s", label);
 }
 
@@ -552,8 +714,8 @@ void BeginFrame(Swapchain *s)
     if (idle)
     {
         s_completedSerial = s_frameSerial;
-        for (DkMemBlock m : s_pendingFree)
-            FreeBlock(m);
+        for (const Range &m : s_pendingFree)
+            Release(m);
         s_pendingFree.clear();
     }
     ++s_frameSerial;
@@ -584,8 +746,12 @@ bool Init()
         Log("dkDeviceCreate failed");
         return false;
     }
-    DkQueueMaker queueMaker; // the defaults (graphics + compute + zcull + scratch) suit a full render path
+    DkQueueMaker queueMaker; // graphics + compute + scratch, as the defaults
     dkQueueMakerDefaults(&queueMaker, s_device);
+    // Zcull (the coarse per-tile depth cull) is off while the console's per-warp blue specks in the lit pass are
+    // investigated: they looked like culled tiles, but turning Zcull off did not remove them (docs/PORTING.md).
+    // Turn it back on, and measure, once they are understood.
+    queueMaker.flags |= DkQueueFlags_DisableZcull;
     s_queue = dkQueueCreate(&queueMaker);
     if (!s_queue)
     {
@@ -616,6 +782,10 @@ void Shutdown()
     for (DkMemBlock b : s_codeBlocks)
         FreeBlock(b);
     s_codeBlocks.clear();
+    for (const Range &m : s_pendingFree)
+        Release(m);
+    s_pendingFree.clear();
+    ReleasePools();
     s_codeOffset = 0;
     if (s_device)
     {
@@ -640,11 +810,11 @@ namespace
 {
 bool MakeStore(uint32_t size, BufferStore *store)
 {
-    store->mem = MakeBlock(size, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached);
-    if (!store->mem)
+    store->mem = Allocate(s_dataPool, size, DK_UNIFORM_BUF_ALIGNMENT);
+    if (!store->mem.mem)
         return false;
-    store->gpu = dkMemBlockGetGpuAddr(store->mem);
-    store->cpu = static_cast<uint8_t *>(dkMemBlockGetCpuAddr(store->mem));
+    store->gpu = dkMemBlockGetGpuAddr(store->mem.mem) + store->mem.offset;
+    store->cpu = static_cast<uint8_t *>(dkMemBlockGetCpuAddr(store->mem.mem)) + store->mem.offset;
     return true;
 }
 } // namespace
@@ -661,7 +831,6 @@ gb::Buffer *CreateBuffer(const BufferDesc &desc)
         return nullptr;
     }
     b->stores.push_back(store);
-    b->mem = store.mem;
     b->gpu = store.gpu;
     return b;
 }
@@ -703,7 +872,6 @@ void UploadBuffer(gb::Buffer *buffer, uint32_t offset, const void *data, uint32_
             if (mode == Upload::Ordered)
                 std::memcpy(b->stores[next].cpu, b->stores[b->cur].cpu, b->size);
             b->cur = next;
-            b->mem = b->stores[next].mem;
             b->gpu = b->stores[next].gpu;
             ++s_renames;
         }
@@ -754,17 +922,13 @@ gb::Texture *CreateTexture(const TextureDesc &desc)
         Log("CreateTexture RT/DS: Format %d -> DkFmt %d, usage %d, %ux%u", int(desc.format), int(lm.format),
             int(desc.usage), desc.width, desc.height);
     dkImageLayoutInitialize(&t->layout, &lm);
-    // Slack after the image (test): Ryujinx's DMA copy read-modify-writes a GOB-rounded destination range, which for
-    // a small mip in the mip tail can run past the end of a tightly sized block into an unmapped page.
-    constexpr uint32_t kTexSlack = 64 << 10;
-    t->mem = MakeBlock(uint32_t(dkImageLayoutGetSize(&t->layout)) + kTexSlack,
-                       DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image);
-    if (!t->mem)
+    t->mem = Allocate(s_imagePool, uint32_t(dkImageLayoutGetSize(&t->layout)), dkImageLayoutGetAlignment(&t->layout));
+    if (!t->mem.mem)
     {
         delete t;
         return nullptr;
     }
-    dkImageInitialize(&t->image, &t->layout, t->mem, 0);
+    dkImageInitialize(&t->image, &t->layout, t->mem.mem, t->mem.offset);
 
     // Give the texture a descriptor id. A render target is sampled as rendered (the final composite reads the scene
     // this way), so its descriptor points at its own image. A sampled texture points at the white placeholder until
@@ -783,7 +947,7 @@ void DestroyTexture(gb::Texture *texture)
     Texture *t = static_cast<Texture *>(texture);
     if (!t)
         return;
-    if (t->mem) // recorded or running work may still sample it: free once the GPU is past this frame
+    if (t->mem.mem) // recorded or running work may still sample it: free once the GPU is past this frame
         s_pendingFree.push_back(t->mem);
     delete t;
 }
@@ -866,30 +1030,144 @@ const gb::Sampler *GetSampler(const SamplerDesc &desc)
     return slot;
 }
 
-gb::Shader *CreateShader(Stage, uint64_t, const char *code, uint32_t size)
+namespace
 {
-    Shader *sh = new Shader();
+// The DKSH's first program header gives the offset of its Maxwell shader program header (SPH) in the code section.
+// In the SPH, a vertex shader's OmapGenericVector (0x36) has 4 bits per attribute; a pixel shader's
+// ImapGenericVector (0x18) has 2 bits (interpolation mode, 0 = unused) per component.
+void ReadAttrMask(Stage stage, const char *code, uint32_t size, uint64_t mask[2])
+{
+    uint32_t hdr[6];
+    if (size < sizeof(hdr))
+        return;
+    std::memcpy(hdr, code, sizeof(hdr));
+    const uint32_t controlSize = hdr[2], programsOff = hdr[4];
+    uint32_t entry = 0;
+    if (hdr[0] != 0x48534B44 || programsOff + 8 > size) // "DKSH"
+        return;
+    std::memcpy(&entry, code + programsOff + 4, sizeof(entry));
+    if (controlSize + entry + 0x50 > size)
+        return;
+    const uint8_t *sph = reinterpret_cast<const uint8_t *>(code) + controlSize + entry;
+    for (uint32_t a = 0; a < 32; ++a)
+        for (uint32_t c = 0; c < 4; ++c)
+        {
+            const bool used = stage == Stage::Vertex ? ((sph[0x36 + a / 2] >> (4 * (a & 1) + c)) & 1) != 0
+                                                     : ((sph[0x18 + a] >> (2 * c)) & 3) != 0;
+            if (used)
+                mask[a / 16] |= 1ull << (4 * (a % 16) + c);
+        }
+}
+
+// DKSH layout (deko3d dksh.h): header {magic, header size, control size, code size, programs offset, program count};
+// 64-byte program headers {type, entrypoint, num_gprs, constbuf1 offset, constbuf1 size, ...}; then the code section,
+// with each program's 0x50-byte Maxwell header at its entrypoint followed by groups of one control word (21 bits per
+// instruction: stall, yield, write barrier, read barrier, wait mask, reuse) and three instructions.
+constexpr uint32_t kDkshMagic = 0x48534B44, kProgHeaderSize = 64;
+
+// uam schedules differently from the nvc0 compiler of the GL path (Mesa 20.1): it dual-issues an ALU instruction with
+// the next TEX/IPA/MUFU/branch (stall 0 + yield), where Mesa's canDualIssue is "TODO: return false", and it decides
+// whether a barrier-setting instruction needs 2 cycles from the next instruction in layout order across basic blocks,
+// where Mesa takes 2 at every block end. This rewrites the control words to Mesa's rules, slightly stricter: no dual
+// issue, and 2 cycles after any instruction that sets a dependency barrier. It only delays issue, so every dependency
+// stays covered.
+// Returns how many control words changed.
+uint32_t UseMesaSchedule(uint8_t *dksh, uint32_t size)
+{
+    uint32_t hdr[6];
+    if (size < sizeof(hdr))
+        return 0;
+    std::memcpy(hdr, dksh, sizeof(hdr));
+    const uint32_t controlSize = hdr[2], codeSize = hdr[3], programsOff = hdr[4], programs = hdr[5];
+    if (hdr[0] != kDkshMagic || uint64_t(controlSize) + codeSize > size)
+        return 0;
+    uint32_t changed = 0;
+    for (uint32_t p = 0; p < programs && programsOff + kProgHeaderSize * (p + 1) <= controlSize; ++p)
+    {
+        uint32_t prog[5];
+        std::memcpy(prog, dksh + programsOff + kProgHeaderSize * p, sizeof(prog));
+        // The instructions end at the program's constant data, if it follows them, or at the first null control word.
+        uint32_t end = codeSize;
+        if (prog[4] && prog[3] > prog[1])
+            end = std::min(end, prog[3]);
+        for (uint32_t at = prog[1] + 0x50; at + 32 <= end; at += 32)
+        {
+            uint64_t control;
+            std::memcpy(&control, dksh + controlSize + at, sizeof(control));
+            if (!control)
+                break;
+            uint64_t out = control;
+            for (int k = 0; k < 3; ++k)
+            {
+                uint64_t c = (control >> (21 * k)) & 0x1FFFFF;
+                uint64_t stall = c & 0xF;
+                const bool barrier = ((c >> 5) & 7) != 7 || ((c >> 8) & 7) != 7;
+                if (stall == 0)
+                {
+                    stall = 1;
+                    c &= ~uint64_t(0x10); // the yield uam adds to a dual-issued pair
+                }
+                if (barrier && stall < 2)
+                    stall = 2;
+                c = (c & ~uint64_t(0xF)) | stall;
+                out = (out & ~(uint64_t(0x1FFFFF) << (21 * k))) | (c << (21 * k));
+            }
+            if (out != control)
+            {
+                std::memcpy(dksh + controlSize + at, &out, sizeof(out));
+                ++changed;
+            }
+        }
+    }
+    return changed;
+}
+
+// Copies a DKSH into the code pool. False when no code block could be made.
+bool PlaceCode(const void *dksh, uint32_t size, DkMemBlock *block, uint32_t *offset)
+{
     const uint32_t need = AlignUp(size, DK_SHADER_CODE_ALIGNMENT);
     if (s_codeBlocks.empty() || s_codeOffset + need > kCodeChunk)
     {
-        DkMemBlock block = MakeBlock(need > kCodeChunk ? need : kCodeChunk,
+        DkMemBlock fresh = MakeBlock(need > kCodeChunk ? need : kCodeChunk,
                                      DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Code);
-        if (!block)
-        {
-            delete sh;
-            return nullptr;
-        }
-        s_codeBlocks.push_back(block);
+        if (!fresh)
+            return false;
+        s_codeBlocks.push_back(fresh);
         s_codeOffset = 0;
     }
-    DkMemBlock block = s_codeBlocks.back();
-    const uint32_t offset = s_codeOffset;
-    std::memcpy(static_cast<uint8_t *>(dkMemBlockGetCpuAddr(block)) + offset, code, size);
+    *block = s_codeBlocks.back();
+    *offset = s_codeOffset;
+    std::memcpy(static_cast<uint8_t *>(dkMemBlockGetCpuAddr(*block)) + *offset, dksh, size);
     s_codeOffset += need;
+    return true;
+}
+
+} // namespace
+
+gb::Shader *CreateShader(Stage stage, uint64_t hash, const char *code, uint32_t size)
+{
+    Shader *sh = new Shader();
+    sh->hash = hash;
+    ReadAttrMask(stage, code, size, sh->attrMask);
+    std::vector<uint8_t> dksh(code, code + size);
+    const uint32_t rescheduled = UseMesaSchedule(dksh.data(), size);
+    DkMemBlock block;
+    uint32_t offset;
+    if (!PlaceCode(dksh.data(), size, &block, &offset))
+    {
+        delete sh;
+        return nullptr;
+    }
     DkShaderMaker maker;
     dkShaderMakerDefaults(&maker, block, offset);
     dkShaderInitialize(&sh->shader, &maker);
     sh->valid = dkShaderIsValid(&sh->shader);
+    static int logged = 0;
+    if (logged < 3)
+    {
+        ++logged;
+        Log("shader %016llx: %u control words rescheduled to Mesa's rules", (unsigned long long)hash, rescheduled);
+    }
     return sh;
 }
 
@@ -913,6 +1191,17 @@ const gb::Pipeline *GetPipeline(const PipelineDesc &desc)
     slot->vertex = vs;
     slot->pixel = ps;
     slot->valid = vs && ps && vs->valid && ps->valid;
+    // Stages are compiled apart, so nothing links them: a pixel shader input the vertex shader does not write reads
+    // whatever the SM's attribute storage holds (GL's linker would have turned it into a constant).
+    if (slot->valid)
+    {
+        const uint64_t gap0 = ps->attrMask[0] & ~vs->attrMask[0], gap1 = ps->attrMask[1] & ~vs->attrMask[1];
+        static std::unordered_set<std::string> s_gapLogged;
+        if ((gap0 || gap1) && s_gapLogged.insert(std::to_string(vs->hash) + ":" + std::to_string(ps->hash)).second)
+            Log("attribute gap: vs %016llx ps %016llx reads unwritten %016llx %016llx (vs writes %016llx %016llx)",
+                (unsigned long long)vs->hash, (unsigned long long)ps->hash, (unsigned long long)gap1,
+                (unsigned long long)gap0, (unsigned long long)vs->attrMask[1], (unsigned long long)vs->attrMask[0]);
+    }
 
     // deko3d binds a dense array indexed by attribute location, and every slot in [0, attribCount) must be valid --
     // the shader reads the inputs at its own locations, which are sparse. Default the gaps to a valid fixed attribute
@@ -1042,7 +1331,6 @@ gb::Swapchain *CreateSwapchain(const SwapchainDesc &desc)
     s_uboMem = MakeBlock(kUboRingSize, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached);
     s_uboCpu = static_cast<uint8_t *>(dkMemBlockGetCpuAddr(s_uboMem));
     s_uboGpu = dkMemBlockGetGpuAddr(s_uboMem);
-    s_uboBuffer.mem = s_uboMem;
     s_uboBuffer.gpu = s_uboGpu;
     s_uboBuffer.size = kUboRingSize;
 
@@ -1193,7 +1481,9 @@ void EndPass()
     if (s_frameTrace)
         Log("trace pass %d end: %d draws", s_passIdx, s_passDraws);
     const Texture *c = s_passColor0;
-    const bool capPass = false; // pass numbers to capture (needs free dump files)
+    // The screen-shaped passes (scene and post-processing chain), not the shadow maps.
+    // The screen-sized passes at the start of the frame, where the lit pass is (2, or 4 after two shadow passes).
+    const bool capPass = c && s_passIdx <= 6 && c->desc.width >= 640 && c->desc.width * 9 == c->desc.height * 16;
     const bool rgba8 = c && (c->dkFormat == DkImageFormat_RGBA8_Unorm || c->dkFormat == DkImageFormat_BGRA8_Unorm ||
                              c->dkFormat == DkImageFormat_BGRX8_Unorm);
     const bool rgba16 = c && c->dkFormat == DkImageFormat_RGBA16_Unorm;
@@ -1452,15 +1742,17 @@ void Present(gb::Swapchain *swapchain, gb::Texture *image)
     // Debug: trace every pass of one world frame (armed here, so it covers the next frame from its first pass).
     if (s_frameTrace)
     {
-        Log("trace frame end (%d passes)", s_passIdx);
+        Log("trace frame end (%d passes, %s)", s_passIdx, s_traceWhat);
         s_frameTrace = false;
-        s_frameTraceDone = true;
         s_passCapPending = !s_passCaps.empty();
     }
-    else if (s_debugCaptures && !s_frameTraceDone && secs >= kTraceAt)
+    else if (s_debugCaptures && s_traceIdx < sizeof(kTraces) / sizeof(kTraces[0]) && secs >= kTraces[s_traceIdx].at)
     {
         s_frameTrace = true;
         s_passIdx = 0;
+        s_traceWhat = kTraces[s_traceIdx].what;
+        Log("trace frame begin (%s)", s_traceWhat);
+        ++s_traceIdx;
     }
     Texture *src = static_cast<Texture *>(image);
     const int slot = dkQueueAcquireImage(s_queue, s->sc);
@@ -1515,6 +1807,9 @@ void Present(gb::Swapchain *swapchain, gb::Texture *image)
                 LogImage(path, px, s_dumpW, s_dumpH, s_dumpBgra, 4, 1, 0, s_dumpH - 200, 480, 200);
                 snprintf(path, sizeof(path), "frame at %u s bottom right", s_dumpLabel);
                 LogImage(path, px, s_dumpW, s_dumpH, s_dumpBgra, 4, 1, s_dumpW - 480, s_dumpH - 200, 480, 200);
+                snprintf(path, sizeof(path), "frame at %u s centre", s_dumpLabel);
+                LogImage(path, px, s_dumpW, s_dumpH, s_dumpBgra, 4, 1, s_dumpW * 3 / 8, s_dumpH * 3 / 8, s_dumpW / 4,
+                         s_dumpH / 4);
             }
         }
         else
@@ -1530,8 +1825,9 @@ void Present(gb::Swapchain *swapchain, gb::Texture *image)
             for (const PassCap &pc : s_passCaps)
             {
                 char path[64];
-                snprintf(path, sizeof(path), "pass %02d", pc.pass);
-                LogImage(path, base + pc.offset, pc.w, pc.h, pc.bgra, pc.bpp);
+                snprintf(path, sizeof(path), "pass %02d %s", pc.pass, s_traceWhat);
+                LogImage(path, base + pc.offset, pc.w, pc.h, pc.bgra, pc.bpp, 1, pc.w * 3 / 8, pc.h * 3 / 8, pc.w / 4,
+                         pc.h / 4);
             }
         }
         else
@@ -1553,8 +1849,8 @@ void WaitIdle()
     if (!(s_swapchain && s_swapchain->recording))
     {
         s_completedSerial = s_frameSerial;
-        for (DkMemBlock m : s_pendingFree)
-            FreeBlock(m);
+        for (const Range &m : s_pendingFree)
+            Release(m);
         s_pendingFree.clear();
     }
 }
