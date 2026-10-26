@@ -25,6 +25,10 @@
 
 bool __cdecl Sys_IsHeadless();
 
+#if defined(__SWITCH__)
+extern "C" bool appletMainLoop(void); // libnx; <switch.h> clashes with the Win32 shim's `interface` macro
+#endif
+
 namespace
 {
 // The messages, styles and flags this layer sends or reads (winuser.h).
@@ -413,8 +417,48 @@ void Translate(const SDL_Event &e)
     }
 }
 
+#if defined(__SWITCH__)
+// SDL2-switch has no dummy video driver, so on the deko3d path (SDL_VIDEODRIVER=dummy, switch_main.cpp) SDL's video
+// never starts, nor the Switch video driver's event pump, which is what serviced the applet loop and refreshed the
+// controllers: only HOME and the capture button, which the system handles, still worked. Without video the first
+// thread that pumps does both. Once appletMainLoop has returned false it is never called again (switch-homebrew.md);
+// that exit request reaches the engine as a WM_CLOSE to the active window, as closing the window does on a PC.
+bool PumpWithoutVideo()
+{
+    static std::thread::id pumpThread;
+    static bool exitSeen = false;
+    HWND active;
+    {
+        Lock lock(L().lock);
+        if (L().video || !L().videoTried)
+            return false;
+        if (pumpThread == std::thread::id())
+            pumpThread = std::this_thread::get_id();
+        if (pumpThread != std::this_thread::get_id())
+            return true;
+        active = L().active;
+    }
+    // Outside the lock: while the app is in the background, appletMainLoop waits for the focus to come back.
+    if (!exitSeen && !appletMainLoop())
+    {
+        exitSeen = true;
+        if (active)
+            PostMessageA(active, kWmClose, 0, 0);
+    }
+    SDL_Event e;
+    while (SDL_PollEvent(&e))
+        Translate(e);
+    Bo1_GamepadPump();
+    return true;
+}
+#endif
+
 void Pump()
 {
+#if defined(__SWITCH__)
+    if (PumpWithoutVideo())
+        return;
+#endif
     if (!Bo1_OnVideoThread())
         return;
     Bo1_InputPump();

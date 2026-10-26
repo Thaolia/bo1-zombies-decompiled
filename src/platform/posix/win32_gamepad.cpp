@@ -13,6 +13,7 @@
 #include <mutex>
 
 bool __cdecl Sys_IsHeadless();
+void Com_Printf(int channel, const char *fmt, ...);
 
 namespace
 {
@@ -25,6 +26,8 @@ XINPUT_GAMEPAD s_state = {};
 bool s_rumbleWanted = false;
 Uint16 s_rumbleLow = 0, s_rumbleHigh = 0;
 bool s_triedInit = false;
+bool s_reportedNone = false;
+constexpr int kConsoleChannel = 16;
 
 SDL_GameController *OpenFirstController()
 {
@@ -41,14 +44,20 @@ void Bo1_GamepadPump()
     if (!s_triedInit)
     {
         s_triedInit = true;
-        if (Sys_IsHeadless() || SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
+        if (Sys_IsHeadless())
             return;
+        if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
+        {
+            Com_Printf(kConsoleChannel, "gamepad: SDL game controller init failed: %s\n", SDL_GetError());
+            return;
+        }
     }
     if (!SDL_WasInit(SDL_INIT_GAMECONTROLLER))
         return;
 
     if (s_controller && !SDL_GameControllerGetAttached(s_controller))
     {
+        Com_Printf(kConsoleChannel, "gamepad: controller detached\n");
         SDL_GameControllerClose(s_controller);
         s_controller = nullptr;
         s_instance = -1;
@@ -57,7 +66,17 @@ void Bo1_GamepadPump()
     {
         s_controller = OpenFirstController();
         if (s_controller)
+        {
             s_instance = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(s_controller));
+            const char *name = SDL_GameControllerName(s_controller);
+            Com_Printf(kConsoleChannel, "gamepad: opened '%s'\n", name ? name : "?");
+            s_reportedNone = false;
+        }
+        else if (!s_reportedNone)
+        {
+            Com_Printf(kConsoleChannel, "gamepad: no game controller (%d joysticks)\n", SDL_NumJoysticks());
+            s_reportedNone = true;
+        }
     }
 
     if (!s_controller)
