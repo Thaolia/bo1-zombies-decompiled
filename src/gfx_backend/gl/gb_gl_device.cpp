@@ -28,6 +28,10 @@
 #include <unistd.h>
 #endif
 
+#if defined(__SWITCH__)
+#include <malloc.h> // mallinfo: real heap use, the only honest memory figure here (switch-homebrew.md)
+#endif
+
 namespace gb::gl
 {
 #define GB_GL_DEFINE(type, name) type name = nullptr;
@@ -410,7 +414,7 @@ private:
 
     // the lanes
     void ServeBuilds();
-    void Compile(Shader *shader, const std::string &source);
+    void Compile(const Shader *shader);
     void Link(Program *program);
     void ReportShader(const Shader *shader);
     void Execute(const Chunk &chunk);
@@ -459,6 +463,17 @@ private:
     Bound m_bound;
     std::vector<Build> m_builds;
     bool m_flushed = true;
+
+    // Build-lane instrumentation: the backend thread's own view of the shader-compile storm a map load triggers
+    // (CreateShader floods the compile lane while the render thread only draws the loading plaque, so the frontend
+    // "new pipelines/links" counters stay at zero). A summary line is logged at most once a second from ServeBuilds.
+    uint64_t m_compileCount = 0, m_linkCount = 0;
+    uint64_t m_compileNs = 0, m_linkNs = 0;
+    uint64_t m_compileMaxNs = 0, m_compileMaxHash = 0;
+    uint64_t m_linkMaxNs = 0, m_linkMaxHash = 0;
+    uint64_t m_buildLogAt = 0; // m_compileCount+m_linkCount at the last summary, so a quiet lane logs nothing
+    size_t m_lastBatch = 0;
+    std::chrono::steady_clock::time_point m_lastBuildLog{};
 
     void *m_window = nullptr; // the window the context draws into, or null
     bool m_reportedWindow = false;
@@ -1264,13 +1279,29 @@ GLuint Device::ResolveScratch(Format format, uint32_t width, uint32_t height)
 
 // ---- the lanes
 
-void Device::Compile(Shader *shader, const std::string &source)
+void Device::Compile(const Shader *shader)
 {
     shader->name = glCreateShader(shader->stage == Stage::Vertex ? GL_VERTEX_SHADER : GL_FRAGMENT_SHADER);
-    const char *text = source.c_str();
-    const GLint length = GLint(source.size());
+    const char *text = shader->source.c_str();
+    const GLint length = GLint(shader->source.size());
     glShaderSource(shader->name, 1, &text, &length);
+    const auto t0 = std::chrono::steady_clock::now();
     glCompileShader(shader->name);
+    // Mesa compiles the GLSL (parse + NIR) inside glCompileShader, so this is where a map's compile storm spends its
+    // time on nouveau; measure it to tell a slow-but-finite storm from a single pathological shader.
+    const uint64_t ns = uint64_t(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count());
+    ++m_compileCount;
+    m_compileNs += ns;
+    if (ns > m_compileMaxNs)
+    {
+        m_compileMaxNs = ns;
+        m_compileMaxHash = shader->hash;
+    }
+    if (ns > 1000000000ull) // >1 s: name it on the spot, it is the suspect
+        Log("gl build: slow %s shader %016llx compiled in %llu ms", shader->stage == Stage::Vertex ? "vertex" : "pixel",
+            static_cast<unsigned long long>(shader->hash), static_cast<unsigned long long>(ns / 1000000ull));
+    std::string().swap(shader->source); // compiled: the GL object holds it now, drop our copy
 }
 
 void Device::ReportShader(const Shader *shader)
@@ -1293,10 +1324,30 @@ void Device::ReportShader(const Shader *shader)
 
 void Device::Link(Program *program)
 {
+    // Lazy compile: the two shaders are compiled here, the first time a program that uses them is linked, not at
+    // CreateShader. A shader shared by several programs compiles once (name stays set); one never drawn never
+    // compiles. All of this runs on this backend thread, so no lock is needed.
+    if (program->vertex->name == 0)
+        Compile(program->vertex);
+    if (program->pixel->name == 0)
+        Compile(program->pixel);
     const GLuint name = glCreateProgram();
     glAttachShader(name, program->vertex->name);
     glAttachShader(name, program->pixel->name);
+    const auto t0 = std::chrono::steady_clock::now();
     glLinkProgram(name);
+    const uint64_t ns = uint64_t(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count());
+    ++m_linkCount;
+    m_linkNs += ns;
+    if (ns > m_linkMaxNs)
+    {
+        m_linkMaxNs = ns;
+        m_linkMaxHash = program->vertex->hash;
+    }
+    if (ns > 1000000000ull) // >1 s: the Tegra codegen stalls here
+        Log("gl build: slow link %016llx + %016llx in %llu ms", static_cast<unsigned long long>(program->vertex->hash),
+            static_cast<unsigned long long>(program->pixel->hash), static_cast<unsigned long long>(ns / 1000000ull));
     GLint ok = GL_FALSE;
     glGetProgramiv(name, GL_LINK_STATUS, &ok);
     glDetachShader(name, program->vertex->name);
@@ -1329,20 +1380,41 @@ void Device::ServeBuilds()
         m_builds.swap(q.builds);
         q.buildsPending.store(false, std::memory_order_relaxed);
     }
-    bool linked = false;
+    m_lastBatch = m_builds.size();
+    const bool linked = !m_builds.empty();
     for (Build &build : m_builds)
-    {
-        if (build.shader)
-            Compile(build.shader, build.source);
-        else
-        {
-            Link(build.program);
-            linked = true;
-        }
-    }
+        Link(build.program); // compiles its shaders on demand (lazy)
     m_builds.clear();
-    q.buildNs += uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start)
-                              .count());
+    const auto end = std::chrono::steady_clock::now();
+    q.buildNs += uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
+
+    // One summary a second while the lane is busy: whether the compile count is still climbing (a finite storm, so
+    // how long to go) or plateaued, the worst single compile/link, and the real heap use (a map load can exhaust the
+    // ~3.2 GB and have the console kill the process). Silent when nothing built since the last line.
+    const uint64_t done = m_compileCount + m_linkCount;
+    if (done != m_buildLogAt && end - m_lastBuildLog >= std::chrono::seconds(1))
+    {
+        m_lastBuildLog = end;
+        m_buildLogAt = done;
+        const double avgMs = m_compileCount ? (double(m_compileNs) * 1e-6 / double(m_compileCount)) : 0.0;
+#if defined(__SWITCH__)
+        const struct mallinfo mi = mallinfo();
+        Log("gl build: %llu shaders (%.0f ms, avg %.1f ms, worst %.0f ms %016llx), %llu links (%.0f ms, worst %.0f ms "
+            "%016llx), batch %zu, heap %.1f MB",
+            static_cast<unsigned long long>(m_compileCount), double(m_compileNs) * 1e-6, avgMs,
+            double(m_compileMaxNs) * 1e-6, static_cast<unsigned long long>(m_compileMaxHash),
+            static_cast<unsigned long long>(m_linkCount), double(m_linkNs) * 1e-6, double(m_linkMaxNs) * 1e-6,
+            static_cast<unsigned long long>(m_linkMaxHash), m_lastBatch,
+            double(static_cast<unsigned>(mi.uordblks)) / double(1 << 20));
+#else
+        Log("gl build: %llu shaders (%.0f ms, avg %.1f ms, worst %.0f ms %016llx), %llu links (%.0f ms, worst %.0f ms "
+            "%016llx), batch %zu",
+            static_cast<unsigned long long>(m_compileCount), double(m_compileNs) * 1e-6, avgMs,
+            double(m_compileMaxNs) * 1e-6, static_cast<unsigned long long>(m_compileMaxHash),
+            static_cast<unsigned long long>(m_linkCount), double(m_linkNs) * 1e-6, double(m_linkMaxNs) * 1e-6,
+            static_cast<unsigned long long>(m_linkMaxHash), m_lastBatch);
+#endif
+    }
     if (linked)
     {
         {

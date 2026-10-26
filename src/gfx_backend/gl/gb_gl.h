@@ -49,8 +49,12 @@ struct Shader : gb::Shader
     Shader(Stage s, uint64_t h) : stage(s), hash(h) {}
     Stage stage;
     uint64_t hash;
-    uint32_t name = 0;           // backend thread
-    mutable bool logged = false; // backend thread: its compile status was reported
+    // The GLSL, held from CreateShader until the backend thread compiles it the first time a program that uses it is
+    // linked (lazy: a map references ~13k shaders but draws a fraction; compiling them all at load OOMs Mesa's GLSL
+    // compiler, PORTING.md 2026-10-25). Freed once compiled. backend thread owns name/source/logged.
+    mutable std::string source;
+    mutable uint32_t name = 0;   // 0 until compiled
+    mutable bool logged = false; // its compile status was reported
 };
 
 // A linked vertex and pixel shader pair, shared by the pipelines made with it.
@@ -296,12 +300,11 @@ struct Chunk
     std::vector<uint8_t> payload;
 };
 
-// The second lane: a compile (`shader` with `source`) or a link (`program`).
+// The second lane: a program to link. Its two shaders are compiled on demand inside the link (they carry their own
+// source), so a shader that is never drawn is never compiled.
 struct Build
 {
-    Shader *shader;
     Program *program;
-    std::string source;
 };
 
 struct Queue

@@ -180,12 +180,12 @@ Bytes Copy(const void *data, uint32_t size)
     return bytes;
 }
 
-void QueueBuild(Shader *shader, Program *program, std::string source)
+void QueueBuild(Program *program)
 {
     Queue &q = R().queue;
     {
         std::lock_guard<std::mutex> lock(q.lock);
-        q.builds.push_back({shader, program, std::move(source)});
+        q.builds.push_back({program});
         q.buildsPending.store(true, std::memory_order_release);
     }
     q.wake.notify_one();
@@ -199,7 +199,7 @@ Program *ProgramFor(const Shader *vertex, const Shader *pixel)
     if (!program)
     {
         program = new Program(vertex, pixel);
-        QueueBuild(nullptr, program, std::string());
+        QueueBuild(program);
         const Clock::time_point start = Clock::now();
         {
             std::unique_lock<std::mutex> lock(r.queue.lock);
@@ -330,7 +330,7 @@ const gb::Sampler *GetSampler(const SamplerDesc &desc)
 gb::Shader *CreateShader(Stage stage, uint64_t hash, const char *code, uint32_t size)
 {
     Shader *shader = new Shader(stage, hash);
-    QueueBuild(shader, nullptr, std::string(code, size));
+    shader->source.assign(code, size); // compiled lazily at the first link that needs it (Shader doc, gb_gl.h)
     return shader;
 }
 
