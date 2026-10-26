@@ -1807,6 +1807,8 @@ void Present(gb::Swapchain *swapchain, gb::Texture *image)
                 LogImage(path, px, s_dumpW, s_dumpH, s_dumpBgra, 4, 1, 0, s_dumpH - 200, 480, 200);
                 snprintf(path, sizeof(path), "frame at %u s bottom right", s_dumpLabel);
                 LogImage(path, px, s_dumpW, s_dumpH, s_dumpBgra, 4, 1, s_dumpW - 480, s_dumpH - 200, 480, 200);
+                snprintf(path, sizeof(path), "frame at %u s top right", s_dumpLabel); // the FPS and battery counter
+                LogImage(path, px, s_dumpW, s_dumpH, s_dumpBgra, 4, 1, s_dumpW - 320, 0, 320, 48);
                 snprintf(path, sizeof(path), "frame at %u s centre", s_dumpLabel);
                 LogImage(path, px, s_dumpW, s_dumpH, s_dumpBgra, 4, 1, s_dumpW * 3 / 8, s_dumpH * 3 / 8, s_dumpW / 4,
                          s_dumpH / 4);
