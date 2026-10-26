@@ -293,7 +293,8 @@ else()
         # #if defined(__SWITCH__) in the shared files and the libnx entry/romfs live in src/platform/switch. Null
         # backend this session (docs/PORTING.md, phase 5): GL (EGL on nwindowGetDefault) and the .nro come next.
         target_sources(BO1Zombies PRIVATE ${PLATFORM_POSIX_FILES} ${PLATFORM_SWITCH_FILES}
-                       ${GFX_D3D9EMU_FILES} ${GFX_BACKEND_NULL_FILES} ${GFX_BACKEND_GL_FILES})
+                       ${GFX_D3D9EMU_FILES} ${GFX_BACKEND_NULL_FILES} ${GFX_BACKEND_GL_FILES}
+                       ${GFX_BACKEND_DEKO3D_FILES})
         # The desktop entry (posix_main.cpp) is replaced by the libnx one (src/platform/switch/switch_main.cpp).
         set_source_files_properties("${SRC_DIR}/platform/posix/posix_main.cpp" PROPERTIES HEADER_FILE_ONLY ON)
         # aarch64 has no x86 SSE header: src/platform/switch/include/xmmintrin.h forwards to sse2neon (NEON).
@@ -312,9 +313,13 @@ else()
         # from the context at run time (SDL_GL_GetProcAddress), so only the Khronos header is needed, and it is on
         # the toolchain's portlibs include path. The dispatcher alone gets BO1_GB_GL, as on posix (a target-wide
         # define would rebuild every file); null stays available as the headless/fallback backend.
-        set_target_properties(BO1Zombies PROPERTIES BO1_GB_GL ON)
-        set_source_files_properties("${SRC_DIR}/gfx_backend/gb_backend.cpp" PROPERTIES
-                                    COMPILE_DEFINITIONS "$<$<BOOL:$<TARGET_PROPERTY:BO1_GB_GL>>:BO1_GB_GL>")
+        # deko3d is the second backend (src/gfx_backend/deko3d): shaders as DKSH that uam compiled offline, so no
+        # runtime GLSL compiler -- the GL path's OOM on a map's shader storm (docs/PORTING.md). Opt-in with
+        # BO1_GFX_BACKEND=deko3d; libdeko3d from the portlibs. As with GL, only the dispatcher learns it exists.
+        set_target_properties(BO1Zombies PROPERTIES BO1_GB_GL ON BO1_GB_DEKO3D ON)
+        set_source_files_properties("${SRC_DIR}/gfx_backend/gb_backend.cpp" PROPERTIES COMPILE_DEFINITIONS
+            "$<$<BOOL:$<TARGET_PROPERTY:BO1_GB_GL>>:BO1_GB_GL>;$<$<BOOL:$<TARGET_PROPERTY:BO1_GB_DEKO3D>>:BO1_GB_DEKO3D>")
+        target_link_libraries(BO1Zombies PRIVATE deko3d)
         # D3DXSaveSurfaceToFileA's image encoders (third_party/stb), for that one file, as on posix.
         set_source_files_properties("${SRC_DIR}/gfx_d3d9emu/d3dx9emu.cpp" PROPERTIES
                                     COMPILE_OPTIONS "-isystem;${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb")

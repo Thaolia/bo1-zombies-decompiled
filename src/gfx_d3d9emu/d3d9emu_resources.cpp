@@ -159,26 +159,43 @@ HRESULT CreateStorage(Device *device, D3DRESOURCETYPE type, uint32_t width, uint
     const bool depthStencil = usage & D3DUSAGE_DEPTHSTENCIL;
     const bool cpuPool = pool == D3DPOOL_SYSTEMMEM || pool == D3DPOOL_SCRATCH;
     const bool layered = type == D3DRTYPE_CUBETEXTURE;
-    if (!width || !height || !depth || width > caps.maxTextureSize || height > caps.maxTextureSize ||
-        (type == D3DRTYPE_VOLUMETEXTURE && (width > 2048 || height > 2048 || depth > 2048)))
-        return D3DERR_INVALIDCALL;
-    if (pool > D3DPOOL_SCRATCH || (pool == D3DPOOL_MANAGED && device->IsEx()))
-        return D3DERR_INVALIDCALL;
-    if ((renderTarget || depthStencil) && (pool != D3DPOOL_DEFAULT || (renderTarget && depthStencil)))
-        return D3DERR_INVALIDCALL;
-    if (info->depth != depthStencil || (renderTarget && !info->renderTarget) || (!info->texture && type != D3DRTYPE_SURFACE))
-        return D3DERR_INVALIDCALL;
-    if (info->depth && type != D3DRTYPE_TEXTURE && type != D3DRTYPE_SURFACE)
-        return D3DERR_INVALIDCALL;
-    if (info->format == gb::Format::Unknown && !(type == D3DRTYPE_SURFACE && renderTarget))
-        return D3DERR_INVALIDCALL;
-    if (SampleCount(multiSample) > 1 && (type != D3DRTYPE_SURFACE || cpuPool || SampleCount(multiSample) > caps.maxSamples))
-        return D3DERR_INVALIDCALL;
     const uint32_t maxLevels = MaxLevels(width, height, type == D3DRTYPE_VOLUMETEXTURE ? depth : 1);
     if (!levels)
         levels = maxLevels;
-    if (levels > maxLevels)
+    // Same checks as before, kept in order (each is independent, so an else-if chain gives the first failure); a
+    // render-target/depth-stencil rejection is logged once with its inputs and the backend caps, because the engine
+    // chose those from GetCaps/CheckDevice* and a caps mismatch here is otherwise invisible.
+    const char *reject = nullptr;
+    if (!width || !height || !depth || width > caps.maxTextureSize || height > caps.maxTextureSize ||
+        (type == D3DRTYPE_VOLUMETEXTURE && (width > 2048 || height > 2048 || depth > 2048)))
+        reject = "dimensions";
+    else if (pool > D3DPOOL_SCRATCH || (pool == D3DPOOL_MANAGED && device->IsEx()))
+        reject = "pool";
+    else if ((renderTarget || depthStencil) && (pool != D3DPOOL_DEFAULT || (renderTarget && depthStencil)))
+        reject = "rt/ds pool";
+    else if (info->depth != depthStencil || (renderTarget && !info->renderTarget) ||
+             (!info->texture && type != D3DRTYPE_SURFACE))
+        reject = "format role";
+    else if (info->depth && type != D3DRTYPE_TEXTURE && type != D3DRTYPE_SURFACE)
+        reject = "depth type";
+    else if (info->format == gb::Format::Unknown && !(type == D3DRTYPE_SURFACE && renderTarget))
+        reject = "unknown format";
+    else if (SampleCount(multiSample) > 1 &&
+             (type != D3DRTYPE_SURFACE || cpuPool || SampleCount(multiSample) > caps.maxSamples))
+        reject = "multisample";
+    else if (levels > maxLevels)
+        reject = "levels";
+    if (reject)
+    {
+        if (renderTarget || depthStencil)
+            WarnOnce(reject,
+                     "d3d9emu: CreateStorage reject '%s' (rt=%d ds=%d): %ux%u fmt=0x%08x usage=0x%lx pool=%d ms=%d / "
+                     "caps maxTex=%u maxSamp=%u infoDepth=%d infoRT=%d infoTex=%d infoFmt=%d",
+                     reject, int(renderTarget), int(depthStencil), width, height, unsigned(format),
+                     (unsigned long)usage, int(pool), int(multiSample), caps.maxTextureSize, caps.maxSamples,
+                     int(info->depth), int(info->renderTarget), int(info->texture), int(info->format));
         return D3DERR_INVALIDCALL;
+    }
 
     auto storage = std::make_shared<Storage>();
     Storage &s = *storage;

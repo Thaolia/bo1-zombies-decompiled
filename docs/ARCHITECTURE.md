@@ -21,7 +21,8 @@ The port adds layers around the decompiled engine and keeps the engine code as c
  src/gfx_backend/gfx_backend.h   explicit low-level contract (see RENDERER.md)
         ├── gl/       v1: GL 4.3 core on its own thread, entry points from the platform's context (SDL2 now)
         ├── null/     draws nothing, checks every call against the contract (headless runs, tests)
-        └── deko3d/   optional phase 7, shaders compiled offline by uam
+        └── deko3d/   Switch only, opt-in (`gfx.cfg` = deko3d): shaders compiled offline by uam into
+                      `shaders.dksh`; renders Kino with its HUD on Ryujinx (phase 7, in progress)
 ```
 
 ## Build presets

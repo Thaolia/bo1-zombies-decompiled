@@ -11,6 +11,9 @@
 #include <cstdint>
 
 #define SHADER_PACK_MAGIC "BO1GLSL1"
+// Same layout, payloads are deko3d DKSH modules uam compiled offline (tools/ffconv/gen/make_dksh_pack.py)
+// instead of GLSL; the deko3d backend loads it in place of the GLSL pack (host::ShaderPackPath picks by backend).
+#define SHADER_PACK_MAGIC_DKSH "BO1DKSH1"
 inline constexpr uint32_t SHADER_PACK_VERSION = 1;
 
 enum ShaderPackStage : uint32_t

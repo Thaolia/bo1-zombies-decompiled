@@ -179,15 +179,38 @@ LRESULT Send(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 int DisplayCount()
 {
-    return Bo1_VideoReady() ? SDL_GetNumVideoDisplays() : 0;
+    if (Bo1_VideoReady())
+    {
+        const int n = SDL_GetNumVideoDisplays();
+        if (n > 0)
+            return n;
+    }
+#if defined(__SWITCH__)
+    // The console always has its screen, even when SDL has no usable video driver -- which is the case on the deko3d
+    // path (deko3d owns nwindowGetDefault, so SDL runs on its dummy driver, or SDL_INIT_VIDEO fails outright).
+    // Reporting zero here made every monitor query fail and the engine's render resolution come out 0 (a 0x0
+    // depth-stencil then aborted R_Init). The GL path has a real SDL display and returns above.
+    return 1;
+#else
+    return 0;
+#endif
 }
 
 bool DisplayBounds(int display, RECT *rect, bool usable = false)
 {
-    SDL_Rect r;
-    if (display < 0 || display >= DisplayCount() ||
-        (usable ? SDL_GetDisplayUsableBounds(display, &r) : SDL_GetDisplayBounds(display, &r)))
+    if (display < 0 || display >= DisplayCount())
         return false;
+    SDL_Rect r = {0, 0, 0, 0};
+    const bool have = Bo1_VideoReady() &&
+                      (usable ? SDL_GetDisplayUsableBounds(display, &r) : SDL_GetDisplayBounds(display, &r)) == 0;
+    if (!have || r.w <= 0 || r.h <= 0)
+    {
+#if defined(__SWITCH__)
+        r = SDL_Rect{0, 0, 1280, 720}; // console fixed size, matching the display-mode/desktop-mode fallbacks
+#else
+        return false;
+#endif
+    }
     *rect = {r.x, r.y, r.x + r.w, r.y + r.h};
     return true;
 }

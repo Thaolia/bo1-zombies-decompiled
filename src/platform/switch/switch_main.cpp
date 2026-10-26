@@ -196,6 +196,14 @@ int main(int, char **)
         {
             setenv("BO1_GFX_BACKEND", v, 1);
             BootLog("gfx.cfg -> BO1_GFX_BACKEND=%s", v);
+            // deko3d drives the console window (nwindowGetDefault) itself; SDL must not also grab it for an EGL/GL
+            // context, or dkSwapchainCreate fails. The dummy video driver gives the engine its window object without
+            // touching nwindow. GL path is unaffected (this only fires for deko3d).
+            if (!std::strcmp(v, "deko3d"))
+            {
+                setenv("SDL_VIDEODRIVER", "dummy", 1);
+                BootLog("deko3d backend -> SDL_VIDEODRIVER=dummy (deko3d owns nwindowGetDefault)");
+            }
         }
     }
 

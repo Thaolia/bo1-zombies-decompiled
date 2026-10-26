@@ -17,11 +17,27 @@ const Backend *s_backend = &null::Table();
 bool Init()
 {
     const char *wanted = std::getenv("BO1_GFX_BACKEND");
-    if (wanted && *wanted && std::strcmp(wanted, "null") && std::strcmp(wanted, "gl"))
+    if (wanted && *wanted && std::strcmp(wanted, "null") && std::strcmp(wanted, "gl") &&
+        std::strcmp(wanted, "deko3d"))
     {
-        std::fprintf(stderr, "gb: BO1_GFX_BACKEND=%s names no backend (null, gl)\n", wanted);
+        std::fprintf(stderr, "gb: BO1_GFX_BACKEND=%s names no backend (null, gl, deko3d)\n", wanted);
         return false;
     }
+    // deko3d is opt-in only (never the default while it is being brought up): asking for it and failing does not
+    // fall back to GL, so the failure is seen.
+#if defined(BO1_GB_DEKO3D)
+    if (wanted && !std::strcmp(wanted, "deko3d"))
+    {
+        s_backend = &deko3d::Table();
+        return s_backend->Init();
+    }
+#else
+    if (wanted && !std::strcmp(wanted, "deko3d"))
+    {
+        std::fprintf(stderr, "gb: this build has no deko3d backend\n");
+        return false;
+    }
+#endif
 #if defined(BO1_GB_GL)
     if (!wanted || !*wanted || !std::strcmp(wanted, "gl"))
     {

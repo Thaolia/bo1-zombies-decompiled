@@ -106,4 +106,8 @@ namespace gl
 {
 const Backend &Table();
 }
+namespace deko3d
+{
+const Backend &Table();
+}
 } // namespace gb

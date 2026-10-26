@@ -82,7 +82,8 @@ private:
         ShaderPackHeader header;
         if (size < long(sizeof(header)) || std::fread(&header, sizeof(header), 1, file) != 1)
             return "too short";
-        if (std::memcmp(header.magic, SHADER_PACK_MAGIC, sizeof(header.magic)))
+        if (std::memcmp(header.magic, SHADER_PACK_MAGIC, sizeof(header.magic)) &&
+            std::memcmp(header.magic, SHADER_PACK_MAGIC_DKSH, sizeof(header.magic)))
             return "bad magic";
         if (header.version != SHADER_PACK_VERSION)
             return "unknown version";

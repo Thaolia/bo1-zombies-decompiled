@@ -2439,6 +2439,16 @@ set(GFX_BACKEND_GL_FILES
 	${SRC_GFX_BACKEND_GL}
 )
 
+set(SRC_GFX_BACKEND_DEKO3D
+	"${SRC_DIR}/gfx_backend/deko3d/gb_deko3d.cpp"
+	"${SRC_DIR}/gfx_backend/deko3d/gb_deko3d.h"
+)
+source_group("gfx_backend/deko3d" FILES ${SRC_GFX_BACKEND_DEKO3D})
+
+set(GFX_BACKEND_DEKO3D_FILES
+	${SRC_GFX_BACKEND_DEKO3D}
+)
+
 # ----- src/qcommon -----
 set(SRC_QCOMMON
 	"${SRC_DIR}/qcommon/bitarray.h"

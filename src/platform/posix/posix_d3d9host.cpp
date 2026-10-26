@@ -10,9 +10,11 @@
 
 #include <stdio.h>
 
+#include <cstring>
 #include <string>
 
 char *__cdecl Sys_DefaultInstallPath();
+namespace gb { const char *Name(); } // backend name, for ShaderPackPath
 void Com_Printf(int channel, const char *fmt, ...);
 
 namespace d3d9emu::host
@@ -29,12 +31,19 @@ bool Listed(const SDL_DisplayMode &mode)
 }
 } // namespace
 
+namespace
+{
+// The console's fixed output modes, reported when SDL has none to give: the deko3d backend drives nwindow directly
+// and runs with SDL's dummy video driver (switch_main.cpp), and a headless desktop run has no display either. Both
+// are >= 800x600, so the engine's renderer init finds a valid resolution instead of aborting. The GL path gets real
+// modes from SDL and never reaches this fallback.
+constexpr DisplayMode kFixedModes[] = {{1280, 720, 60}, {1920, 1080, 60}};
+} // namespace
+
 uint32_t DisplayModes(DisplayMode *modes, uint32_t capacity)
 {
-    if (!Bo1_VideoReady())
-        return 0;
     uint32_t count = 0;
-    const int total = SDL_GetNumDisplayModes(kAdapterDisplay);
+    const int total = Bo1_VideoReady() ? SDL_GetNumDisplayModes(kAdapterDisplay) : 0;
     for (int i = 0; i < total; ++i)
     {
         SDL_DisplayMode mode;
@@ -44,6 +53,13 @@ uint32_t DisplayModes(DisplayMode *modes, uint32_t capacity)
             modes[count] = {uint32_t(mode.w), uint32_t(mode.h), uint32_t(mode.refresh_rate)};
         ++count;
     }
+    if (count == 0)
+        for (const DisplayMode &m : kFixedModes)
+        {
+            if (count < capacity)
+                modes[count] = m;
+            ++count;
+        }
     return count;
 }
 
@@ -51,7 +67,10 @@ bool DesktopMode(DisplayMode *mode)
 {
     SDL_DisplayMode desktop;
     if (!Bo1_VideoReady() || SDL_GetDesktopDisplayMode(kAdapterDisplay, &desktop))
-        return false;
+    {
+        *mode = kFixedModes[0]; // 720p, as the backbuffer is created at (switch display fix)
+        return true;
+    }
     *mode = {uint32_t(desktop.w), uint32_t(desktop.h), uint32_t(desktop.refresh_rate)};
     return true;
 }
@@ -94,7 +113,10 @@ bool WindowVisible(HWND hwnd)
 
 const char *ShaderPackPath()
 {
-    static const std::string path = Bo1_PosixPath(Sys_DefaultInstallPath()) + "/shaders.pack";
+    // deko3d loads DKSH that uam compiled offline (shaders.dksh); GL/null load the GLSL pack.
+    static const bool dksh = !std::strcmp(gb::Name(), "deko3d");
+    static const std::string path =
+        Bo1_PosixPath(Sys_DefaultInstallPath()) + (dksh ? "/shaders.dksh" : "/shaders.pack");
     return path.c_str();
 }
 
