@@ -1450,7 +1450,7 @@ void __cdecl LiveStats_PublishNews(int controllerIndex)
     char *v14; // [esp+Ch] [ebp-9Ch]
     const char *v15; // [esp+1Ch] [ebp-8Ch]
     const char *name; // [esp+20h] [ebp-88h]
-    unsigned int v17; // [esp+20h] [ebp-88h]
+    uintptr_t v17; // [esp+20h] [ebp-88h]
     signed int contractIndex; // [esp+24h] [ebp-84h]
     signed int activeContractIndex; // [esp+28h] [ebp-80h]
     int rowNum; // [esp+2Ch] [ebp-7Ch]

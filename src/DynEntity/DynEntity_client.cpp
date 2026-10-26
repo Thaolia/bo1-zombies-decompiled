@@ -2459,7 +2459,7 @@ void __cdecl DynEntCl_EntityImpactEvent(
     float presetBulletForceScale; // [esp+4Ch] [ebp-34h]
     float force[3]; // [esp+50h] [ebp-30h] BYREF
     unsigned int boneName; // [esp+5Ch] [ebp-24h] BYREF
-    int id; // [esp+60h] [ebp-20h]
+    intptr_t id; // [esp+60h] [ebp-20h]
     float hitDir[3]; // [esp+68h] [ebp-18h] BYREF
     DObj *obj; // [esp+74h] [ebp-Ch]
     PhysPreset *physPreset; // [esp+78h] [ebp-8h]
