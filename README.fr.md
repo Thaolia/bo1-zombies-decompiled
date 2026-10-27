@@ -28,6 +28,21 @@ carte SD, dans `sdmc:/switch/bo1zm/`.
 Le jeu doit être lancé en mode application (title takeover : maintenir R en lançant un jeu). Le mode applet,
 c'est-à-dire l'album, ne donne qu'environ 400 Mo de RAM.
 
+Au lancement, un menu texte s'ouvre avant le jeu. On y choisit :
+- la map, parmi les 10 maps zombies ;
+- l'aim assist : activé ou non, avec ralentissement, verrouillage et visée auto ;
+- le god mode ;
+- le rendu (deko3d ou OpenGL), la limite de FPS (30 ou 60), les ombres, le filtre de texture et le compteur
+  FPS/batterie ;
+- les manettes : la liste des manettes détectées, et l'écran de la Switch pour en connecter.
+
+Les touches : croix pour choisir, gauche/droite pour modifier, A pour valider, **+** pour lancer la partie
+directement sur la map, **−** pour quitter. Les choix sont gardés dans `sdmc:/switch/bo1zm/menu.cfg`. Au lancement, le
+menu écrit `launch.cfg` (la ligne de commande du moteur) et `gfx.cfg` (le rendu). Le contenu facultatif de
+`launch_extra.cfg` est ajouté à la ligne de commande, ce qui sert pour des options de diagnostic. Avec un fichier
+vide `skip_menu` dans le même dossier, le jeu démarre sans menu, sur `launch.cfg` et `gfx.cfg` tels quels. C'est
+pratique sur un émulateur.
+
 ## Build PC d'origine
 Les instructions upstream (Windows, MSVC x86, D3D9) sont dans `README.md`, `setup.ps1` et `Play.bat`.
 

@@ -1598,3 +1598,48 @@ are removed: the assist is confirmed on the console. The `markdiag` instrumentat
 working-tree change in `fx_marks.cpp` and `r_marks.cpp`, until a longer console run shows the lag or rules it out.
 Before the merge: win32-msvc and win64-msvc build, and the Switch builds in the committed state (no `markdiag:` or
 `aim:` string, no `cntvct_el0`).
+
+**Start menu on the Switch (asked by the user: start a game without the official menu).** Before the engine,
+`switch_main.cpp` shows a libnx text-console menu (`switch_launcher.cpp`). It offers:
+- the map: the 10 zombies maps, labelled as in `tools/mod-launcher.hta`;
+- the aim assist (`bo1_aimassist` and the three `aim_*_enabled`);
+- god mode (`bo1_testclient_god`, which puts `FL_GODMODE` back around every server frame: the `god` command is a
+  toggle that `ClientSpawn` clears);
+- the renderer (`gfx.cfg`, deko3d or GL);
+- the frame-rate cap (`com_maxfps` 30 or 60), shadows (`sm_enable`) and texture filtering (`r_texFilterAnisoMax`
+  16/8/4/2, or 1 with `r_texFilterMipMode` trilinear or bilinear);
+- the FPS/battery counter (`bo1_fpscounter`);
+- the controllers: the Npad styles every 0.5 s, and A opens the system controller screen (`hidLaShowControllerSupport`,
+  single mode).
+
+Every graphics dvar is written explicitly, because they are archived in `config.cfg`. The choices persist in
+`menu.cfg`. Start (**+**, or A on DEMARRER) writes `launch.cfg` (`... +devmap <map>`, with the optional
+`launch_extra.cfg` before `+devmap`) and `gfx.cfg`. An empty `skip_menu` file boots on those two files as they are.
+
+`launcher_config.cpp` holds the settings and the line and has no libnx; `launcher_config_test` checks it on the host
+(defaults, the exact line, round-trips, invalid values, `+devmap` last): all checks pass. `d3d9emu_test`,
+`gb_gl_test` (46 checks) and `gamepad_test` still pass, and win64-msvc builds.
+
+Ryujinx, build 22:06:32, with Player 1 mapped to the keyboard for the test (config backed up and restored, same md5).
+The menu shows with battery, build and "Joueur 1 : Manette Pro". Down then Right picks Five, and + starts. The log has
+the generated line with the extra `+set bo1_frameperf 200` before `+devmap zombie_pentagon`, and Five loads and
+renders on deko3d.
+
+The first try crashed at the first `BootLog` after Start: `printf → consolePrintChar → framebufferBegin` read address
+0. libnx's `consoleExit` closes the framebuffer but leaves stdout and stderr on the console device, which starts a
+new frame on the next character. The launcher now saves `devoptab_list[STD_OUT]`/`[STD_ERR]` before `consoleInit`
+and restores them after `consoleExit` (rule in `switch-homebrew.md`).
+
+`skip_menu` run, with a hand-written `launch.cfg` (Kino, `bo1_frameperf`):
+- the log says `skip_menu present`, has no `[launcher]` line and uses exactly that line;
+- `menu.cfg`, `launch.cfg` and `gfx.cfg` keep their md5;
+- Kino loads.
+
+The emulator's SD keeps `skip_menu` for scripted runs. Console check pending: the controller screen, god mode, 30 fps
+and the filters on hardware.
+
+**Console test of the menu (build 22:06:32).** The menu works. A on "Manettes" did nothing: `hidLaShowControllerSupport`
+returned `0x5d59` (libnx 46, `LibAppletBadExit`) each time. That call only shows its screen when the connected pads
+fall short of the request, and the attached Joy-Cons satisfy a single-player request. The menu now calls
+`hidLaShowControllerSupportForSystem(&info, &arg, false)`, which always shows the game's controller screen (SDL2-switch
+uses it too). On the console the controller screen now opens and returns `0x0`.

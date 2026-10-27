@@ -265,3 +265,31 @@ time.
 ## Runtime data on the Switch
 `sdmc:/switch/bo1zm/`: converted `zone/` from `ffconv`, `main/*.iwd` from the user's install, and the shader
 cache. The app must run in application mode (title takeover). Applet mode only gives about 400 MB.
+
+## Start-up on the Switch
+`src/platform/switch/switch_main.cpp` (libnx entry) runs these steps in order:
+1. truncates `boot.log`;
+2. sets the cwd to the data dir;
+3. refuses applet mode;
+4. mounts romfs (`build.txt`, the link time);
+5. shows the **start menu**, unless `skip_menu` is present;
+6. applies the backend (`BO1_GFX_BACKEND`, plus `SDL_VIDEODRIVER=dummy` for deko3d);
+7. calls `WinMain` with the start-up line.
+
+The start menu lives in two parts:
+- `switch_launcher.cpp`: the libnx text console, the pad, and the controller list and system screen (`hidLa`).
+- `launcher_config.cpp`: the settings and the start-up line. It contains no libnx and is tested on the host by
+  `launcher_config_test`.
+
+Its files in `sdmc:/switch/bo1zm/`:
+
+| File | Written by | Read by |
+|---|---|---|
+| `menu.cfg` | the menu (its choices, `key=value`) | the menu, at the next launch |
+| `launch.cfg` | the menu, on Start | the engine's start-up line (`skip_menu` boots read it as is) |
+| `gfx.cfg` | the menu, on Start (`deko3d` or `gl`) | the backend choice (`skip_menu` boots read it as is) |
+| `launch_extra.cfg` | the user (optional) | the menu: copied before `+devmap` (diagnostic dvars) |
+| `skip_menu` | the user or a test script (empty) | `switch_main.cpp`: boot without the menu |
+
+The menu releases the screen with `consoleExit` before the renderer takes `nwindowGetDefault`. It also gives stdout
+and stderr back their earlier devices, because libnx leaves them on the closed console (see `docs/PORTING.md`).
