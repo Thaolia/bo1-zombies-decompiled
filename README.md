@@ -41,8 +41,10 @@ folder> +devmap zombie_theater` for the windowed client, with `+set bo1_headless
 (`ffconv` again).
 
 A dedicated zombies server (work in progress, branch `server`) is the same program started with `+set bo1_server 1`
-on Windows or Linux: no window, listening on UDP on every interface, `server.cfg` for its settings. Clients join with
-`connect <address>:<port>`, or by themselves with `+set cl_autoConnect <address>:<port>` in a `launch.cfg` next to
-the program, and `tools/server_status.py <address>` shows the map and players. See `docs/SERVER.md`.
+on Windows or Linux: no window, listening on UDP on every interface, `server.cfg` for its settings. `Server.bat
+[map] [port]` and `./Server.sh [map] [port]` start one. Clients join with `Play.bat net <address>:<port> [name]`
+(or `Launch.bat net ...`), with `connect <address>:<port>`, or by themselves with `+set cl_autoConnect
+<address>:<port>` in a `launch.cfg` next to the program, and `tools/server_status.py <address>` shows the map and
+players. See `docs/SERVER.md`.
 
 French version: `README.fr.md`.

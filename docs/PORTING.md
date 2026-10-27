@@ -1731,5 +1731,21 @@ game overs) had none. To compare against a listen-server run before blaming the 
   `status` ran as `statu`): fixed the same way.
 - Verified on Linux in a 120x40 `tmux` pane: the screen above with a win64 client joined (selected with F3, F8 filled
   `clientkick 0`, Esc cleared it), `status` run from the command line printed the server's table into the log, `quit`
-  ended the server with code 0 and gave the terminal back. The Windows console window (`AllocConsole`) is built but
-  not yet looked at: a run would open a window on the desktop.
+  ended the server with code 0 and gave the terminal back. The Windows console window (`AllocConsole`) was checked
+  by the user, with a current exe: it shows the same screen and takes commands.
+
+**Start scripts (2026-10-27).** `Server.bat` / `Server.sh` at the root start a server on `0.0.0.0` (map and port as
+arguments, the rest passed on); `Play.bat net <address[:port]> [name]` (alias `Launch.bat`) starts the 64-bit client
+with `cl_autoConnect` and `name`. Usage in `docs/SERVER.md` ("Start scripts", "Joining from a client").
+
+- `Server.bat` starts the program with `start /D build\Release`: the engine reads `localization.txt` from its working
+  folder, and without it the server stopped on the `localization.language` assert (`win_localize.cpp`).
+- `Server.sh` runs a copy of the program in the server folder, next to links to `zone`, `shaders.pack` and
+  `localization.txt`: the program loads `zone/` from its own folder.
+- `Play.bat net` leaves `net_ip` at its default: the other modes bind `127.0.0.1`, from which a LAN address cannot be
+  reached.
+- Verified: `Server.bat` bound `0.0.0.0:3074` (netstat, `Opening IP socket`), answered `getstatus` from Windows and
+  WSL, and a win64 client with `name Player2` showed up as `#0 Player2 ... active`; `Server.sh` on the ext4 data bound
+  `0.0.0.0:3074` and a win64 client `Player3` joined it over the WSL address (`172.23.3.156`). `Play.bat net`'s command
+  lines were checked with a dry copy (`start` replaced by `echo`) for an address alone, with a name, and without an
+  address (usage message).

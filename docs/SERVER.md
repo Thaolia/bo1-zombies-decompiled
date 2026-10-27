@@ -15,6 +15,28 @@ The server is the game's own executable started with `+set bo1_server 1` (`BO1Zo
 error ends the process instead of showing a message. Every console line goes to `<fs_h>/main/console_mp.log`
 (`logfile 2`).
 
+### Start scripts
+
+At the repository root, `Server.bat` (Windows) and `Server.sh` (Linux) start a server listening on every interface
+(`net_ip 0.0.0.0`):
+
+    Server.bat [map] [port] [more + commands]        defaults: zombie_theater 3074
+    ./Server.sh [map] [port] [more + commands]
+    Server.bat zombie_cosmodrome 3074 +set g_password secret
+
+- `Server.bat` runs `build\win64-msvc\Release\BO1Zombies.exe` (the `win64-msvc` preset) in its own console window,
+  on the game files of `build\Release` (`fs_b`, also its working folder: it holds `localization.txt`) and the zones of
+  `build\zones64` (linked as `zone` next to the program, as `Play.bat x64` does). Its folder (`fs_h`) is
+  `build\server`: put `server.cfg` in `build\server\main\`.
+- `Server.sh` takes its paths from the environment: `BO1_EXE` (default `build/linux64-clang/Release/BO1Zombies`),
+  `BO1_INSTALL` (game files, default `build/Release`), `BO1_ZONES` (`zone/` and `shaders.pack`, default
+  `build/zones64`) and `BO1_SERVER` (its folder, default `build/server-linux`). It copies the program into that folder,
+  links `zone`, `shaders.pack` and `localization.txt` there, and runs it from there. Keep the game files and zones on a
+  Linux file system: read from `/mnt/c` under WSL a map takes minutes to load.
+
+      BO1_EXE=~/build/bo1-server/build/Release/BO1Zombies BO1_INSTALL=~/bo1-run/install \
+      BO1_ZONES=~/bo1-run/data ./Server.sh
+
 ### The console
 
 In a terminal (Linux) or with its own console window (Windows), the server shows a curses console:
@@ -65,7 +87,16 @@ Load the map either from `server.cfg` or from the command line, not from both (e
 
 ## Joining from a client (PC)
 
-Put a `launch.cfg` next to the client program (`BO1Zombies.exe`, or the Linux `BO1Zombies`). Its text is added before
+On Windows, `Play.bat net <address[:port]> [name]` (or `Launch.bat net ...`, the same script) starts the 64-bit
+client (`Play.bat x64`) with `cl_autoConnect <address>` and `name <name>` (the player's name on the server, no
+spaces):
+
+    Launch.bat net 172.23.3.156:3074 Player2
+
+Unlike the other `Play.bat` modes it keeps `net_ip` at its default: a client bound to `127.0.0.1` cannot reach a LAN
+address.
+
+Otherwise put a `launch.cfg` next to the client program (`BO1Zombies.exe`, or the Linux `BO1Zombies`). Its text is added before
 the command line (whose values win), several lines read as one, with no comments:
 
     +set cl_autoConnect 192.168.1.20:3074
