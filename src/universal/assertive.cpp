@@ -582,6 +582,50 @@ void __cdecl Assert_SetMonkeyCallbackHandler(void (__cdecl *AssertCallbackFunc)(
     MonkeyAssertCallback = AssertCallbackFunc;
 }
 
+#if defined(__SWITCH__)
+#include <cstring>
+#include <mutex>
+
+namespace
+{
+struct AssertSite
+{
+    const char *file;
+    int line;
+    unsigned int count;
+};
+AssertSite s_assertSites[128];
+std::mutex s_assertSitesLock;
+} // namespace
+
+// The console has no debugger: __debugbreak (raise(SIGTRAP)) returns and the game goes on, and every assert writes two
+// SD files (open, append, close; Sys_HeadlessLogAssert). An assert that holds every frame then costs that every
+// frame: one Call of the Dead game logged 1011 CG_EntityContact asserts, and the 32-bit point-group handle limit of
+// fx_marks.cpp fired on every access past group 1450. Log the first three of each site, then one line per thousand.
+static bool Assert_SwitchShouldLog(const char *filename, int line, unsigned int *occurrence)
+{
+    const std::lock_guard<std::mutex> guard(s_assertSitesLock);
+    for (AssertSite &site : s_assertSites)
+    {
+        if (!site.file)
+        {
+            site.file = filename;
+            site.line = line;
+            site.count = 1;
+            *occurrence = 1;
+            return true;
+        }
+        if (site.line == line && (site.file == filename || !strcmp(site.file, filename)))
+        {
+            *occurrence = ++site.count;
+            return site.count <= 3 || site.count % 1000 == 0;
+        }
+    }
+    *occurrence = 1; // more than 128 sites: log them all
+    return true;
+}
+#endif
+
 bool Assert_MyHandler(const char *filename, int line, int type, const char *fmt, ...)
 {
 #if 0
@@ -624,6 +668,11 @@ bool Assert_MyHandler(const char *filename, int line, int type, const char *fmt,
     Sys_LeaveCriticalSection(CRITSECT_ASSERT);
     return shouldBreak == 0;
 #else
+#if defined(__SWITCH__)
+    unsigned int occurrence;
+    if (!Assert_SwitchShouldLog(filename, line, &occurrence))
+        return 1;
+#endif
     {
         // zombies: headless runs log the assert text before breaking (win_main.cpp)
         char assertText[1024];
@@ -632,7 +681,17 @@ bool Assert_MyHandler(const char *filename, int line, int type, const char *fmt,
         _vsnprintf(assertText, sizeof(assertText) - 1, fmt, va);
         va_end(va);
         assertText[sizeof(assertText) - 1] = 0;
-        Sys_HeadlessLogAssert(filename, line, assertText);
+#if defined(__SWITCH__)
+        if (occurrence > 1)
+        {
+            char counted[sizeof(assertText) + 32];
+            _snprintf(counted, sizeof(counted) - 1, "%s (occurrence %u)", assertText, occurrence);
+            counted[sizeof(counted) - 1] = 0;
+            Sys_HeadlessLogAssert(filename, line, counted);
+        }
+        else
+#endif
+            Sys_HeadlessLogAssert(filename, line, assertText);
     }
     __debugbreak();
     return 1;

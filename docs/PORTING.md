@@ -1643,3 +1643,24 @@ returned `0x5d59` (libnx 46, `LibAppletBadExit`) each time. That call only shows
 fall short of the request, and the attached Joy-Cons satisfy a single-player request. The menu now calls
 `hidLaShowControllerSupportForSystem(&info, &arg, false)`, which always shows the game's controller screen (SDL2-switch
 uses it too). On the console the controller screen now opens and returns `0x0`.
+
+**Asserts do not stop on the Switch: probable cause of the round-2 lag.** On the console, `__debugbreak()` is
+`raise(SIGTRAP)` (`msvc_intrinsics.h`), which newlib/libnx ignore, so a failed assert logs and the game goes on. The log
+is `Sys_HeadlessLogAssert`, which opens, appends and closes two SD files (`main/console_mp.log`,
+`main/bo1_emergency.log`).
+
+The point-group check fixed in `1c216da` held the 32-bit limit, so it failed on every access past group 1450. That is
+dozens of accesses a frame once round 2 filled the pool, each one paying two SD writes. This fits the
+`fx_marks_draw`/`Mark verts`/`markfragments` costs of 200-900 ms per frame, which followed particular marks and
+stopped as marks were freed, and the lag has not been seen since build 20:57. It stays "probable": `bo1_emergency.log`
+is deleted at each start, so the lag runs' asserts are gone.
+
+A Call of the Dead game logged 1011 `CG_EntityContact` asserts (`!cent->pose.general.mins[2]`). `actor.height` and
+`general.mins[2]` share offset 16 on both widths, so this is the map's data, not a layout bug; the same assert stops the
+Linux client, where SIGTRAP kills. On the Switch (`__SWITCH__` only), `Assert_MyHandler` now logs each assert site
+three times, then once per thousand, with the count. Ryujinx, Call of the Dead: occurrences 1, 2, 3, 1000, 2000 and
+3000 logged instead of more than 3000 double writes. The `markdiag` instrumentation is removed (never committed).
+
+**`bo1_clientCommands` on the Switch.** The console and Ryujinx have no headless client, so `bo1_clientCommands`
+(`win_main.cpp`, `Sys_HeadlessClientCommandsFrame`) runs in a normal game there (`__SWITCH__` only, empty by default):
+a scripted emulator run puts it in `launch.cfg` or `launch_extra.cfg` to act at a set time after spawning.
