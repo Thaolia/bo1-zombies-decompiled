@@ -2598,6 +2598,8 @@ set(SRC_SERVER_MP
 	"${SRC_DIR}/server_mp/sv_main_pc_mp.h"
 	"${SRC_DIR}/server_mp/sv_net_chan_mp.cpp"
 	"${SRC_DIR}/server_mp/sv_net_chan_mp.h"
+	"${SRC_DIR}/server_mp/sv_zm_admin.cpp"
+	"${SRC_DIR}/server_mp/sv_zm_admin.h"
 	"${SRC_DIR}/server_mp/sv_snapshot_mp.cpp"
 	"${SRC_DIR}/server_mp/sv_snapshot_mp.h"
 	"${SRC_DIR}/server_mp/sv_snapshot_profile_mp.cpp"

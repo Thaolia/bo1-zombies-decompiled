@@ -44,6 +44,7 @@ void PrintWorkingDir();
 char __cdecl CheckRemoteSession();
 bool __cdecl StartingDedicatedServer(char *cmdline);
 bool __cdecl Sys_IsHeadless(); // zombies: '+set bo1_headless 1' - no windows at all (see win_main.cpp)
+bool __cdecl Sys_IsDedicatedZombiesServer(); // zombies: '+set bo1_server 1' - the dedicated zombies server (see win_main.cpp)
 bool __cdecl Sys_IsHeadlessClient(); // zombies: '+set bo1_headless_client 1' - headless listen server + local client (see win_main.cpp)
 void __cdecl Sys_HeadlessNoteHud(int pmType, bool hudDrawn); // zombies: headless restart timeline (cgame, per 2D frame)
 void __cdecl Sys_HeadlessTimeline(const char *what); // zombies: headless restart timeline event, real ms after init

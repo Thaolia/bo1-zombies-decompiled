@@ -130,7 +130,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | in progress: the devkitA64 + libnx build compiles, links and packages `BO1Zombies.nro` (null backend), reusing the posix SDL2/Win32-shim layer with a thin `src/platform/switch/` and `#if defined(__SWITCH__)` deltas. **Boots on Ryujinx 1.1.1375**: the libnx entry runs (applet type = Application), romfs mounts, the engine's `WinMain` runs ~30 s with no crash (SD `boot.log`). Prereqs fixed: the libgcc GCS/SME NOP patch (`switch/tools/patch_ryujinx_mrs.py`, POST_BUILD) for Ryujinx's JIT, and a one-file embedded romfs (`switch/romfs`) so `romfsInit` does not crash the emulator. With the converted zones staged on the SD, the engine **loads the pre-gfx code zones** (`en_code_pre_gfx_mp`, `code_pre_gfx_mp`) — the ffconv AArch64 path proven end to end — and runs `FS_Startup`. Four fixes got there: the GCS/SME NOP patch and embedded romfs (boot), `chdir` to the install dir (language + `fs_basepath`), a `pread` EOF fix for libnx's past-EOF `lseek` (zone read-ahead), and reading the win64 IWffs ABI tag (layout-identical, `--check-switch`). With the iwds staged and a `device:`-prefix fix in `Bo1_PosixPath`, it then boots through FS_Startup (103814 iwd files), R_Init, the frontend, and `+devmap zombie_theater` into a **map load** (common_zombie 78 MB, the Kino zones) — before crashing part way through `en_zombie_theater` on a guest invalid memory access (a 64-bit bug in the zombie map asset stream, to debug on the posix x86-64 build). Then GL (EGL on nwindow) and audio |
 | 6 | Stabilisation, all base maps, docs | todo |
 | 7 | (optional) deko3d backend behind the same `gfx_backend.h` | in progress: opt-in on the Switch build (`gfx.cfg` = deko3d, `shaders.dksh` from uam); renders the main menu's 3D scene and Kino in game with its HUD on Ryujinx (2026-10-26, see the deko3d notes below); not yet run on the console in game |
-| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part deferred until `_new` and `_server` are merged into `switch`; step 3 done on Linux (2026-10-27: curses console), its Windows window still to be seen; see "Dedicated server (phase 8)" |
+| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part deferred until `_new` and `_server` are merged into `switch`; step 3 done (2026-10-27: curses console, Linux and Windows); step 4 done on win64 (2026-10-27: `zm_*` admin commands, mods/admin); see "Dedicated server (phase 8)" |
 
 ## Verification per phase
 - **0**: the `win32-msvc` preset still builds and `Play.bat` reaches the zombies menu and plays Kino der Toten.
@@ -1878,3 +1878,55 @@ with `cl_autoConnect` and `name`. Usage in `docs/SERVER.md` ("Start scripts", "J
   `0.0.0.0:3074` and a win64 client `Player3` joined it over the WSL address (`172.23.3.156`). `Play.bat net`'s command
   lines were checked with a dry copy (`start` replaced by `echo`) for an address alone, with a name, and without an
   address (usage message).
+
+**Step 4, admin commands (2026-10-27).** Operator's view in `docs/SERVER.md` ("Admin commands"); script side in
+`mods/admin/README.md`.
+
+- `src/server_mp/sv_zm_admin.cpp` registers the `zm_*` commands only with `bo1_server`, as the operator commands are
+  (`Cmd_AddCommandInternal` + `Cbuf_AddServerText_f`, so they run on the server thread). god / demigod / notarget /
+  noclip are the retail cheats' entity and client flags, kept per slot and set again before and after `G_RunFrame`
+  (a spawn inside the frame rebuilds the flags, as `bo1_testclient_god` found); switched off, a flag is cleared once,
+  so the retail cheats still work afterwards. A slot's states end when it is freed, not on a map load.
+- Everything that needs the game's scripts (points, perks, revive, kill, respawn, round) is queued and handed to
+  mods/admin as a `"zm_admin", cmd, arg` notify on the player's entity (`Scr_AddString` ×2 + `Scr_Notify`, the
+  `menuresponse` path, values pushed last to first), at most one per player and frame: a notify finds only the
+  threads already in their `waittill`, and the script's loop is back there one frame later.
+- mods/admin is stacked on every map by `FS_ModStackNames` when `Sys_IsDedicatedZombiesServer()` (new, `win_main`),
+  after the `fs_mods` names, and the server also searches `fs_homepath/mods/<name>` (after `fs_basepath`'s, so it
+  wins): `Server.bat` / `Server.sh` link the repository's `mods/` there, since the install has none and
+  `build\Release\mods` is only refreshed by the win32 build. A map load (`SV_SpawnServer` → `FS_Restart`) reads
+  `fs_mods` again, so `zm_mods` is `fs_mods` + `devmap <current map>`.
+- The script's replies are `LogPrint("admin: ...")`; `G_LogPrintf` also prints such lines to the console on the
+  server (`SV_ZmAdmin_LogLine`), so they reach the curses console. rcon output (`Com_Printf` while a command sent
+  with rcon runs) goes back to the rcon client only, not to `console_mp.log`.
+- Each command calls the retail function found in the zones' script sources (`auto_revive`, `give_perk`,
+  `add_to_player_score`, `spectator_respawn` through `level.spawnPlayer`, the devgui's goto-round). `zm_kill` first
+  went through the engine's `player_die` (the kill cheat's body): the player stayed `playing` at 0 health and the MP
+  engine respawned it a few seconds later, skipping the zombies death. It now does what `maps\_zombiemode` does to a
+  player outside the playable area (`lives = 0`, `DoDamage(health + 1000)`, `bleedout_time = 0`): down, bled out at
+  once, spectator.
+- `g_inactivity 0` joins the server defaults: a dedicated config sets 120 (`g_inactivity "120"` in the dvar dump), and
+  the idle headless test clients were dropped with `GAME_DROPPEDFORINACTIVITY` after two minutes, ending the game.
+- `zm_admin` and the TUI show each player's place in the game (`playing`, `down` from `gclient_s::lastStand`, `dead`
+  at 0 health, `spectator`) and the zm states (G/D/N/C); F4-F7 fill `zm_god`, `zm_revive`, `zm_respawn`, `zm_points`,
+  F10 now `zm_reset`. `tools/server_rcon.py` sends a command over rcon.
+- Verified on win64 (Kino, a `bo1_server` server and two headless clients over the LAN address, commands over rcon):
+  `zm_startpoints 5000` / `zm_startperks jugg` gave both players 5000 points and Juggernog (health 250); `zm_points`
+  (+1234, -2000), `zm_setpoints 7777`, `zm_perk Bravo all` (Quick Revive, Speed Cola, Double Tap, Mule Kick: Kino's
+  other machines), `zm_perk 0 speed doubletap`, an unknown perk refused; `zm_round 5` and `zm_round 3` ("round 3 from
+  1", then "round 3 started"); `zm_revive` on a player downed in round 5 ("revived"), refused on a standing one;
+  `zm_kill 0` → `spectator` within a second, `zm_respawn 0` → `playing`; `zm_mods zinfo` reloaded Kino with
+  `fs_mods: hooks of mods/admin` and `mods/zinfo`, both players back with their start points and perks; `zm_god`
+  kept a player alive through rounds the other one was downed in. Not run: `zm_noclip` / `zm_notarget` on a moving
+  player (headless clients do not move).
+- Verified on Linux (`Server.sh` in a 120x40 `tmux` pane, ext4 data, a win64 client over the WSL address): the
+  `mods` link to the repository, `fs_mods: hooks of mods/admin`, `admin: loaded on zombie_theater`; the TUI row
+  `0 Alpha ... playing 2500 G` (`zm_startpoints 2500`, `zm_god` over `tools/server_rcon.py`), the script's `admin:`
+  replies in the curses log; F7 with nothing selected filled `zm_points 0 ` (the first player is selected), `500`
+  Enter gave 3000 points, F4 Enter `zm_god 0`. `server_rcon.py` with a wrong password prints `Invalid password.`
+  (BO1's rcon replies carry a 0x01 byte before `print`). `linux64-clang` and `switch` (`.nro`) build;
+  `tools/syntax_check.py` (`win_main.h` changed): 1298 files, 0 errors with `mingw32-gcc` and `mingw32-clang`.
+- Known: a Quick Revive given while one player is in takes the solo path (`give_perk`: `players.size == 1`), and its
+  retail `solo_revive_buy_trigger_move` thread then logs `self.lives` errors once a second player is in, as a solo
+  purchase followed by a join would. A joiner can come in as a spectator until the round ends (step 6); with only
+  that player alive, a down ends the game.

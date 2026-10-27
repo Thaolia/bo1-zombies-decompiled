@@ -1,6 +1,7 @@
 #include "sv_tui.h"
 
 #include <server_mp/sv_main_mp.h>
+#include <server_mp/sv_zm_admin.h>
 #include <server/server.h>
 #include <qcommon/common.h>
 #include <qcommon/net_chan_mp.h>
@@ -41,6 +42,8 @@ const char *Sys_ServerTuiFrame()
             p.score = cl->header.state == CS_ACTIVE ? G_GetClientScore(i) : 0;
             I_strncpyz(p.name, cl->name, sizeof(p.name));
             I_strncpyz(p.address, NET_AdrToString(cl->header.netchan.remoteAddress), sizeof(p.address));
+            I_strncpyz(p.game, cl->header.state == CS_ACTIVE ? SV_ZmAdmin_GameState(i) : "", sizeof(p.game));
+            SV_ZmAdmin_Flags(i, p.admin, sizeof(p.admin));
         }
     }
     return ServerTui_Frame(status);

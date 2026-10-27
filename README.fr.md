@@ -75,5 +75,19 @@ les interfaces, réglages dans `server.cfg`. `Server.bat [map] [port]` et `./Ser
 (chemins de `Server.sh` : variables `BO1_EXE`, `BO1_INSTALL`, `BO1_ZONES`, `BO1_SERVER`). Les clients se connectent
 avec `Play.bat net <adresse>:<port> [pseudo]` (ou `Launch.bat net 172.23.3.156:3074 Player2`), avec
 `connect <adresse>:<port>`, ou tout seuls avec `+set cl_autoConnect <adresse>:<port>` dans un `launch.cfg` posé à côté
-du programme, et `tools/server_status.py <adresse>` affiche la map et les joueurs. Détails (en anglais) :
-`docs/SERVER.md`.
+du programme, et `tools/server_status.py <adresse>` affiche la map et les joueurs.
+
+Commandes admin, tapées dans la console du serveur (ou en rcon avec `tools/server_rcon.py <adresse> <mot de passe>
+<commande>`, quand `rcon_password` est défini) ; `<joueur>` est un numéro, un pseudo ou `all` :
+- `zm_god <joueur> [0|1]` (invincible), `zm_demigod`, `zm_notarget`, `zm_noclip` ;
+- `zm_points <joueur> <montant>` (négatif pour retirer), `zm_setpoints <joueur> <montant>` ;
+- `zm_perk <joueur> <perk ...|all>` : `jugg`, `revive`, `speed`, `doubletap`, `staminup`, `phd`, `deadshot`, `mulekick` ;
+- `zm_revive <joueur>` (relève un joueur à terre), `zm_kill <joueur>`, `zm_respawn <joueur>` (fait revenir un
+  spectateur tout de suite) ;
+- `zm_round <n>`, `zm_reset` (relance la map), `zm_map <map>`, `zm_mods "<mods>"` (change `fs_mods` et relance) ;
+- `zm_admin` liste les joueurs et leur état ;
+- réglages `zm_startpoints <n>` et `zm_startperks "<perks>"` : points et perks de départ de chaque joueur.
+
+Dans la console curses : F4 god, F5 revive, F6 respawn, F7 points, F8 kick, F10 reset (la commande s'écrit sur la
+ligne, Entrée l'exécute). Le côté script est le mod `mods/admin`, que le serveur ajoute toujours à `fs_mods`. Détails
+(en anglais) : `docs/SERVER.md`.

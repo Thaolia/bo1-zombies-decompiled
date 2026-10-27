@@ -29,5 +29,7 @@ cp -u "$EXE" "$SERVER/BO1Zombies"
 ln -sfn "$ZONES/zone" "$SERVER/zone"
 ln -sfn "$ZONES/shaders.pack" "$SERVER/shaders.pack"
 ln -sfn "$INSTALL/localization.txt" "$SERVER/localization.txt"
+# The server always stacks mods/admin (its zm_* admin commands) and reads mods/ from its own folder: this repository's.
+ln -sfn "$ROOT/mods" "$SERVER/mods"
 cd "$SERVER"
 exec ./BO1Zombies +set fs_b "$INSTALL" +set fs_h "$SERVER" +set bo1_server 1 +set net_ip 0.0.0.0 +set net_port "$PORT" "$@" +devmap "$MAP"

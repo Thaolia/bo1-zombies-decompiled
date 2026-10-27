@@ -12,6 +12,8 @@ struct ServerTuiPlayer
     int score;
     char name[32];
     char address[48];
+    char game[12];   // in the game (state 5): playing, down, spectator, dead
+    char admin[8];   // zm_* states: G god, D demigod, N notarget, C noclip
 };
 
 struct ServerTuiStatus

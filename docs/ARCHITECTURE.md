@@ -317,3 +317,11 @@ Status and the server's own layers (bind, curses console, admin commands, logs):
 `sv_tui_engine.cpp` (the server's state into a plain struct). `win_main.cpp` routes `Sys_Print` to it and takes its
 command line in `Sys_GetEvent` while it is active. PDCurses (`third_party/pdcurses`) on Windows, ncurses on posix, not
 on the Switch.
+
+### Admin commands (phase 8)
+
+`src/server_mp/sv_zm_admin.cpp` holds the server's `zm_*` commands (registered only with `bo1_server`, run on the
+server thread). The cheat states (god, demigod, notarget, noclip) are engine flags it sets around each `G_RunFrame`;
+everything else is queued and handed, one command per player and frame, to `mods/admin` as a `"zm_admin"` notify on
+the player's entity. The server always stacks `mods/admin` on `fs_mods` (`FS_ModStackNames`) and also reads mods from
+`fs_homepath/mods`; its `admin: ...` LogPrint replies are copied to the console by `G_LogPrintf`.

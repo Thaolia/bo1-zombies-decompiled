@@ -42,18 +42,21 @@ At the repository root, `Server.bat` (Windows) and `Server.sh` (Linux) start a s
 In a terminal (Linux) or with its own console window (Windows), the server shows a curses console:
 
     BO1 Zombies server | BO1 Linux TUI test | zombie_theater | 1/4 players | port 29070 | up 0:01:50
-      #   name                     address                 ping  state        points
-    > 0   Player                   172.23.0.1:29060          31  active          500
+      #   name                     address                 ping  state        points admin
+    > 0   Player                   172.23.0.1:29060          31  playing        500 G
       1   -
     -- console ----------------------------------------------------------------------
     ...the console log...
-     F2/F3 player  F8 kick  F10 restart  PgUp/PgDn log  Up/Down history  Esc clear  'quit' stops the server
+     F2/F3 player  F4 god  F5 revive  F6 respawn  F7 points  F8 kick  F10 reset  PgUp/PgDn log  Up/Down history ...
     > status
 
 - The command line takes any console command (`status`, `map zombie_cosmodrome`, `set g_password x`, `quit`, ...);
   Up/Down recall the last 100.
-- F2 / F3 select the previous / next player. F8 writes `clientkick <player>` and F10 `map_restart` on the command
-  line: nothing runs until Enter (Esc clears it).
+- state: `connected` / `loading`, then, in the game, `playing`, `down` (last stand), `dead` or `spectator`. admin:
+  the `zm_*` states on (G god, D demigod, N notarget, C noclip).
+- F2 / F3 select the previous / next player. F4 writes `zm_god <player>`, F5 `zm_revive <player>`, F6
+  `zm_respawn <player>`, F7 `zm_points <player> ` (type the amount), F8 `clientkick <player>` and F10 `zm_reset` on
+  the command line: nothing runs until Enter (Esc clears it).
 - PgUp / PgDn scroll the log (5000 lines kept), End goes back to the newest line. Everything also goes to
   `<fs_h>/main/console_mp.log`.
 - `+set bo1_tui 0` keeps the plain console (stdout and stdin), and so does a server whose output is not a terminal
@@ -61,7 +64,8 @@ In a terminal (Linux) or with its own console window (Windows), the server shows
 
 ### Settings and their order
 
-1. Server defaults: `bo1_zombies 1`, `sv_maxclients 4`.
+1. Server defaults: `bo1_zombies 1`, `sv_maxclients 4`, `g_inactivity 0` (the dedicated configs' 120 s idle kick is
+   multiplayer's; zombies has none. `set g_inactivity 120` brings it back).
 2. The command line's `+set` values, which override the defaults.
 3. `server.cfg`, run with `exec` from the game's search path (put it in `<fs_h>/main/`). An `exec` runs after every
    startup `+set`, so its values override both. A missing `server.cfg` only prints an error.
@@ -131,7 +135,42 @@ one query every 50 ms.
 A server and its clients may run on different platforms: the network messages are encoded the same way on all of
 them. Checked: a Linux server with a Windows client, and Windows with Windows. Switch clients come with step 2.
 
+## Admin commands
+
+Typed in the server's console, run from `server.cfg`, or sent over rcon once the server has a `rcon_password`:
+`tools/server_rcon.py <address>[:port] <password> zm_god all 1`. `<player>` is a slot number, a player's name, or
+`all`.
+
+| command | what it does |
+| --- | --- |
+| `zm_admin` | lists the players (state, health, the states below) and the start settings |
+| `zm_god <player> [0\|1]` | god mode (no damage); without a value it toggles. Kept until switched off or the player leaves, across map loads |
+| `zm_demigod`, `zm_notarget`, `zm_noclip` | the same for the other retail cheats: damage without dying, ignored by zombies, flying through walls |
+| `zm_points <player> <amount>` | gives points (a negative amount takes them, down to 0) |
+| `zm_setpoints <player> <amount>` | sets the points |
+| `zm_perk <player> <perk ...\|all>` | gives perks for free: `jugg`, `revive`, `speed`, `doubletap`, `staminup`, `phd`, `deadshot`, `mulekick` or a `specialty_` name; only the perks this map has a machine for |
+| `zm_revive <player>` | stands a downed player up |
+| `zm_kill <player>` | kills a player (god goes off first): the player spectates until the round ends |
+| `zm_respawn <player>` | brings a spectator back now instead of at the end of the round |
+| `zm_round <n>` | goes to round `n` (between rounds: once the next round starts) |
+| `zm_reset` | loads the current map again (a new game) |
+| `zm_map <map>` | loads another map |
+| `zm_mods "<mods>"` | sets `fs_mods` (quoted, `""` for none) and loads the current map again with it; alone, prints it |
+
+Settings, in `server.cfg` or on the command line: `zm_startpoints <n>` (every player's points once they first spawn on
+a map; 0 keeps the game's own) and `zm_startperks "<perks>"` (perks every player gets then, e.g. `"jugg revive"`).
+
+The engine checks the arguments and prints `zm_admin: ...` at once; the script side (mods/admin, which the server
+always adds to `fs_mods`) replies with `admin: ...` lines once it has acted, also written to `games_mp.log`. Output
+of a command sent with rcon goes back to the rcon client, not to the console log. `Server.bat` and `Server.sh` link
+this repository's `mods/` into the server's folder, where the server reads it; started otherwise, put `mods/` there
+(`<fs_h>/mods/admin`).
+
+Known limits: a Quick Revive given while only one player is in the game takes the solo path (an extra life, the
+machine hidden), as a solo purchase would, and its retail thread then logs script errors once more players are in;
+a player who joins a game in progress spectates until the round ends unless `zm_respawn` brings them in (step 6).
+
 ## Not done yet
 
-Admin commands (god, revive, points, perks, reset, mods), client logs sent to the server, joining a game in progress
-and more than 4 players: see the plan in `docs/PORTING.md`, phase 8.
+Client logs sent to the server, joining a game in progress and more than 4 players: see the plan in
+`docs/PORTING.md`, phase 8.

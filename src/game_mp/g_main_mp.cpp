@@ -88,6 +88,7 @@
 #include "pregame.h"
 #include <game_sp/g_sp_playtrace.h>
 #include <platform/arch_size.h>
+#include <server_mp/sv_zm_admin.h>
 
 const char *g_entcountNames[8] =
 {
@@ -2740,6 +2741,7 @@ void G_LogPrintf(const char *fmt, ...)
     string2[sizeof(string2) - 1] = 0;
     va_end(va);
     G_Mapkit_RecordCheck(string2);
+    SV_ZmAdmin_LogLine(string2); // phase 8: mods/admin's replies to the server console
     if ( level.logFile )
     {
         argptr = 0;

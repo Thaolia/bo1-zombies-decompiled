@@ -63,9 +63,11 @@ void AppendLog(const char *text)
     s_logChanged = true;
 }
 
-const char *StateName(int state)
+const char *StateName(const ServerTuiPlayer &p)
 {
-    switch (state)
+    if (p.state == 5 && p.game[0])
+        return p.game;
+    switch (p.state)
     {
     case 3:
         return "connected";
@@ -109,6 +111,9 @@ void SelectPlayer(const ServerTuiStatus &status, int step)
 // action keys only fill the command line; Enter runs it, so no key acts on a player by itself
 void PrefillForSelected(const ServerTuiStatus &status, const char *command)
 {
+    // nothing selected yet: the first player, so a lone player needs no F2/F3 first
+    if (!FindPlayer(status, s_selected) && status.playerCount > 0)
+        s_selected = status.players[0].num;
     if (!FindPlayer(status, s_selected))
         return;
     char line[64];
@@ -175,11 +180,25 @@ void HandleKey(int ch, const ServerTuiStatus &status, int logRows)
     case KEY_F(3):
         SelectPlayer(status, 1);
         break;
+    case KEY_F(4):
+        PrefillForSelected(status, "zm_god");
+        break;
+    case KEY_F(5):
+        PrefillForSelected(status, "zm_revive");
+        break;
+    case KEY_F(6):
+        PrefillForSelected(status, "zm_respawn");
+        break;
+    case KEY_F(7):
+        PrefillForSelected(status, "zm_points");
+        if (!s_input.empty())
+            s_input += " ";
+        break;
     case KEY_F(8):
         PrefillForSelected(status, "clientkick");
         break;
     case KEY_F(10):
-        s_input = "map_restart";
+        s_input = "zm_reset";
         break;
 #if defined(KEY_RESIZE)
     case KEY_RESIZE:
@@ -223,8 +242,8 @@ void Draw(const ServerTuiStatus &status)
     int slots = status.maxClients;
     if (slots > rows / 3)
         slots = rows / 3 > 1 ? rows / 3 : 1;
-    std::snprintf(line, sizeof(line), "  %-3s %-24s %-22s %5s  %-10s %8s", "#", "name", "address", "ping", "state",
-                  "points");
+    std::snprintf(line, sizeof(line), "  %-3s %-24s %-22s %5s  %-10s %8s %s", "#", "name", "address", "ping", "state",
+                  "points", "admin");
     attron(A_BOLD);
     DrawLine(1, line, cols);
     attroff(A_BOLD);
@@ -232,8 +251,9 @@ void Draw(const ServerTuiStatus &status)
     {
         const ServerTuiPlayer *p = FindPlayer(status, slot);
         if (p)
-            std::snprintf(line, sizeof(line), "%c %-3d %-24.24s %-22.22s %5d  %-10s %8d", slot == s_selected ? '>' : ' ',
-                          slot, p->name, p->address, p->ping, StateName(p->state), p->score);
+            std::snprintf(line, sizeof(line), "%c %-3d %-24.24s %-22.22s %5d  %-10s %8d %s",
+                          slot == s_selected ? '>' : ' ', slot, p->name, p->address, p->ping, StateName(*p), p->score,
+                          p->admin);
         else
             std::snprintf(line, sizeof(line), "%c %-3d -", slot == s_selected ? '>' : ' ', slot);
         if (slot == s_selected)
@@ -269,7 +289,8 @@ void Draw(const ServerTuiStatus &status)
     attron(A_REVERSE);
     mvhline(rows - 2, 0, ' ', cols);
     mvaddnstr(rows - 2, 0,
-              " F2/F3 player  F8 kick  F10 restart  PgUp/PgDn log  Up/Down history  Esc clear  'quit' stops the server",
+              " F2/F3 player  F4 god  F5 revive  F6 respawn  F7 points  F8 kick  F10 reset  PgUp/PgDn log  Up/Down history"
+              "  Esc clear  'quit' stops the server",
               cols);
     attroff(A_REVERSE);
 

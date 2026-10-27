@@ -18,6 +18,7 @@
 #include <clientscript/cscr_memorytree.h>
 #include <bgame/bg_perks.h>
 #include <game_mp/g_client_script_cmd_mp.h>
+#include "sv_zm_admin.h"
 #include <ui/ui_main_pc.h>
 #include <ui/ui_playlists.h>
 #include <live/live_storage_pub.h>
@@ -252,6 +253,7 @@ void __cdecl SV_AddOperatorCommands()
         if (IsDedicatedServer())
         {
             SV_AddDedicatedCommands();
+            SV_ZmAdmin_AddCommands(); // phase 8: only with bo1_server
         }
         Cmd_AddCommandInternal("scriptUsage", Cbuf_AddServerText_f, &SV_ScriptUsage_f_VAR);
         Cmd_AddServerCommandInternal("scriptUsage", SV_ScriptUsage_f, &SV_ScriptUsage_f_VAR_SERVER);

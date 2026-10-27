@@ -34,6 +34,7 @@
 #include <win32/win_shared.h>
 #include <client/cl_debugdata.h>
 #include "sv_bot_mp.h"
+#include "sv_zm_admin.h"
 #include <win32/win_main.h>
 #include <universal/com_workercmds.h>
 #include <universal/com_tasks.h>
@@ -1178,6 +1179,7 @@ void    SV_RunFrame()
     SV_ResetSkeletonCache();
     CL_FlushDebugServerData();
     G_SP_HeadlessTestClientFrame(false);
+    SV_ZmAdmin_Frame(false);
     SV_RunClientConnectCallbacks();
     // zombies (a1): SP Com_ServerLoop (SP 0x0087E2A0) reads the client packets (usercmds) inside every server frame,
     // not only when the server thread wakes: right after SV_RunClientConnectCallbacks (0x0087E45C, the event loop at
@@ -1192,6 +1194,7 @@ void    SV_RunFrame()
     G_RunFrame(svs.time);
     const unsigned int gameEnd = measure ? Sys_Milliseconds() : 0;
     G_SP_HeadlessTestClientFrame(true);
+    SV_ZmAdmin_Frame(true);
     sv.physicsTime = Phys_GetCurrentTime();
     CL_UpdateDebugServerData();
     if (spPacketReads)

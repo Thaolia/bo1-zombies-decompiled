@@ -79,8 +79,9 @@ SysInfo sys_info;
 // zombies: bo1_server - '+set bo1_server 1': the dedicated zombies server (docs/PORTING.md, phase 8). It runs with every
 // bo1_headless guard (no window, no dialog, no sound, fatal errors exit) but serves the network: it does not force
 // net_ip, whose default "localhost" NET_IPSocket binds to every interface. It starts with server defaults
-// (bo1_zombies 1, sv_maxclients 4) that the caller's +set values override, then execs server.cfg; an exec runs after
-// every startup +set, so server.cfg overrides both.
+// (bo1_zombies 1, sv_maxclients 4, g_inactivity 0: the dedicated configs' 120 s idle kick is MP's, SP zombies has
+// none) that the caller's +set values override, then execs server.cfg; an exec runs after every startup +set, so
+// server.cfg overrides both.
 static bool s_headless;
 static bool s_headlessClient;
 static bool s_server;
@@ -90,6 +91,11 @@ static int s_autoquitStartMs;
 bool __cdecl Sys_IsHeadless()
 {
     return s_headless;
+}
+
+bool __cdecl Sys_IsDedicatedZombiesServer()
+{
+    return s_server;
 }
 
 bool __cdecl Sys_IsHeadlessClient()
@@ -2525,7 +2531,7 @@ int __stdcall WinMain(HINSTANCE__ *hInstance, HINSTANCE__ *hPrevInstance, char *
             InitTiming();
             Sys_FindInfo();
             g_wv.hInstance = hInstance;
-            I_strncpyz(sys_cmdline, s_server ? "+set bo1_zombies 1 +set sv_maxclients 4 +exec server.cfg " : "", 1024);
+            I_strncpyz(sys_cmdline, s_server ? "+set bo1_zombies 1 +set sv_maxclients 4 +set g_inactivity 0 +exec server.cfg " : "", 1024);
             I_strncat(sys_cmdline, 1024, lpCmdLine);
             // x6: the headless settings below must always fit (a cut '+set dedicated 1' or '+set r_aaSamples 1' changes
             // what runs); a caller line too long for them loses its tail instead (headless.ps1 refuses such lines)

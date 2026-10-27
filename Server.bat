@@ -28,6 +28,8 @@ if not exist "%EXE%" (echo Server not built: %EXE% - build the win64-msvc preset
 if not exist "%~dp0build\zones64\zone" (echo IWffs zones not found: build\zones64 - run tools\ffconv, see docs\PORTING.md & pause & exit /b 1)
 if not exist "%X64%\zone" mklink /J "%X64%\zone" "%~dp0build\zones64\zone" >nul
 if not exist "%SRVHOME%\main" mkdir "%SRVHOME%\main"
+rem the server always stacks mods\admin (its zm_* admin commands) and reads mods\ from its own folder: this repository's
+if not exist "%SRVHOME%\mods" mklink /J "%SRVHOME%\mods" "%~dp0mods" >nul
 rem the working folder holds localization.txt (build\Release), as Play.bat runs it
 start "" /D "%GAME%" "%EXE%" +set fs_b "%GAME%" +set fs_h "%SRVHOME%" +set bo1_server 1 +set net_ip 0.0.0.0 +set net_port %PORT%%MORE% +devmap %MAP%
 endlocal

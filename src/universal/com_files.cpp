@@ -24,6 +24,7 @@
 #include <database/db_registry.h>
 #include <sound/snd_public_async.h>
 #include <win32/win_net.h>
+#include <win32/win_main.h>
 #include <sound/snd_stream.h>
 
 const char TEN_SPACE[] = "          ";
@@ -2392,7 +2393,8 @@ bool FS_ModsActive()
 
 bool FS_ModStackActive()
 {
-    return fs_modsVar && *fs_modsVar->current.string;
+    // phase 8: the dedicated zombies server always stacks mods/admin, its admin commands' script side
+    return (fs_modsVar && *fs_modsVar->current.string) || Sys_IsDedicatedZombiesServer();
 }
 
 // mod: the stacked mods in load order: each fs_mods name once, and fs_game's mod first when it is a mods/<name> folder not
@@ -2445,6 +2447,18 @@ int FS_ModStackNames(char (*names)[64], int max)
     if ( !FS_ModStackActive() || max < 1 )
         return 0;
     int count = FS_ModStackParse(fs_modsVar->current.string, names, 0, max, false);
+    if ( Sys_IsDedicatedZombiesServer() )
+    {
+        int m = 0;
+        while ( m < count && I_stricmp(names[m], "admin") )
+            ++m;
+        if ( m == count )
+        {
+            if ( count == max )
+                --count;
+            I_strncpyz(names[count++], "admin", 64);
+        }
+    }
     const char *g = fs_gameDirVar ? fs_gameDirVar->current.string : "";
     if ( (!I_strnicmp(g, "mods/", 5) || !I_strnicmp(g, "mods\\", 5)) && FS_ModStackParse(g, game, 0, 1, true) )
     {
@@ -2530,9 +2544,19 @@ void __cdecl FS_Startup(const char *gameName, bool allow_devraw)
         char names[16][64];
         I_strncpyz(gamedir, fs_gamedir, 256);
         int count = FS_ModStackNames(names, 16);
+        // phase 8: a dedicated server also reads fs_homepath's mods/ (after, so it wins) when it is another folder: the
+        // server's own folder holds the repository's mods/ (Server.bat / Server.sh), the install does not
+        const bool home = Sys_IsDedicatedZombiesServer() && *fs_homepath->current.string
+            && I_stricmp(fs_homepath->current.string, fs_basepath->current.string);
         for ( int m = 0; m < count; ++m )
+        {
             FS_AddGameDirectory((char *)fs_basepath->current.string, va("mods/%s", names[m]), 0, 0);
+            if ( home )
+                FS_AddGameDirectory((char *)fs_homepath->current.string, va("mods/%s", names[m]), 0, 0);
+        }
         FS_AddGameDirectory((char *)fs_basepath->current.string, "mods/_stack", 0, 0);
+        if ( home )
+            FS_AddGameDirectory((char *)fs_homepath->current.string, "mods/_stack", 0, 0);
         I_strncpyz(fs_gamedir, gamedir, 256);
     }
     Com_ReadCDKey();
