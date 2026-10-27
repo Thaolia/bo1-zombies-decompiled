@@ -237,14 +237,14 @@ void ZmRespawn_f()
     ZmScriptCommand("zm_respawn", "respawn", false, false, "zm_respawn <player|all>");
 }
 
-// the script's DoDamage cannot reach a god player: god and demigod go off first (the frame clears the flags before it
-// hands the command over)
-void ZmKill_f()
+// zm_kill / zm_down: the script's DoDamage cannot reach a god player, so god and demigod go off first (the frame
+// clears the flags before it hands the command over)
+void ZmDamageCommand(const char *name, const char *script)
 {
     int targets[ZM_MAX_CLIENTS];
     if ( SV_Cmd_Argc() != 2 )
     {
-        ZmUsage("zm_kill <player|all>");
+        Com_Printf(0, "usage: %s <player|all>\n", name);
         return;
     }
     const int count = ZmTargets(SV_Cmd_Argv(1), CS_ACTIVE, targets);
@@ -253,8 +253,18 @@ void ZmKill_f()
         ZmAdminState &s = s_state[targets[t]];
         s.clearOnce |= s.on & (ZM_GOD | ZM_DEMIGOD);
         s.on &= ~(ZM_GOD | ZM_DEMIGOD);
-        ZmQueue(targets[t], "kill", "");
+        ZmQueue(targets[t], script, "");
     }
+}
+
+void ZmKill_f()
+{
+    ZmDamageCommand("zm_kill", "kill");
+}
+
+void ZmDown_f()
+{
+    ZmDamageCommand("zm_down", "down");
 }
 
 // the level's round: run by mods/admin from any player in the game
@@ -358,8 +368,9 @@ ZmCommandDef s_commands[] = {
     { "zm_god", ZmGod_f },       { "zm_demigod", ZmDemigod_f }, { "zm_notarget", ZmNotarget_f },
     { "zm_noclip", ZmNoclip_f }, { "zm_points", ZmPoints_f },   { "zm_setpoints", ZmSetPoints_f },
     { "zm_perk", ZmPerk_f },     { "zm_revive", ZmRevive_f },   { "zm_respawn", ZmRespawn_f },
-    { "zm_kill", ZmKill_f },     { "zm_round", ZmRound_f },     { "zm_reset", ZmReset_f },
-    { "zm_map", ZmMap_f },       { "zm_mods", ZmMods_f },       { "zm_admin", ZmAdmin_f },
+    { "zm_kill", ZmKill_f },     { "zm_down", ZmDown_f },       { "zm_round", ZmRound_f },
+    { "zm_reset", ZmReset_f },   { "zm_map", ZmMap_f },         { "zm_mods", ZmMods_f },
+    { "zm_admin", ZmAdmin_f },
 };
 
 // hands the player's oldest queued command to mods/admin's "zm_admin" waittill (one per player and frame: a second

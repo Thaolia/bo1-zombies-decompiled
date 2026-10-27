@@ -1930,6 +1930,22 @@ with `cl_autoConnect` and `name`. Usage in `docs/SERVER.md` ("Start scripts", "J
   Enter gave 3000 points, F4 Enter `zm_god 0`. `server_rcon.py` with a wrong password prints `Invalid password.`
   (BO1's rcon replies carry a 0x01 byte before `print`). `linux64-clang` and `switch` (`.nro`) build;
   `tools/syntax_check.py` (`win_main.h` changed): 1298 files, 0 errors with `mingw32-gcc` and `mingw32-clang`.
+- The user's first game with a PC and a Switch client (2026-10-27) logged script errors in `spectator_respawn`
+  (`self.spectator_respawn` undefined: no end-of-round respawn) and in `_zombiemode_powerups.gsc:528`
+  (`zombie_score_start_2p` undefined: the power-up drops stopped). Both come from the retail set-up done once at
+  `all_players_connected`, which `getnumexpectedplayers` (connected or loading clients) lets fall as soon as the
+  players present are in: the PC dropped during a `zm_reset` load and came back after it. mods/admin now gives a later
+  player a start point and defines the start points for 1-4 players. Checked with Alpha in first and Bravo joining in
+  round 1: "start point given to 1 (Bravo)", `zm_kill 1`, Bravo back at the end of round 2 with no script error (not
+  at the end of round 1: `round_think` reads `get_players()` at the round's start and respawns spectators only when
+  that count is not 1, retail).
+- The "revive does not work" report was `zm_revive` on a player `zm_kill` had killed (spectating, `not down`): the
+  reply now says so. `zm_down` puts a player in last stand for revive tests, and `zm_debug_revive 1` logs each test
+  of the retail revive (`can_revive`, `is_reviving`) per player. With headless clients: the trigger (`touch 1` at 66
+  units), sight and bullet traces pass; facing and use stay 0, as headless clients send no input (`+activate` /
+  `+right` from `bo1_clientCommands` changed nothing), so a player-to-player revive over the network is still to be
+  checked with real clients. `UseButtonPressed` reads usercmd bits 3 and 5, which the headless window-repair test
+  drives.
 - Known: a Quick Revive given while one player is in takes the solo path (`give_perk`: `players.size == 1`), and its
   retail `solo_revive_buy_trigger_move` thread then logs `self.lives` errors once a second player is in, as a solo
   purchase followed by a join would. A joiner can come in as a spectator until the round ends (step 6); with only

@@ -7,15 +7,87 @@
 // entity, at most once per player and server frame (src/server_mp/sv_zm_admin.cpp). Every reply is a LogPrint line
 // starting with "admin: ", which the server also prints to its console.
 //
-// Dvars read here: zm_startpoints (points each player starts with, 0 = the game's own) and zm_startperks (perks each
-// player starts with: names or "all").
+// Dvars read here: zm_startpoints (points each player starts with, 0 = the game's own), zm_startperks (perks each
+// player starts with: names or "all") and zm_debug_revive (1: while a player is down, log why each other player can
+// or cannot revive them).
+//
+// A dedicated server's players come in one by one, while the retail game sets up its players once, when
+// "all_players_connected" is set (maps\_load_common): as soon as the players connected at that time are in. A player
+// who joins later misses that set-up; admin_late_join_* fills in what the game reads later and would fail on.
 
 main_end()
 {
 	level.admin_round_active = false;
 	level thread admin_round_tracker();
 	level thread admin_connect_watch();
+	level thread admin_late_join_vars();
 	admin_log( "loaded on " + GetDvar( #"mapname" ) );
+}
+
+
+// maps\_zombiemode::difficulty_init sets the start points for the player count at that time only, and
+// maps\_zombiemode_powerups reads them for the current count ("zombie_score_start_" + players.size + "p"): with one
+// more player that var is undefined and the power-up drop thread dies. Set every count the same way (difficulty 1,
+// table column 2).
+admin_late_join_vars()
+{
+	flag_wait( "all_players_connected" );
+	for ( n = 1; n <= 4; n++ )
+	{
+		if ( !IsDefined( level.zombie_vars["zombie_score_start_" + n + "p"] ) )
+		{
+			maps\_zombiemode_utility::set_zombie_var( "zombie_score_start_" + n + "p", 3000, false, 2 );
+		}
+		if ( !IsDefined( level.zombie_vars["zombie_team_score_start_" + n + "p"] ) )
+		{
+			maps\_zombiemode_utility::set_zombie_var( "zombie_team_score_start_" + n + "p", 2000, false, 2 );
+		}
+	}
+}
+
+
+// maps\_zombiemode::coop_player_spawn_placement gives a start point (the struct spectator_respawn spawns a dead player
+// at) to the players in at "all_players_connected" only; without one the end-of-round respawn stops with a script error
+admin_late_join_start_point()
+{
+	self endon( "disconnect" );
+	flag_wait( "all_players_connected" );
+	wait( 1 );
+	self admin_ensure_start_point();
+}
+
+
+admin_ensure_start_point()
+{
+	if ( IsDefined( self.spectator_respawn ) )
+	{
+		return;
+	}
+	structs = getstructarray( "initial_spawn_points", "targetname" );
+	if ( structs.size == 0 )
+	{
+		return;
+	}
+	players = get_players();
+	choice = structs[self GetEntityNumber() % structs.size];
+	for ( i = 0; i < structs.size; i++ )
+	{
+		used = false;
+		for ( p = 0; p < players.size; p++ )
+		{
+			if ( players[p] != self && IsDefined( players[p].spectator_respawn ) && players[p].spectator_respawn == structs[i] )
+			{
+				used = true;
+			}
+		}
+		if ( !used )
+		{
+			choice = structs[i];
+			break;
+		}
+	}
+	self.spectator_respawn = choice;
+	admin_log( "start point given to " + self admin_who() + " (joined after the game set up its players)" );
 }
 
 
@@ -69,6 +141,8 @@ admin_player()
 	}
 	self.admin_listening = true;
 	self thread admin_start_kit();
+	self thread admin_late_join_start_point();
+	self thread admin_revive_debug_watch();
 	for ( ;; )
 	{
 		self waittill( "zm_admin", cmd, arg );
@@ -100,6 +174,9 @@ admin_run( cmd, arg )
 		break;
 	case "kill":
 		self admin_kill();
+		break;
+	case "down":
+		self admin_down();
 		break;
 	case "round":
 		admin_goto_round( int( arg ) );
@@ -278,7 +355,14 @@ admin_revive()
 {
 	if ( !self maps\_laststand::player_is_in_laststand() )
 	{
-		admin_log( "revive " + self admin_who() + ": not down" );
+		if ( self.sessionstate == "spectator" )
+		{
+			admin_log( "revive " + self admin_who() + ": dead (spectating), zm_respawn brings them back" );
+		}
+		else
+		{
+			admin_log( "revive " + self admin_who() + ": not down" );
+		}
 		return;
 	}
 	// auto_revive (as solo Quick Revive) counts a revive for the reviver: here the player itself, whose count is kept
@@ -310,6 +394,89 @@ admin_kill()
 }
 
 
+// down without dying: a test for revives (the player bleeds out as usual unless revived)
+admin_down()
+{
+	if ( self.sessionstate != "playing" || self maps\_laststand::player_is_in_laststand() )
+	{
+		admin_log( "down " + self admin_who() + ": not standing" );
+		return;
+	}
+	self DoDamage( self.health + 1000, self.origin );
+	admin_log( "downed " + self admin_who() + ", in last stand " + self maps\_laststand::player_is_in_laststand() );
+}
+
+
+//-------------------------------------------------------------------------------
+// revive diagnostics (zm_debug_revive 1): maps\_laststand::revive_trigger_think revives once another player passes
+// can_revive and holds use; this logs each step of that test, for every other player, whenever the result changes
+//-------------------------------------------------------------------------------
+
+admin_revive_debug_watch()
+{
+	self endon( "disconnect" );
+	for ( ;; )
+	{
+		self waittill( "player_downed" );
+		if ( GetDvarInt( #"zm_debug_revive" ) > 0 )
+		{
+			self admin_revive_debug();
+		}
+	}
+}
+
+
+admin_revive_debug()
+{
+	self endon( "disconnect" );
+	admin_log( "revive debug: " + self admin_who() + " is down, trigger " + IsDefined( self.revivetrigger ) + ", radius " + GetDvarInt( #"revive_trigger_radius" ) );
+	last = [];
+	while ( self maps\_laststand::player_is_in_laststand() )
+	{
+		players = get_players();
+		for ( i = 0; i < players.size; i++ )
+		{
+			p = players[i];
+			if ( p == self )
+			{
+				continue;
+			}
+			result = admin_revive_checks( p, self );
+			key = "p" + p GetEntityNumber();
+			if ( !IsDefined( last[key] ) || last[key] != result )
+			{
+				last[key] = result;
+				admin_log( "revive debug: " + p admin_who() + " -> " + self GetEntityNumber() + ": " + result );
+			}
+		}
+		wait( 0.25 );
+	}
+	admin_log( "revive debug: " + self admin_who() + " no longer down, session " + self.sessionstate );
+}
+
+
+// the tests of maps\_laststand::can_revive and is_reviving, in their order
+admin_revive_checks( p, downed )
+{
+	result = "dist " + int( Distance( p.origin, downed.origin ) ) + " alive " + IsAlive( p ) + " down " + p maps\_laststand::player_is_in_laststand();
+	if ( IsDefined( downed.revivetrigger ) )
+	{
+		result = result + " touch " + p IsTouching( downed.revivetrigger );
+	}
+	else
+	{
+		result = result + " touch (no trigger)";
+	}
+	result = result + " facing " + p maps\_laststand::is_facing( downed );
+	result = result + " sight " + SightTracePassed( p.origin + ( 0, 0, 50 ), downed.origin + ( 0, 0, 30 ), false, undefined );
+	result = result + " bullet " + BulletTracePassed( p.origin + ( 0, 0, 50 ), downed.origin + ( 0, 0, 30 ), false, undefined );
+	result = result + " zombie " + is_true( p.is_zombie );
+	result = result + " use " + p UseButtonPressed();
+	result = result + " can_revive " + p maps\_laststand::can_revive( downed );
+	return result;
+}
+
+
 // the game respawns spectators between rounds (maps\_zombiemode::spectators_respawn): the same call, now
 admin_respawn()
 {
@@ -328,14 +495,7 @@ admin_respawn()
 		level.custom_spawnPlayer = maps\_zombiemode::spectator_respawn;
 	}
 	// spectator_respawn spawns at the player's start point; a player who joined later has none
-	if ( !IsDefined( self.spectator_respawn ) )
-	{
-		structs = getstructarray( "initial_spawn_points", "targetname" );
-		if ( structs.size > 0 )
-		{
-			self.spectator_respawn = structs[self GetEntityNumber() % structs.size];
-		}
-	}
+	self admin_ensure_start_point();
 	if ( !IsDefined( self.spectator_respawn ) )
 	{
 		admin_log( "respawn " + self admin_who() + ": the map has no player start point" );

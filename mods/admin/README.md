@@ -17,15 +17,25 @@ The script side of the `zm_*` console commands of the dedicated zombies server (
     machine for;
   - revive: `maps\_laststand::auto_revive` (the solo Quick Revive path); the player's own revive count is kept;
   - kill: what `maps\_zombiemode` does to a player outside the playable area (no life left, down, bled out at once);
+  - down: `DoDamage( health + 1000 )`, the game's own last stand;
   - respawn: `[[level.spawnPlayer]]` with `maps\_zombiemode::spectator_respawn`, as `spectators_respawn` between rounds;
   - round: the devgui's `zombie_devgui_goto_round`, as mods/sandbox does it.
 - Each reply is a `LogPrint` line starting with `admin: `; the server also prints those to its console (and so to its
   curses console).
 
+## Players who join later
+
+The game sets its players up when `all_players_connected` is set (`maps\_load_common`), which on a dedicated server is
+as soon as the players connected at that time are in. For a later player, `_admin.gsc` gives a start point
+(`spectator_respawn`, the struct the end-of-round respawn spawns at) and defines `zombie_score_start_<n>p` /
+`zombie_team_score_start_<n>p` for 1 to 4 players (the power-up drop reads them for the current count).
+
 ## Dvars
 
 - `zm_startpoints <n>`: every player's points once they first spawn on a map (0, the default, keeps the game's own).
 - `zm_startperks "<perks>"`: perks every player gets at that time, e.g. `"jugg revive"` or `"all"`.
+- `zm_debug_revive 1`: while a player is down, logs each test of `maps\_laststand::can_revive` / `is_reviving` for
+  every other player whenever the result changes.
 
 Perk names: `jugg`, `revive`, `speed`, `doubletap`, `staminup`, `phd`, `deadshot`, `mulekick`, or the game's own
 `specialty_...` name.

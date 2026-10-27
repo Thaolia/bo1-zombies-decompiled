@@ -84,11 +84,14 @@ Commandes admin, tapées dans la console du serveur (ou en rcon avec `tools/serv
 - `zm_god <joueur> [0|1]` (invincible), `zm_demigod`, `zm_notarget`, `zm_noclip` ;
 - `zm_points <joueur> <montant>` (négatif pour retirer), `zm_setpoints <joueur> <montant>` ;
 - `zm_perk <joueur> <perk ...|all>` : `jugg`, `revive`, `speed`, `doubletap`, `staminup`, `phd`, `deadshot`, `mulekick` ;
-- `zm_revive <joueur>` (relève un joueur à terre), `zm_kill <joueur>`, `zm_respawn <joueur>` (fait revenir un
-  spectateur tout de suite) ;
+- `zm_revive <joueur>` (relève un joueur à terre ; un joueur mort est spectateur, c'est `zm_respawn`), `zm_down <joueur>`
+  (met à terre sans tuer, pour tester le revive), `zm_kill <joueur>` (tue : directement spectateur),
+  `zm_respawn <joueur>` (fait revenir un spectateur tout de suite) ;
 - `zm_round <n>`, `zm_reset` (relance la map), `zm_map <map>`, `zm_mods "<mods>"` (change `fs_mods` et relance) ;
 - `zm_admin` liste les joueurs et leur état ;
 - réglages `zm_startpoints <n>` et `zm_startperks "<perks>"` : points et perks de départ de chaque joueur.
+- `set zm_debug_revive 1` : quand un joueur est à terre, le log dit pour chaque autre joueur quelle condition du revive
+  passe ou bloque (distance, trigger, orientation, visée, touche utiliser).
 
 Dans la console curses : F4 god, F5 revive, F6 respawn, F7 points, F8 kick, F10 reset (la commande s'écrit sur la
 ligne, Entrée l'exécute). Le côté script est le mod `mods/admin`, que le serveur ajoute toujours à `fs_mods`. Détails
