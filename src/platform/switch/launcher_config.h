@@ -35,7 +35,12 @@ enum LauncherTexFilter
 
 struct LauncherSettings
 {
-    int map = 0; // index into kLauncherMaps
+    // Join a dedicated server (docs/SERVER.md) instead of a solo game on `map`.
+    bool join = false;
+    std::string serverHost; // valid per Launcher_ValidServerHost, or empty
+    int serverPort = 3074;  // the dedicated server's default net_port
+    std::string playerName; // the name on the server, valid per Launcher_ValidPlayerName or empty (the game's own)
+    int map = 0;            // index into kLauncherMaps
     bool aimAssist = true;
     bool aimSlowdown = true;
     bool aimLockon = true;
@@ -55,8 +60,19 @@ std::string Launcher_FormatSettings(const LauncherSettings &s);
 
 // The line written to launch.cfg. Every dvar is set explicitly, the defaults included: the graphics ones are archived
 // in config.cfg, so leaving one out would keep whatever an earlier launch chose. `extra` (launch_extra.cfg, may be
-// empty) goes before +devmap, which must stay last.
+// empty) goes before +devmap, which must stay last. A join with a server boots the game's menu and sets cl_autoConnect
+// instead of +devmap; a join without one falls back to the solo line.
 std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::string &extra);
+
+// What the menu accepts from the keyboard. A host is an IPv4 address or a host name, 1-63 letters, digits, '.' or '-';
+// a port 1-65535, as text of digits only; a name 1-15 letters, digits, '_', '-' or '.'. No blank in any of them, since
+// launch.cfg is one command line.
+bool Launcher_ValidServerHost(const std::string &host);
+bool Launcher_ParsePort(const std::string &text, int *port);
+bool Launcher_ValidPlayerName(const std::string &name);
+
+// "host:port", the address cl_autoConnect gets.
+std::string Launcher_ServerAddress(const LauncherSettings &s);
 
 // The gfx.cfg value switch_main.cpp turns into BO1_GFX_BACKEND.
 const char *Launcher_BackendName(LauncherBackend backend);

@@ -29,6 +29,9 @@ Le jeu doit être lancé en mode application (title takeover : maintenir R en la
 c'est-à-dire l'album, ne donne qu'environ 400 Mo de RAM.
 
 Au lancement, un menu texte s'ouvre avant le jeu. On y choisit :
+- une partie solo, ou un serveur dédié à rejoindre. La ligne **Serveur** ouvre son propre écran. On y active ou non
+  la connexion, on y saisit l'adresse IP et le port du serveur avec le clavier de la console, et son nom de joueur.
+  L'écran montre aussi l'adresse réseau de la console (`docs/SERVER.md`, « Joining from a Switch ») ;
 - la map, parmi les 10 maps zombies ;
 - l'aim assist : activé ou non, avec ralentissement, verrouillage et visée auto ;
 - le god mode ;
@@ -37,7 +40,8 @@ Au lancement, un menu texte s'ouvre avant le jeu. On y choisit :
 - les manettes : la liste des manettes détectées, et l'écran de la Switch pour en connecter.
 
 Les touches : croix pour choisir, gauche/droite pour modifier, A pour valider, **+** pour lancer la partie
-directement sur la map, **−** pour quitter. Les choix sont gardés dans `sdmc:/switch/bo1zm/menu.cfg`. Au lancement, le
+directement sur la map (ou, avec un serveur, ouvrir le menu du jeu, qui rejoint alors le serveur tout seul), **−** pour
+quitter. Dans l'écran du serveur, B revient au menu. Les choix sont gardés dans `sdmc:/switch/bo1zm/menu.cfg`. Au lancement, le
 menu écrit `launch.cfg` (la ligne de commande du moteur) et `gfx.cfg` (le rendu). Le contenu facultatif de
 `launch_extra.cfg` est ajouté à la ligne de commande, ce qui sert pour des options de diagnostic. Avec un fichier
 vide `skip_menu` dans le même dossier, le jeu démarre sans menu, sur `launch.cfg` et `gfx.cfg` tels quels. C'est
@@ -96,3 +100,33 @@ Commandes admin, tapées dans la console du serveur (ou en rcon avec `tools/serv
 Dans la console curses : F4 god, F5 revive, F6 respawn, F7 points, F8 kick, F10 reset (la commande s'écrit sur la
 ligne, Entrée l'exécute). Le côté script est le mod `mods/admin`, que le serveur ajoute toujours à `fs_mods`. Détails
 (en anglais) : `docs/SERVER.md`.
+
+
+## Paquets prêts à copier
+`tools/make_dist.sh` (bash, depuis WSL) part d'un arbre de sources où `setup.ps1` a copié le jeu. Il produit dans
+`build/dist` un dossier prêt à copier et une archive par plateforme :
+- `BO1Zombies_windows/` (`.zip`) : le client et le serveur 64 bits. `Play.bat` lance le jeu, `Play.bat net
+  <adresse[:port]> [nom]` rejoint un serveur, `Server.bat [map] [port]` lance un serveur. Les DLL d'exécution 64 bits
+  sont incluses ;
+- `BO1Zombies_linux/` (`.tar.gz`) : le client et le serveur Linux, avec `play.sh` (`./play.sh net ...`),
+  `server.sh [map] [port]` et `shaders.pack` ;
+- `BO1Zombies_switch/` (`.zip`) : une arborescence de carte SD, `switch/bo1zm/` avec le `.nro`, `shaders.pack` et
+  `shaders.dksh`.
+
+Chaque paquet contient aussi les zones converties, les `main/*.iwd` et le `localization.txt` de l'install (plus
+`main/video` sur PC), un `LISEZMOI.txt` et un `VERSION.txt` (commit, date, heure du lien du NRO).
+
+    tools/make_dist.sh                       # les trois
+    tools/make_dist.sh switch linux          # une partie
+    tools/make_dist.sh --no-build windows    # empaqueter l'existant, échouer si quelque chose manque ou est périmé
+
+Sans `--no-build`, le script compile ce qu'il faut, en incrémental :
+- le preset `win64-msvc` ;
+- les programmes Linux et Switch dans `--work`, un dossier ext4 (`~/.cache/bo1zm-dist`) ;
+- les zones converties, si elles manquent ou sont plus vieilles que les sources du convertisseur (`ffconv --verify`,
+  puis `check_shader_pack.py`). Les anciennes zones restent en place tant que les nouvelles n'ont pas passé ces
+  vérifications ;
+- `shaders.dksh`, quand son `shaders.pack` a changé. Le script échoue si uam rejette un shader.
+
+Autres options : `--out`, `--game`, `--zones`, `--dxsdk`, `--archive auto|zip|tar|none`, `--jobs` ; `--help` les
+décrit. Les paquets contiennent vos propres fichiers de jeu : gardez-les pour vos appareils, ne les publiez pas.

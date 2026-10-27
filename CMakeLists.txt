@@ -397,8 +397,8 @@ else()
         target_link_libraries(gamepad_test PRIVATE SDL2::SDL2)
         target_compile_options(gamepad_test PRIVATE -Wall -Wextra
                                $<$<CXX_COMPILER_ID:Clang>:-Wno-nonportable-include-path>)
-        # The Switch start menu's settings and start-up line (src/platform/switch/launcher_config.cpp, no libnx in it):
-        # ./launcher_config_test.
+        # The Switch start menu's settings and start-up line (src/platform/switch/launcher_config.cpp, no libnx in it)
+        # and the launch.cfg cleaner every platform shares (src/platform/launch_cfg.h): ./launcher_config_test.
         add_executable(launcher_config_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/platform/launcher_config_test.cpp"
                        "${SRC_DIR}/platform/switch/launcher_config.cpp")
         target_include_directories(launcher_config_test PRIVATE "${SRC_DIR}")

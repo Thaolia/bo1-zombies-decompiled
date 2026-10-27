@@ -272,12 +272,15 @@ cache. The app must run in application mode (title takeover). Applet mode only g
 2. sets the cwd to the data dir;
 3. refuses applet mode;
 4. mounts romfs (`build.txt`, the link time);
-5. shows the **start menu**, unless `skip_menu` is present;
-6. applies the backend (`BO1_GFX_BACKEND`, plus `SDL_VIDEODRIVER=dummy` for deko3d);
-7. calls `WinMain` with the start-up line.
+5. opens the network (`switch_net.cpp`: BSD sockets for the engine's UDP, `nifm` for the console's address; closed by
+   `atexit`, since the engine leaves through `exit()`);
+6. shows the **start menu**, unless `skip_menu` is present;
+7. applies the backend (`BO1_GFX_BACKEND`, plus `SDL_VIDEODRIVER=dummy` for deko3d);
+8. calls `WinMain` with the start-up line.
 
 The start menu lives in two parts:
-- `switch_launcher.cpp`: the libnx text console, the pad, and the controller list and system screen (`hidLa`).
+- `switch_launcher.cpp`: the libnx text console, the pad, the controller list and system screen (`hidLa`), and the
+  server screen (address, port and name typed with the keyboard applet, `swkbd`).
 - `launcher_config.cpp`: the settings and the start-up line. It contains no libnx and is tested on the host by
   `launcher_config_test`.
 
@@ -286,7 +289,7 @@ Its files in `sdmc:/switch/bo1zm/`:
 | File | Written by | Read by |
 |---|---|---|
 | `menu.cfg` | the menu (its choices, `key=value`) | the menu, at the next launch |
-| `launch.cfg` | the menu, on Start | the engine's start-up line (`skip_menu` boots read it as is) |
+| `launch.cfg` | the menu, on Start | the engine's start-up line (`skip_menu` boots read it as is; several lines read as one, `src/platform/launch_cfg.h`, as on PC) |
 | `gfx.cfg` | the menu, on Start (`deko3d` or `gl`) | the backend choice (`skip_menu` boots read it as is) |
 | `launch_extra.cfg` | the user (optional) | the menu: copied before `+devmap` (diagnostic dvars) |
 | `skip_menu` | the user or a test script (empty) | `switch_main.cpp`: boot without the menu |

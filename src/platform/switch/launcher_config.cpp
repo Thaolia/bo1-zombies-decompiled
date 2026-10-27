@@ -57,9 +57,31 @@ std::string Trim(const std::string &s)
     return s.substr(b, e - b);
 }
 
+bool AddressChar(char c)
+{
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '.' || c == '-';
+}
+
 void Apply(LauncherSettings *s, const std::string &key, const std::string &value)
 {
-    if (key == "map")
+    if (key == "mode")
+    {
+        if (value == "solo" || value == "join")
+            s->join = value == "join";
+    }
+    else if (key == "server")
+    {
+        if (Launcher_ValidServerHost(value))
+            s->serverHost = value;
+    }
+    else if (key == "port")
+        Launcher_ParsePort(value, &s->serverPort);
+    else if (key == "name")
+    {
+        if (Launcher_ValidPlayerName(value))
+            s->playerName = value;
+    }
+    else if (key == "map")
     {
         for (int i = 0; i < kLauncherMapCount; ++i)
             if (value == kLauncherMaps[i].bsp)
@@ -120,6 +142,10 @@ LauncherSettings Launcher_ParseSettings(const std::string &text)
 std::string Launcher_FormatSettings(const LauncherSettings &s)
 {
     std::string out;
+    out += std::string("mode=") + (s.join ? "join" : "solo") + "\n";
+    out += "server=" + s.serverHost + "\n";
+    out += "port=" + std::to_string(s.serverPort) + "\n";
+    out += "name=" + s.playerName + "\n";
     out += "map=" + std::string(kLauncherMaps[s.map].bsp) + "\n";
     out += std::string("aimassist=") + (s.aimAssist ? "1" : "0") + "\n";
     out += std::string("aim_slowdown=") + (s.aimSlowdown ? "1" : "0") + "\n";
@@ -137,6 +163,7 @@ std::string Launcher_FormatSettings(const LauncherSettings &s)
 std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::string &extra)
 {
     const TexFilterInfo &filter = kTexFilters[s.texFilter];
+    const bool join = s.join && Launcher_ValidServerHost(s.serverHost);
     std::string line = "+set bo1_zombies 1";
     // The three switches only act while bo1_aimassist is on (AimAssist_PlayerDisabledAutoAim), so they keep their
     // values when the assist is off and come back as they were.
@@ -146,16 +173,65 @@ std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::strin
     line += std::string(" +set aim_autoaim_enabled ") + (s.aimAutoaim ? "1" : "0");
     // Not the `god` command: it is a toggle that ClientSpawn clears. This dvar puts the god-mode bit back on every
     // playing client around each server frame (G_SP_HeadlessTestClientFrame).
-    line += std::string(" +set bo1_testclient_god ") + (s.god ? "1" : "0");
+    // Only a local server reads it: the dedicated server decides god mode for its players.
+    line += std::string(" +set bo1_testclient_god ") + (s.god && !join ? "1" : "0");
     line += " +set com_maxfps " + std::to_string(s.maxFps);
     line += std::string(" +set sm_enable ") + (s.shadows ? "1" : "0");
     line += std::string(" +set bo1_fpscounter ") + (s.fpsCounter ? "1" : "0");
     line += " +set r_texFilterAnisoMax " + std::to_string(filter.anisoMax);
     line += " +set r_texFilterMipMode " + std::to_string(filter.mipMode);
+    if (join && Launcher_ValidPlayerName(s.playerName))
+        line += " +set name " + s.playerName;
     if (!extra.empty())
         line += " " + extra;
+    if (join)
+    {
+        // The player typed the address, so a server beyond the LAN is meant. cl_autoConnect, not +connect: the menu's
+        // own load undoes a connect from the command line, and it retries when the server is not up yet or goes away.
+        line += " +set cl_allowWanConnect 1 +set cl_autoConnect " + Launcher_ServerAddress(s);
+        return line;
+    }
     line += " +devmap " + std::string(kLauncherMaps[s.map].bsp);
     return line;
+}
+
+bool Launcher_ValidServerHost(const std::string &host)
+{
+    if (host.empty() || host.size() > 63)
+        return false;
+    for (char c : host)
+        if (!AddressChar(c))
+            return false;
+    return true;
+}
+
+bool Launcher_ParsePort(const std::string &text, int *port)
+{
+    if (text.empty() || text.size() > 5)
+        return false;
+    for (char c : text)
+        if (c < '0' || c > '9')
+            return false;
+    const int value = std::atoi(text.c_str());
+    if (value < 1 || value > 65535)
+        return false;
+    *port = value;
+    return true;
+}
+
+std::string Launcher_ServerAddress(const LauncherSettings &s)
+{
+    return s.serverHost + ":" + std::to_string(s.serverPort);
+}
+
+bool Launcher_ValidPlayerName(const std::string &name)
+{
+    if (name.empty() || name.size() > 15)
+        return false;
+    for (char c : name)
+        if (!AddressChar(c) && c != '_')
+            return false;
+    return true;
 }
 
 const char *Launcher_BackendName(LauncherBackend backend)

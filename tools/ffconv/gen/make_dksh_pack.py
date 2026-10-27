@@ -12,6 +12,8 @@ followed by one NUL byte, to satisfy the pack's existing NUL-termination check. 
 import argparse
 import concurrent.futures
 import os
+import platform
+import shutil
 import struct
 import subprocess
 import sys
@@ -20,6 +22,10 @@ import tempfile
 HEADER = struct.Struct('<8sII')   # magic, version, count
 ENTRY = struct.Struct('<QIIII')   # hash, stage, offset, size, reserved
 STAGES = {0: 'vert', 1: 'frag'}
+# uam's output depends on where its heap lands: with address randomisation 7 of 64 runs on one shader gave other code
+# (2026-10-27, 1790 of 13704 shaders differed between two packs of the same GLSL), with it off 64 of 64 matched the
+# pack checked on the console. Without setarch the pack still builds, but may differ from run to run.
+NO_ASLR = ['setarch', platform.machine(), '-R'] if shutil.which('setarch') else []
 
 
 def read_glsl_pack(path):
@@ -43,7 +49,7 @@ def compile_one(uam, work, shader):
     dst = src + '.dksh'
     with open(src, 'wb') as f:
         f.write(glsl)
-    proc = subprocess.run([uam, '-s', STAGES[stage], src, '-o', dst], capture_output=True, text=True)
+    proc = subprocess.run(NO_ASLR + [uam, '-s', STAGES[stage], src, '-o', dst], capture_output=True, text=True)
     if proc.returncode or not os.path.exists(dst):
         return (h, stage, None, (proc.stderr or proc.stdout).strip())
     with open(dst, 'rb') as f:
@@ -60,6 +66,8 @@ def main():
     if not os.path.exists(opts.uam):
         raise SystemExit(f'uam not found at {opts.uam} (set --uam or DEVKITPRO)')
 
+    if not NO_ASLR:
+        print('setarch not found: uam runs with address randomisation, the pack may differ between runs')
     shaders = read_glsl_pack(opts.glsl_pack)
     print(f'{opts.glsl_pack}: {len(shaders)} GLSL shaders -> compiling with {opts.uam} (jobs={opts.jobs})')
     with tempfile.TemporaryDirectory() as work, concurrent.futures.ThreadPoolExecutor(opts.jobs) as pool:

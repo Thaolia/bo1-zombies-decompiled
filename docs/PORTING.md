@@ -117,6 +117,8 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-26 | A dedicated-server project starts on branch `server` (worktree `../BO-Zombies_switch_server`), phase 8 below: a dedicated zombies server (Linux and Windows, curses console), win64 and Switch clients joining over UDP by IP from `launch.cfg`, client logs sent to the server, admin commands, join in progress, then more than 4 players | The engine is the MP build with the SP zombies grafted on, so the Quake 3 UDP connect path (`connect`, `getchallenge`, `SV_DirectConnect`, netchan) is already there without DemonWare; only a client of a *remote* server had never been run |
 | 2026-10-26 | Fixes that make a path work which was broken in the reference too (a remote `connect` from the menu) may change `win32-msvc` behaviour, without a guard | Agreed with the user. 64-bit fixes and port code still keep the 32-bit code identical (`codediff`) |
 | 2026-10-27 | The message Huffman tree is built with a total order: equal weights fall back to node creation order (`huffman.cpp`, `nodeCmp`) | `qsort` leaves the order of equal elements to each C library, so MSVC, glibc and newlib built different trees and a client decoded garbage from a server of another platform (a win64 client of the Linux server misread a script mover's origin, then crashed on a dynent id). It changes the compressed bits on every build, `win32-msvc` included; both ends run the same code, nothing else reads them |
+| 2026-10-27 | `tools/make_dist.sh` packages each platform (windows, linux, switch) as a ready-to-copy folder plus an archive, building what it needs first: win64-msvc, the Linux and Switch programs on an ext4 copy of the tree, the zones when a converter source is newer than their `shaders.pack`, and `shaders.dksh` when the pack's md5 changed | The user asked for all-in-one archives like the SD card hand-off. A stale `shaders.pack`/`.dksh` pair on the SD caused the Switch-only foliage and wall bugs (2026-10-27), so the script ties the pack to the converter's sources, the DKSH to the pack, and refuses a DKSH uam rejected shaders from |
+| 2026-10-27 | `make_dksh_pack.py` runs uam with address randomisation off (`setarch -R`) | uam's output depends on where its heap lands: on one shader 7 of 64 runs gave other code with randomisation on, 0 of 64 with it off, and two packs from the same `shaders.pack` (md5 `175c7065`) differed in 1790 of 13 704 shaders. With it off, two full builds gave the same pack (md5 `a44c919b`). The v4 pack the console validated (`7fa71b32`) was built with it on, so it is one random mix of those variants and differs from the reproducible pack in 1480 shaders: judge the first reproducible pack on the console once |
 
 ## Phases
 | # | Phase | Status |
@@ -130,7 +132,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | in progress: the devkitA64 + libnx build compiles, links and packages `BO1Zombies.nro` (null backend), reusing the posix SDL2/Win32-shim layer with a thin `src/platform/switch/` and `#if defined(__SWITCH__)` deltas. **Boots on Ryujinx 1.1.1375**: the libnx entry runs (applet type = Application), romfs mounts, the engine's `WinMain` runs ~30 s with no crash (SD `boot.log`). Prereqs fixed: the libgcc GCS/SME NOP patch (`switch/tools/patch_ryujinx_mrs.py`, POST_BUILD) for Ryujinx's JIT, and a one-file embedded romfs (`switch/romfs`) so `romfsInit` does not crash the emulator. With the converted zones staged on the SD, the engine **loads the pre-gfx code zones** (`en_code_pre_gfx_mp`, `code_pre_gfx_mp`) — the ffconv AArch64 path proven end to end — and runs `FS_Startup`. Four fixes got there: the GCS/SME NOP patch and embedded romfs (boot), `chdir` to the install dir (language + `fs_basepath`), a `pread` EOF fix for libnx's past-EOF `lseek` (zone read-ahead), and reading the win64 IWffs ABI tag (layout-identical, `--check-switch`). With the iwds staged and a `device:`-prefix fix in `Bo1_PosixPath`, it then boots through FS_Startup (103814 iwd files), R_Init, the frontend, and `+devmap zombie_theater` into a **map load** (common_zombie 78 MB, the Kino zones) — before crashing part way through `en_zombie_theater` on a guest invalid memory access (a 64-bit bug in the zombie map asset stream, to debug on the posix x86-64 build). Then GL (EGL on nwindow) and audio |
 | 6 | Stabilisation, all base maps, docs | todo |
 | 7 | (optional) deko3d backend behind the same `gfx_backend.h` | in progress: opt-in on the Switch build (`gfx.cfg` = deko3d, `shaders.dksh` from uam); renders the main menu's 3D scene and Kino in game with its HUD on Ryujinx (2026-10-26, see the deko3d notes below); not yet run on the console in game |
-| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part deferred until `_new` and `_server` are merged into `switch`; step 3 done (2026-10-27: curses console, Linux and Windows); step 4 done on win64 (2026-10-27: `zm_*` admin commands, mods/admin); see "Dedicated server (phase 8)" |
+| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part done (2026-10-27: sockets, `nifm`, the start menu's server screen; a console joined a win64 server and played; Ryujinx's BSD `RecvFrom` throws); step 3 done (2026-10-27: curses console, Linux and Windows); step 4 done on win64 (2026-10-27: `zm_*` admin commands, mods/admin); see "Dedicated server (phase 8)" |
 
 ## Verification per phase
 - **0**: the `win32-msvc` preset still builds and `Play.bat` reaches the zombies menu and plays Kino der Toten.
@@ -1821,8 +1823,8 @@ game overs) had none. To compare against a listen-server run before blaming the 
 - Rule kept from the run: before each rebuild, stop the test servers and clients, Linux ones by their executable
   (`.claude/rules/server-test-processes.md`): three stale Linux servers once kept port 29070.
 
-**Step 2, PC clients (2026-10-27).** The Switch part (sockets, `nifm`, the shared `launch.cfg` reader) waits until the
-`_new` and `_server` worktrees are both merged into `switch` (user's order).
+**Step 2, PC clients (2026-10-27).** The Switch part came after the `_new` and `_server` worktrees were both merged into
+`switch` (user's order): see "Step 2, Switch clients" below.
 
 - `launch.cfg` next to the program (`win_main.cpp`, `Sys_PrependLaunchCfg`, not on the Switch, which reads its own
   from the same folder in `switch_main.cpp`): its text, newlines read as blanks, goes before the command line, so the
@@ -1839,6 +1841,44 @@ game overs) had none. To compare against a listen-server run before blaming the 
   client times out (`EXE_ERR_SERVER_TIMEOUT`), retries, and is active again 35 s after the server restarted, without
   any input; it keeps retrying at growing intervals once the server is gone, and quits normally (exit 0). `connect
   203.0.113.1` is refused with the message and the menu stays up; with `cl_allowWanConnect 1` it goes `CA_CONNECTING`.
+
+**Step 2, Switch clients (2026-10-27).** Done after `_new` and `_server` were merged into `switch`; the player's view
+is in `docs/SERVER.md` ("Joining from a Switch").
+
+- `switch_net.cpp`: `socketInitializeDefault()` and `nifmInitialize(User)` before the start menu, in every boot (the
+  menu's own local server needs UDP too), logged as `network:` lines with the console's IP, connection type and
+  internet status; `socketExit`/`nifmExit` through `atexit`, since the engine leaves through `exit()` in `Sys_Quit`.
+  Without sockets the engine plays solo as before (its `socket()` calls fail). The posix Winsock shim works on libnx's
+  BSD `sockaddr` (`sa_len` first, one-byte `sa_family`): `win_net.cpp` writes `sa_family` by name and `NetadrToSockadr`
+  clears the struct, and the BSD stack takes the length from `addrlen`.
+- The start menu has a **Serveur** line that opens a server screen: the connection on or off, the IP address and the
+  port typed with the keyboard applet (`swkbd`, number pad), the player name, and the console's address. Start writes
+  `+set name <name> +set cl_allowWanConnect 1 +set cl_autoConnect <host>:<port>` and no `+devmap`; map and god mode
+  are greyed out (the server decides them, and `bo1_testclient_god` is written 0). Start is refused with no address,
+  or with the connection on and no network. `menu.cfg` keeps `mode`, `server`, `port` and `name`.
+- `CL_Connect_f` (`__SWITCH__` only): with no IP address on the console, a non-loopback `connect` is refused with a
+  message before the menu's local server is killed. `cl_main_pc_mp.cpp` codediff: identical.
+- `src/platform/launch_cfg.h`: the `launch.cfg` cleaner (line breaks and tabs to blanks, ends trimmed) shared by
+  `Sys_PrependLaunchCfg` (PC) and the Switch's `LoadLaunchArgs`, so a several-line `launch.cfg` means the same on both.
+  `win_main.cpp` codediff: only `WinMain` changes, where `Sys_PrependLaunchCfg` is inlined (it now also trims leading
+  blanks); every later jump moves.
+- Verified: `launcher_config_test` (join line, host, port and name validation, `menu.cfg` round trip, `launch.cfg`
+  cleaning), `d3d9emu_test`, `gb_gl_test`, `gamepad_test`; Switch, Linux and win64-msvc builds; no `cntvct_el0`;
+  `syntax_check` on mingw32-gcc and mingw32-clang for the two engine files.
+- Ryujinx 1.1.1375 against a win64 dedicated server (`bo1_server`, `0.0.0.0:29555`), `skip_menu` boot with a
+  three-line `launch.cfg`: `socketInitializeDefault -> 0x0`, `nifmInitialize -> 0x0`, `IP 192.168.1.194`, the three
+  lines read as one start-up line, the client's UDP socket opens (`localhost:3074`), the game's menu comes up
+  (`CA_ACTIVE` at 50 s) and `cl_autoConnect` connects (`CA_CONNECTING` at 61 s). Ten seconds later the emulator
+  itself throws in `Bsd.IClient.RecvFrom` (`InvalidMemoryRegionException`, `va=0x400008108780`, size 0x10) when the
+  server's reply arrives and it writes the sender's address: the address is `(16 << 42) | 0x8108780`, the 16-byte
+  buffer's size inside the address bits, so Ryujinx decodes libnx's IPC buffer descriptor wrongly. libnx's
+  `recvfrom` is the standard one, so the join itself is to be judged on the console.
+- Console (the user, build 06:38:06, `Server.bat` on the PC at `192.168.1.194:3074`): the user reported it works.
+  The boot.log shows `IP 192.168.1.200`, the server screen's line (`name Thaolia`, `cl_autoConnect
+  192.168.1.194:3074`) and three `cl_autoConnect` joins. The server log shows `Client 0 connecting with 50 challenge
+  ping from 192.168.1.200:3074`, the game state sent to `Thaolia`, and a game played up to `EXE_PLAYERKICKED` and the
+  game over. The client then joined again by itself (`Client 1 connecting`), and the old slot timed out (`CS_ZOMBIE` to
+  `CS_FREE`). Not checked yet: Wi-Fi off (the no-network refusals).
 
 **Step 3, the server's curses console (2026-10-27).** Operator's view in `docs/SERVER.md` ("The console").
 
