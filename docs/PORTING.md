@@ -1873,6 +1873,10 @@ with `cl_autoConnect` and `name`. Usage in `docs/SERVER.md` ("Start scripts", "J
   `localization.txt`: the program loads `zone/` from its own folder.
 - `Play.bat net` leaves `net_ip` at its default: the other modes bind `127.0.0.1`, from which a LAN address cannot be
   reached.
+- `Server.bat` and `Play.bat` take `BO1_INSTALL` / `BO1_ZONES` as `Server.sh` does: the `server` worktree has
+  neither the game files in `build\Release` nor `build\zones64` (the user's first `Server.bat` stopped on "IWffs
+  zones not found"). Checked: `Server.bat zombie_cosmodrome` with both set loaded Ascension (`admin: loaded on
+  zombie_cosmodrome`, `getstatus`), and `Play.bat net`'s dry copy took the worktree's exe with the other folder's files.
 - Verified: `Server.bat` bound `0.0.0.0:3074` (netstat, `Opening IP socket`), answered `getstatus` from Windows and
   WSL, and a win64 client with `name Player2` showed up as `#0 Player2 ... active`; `Server.sh` on the ext4 data bound
   `0.0.0.0:3074` and a win64 client `Player3` joined it over the WSL address (`172.23.3.156`). `Play.bat net`'s command

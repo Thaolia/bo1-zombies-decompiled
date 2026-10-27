@@ -27,7 +27,12 @@ At the repository root, `Server.bat` (Windows) and `Server.sh` (Linux) start a s
 - `Server.bat` runs `build\win64-msvc\Release\BO1Zombies.exe` (the `win64-msvc` preset) in its own console window,
   on the game files of `build\Release` (`fs_b`, also its working folder: it holds `localization.txt`) and the zones of
   `build\zones64` (linked as `zone` next to the program, as `Play.bat x64` does). Its folder (`fs_h`) is
-  `build\server`: put `server.cfg` in `build\server\main\`.
+  `build\server`: put `server.cfg` in `build\server\main\`. Game files or zones that live elsewhere (another
+  worktree) are given with two variables, as for `Server.sh`; `Play.bat` reads the same ones:
+
+      set BO1_INSTALL=C:\...\BO-Zombies_switch\build\Release
+      set BO1_ZONES=C:\...\BO-Zombies_switch_new\build\zones64
+      Server.bat zombie_cosmodrome 3074
 - `Server.sh` takes its paths from the environment: `BO1_EXE` (default `build/linux64-clang/Release/BO1Zombies`),
   `BO1_INSTALL` (game files, default `build/Release`), `BO1_ZONES` (`zone/` and `shaders.pack`, default
   `build/zones64`) and `BO1_SERVER` (its folder, default `build/server-linux`). It copies the program into that folder,
@@ -36,6 +41,25 @@ At the repository root, `Server.bat` (Windows) and `Server.sh` (Linux) start a s
 
       BO1_EXE=~/build/bo1-server/build/Release/BO1Zombies BO1_INSTALL=~/bo1-run/install \
       BO1_ZONES=~/bo1-run/data ./Server.sh
+
+### Maps
+
+The map is `Server.bat`'s first argument, `+devmap <map>`, or `zm_map <map>` while the server runs. Every map needs
+its zone converted by `tools/ffconv` (`<zones>/zone/Common/<map>.ff` and `<map>_patch.ff`).
+
+| map | name | on the dedicated server |
+| --- | --- | --- |
+| `zombie_theater` | Kino der Toten | played (phases 0-4) |
+| `zombie_pentagon` | Five | not run yet |
+| `zombie_cosmodrome` | Ascension | loads, admin mod loaded (2026-10-27); not played yet |
+| `zombie_coast` | Call of the Dead | not run yet |
+| `zombie_temple` | Shangri-La | not run yet |
+| `zombie_moon` | Moon | not run yet |
+| `zombie_cod5_prototype` | Nacht der Untoten | not run yet |
+| `zombie_cod5_asylum` | Verrückt | not run yet |
+| `zombie_cod5_sumpf` | Shi No Numa | not run yet |
+| `zombie_cod5_factory` | Der Riese | not run yet |
+| `zombietron` | Dead Ops Arcade | not run yet (another game mode) |
 
 ### The console
 

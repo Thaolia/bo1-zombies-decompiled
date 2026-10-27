@@ -6,8 +6,13 @@ rem   Server.bat zombie_cosmodrome 3074 +set g_password secret
 rem Settings: build\server\main\server.cfg (see docs\SERVER.md); console log: build\server\main\console_mp.log.
 rem Clients join with "Play.bat net <this PC's address>:<port> [name]". Open the UDP port in the Windows firewall for
 rem clients on other machines: the server shows no firewall prompt.
+rem Game files and zones from elsewhere (another worktree): set BO1_INSTALL=<folder with main\*.iwd and localization.txt>
+rem and BO1_ZONES=<folder with zone\> first; the defaults are build\Release and build\zones64.
 setlocal
 set "GAME=%~dp0build\Release"
+if defined BO1_INSTALL set "GAME=%BO1_INSTALL%"
+set "ZONES=%~dp0build\zones64"
+if defined BO1_ZONES set "ZONES=%BO1_ZONES%"
 set "X64=%~dp0build\win64-msvc\Release"
 set "EXE=%X64%\BO1Zombies.exe"
 set "SRVHOME=%~dp0build\server"
@@ -25,8 +30,9 @@ shift
 goto more
 :run
 if not exist "%EXE%" (echo Server not built: %EXE% - build the win64-msvc preset, see README.md & pause & exit /b 1)
-if not exist "%~dp0build\zones64\zone" (echo IWffs zones not found: build\zones64 - run tools\ffconv, see docs\PORTING.md & pause & exit /b 1)
-if not exist "%X64%\zone" mklink /J "%X64%\zone" "%~dp0build\zones64\zone" >nul
+if not exist "%ZONES%\zone" (echo IWffs zones not found: %ZONES% - run tools\ffconv, see docs\PORTING.md & pause & exit /b 1)
+if not exist "%GAME%\localization.txt" (echo Game files not found: %GAME% - see README.md & pause & exit /b 1)
+if not exist "%X64%\zone" mklink /J "%X64%\zone" "%ZONES%\zone" >nul
 if not exist "%SRVHOME%\main" mkdir "%SRVHOME%\main"
 rem the server always stacks mods\admin (its zm_* admin commands) and reads mods\ from its own folder: this repository's
 if not exist "%SRVHOME%\mods" mklink /J "%SRVHOME%\mods" "%~dp0mods" >nul

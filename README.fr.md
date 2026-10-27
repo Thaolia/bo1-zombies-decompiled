@@ -72,7 +72,9 @@ d'OpenGL dans le log. Les zones converties avant le 2026-10-24 ont besoin d'un n
 ## Serveur dédié zombies (en cours, branche `server`)
 C'est le même programme lancé avec `+set bo1_server 1`, sous Windows ou Linux : pas de fenêtre, écoute UDP sur toutes
 les interfaces, réglages dans `server.cfg`. `Server.bat [map] [port]` et `./Server.sh [map] [port]` en lancent un
-(chemins de `Server.sh` : variables `BO1_EXE`, `BO1_INSTALL`, `BO1_ZONES`, `BO1_SERVER`). Les clients se connectent
+(chemins de `Server.sh` : variables `BO1_EXE`, `BO1_INSTALL`, `BO1_ZONES`, `BO1_SERVER` ; `Server.bat` et `Play.bat` lisent
+aussi `BO1_INSTALL` et `BO1_ZONES` quand les fichiers du jeu ou les zones sont dans un autre worktree). Liste des maps :
+`docs/SERVER.md`, section « Maps ». Les clients se connectent
 avec `Play.bat net <adresse>:<port> [pseudo]` (ou `Launch.bat net 172.23.3.156:3074 Player2`), avec
 `connect <adresse>:<port>`, ou tout seuls avec `+set cl_autoConnect <adresse>:<port>` dans un `launch.cfg` posé à côté
 du programme, et `tools/server_status.py <adresse>` affiche la map et les joueurs.
