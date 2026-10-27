@@ -310,8 +310,11 @@ bool Normalize(const MOJOSHADER_parseData &parsed, bool pixel, const std::set<Us
         out << "layout(std140, binding = 1) uniform BO1PixelConstants\n{\n    vec4 ps_c_reg[256];\n"
                "    vec4 bo1_alpha_test;\n};\n";
     else
+        // D3D9 hardware computes a position the same way in every shader: the engine's depth prepass and its lit
+        // passes compare equal depths from different vertex shaders. Without invariance a compiler may fuse their
+        // multiply-adds differently (uam does), and the lit pass then fails its depth test on whole walls.
         out << "layout(std140, binding = 0) uniform BO1VertexConstants\n{\n    vec4 vs_c_reg[256];\n"
-               "    vec4 bo1_pos_fixup;\n};\n";
+               "    vec4 bo1_pos_fixup;\n};\ninvariant gl_Position;\n";
     for (const Usage &usage : varyings)
     {
         const int location = VaryingLocation(usage);

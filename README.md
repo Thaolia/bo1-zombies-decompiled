@@ -12,6 +12,17 @@ This fork ports the engine to Nintendo Switch 1 homebrew (`.nro`, AArch64, libnx
 zombies on the base maps. It is a work in progress: see `docs/PORTING.md` for the plan and status, and
 `docs/ARCHITECTURE.md` for how the port is layered.
 
+On the console the game starts in a text menu, where you choose:
+- the map;
+- the aim assist and its slowdown, lock-on and auto-aim;
+- god mode;
+- the renderer (deko3d or OpenGL), the frame-rate cap, shadows, texture filtering and the FPS/battery counter;
+- the controllers (the list of detected pads, and the system screen to connect them).
+
+**+** starts the game straight on the map. The choices are kept in `sdmc:/switch/bo1zm/menu.cfg`, and Start writes
+`launch.cfg` and `gfx.cfg`. An empty `skip_menu` file there boots without the menu, on those two files as they are
+(handy on an emulator). `docs/ARCHITECTURE.md` lists the files.
+
 No game data is distributed. A converter run on your own PC (`tools/ffconv`) turns your Steam install's
 fastfiles into the 64-bit format the port loads, and translates their shaders to GLSL:
 

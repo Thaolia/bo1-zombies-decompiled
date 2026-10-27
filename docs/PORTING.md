@@ -1603,6 +1603,135 @@ working-tree change in `fx_marks.cpp` and `r_marks.cpp`, until a longer console 
 Before the merge: win32-msvc and win64-msvc build, and the Switch builds in the committed state (no `markdiag:` or
 `aim:` string, no `cntvct_el0`).
 
+**Start menu on the Switch (asked by the user: start a game without the official menu).** Before the engine,
+`switch_main.cpp` shows a libnx text-console menu (`switch_launcher.cpp`). It offers:
+- the map: the 10 zombies maps, labelled as in `tools/mod-launcher.hta`;
+- the aim assist (`bo1_aimassist` and the three `aim_*_enabled`);
+- god mode (`bo1_testclient_god`, which puts `FL_GODMODE` back around every server frame: the `god` command is a
+  toggle that `ClientSpawn` clears);
+- the renderer (`gfx.cfg`, deko3d or GL);
+- the frame-rate cap (`com_maxfps` 30 or 60), shadows (`sm_enable`) and texture filtering (`r_texFilterAnisoMax`
+  16/8/4/2, or 1 with `r_texFilterMipMode` trilinear or bilinear);
+- the FPS/battery counter (`bo1_fpscounter`);
+- the controllers: the Npad styles every 0.5 s, and A opens the system controller screen (`hidLaShowControllerSupport`,
+  single mode).
+
+Every graphics dvar is written explicitly, because they are archived in `config.cfg`. The choices persist in
+`menu.cfg`. Start (**+**, or A on DEMARRER) writes `launch.cfg` (`... +devmap <map>`, with the optional
+`launch_extra.cfg` before `+devmap`) and `gfx.cfg`. An empty `skip_menu` file boots on those two files as they are.
+
+`launcher_config.cpp` holds the settings and the line and has no libnx; `launcher_config_test` checks it on the host
+(defaults, the exact line, round-trips, invalid values, `+devmap` last): all checks pass. `d3d9emu_test`,
+`gb_gl_test` (46 checks) and `gamepad_test` still pass, and win64-msvc builds.
+
+Ryujinx, build 22:06:32, with Player 1 mapped to the keyboard for the test (config backed up and restored, same md5).
+The menu shows with battery, build and "Joueur 1 : Manette Pro". Down then Right picks Five, and + starts. The log has
+the generated line with the extra `+set bo1_frameperf 200` before `+devmap zombie_pentagon`, and Five loads and
+renders on deko3d.
+
+The first try crashed at the first `BootLog` after Start: `printf → consolePrintChar → framebufferBegin` read address
+0. libnx's `consoleExit` closes the framebuffer but leaves stdout and stderr on the console device, which starts a
+new frame on the next character. The launcher now saves `devoptab_list[STD_OUT]`/`[STD_ERR]` before `consoleInit`
+and restores them after `consoleExit` (rule in `switch-homebrew.md`).
+
+`skip_menu` run, with a hand-written `launch.cfg` (Kino, `bo1_frameperf`):
+- the log says `skip_menu present`, has no `[launcher]` line and uses exactly that line;
+- `menu.cfg`, `launch.cfg` and `gfx.cfg` keep their md5;
+- Kino loads.
+
+The emulator's SD keeps `skip_menu` for scripted runs. Console check pending: the controller screen, god mode, 30 fps
+and the filters on hardware.
+
+**Console test of the menu (build 22:06:32).** The menu works. A on "Manettes" did nothing: `hidLaShowControllerSupport`
+returned `0x5d59` (libnx 46, `LibAppletBadExit`) each time. That call only shows its screen when the connected pads
+fall short of the request, and the attached Joy-Cons satisfy a single-player request. The menu now calls
+`hidLaShowControllerSupportForSystem(&info, &arg, false)`, which always shows the game's controller screen (SDL2-switch
+uses it too). On the console the controller screen now opens and returns `0x0`.
+
+**Asserts do not stop on the Switch: probable cause of the round-2 lag.** On the console, `__debugbreak()` is
+`raise(SIGTRAP)` (`msvc_intrinsics.h`), which newlib/libnx ignore, so a failed assert logs and the game goes on. The log
+is `Sys_HeadlessLogAssert`, which opens, appends and closes two SD files (`main/console_mp.log`,
+`main/bo1_emergency.log`).
+
+The point-group check fixed in `1c216da` held the 32-bit limit, so it failed on every access past group 1450. That is
+dozens of accesses a frame once round 2 filled the pool, each one paying two SD writes. This fits the
+`fx_marks_draw`/`Mark verts`/`markfragments` costs of 200-900 ms per frame, which followed particular marks and
+stopped as marks were freed, and the lag has not been seen since build 20:57. It stays "probable": `bo1_emergency.log`
+is deleted at each start, so the lag runs' asserts are gone.
+
+A Call of the Dead game logged 1011 `CG_EntityContact` asserts (`!cent->pose.general.mins[2]`). `actor.height` and
+`general.mins[2]` share offset 16 on both widths, so this is the map's data, not a layout bug; the same assert stops the
+Linux client, where SIGTRAP kills. On the Switch (`__SWITCH__` only), `Assert_MyHandler` now logs each assert site
+three times, then once per thousand, with the count. Ryujinx, Call of the Dead: occurrences 1, 2, 3, 1000, 2000 and
+3000 logged instead of more than 3000 double writes. The `markdiag` instrumentation is removed (never committed).
+
+**`bo1_clientCommands` on the Switch.** The console and Ryujinx have no headless client, so `bo1_clientCommands`
+(`win_main.cpp`, `Sys_HeadlessClientCommandsFrame`) runs in a normal game there (`__SWITCH__` only, empty by default):
+a scripted emulator run puts it in `launch.cfg` or `launch_extra.cfg` to act at a set time after spawning.
+
+**Call of the Dead rendering: the snow shrubs (fixed 2026-10-27, a stale shader pack on the SD).**
+- **Symptom.** The "flickering walls" were the snow shrubs: alpha-tested cards drawn as solid light-blue or orange
+  triangles, on the console and on Ryujinx, with shadows on or off and filtering 2x or 16x. Der Riese showed whole walls
+  in the fog colour the same way.
+- **Placing it.**
+  - The Linux client on GL drew the shrubs right. Gdb swallowed the asserts' SIGTRAP:
+    `handle SIGTRAP nostop noprint nopass`. So the zone data, the GLSL translation and the frontend were fine.
+  - The deko3d bindings were right too: BC2 to `DkImageFormat_RGBA_BC2`, the sampler3D in slot 11, the blend state.
+  - The deko3d frame dump showed the texture's dark branches *inside* the solid triangles. So the colour was read,
+    and only the cut-out was missing.
+- **Cause.** Both SD cards held the `shaders.pack` of 2026-10-22 (`build/iwffs-v2`) and a `shaders.dksh` compiled from
+  it (uam output of that GLSL, byte for byte).
+  - That GLSL still declares `vec4 bo1_vpos_flip;` before `bo1_alpha_test`, so it reads the alpha test at `c[257]`.
+  - The frontend writes it at `c[256]`, so the alpha test was off in every shader.
+  - With the alpha test off, the depth prepass wrote whole cards and the fog showed through them.
+  - Nothing warned: a pack entry's hash is the D3D9 bytecode's, so the stale and the current packs hold the same
+    13 704 hashes.
+- **Fix.** Rebuilt `shaders.dksh` from the current `build/zones64/shaders.pack` with `make_dksh_pack.py` (13 692 DKSH,
+  the same 12 vertex shaders rejected by uam), and copied both packs to the SD cards. Ryujinx then showed no solid
+  triangles at the same 150 s frame.
+- **Rule.** Redeploy `shaders.pack` and `shaders.dksh` together after any change to the shader interface. Before
+  chasing a rendering bug that only the console shows, check `grep -ac bo1_vpos_flip shaders.pack` gives 0 on the SD.
+
+**Der Riese rendering: flickering walls (fixed 2026-10-27, two shader-interface bugs).**
+- **Symptom.** With the current packs, whole façade walls drew as solid light blue or orange, changing from frame to
+  frame, and a band of lower walls stayed light blue. Seen on the console and on Ryujinx.
+- **Placing it.** A temporary deko3d probe read two pixels of the lit pass (pass 2) after each draw of the traced
+  frame. The first draw wrote the orange, and none of the 338 draws after it touched those pixels: the wall was not
+  drawn there at all. With `+set r_depthPrepass 0` the façade drew right.
+- **Cause 1: no position invariance.** The engine's depth prepass and its lit passes compare equal depths computed by
+  different vertex shaders. uam fuses their multiply-adds differently, the positions differ in the last bits, and the
+  lit pass fails its `LessEqual` test on whole walls (z-fighting). Mesa on llvmpipe happened to agree with itself.
+  - Fix: `ff_glsl.cpp` declares `invariant gl_Position;` in every vertex shader. uam then stops fusing them: a test
+    shader grows from 3072 to 3328 bytes of DKSH.
+- **Cause 2: 12 vertex shaders never compiled.** `ShaderPack_InputLocation` put BLENDWEIGHT at location 19, the
+  index of its material stream destination. GL and uam accept 16 locations, so uam rejected those 12 shaders (GL
+  failed to link them) and the frontend skipped their draws ("is not in shaders.pack"): the band of light-blue walls.
+  - Fix: BLENDWEIGHT takes location 15, and TEXCOORD10-13 (destinations 15-18) take none. No vertex shader in the
+    zombies zones reads them: 356 vertex shaders checked, and ffconv rejects a shader that would.
+  - The frontend and the packs must change together: an NRO built before this table reads the wrong inputs with the
+    new packs, and the reverse.
+- **Verified.**
+  - `ffconv --verify --game`: 65 zones, 0 failed; the zones are byte-identical to the previous `build/zones64`.
+  - `check_shader_pack.py`: 13 704 shaders, 0 rejected. `make_dksh_pack.py`: 13 704 DKSH, 0 rejected by uam
+    (12 before).
+  - The intermediate pack (invariance only) differs from the previous one only by `#version 430` and the
+    `invariant` line in the 356 vertex shaders.
+  - `d3d9emu_test`, `gb_gl_test` (46 checks), `launcher_config_test` and `gamepad_test` pass.
+  - Ryujinx, NRO of 01:43:34 with the new packs: the 150 s and 210 s frames of Der Riese show the façade, the
+    scaffolding and the lower stone walls, with no solid fill.
+  - Console (the user, same NRO and packs): Der Riese draws right, and no texture problem is left.
+- **Not done.** The Linux GL client could not be compared on Der Riese: it stops early with "Field loopSoundFade
+  changed for archived eType Player Entity" (a separate bug, open).
+
+**Call of the Dead rendering, still open.**
+- **After the player dies (Ryujinx).** Seen with the stale packs; the console run with the current ones showed no
+  texture problem, Ryujinx is still to check again. The world turns flat grey and light blue. The pass trace shows every lit draw
+  binding the same 128x128 BC3 texture with 8 mips in slots 0 and 1 (the engine's default image, by its size), with only
+  the lightmaps differing. The real textures are back at the 150 s dump.
+- **Linux GL comparison.** The Linux client stops on the `CG_EntityContact` assert while Call of the Dead loads
+  unless gdb swallows the SIGTRAP: run it under `/usr/bin/gdb -batch -ex "handle SIGTRAP nostop noprint nopass"
+  -ex "handle SIG35 nostop noprint pass" -ex run --args ...`.
+
 ## Dedicated server (phase 8)
 
 Plan (steps): 0 prove that a client of a remote server plays; 1 a `bo1_server` mode bound to the network (not
