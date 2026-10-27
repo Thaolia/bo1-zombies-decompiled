@@ -1,5 +1,6 @@
 // The Switch entry (libnx). It mounts romfs for the game data, refuses applet mode (which gets a fraction of the RAM
-// and cannot run the engine, switch-homebrew.md), then hands the engine's WinMain the same start as every platform.
+// and cannot run the engine, switch-homebrew.md), shows the start menu (switch_launcher.cpp), then hands the engine's
+// WinMain the same start as every platform.
 // The Win32 shims and the minidump flag are shared with posix; only the entry and romfs differ, so this file stands
 // in for posix_main.cpp on the switch build.
 
@@ -8,6 +9,8 @@
 #include <switch.h>
 
 #include <win32/win_main.h>
+
+#include "switch_launcher.h"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -41,14 +44,18 @@ namespace
 {
 const char *const kDataDir = "sdmc:/switch/bo1zm";
 const char *const kBootLogPath = "sdmc:/switch/bo1zm/boot.log";
-// The console has no command line, so the engine's start-up arguments come from an optional text file on the SD card
-// the user can edit without rebuilding (e.g. "+set bo1_zombies 1 +devmap zombie_cosmodrome"). Absent or empty, the
-// default boots straight into solo zombies; the front-end command that lands on the map-select menu is pinned later.
+// The console has no command line: the engine's start-up arguments live in a text file on the SD card, which the start
+// menu writes (e.g. "+set bo1_zombies 1 ... +devmap zombie_cosmodrome") and a skip_menu boot reads as it is. Absent or
+// empty there, the default boots solo zombies into the game's own front end.
 const char *const kLaunchConfigPath = "sdmc:/switch/bo1zm/launch.cfg";
 // Presence-only bring-up override: with this file on the SD card the engine runs even outside application mode, so a
 // directly-loaded NRO (as an emulator loads it) can be exercised past the refusal screen. Hardware behaviour without
 // the file is unchanged: applet mode is refused.
 const char *const kAllowAppletPath = "sdmc:/switch/bo1zm/allow_applet";
+// Presence-only: boot without the start menu (switch_launcher.cpp), on launch.cfg and gfx.cfg as they are on the SD.
+// An emulator or a scripted run has no one to press Start.
+const char *const kSkipMenuPath = "sdmc:/switch/bo1zm/skip_menu";
+const char *const kGfxConfigPath = "sdmc:/switch/bo1zm/gfx.cfg";
 const char *const kDefaultArgs = "+set bo1_zombies 1";
 char s_commandLine[1024];
 
@@ -99,7 +106,7 @@ bool FileExists(const char *path)
     return true;
 }
 
-char *LoadLaunchArgs()
+void LoadLaunchArgs()
 {
     FILE *f = std::fopen(kLaunchConfigPath, "rb");
     size_t n = 0;
@@ -114,7 +121,38 @@ char *LoadLaunchArgs()
         s_commandLine[--n] = '\0';
     if (n == 0)
         std::snprintf(s_commandLine, sizeof(s_commandLine), "%s", kDefaultArgs);
-    return s_commandLine;
+}
+
+// gfx.cfg holds the graphics backend ("deko3d", "gl" or "null"); "" when the file is absent or empty.
+void LoadBackendConfig(char *backend, size_t size)
+{
+    backend[0] = '\0';
+    if (FILE *gf = std::fopen(kGfxConfigPath, "rb"))
+    {
+        const size_t n = std::fread(backend, 1, size - 1, gf);
+        std::fclose(gf);
+        backend[n] = '\0';
+        for (size_t i = 0; i < n; ++i)
+            if (backend[i] == '\r' || backend[i] == '\n' || backend[i] == ' ')
+                backend[i] = '\0';
+    }
+}
+
+// The dispatcher reads BO1_GFX_BACKEND; without it the default applies (GL when it gets a context).
+void ApplyBackend(const char *backend)
+{
+    if (!backend[0])
+        return;
+    setenv("BO1_GFX_BACKEND", backend, 1);
+    BootLog("gfx backend -> BO1_GFX_BACKEND=%s", backend);
+    // deko3d drives the console window (nwindowGetDefault) itself; SDL must not also grab it for an EGL/GL context, or
+    // dkSwapchainCreate fails. The dummy video driver gives the engine its window object without touching nwindow. GL
+    // path is unaffected (this only fires for deko3d).
+    if (!std::strcmp(backend, "deko3d"))
+    {
+        setenv("SDL_VIDEODRIVER", "dummy", 1);
+        BootLog("deko3d backend -> SDL_VIDEODRIVER=dummy (deko3d owns nwindowGetDefault)");
+    }
 }
 
 // Application mode gives the process the console's memory; applet mode (album, overlay) gives a fraction and cannot
@@ -249,32 +287,6 @@ int main(int, char **)
     char cwdbuf[256];
     BootLog("chdir(%s) -> %d; cwd = %s", kDataDir, cdrc, getcwd(cwdbuf, sizeof(cwdbuf)) ? cwdbuf : "(getcwd failed)");
 
-    // Optional bring-up override: a file sdmc:/switch/bo1zm/gfx.cfg holding "null" or "gl" selects the graphics
-    // backend (the dispatcher reads BO1_GFX_BACKEND) without a rebuild. Absent, the default applies (GL when it gets
-    // a context). Lets the console be exercised headlessly (null) past the slow first-boot shader compile.
-    if (FILE *gf = std::fopen("sdmc:/switch/bo1zm/gfx.cfg", "rb"))
-    {
-        char v[16] = {};
-        const size_t n = std::fread(v, 1, sizeof(v) - 1, gf);
-        std::fclose(gf);
-        for (size_t i = 0; i < n; ++i)
-            if (v[i] == '\r' || v[i] == '\n' || v[i] == ' ')
-                v[i] = 0;
-        if (v[0])
-        {
-            setenv("BO1_GFX_BACKEND", v, 1);
-            BootLog("gfx.cfg -> BO1_GFX_BACKEND=%s", v);
-            // deko3d drives the console window (nwindowGetDefault) itself; SDL must not also grab it for an EGL/GL
-            // context, or dkSwapchainCreate fails. The dummy video driver gives the engine its window object without
-            // touching nwindow. GL path is unaffected (this only fires for deko3d).
-            if (!std::strcmp(v, "deko3d"))
-            {
-                setenv("SDL_VIDEODRIVER", "dummy", 1);
-                BootLog("deko3d backend -> SDL_VIDEODRIVER=dummy (deko3d owns nwindowGetDefault)");
-            }
-        }
-    }
-
     const AppletType at = appletGetAppletType();
     BootLog("applet type = %d (%s)", (int)at, AppletTypeName(at));
 
@@ -292,18 +304,35 @@ int main(int, char **)
     BootLog("romfsInit -> 0x%x%s", rrc, R_SUCCEEDED(rrc) ? " (mounted)" : " (none; data from SD)");
     // Which NRO wrote this log: the link time the build packs into romfs (CMakeLists.txt), not a compile-time
     // __DATE__, which only changes when this file recompiles.
+    char stamp[64] = "(no romfs:/build.txt)";
     if (FILE *bf = std::fopen("romfs:/build.txt", "rb"))
     {
-        char stamp[64] = {};
         const size_t n = std::fread(stamp, 1, sizeof(stamp) - 1, bf);
         std::fclose(bf);
         stamp[n && stamp[n - 1] == '\n' ? n - 1 : n] = '\0';
-        BootLog("build %s", stamp);
     }
-    else
-        BootLog("build (no romfs:/build.txt)");
+    BootLog("build %s", stamp);
 
-    char *const args = LoadLaunchArgs();
+    // The start menu writes launch.cfg and gfx.cfg and hands back what it wrote; skip_menu boots on the files as they
+    // are (hand-edited, or left by the last Start).
+    char backend[16];
+    char *const args = s_commandLine;
+    if (FileExists(kSkipMenuPath))
+    {
+        BootLog("skip_menu present -> launch.cfg and gfx.cfg as they are");
+        LoadBackendConfig(backend, sizeof(backend));
+        LoadLaunchArgs();
+    }
+    else if (Launcher_Run(stamp, s_commandLine, sizeof(s_commandLine), backend, sizeof(backend)) == LAUNCHER_QUIT)
+    {
+        BootLog("start menu closed -> exit without the engine");
+        if (s_psmUp)
+            psmExit();
+        if (R_SUCCEEDED(rrc))
+            romfsExit();
+        return 0;
+    }
+    ApplyBackend(backend);
     BootLog("launch args = \"%s\"", args);
     BootLog("entering WinMain");
     const int rc = WinMain(GetModuleHandleA(nullptr), nullptr, args, 10 /* SW_SHOWDEFAULT */);

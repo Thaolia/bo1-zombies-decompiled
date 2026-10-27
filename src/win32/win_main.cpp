@@ -620,8 +620,15 @@ static int s_clientCommandsRun;
 
 static void Sys_HeadlessClientCommandsFrame(int elapsed)
 {
+#if defined(__SWITCH__)
+    // The console and its emulator have no headless client: launch.cfg's bo1_clientCommands runs in a normal game
+    // there (empty by default), so a scripted emulator run can act at a time after spawning.
+    if (!bo1_clientCommands || !bo1_clientCommands->current.string[0])
+        return;
+#else
     if (!Sys_IsHeadlessClient() || !bo1_clientCommands || !bo1_clientCommands->current.string[0])
         return;
+#endif
     if (CL_GetLocalClientConnectionState(0) != CA_ACTIVE)
         return;
     if (s_clientCommandsStart < 0)

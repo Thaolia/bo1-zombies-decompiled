@@ -2378,6 +2378,10 @@ set(PLATFORM_POSIX_FILES
 
 # ----- src/platform/switch (switch only; reuses the posix layer, added by CMakeLists.txt) -----
 set(SRC_PLATFORM_SWITCH
+	"${SRC_DIR}/platform/switch/launcher_config.cpp"
+	"${SRC_DIR}/platform/switch/launcher_config.h"
+	"${SRC_DIR}/platform/switch/switch_launcher.cpp"
+	"${SRC_DIR}/platform/switch/switch_launcher.h"
 	"${SRC_DIR}/platform/switch/switch_libc_stubs.cpp"
 	"${SRC_DIR}/platform/switch/switch_main.cpp"
 )
