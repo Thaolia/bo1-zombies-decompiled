@@ -81,3 +81,33 @@ avec `Play.bat net <adresse>:<port> [pseudo]` (ou `Launch.bat net 172.23.3.156:3
 `connect <adresse>:<port>`, ou tout seuls avec `+set cl_autoConnect <adresse>:<port>` dans un `launch.cfg` posé à côté
 du programme, et `tools/server_status.py <adresse>` affiche la map et les joueurs. Détails (en anglais) :
 `docs/SERVER.md`.
+
+
+## Paquets prêts à copier
+`tools/make_dist.sh` (bash, depuis WSL) part d'un arbre de sources où `setup.ps1` a copié le jeu. Il produit dans
+`build/dist` un dossier prêt à copier et une archive par plateforme :
+- `BO1Zombies_windows/` (`.zip`) : le client et le serveur 64 bits. `Play.bat` lance le jeu, `Play.bat net
+  <adresse[:port]> [nom]` rejoint un serveur, `Server.bat [map] [port]` lance un serveur. Les DLL d'exécution 64 bits
+  sont incluses ;
+- `BO1Zombies_linux/` (`.tar.gz`) : le client et le serveur Linux, avec `play.sh` (`./play.sh net ...`),
+  `server.sh [map] [port]` et `shaders.pack` ;
+- `BO1Zombies_switch/` (`.zip`) : une arborescence de carte SD, `switch/bo1zm/` avec le `.nro`, `shaders.pack` et
+  `shaders.dksh`.
+
+Chaque paquet contient aussi les zones converties, les `main/*.iwd` et le `localization.txt` de l'install (plus
+`main/video` sur PC), un `LISEZMOI.txt` et un `VERSION.txt` (commit, date, heure du lien du NRO).
+
+    tools/make_dist.sh                       # les trois
+    tools/make_dist.sh switch linux          # une partie
+    tools/make_dist.sh --no-build windows    # empaqueter l'existant, échouer si quelque chose manque ou est périmé
+
+Sans `--no-build`, le script compile ce qu'il faut, en incrémental :
+- le preset `win64-msvc` ;
+- les programmes Linux et Switch dans `--work`, un dossier ext4 (`~/.cache/bo1zm-dist`) ;
+- les zones converties, si elles manquent ou sont plus vieilles que les sources du convertisseur (`ffconv --verify`,
+  puis `check_shader_pack.py`). Les anciennes zones restent en place tant que les nouvelles n'ont pas passé ces
+  vérifications ;
+- `shaders.dksh`, quand son `shaders.pack` a changé. Le script échoue si uam rejette un shader.
+
+Autres options : `--out`, `--game`, `--zones`, `--dxsdk`, `--archive auto|zip|tar|none`, `--jobs` ; `--help` les
+décrit. Les paquets contiennent vos propres fichiers de jeu : gardez-les pour vos appareils, ne les publiez pas.

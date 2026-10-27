@@ -61,4 +61,29 @@ on Windows or Linux: no window, listening on UDP on every interface, `server.cfg
 <address>:<port>` in a `launch.cfg` next to the program, and `tools/server_status.py <address>` shows the map and
 players. See `docs/SERVER.md`.
 
+## Packages
+
+`tools/make_dist.sh` (bash, from WSL) turns a source tree where `setup.ps1` has copied the game into ready-to-copy
+folders and archives in `build/dist`, one per platform:
+
+| Package | Holds | Archive |
+|---|---|---|
+| `BO1Zombies_windows/` | the 64-bit client and dedicated server, `Play.bat` (`Play.bat net <address[:port]> [name]` joins a server), `Server.bat [map] [port]`, the 64-bit runtime DLLs | `.zip` |
+| `BO1Zombies_linux/` | the Linux client and dedicated server, `play.sh` (`./play.sh net ...`), `server.sh [map] [port]`, `shaders.pack` | `.tar.gz` |
+| `BO1Zombies_switch/` | an SD card tree, `switch/bo1zm/` with the `.nro`, `shaders.pack` and `shaders.dksh` | `.zip` |
+
+Each also holds the converted zones, the install's `main/*.iwd` and `localization.txt` (and `main/video` on PC), a
+`LISEZMOI.txt` and a `VERSION.txt` (commit, date, NRO link time).
+
+    tools/make_dist.sh                       # all three
+    tools/make_dist.sh switch linux          # some
+    tools/make_dist.sh --no-build windows    # package what is built, fail on anything missing or out of date
+
+Unless `--no-build`, it builds what the packages need, incrementally: the `win64-msvc` preset, the Linux and Switch
+programs in `--work` (an ext4 folder, `~/.cache/bo1zm-dist`), the converted zones when they are missing or older than
+the converter's sources (`ffconv --verify`, then `check_shader_pack.py`; the old zones stay until the new ones
+pass), and `shaders.dksh` when its `shaders.pack` changed (it fails if uam rejects a shader). Other options:
+`--out`, `--game`, `--zones`, `--dxsdk`, `--archive auto|zip|tar|none`, `--jobs`; `--help` lists them. The packages
+hold your own game files: keep them for your own devices, never publish them.
+
 French version: `README.fr.md`.
