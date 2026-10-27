@@ -40,15 +40,16 @@ struct ShaderPackEntry
 
 static_assert(sizeof(ShaderPackHeader) == 16 && sizeof(ShaderPackEntry) == 24, "shaders.pack layout");
 
-// The location of a vertex shader input: the index of its D3D9 usage in the engine's material stream destinations
-// (s_streamDestInfo in gfx_d3d/r_material.cpp), so that a stream reaches the input Material_BuildVertexDecl routes
-// it to. -1 for a usage that is not a destination.
+// The location of a vertex shader input, so that a stream reaches the input Material_BuildVertexDecl routes it to:
+// the index of its D3D9 usage in the engine's material stream destinations (s_streamDestInfo in
+// gfx_d3d/r_material.cpp), except that GL and uam accept 16 locations and there are 20 destinations. No vertex shader
+// in the zombies zones reads TEXCOORD10-13, so they get none (-1, as a usage that is not a destination; ffconv
+// rejects a shader that reads one), and BLENDWEIGHT takes 15 instead of 19 (uam and GL refused its 12 shaders).
 inline int ShaderPack_InputLocation(int usage, int usageIndex)
 {
-    static constexpr uint8_t kDestinations[20][2] = {{0, 0}, {3, 0}, {10, 0}, {10, 1}, {12, 0}, {5, 0},  {5, 1},
-                                                     {5, 2}, {5, 3}, {5, 4},  {5, 5},  {5, 6},  {5, 7},  {5, 8},
-                                                     {5, 9}, {5, 10}, {5, 11}, {5, 12}, {5, 13}, {1, 0}};
-    for (int d = 0; d < 20; ++d)
+    static constexpr uint8_t kDestinations[16][2] = {{0, 0}, {3, 0}, {10, 0}, {10, 1}, {12, 0}, {5, 0}, {5, 1}, {5, 2},
+                                                     {5, 3}, {5, 4}, {5, 5}, {5, 6},  {5, 7},  {5, 8}, {5, 9}, {1, 0}};
+    for (int d = 0; d < 16; ++d)
         if (kDestinations[d][0] == usage && kDestinations[d][1] == usageIndex)
             return d;
     return -1;

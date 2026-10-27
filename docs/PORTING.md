@@ -1664,3 +1664,66 @@ three times, then once per thousand, with the count. Ryujinx, Call of the Dead: 
 **`bo1_clientCommands` on the Switch.** The console and Ryujinx have no headless client, so `bo1_clientCommands`
 (`win_main.cpp`, `Sys_HeadlessClientCommandsFrame`) runs in a normal game there (`__SWITCH__` only, empty by default):
 a scripted emulator run puts it in `launch.cfg` or `launch_extra.cfg` to act at a set time after spawning.
+
+**Call of the Dead rendering: the snow shrubs (fixed 2026-10-27, a stale shader pack on the SD).**
+- **Symptom.** The "flickering walls" were the snow shrubs: alpha-tested cards drawn as solid light-blue or orange
+  triangles, on the console and on Ryujinx, with shadows on or off and filtering 2x or 16x. Der Riese showed whole walls
+  in the fog colour the same way.
+- **Placing it.**
+  - The Linux client on GL drew the shrubs right. Gdb swallowed the asserts' SIGTRAP:
+    `handle SIGTRAP nostop noprint nopass`. So the zone data, the GLSL translation and the frontend were fine.
+  - The deko3d bindings were right too: BC2 to `DkImageFormat_RGBA_BC2`, the sampler3D in slot 11, the blend state.
+  - The deko3d frame dump showed the texture's dark branches *inside* the solid triangles. So the colour was read,
+    and only the cut-out was missing.
+- **Cause.** Both SD cards held the `shaders.pack` of 2026-10-22 (`build/iwffs-v2`) and a `shaders.dksh` compiled from
+  it (uam output of that GLSL, byte for byte).
+  - That GLSL still declares `vec4 bo1_vpos_flip;` before `bo1_alpha_test`, so it reads the alpha test at `c[257]`.
+  - The frontend writes it at `c[256]`, so the alpha test was off in every shader.
+  - With the alpha test off, the depth prepass wrote whole cards and the fog showed through them.
+  - Nothing warned: a pack entry's hash is the D3D9 bytecode's, so the stale and the current packs hold the same
+    13 704 hashes.
+- **Fix.** Rebuilt `shaders.dksh` from the current `build/zones64/shaders.pack` with `make_dksh_pack.py` (13 692 DKSH,
+  the same 12 vertex shaders rejected by uam), and copied both packs to the SD cards. Ryujinx then showed no solid
+  triangles at the same 150 s frame.
+- **Rule.** Redeploy `shaders.pack` and `shaders.dksh` together after any change to the shader interface. Before
+  chasing a rendering bug that only the console shows, check `grep -ac bo1_vpos_flip shaders.pack` gives 0 on the SD.
+
+**Der Riese rendering: flickering walls (fixed 2026-10-27, two shader-interface bugs).**
+- **Symptom.** With the current packs, whole façade walls drew as solid light blue or orange, changing from frame to
+  frame, and a band of lower walls stayed light blue. Seen on the console and on Ryujinx.
+- **Placing it.** A temporary deko3d probe read two pixels of the lit pass (pass 2) after each draw of the traced
+  frame. The first draw wrote the orange, and none of the 338 draws after it touched those pixels: the wall was not
+  drawn there at all. With `+set r_depthPrepass 0` the façade drew right.
+- **Cause 1: no position invariance.** The engine's depth prepass and its lit passes compare equal depths computed by
+  different vertex shaders. uam fuses their multiply-adds differently, the positions differ in the last bits, and the
+  lit pass fails its `LessEqual` test on whole walls (z-fighting). Mesa on llvmpipe happened to agree with itself.
+  - Fix: `ff_glsl.cpp` declares `invariant gl_Position;` in every vertex shader. uam then stops fusing them: a test
+    shader grows from 3072 to 3328 bytes of DKSH.
+- **Cause 2: 12 vertex shaders never compiled.** `ShaderPack_InputLocation` put BLENDWEIGHT at location 19, the
+  index of its material stream destination. GL and uam accept 16 locations, so uam rejected those 12 shaders (GL
+  failed to link them) and the frontend skipped their draws ("is not in shaders.pack"): the band of light-blue walls.
+  - Fix: BLENDWEIGHT takes location 15, and TEXCOORD10-13 (destinations 15-18) take none. No vertex shader in the
+    zombies zones reads them: 356 vertex shaders checked, and ffconv rejects a shader that would.
+  - The frontend and the packs must change together: an NRO built before this table reads the wrong inputs with the
+    new packs, and the reverse.
+- **Verified.**
+  - `ffconv --verify --game`: 65 zones, 0 failed; the zones are byte-identical to the previous `build/zones64`.
+  - `check_shader_pack.py`: 13 704 shaders, 0 rejected. `make_dksh_pack.py`: 13 704 DKSH, 0 rejected by uam
+    (12 before).
+  - The intermediate pack (invariance only) differs from the previous one only by `#version 430` and the
+    `invariant` line in the 356 vertex shaders.
+  - `d3d9emu_test`, `gb_gl_test` (46 checks), `launcher_config_test` and `gamepad_test` pass.
+  - Ryujinx, NRO of 01:43:34 with the new packs: the 150 s and 210 s frames of Der Riese show the façade, the
+    scaffolding and the lower stone walls, with no solid fill.
+  - Console (the user, same NRO and packs): Der Riese draws right, and no texture problem is left.
+- **Not done.** The Linux GL client could not be compared on Der Riese: it stops early with "Field loopSoundFade
+  changed for archived eType Player Entity" (a separate bug, open).
+
+**Call of the Dead rendering, still open.**
+- **After the player dies (Ryujinx).** Seen with the stale packs; the console run with the current ones showed no
+  texture problem, Ryujinx is still to check again. The world turns flat grey and light blue. The pass trace shows every lit draw
+  binding the same 128x128 BC3 texture with 8 mips in slots 0 and 1 (the engine's default image, by its size), with only
+  the lightmaps differing. The real textures are back at the 150 s dump.
+- **Linux GL comparison.** The Linux client stops on the `CG_EntityContact` assert while Call of the Dead loads
+  unless gdb swallows the SIGTRAP: run it under `/usr/bin/gdb -batch -ex "handle SIGTRAP nostop noprint nopass"
+  -ex "handle SIG35 nostop noprint pass" -ex run --args ...`.
