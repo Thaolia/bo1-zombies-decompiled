@@ -95,7 +95,9 @@ char *__cdecl Sys_ConsoleInput()
         s_inputLength = 0;
         if (!s_inputLine[0])
             continue;
-        I_strncpyz(s_returnedText, s_inputLine, sizeof(s_returnedText));
+        // with its newline, as win_syscon.cpp returns it: Sys_GetEvent copies strlen - 1 characters
+        I_strncpyz(s_returnedText, s_inputLine, sizeof(s_returnedText) - 1);
+        I_strncat(s_returnedText, sizeof(s_returnedText), "\n");
         return s_returnedText;
     }
     return nullptr;

@@ -38,6 +38,9 @@
 #include "win_configure.h"
 #include <direct.h>
 #include "win_steam.h"
+#if !defined(__SWITCH__)
+#include <server_tui/sv_tui.h>
+#endif
 #include <universal/com_expressions_eval.h>
 #include <gfx_d3d/r_material.h>
 #include <ui/keycodes.h>
@@ -94,10 +97,10 @@ bool __cdecl Sys_IsHeadlessClient()
     return s_headlessClient;
 }
 
-// value of '<name> <int>' in a raw command line ('+set name 1'); the last whole-word match wins
-static int Sys_CmdlineIntValue(const char *cmdline, const char *name)
+// value of '<name> <int>' in a raw command line ('+set name 1'); the last whole-word match wins, absent if none
+static int Sys_CmdlineIntValue(const char *cmdline, const char *name, int absent = 0)
 {
-    int value = 0;
+    int value = absent;
     size_t len = strlen(name);
     for (const char *p = strstr(cmdline, name); p; p = strstr(p + len, name))
     {
@@ -267,6 +270,9 @@ typedef unsigned int SysAddrPrint;
 // headless: record where a crash happened, then let WER (no UI, see WinMain) write Application Error 1000 and end it
 static LONG __stdcall Sys_HeadlessExceptionFilter(_EXCEPTION_POINTERS *info)
 {
+#if !defined(__SWITCH__)
+    ServerTui_Stop(); // the terminal back to normal before the process ends
+#endif
     const EXCEPTION_RECORD *rec = info->ExceptionRecord;
     HMODULE module = NULL;
     char modulePath[MAX_PATH] = "?";
@@ -1460,6 +1466,13 @@ void    Sys_Error(char *error, ...)
     Switch_DebugLog("\n");
 #endif
 
+#if !defined(__SWITCH__)
+    if ( ServerTui_Active() )
+    {
+        ServerTui_Stop(); // phase 8: the error is shown on the restored terminal
+        fprintf(stderr, "Sys_Error: %s\n", string);
+    }
+#endif
     // zombies: headless ends here - no error console, no message box, and no FixWindowsDesktop (it resets the
     // display mode and the desktop gamma ramp)
     // x6c38: a normal launch keeps the text in main\bo1_emergency.log too, then goes on to its error box
@@ -1504,6 +1517,9 @@ void    Sys_Error(char *error, ...)
 
 void __cdecl    Sys_Quit()
 {
+#if !defined(__SWITCH__)
+    ServerTui_Stop();
+#endif
     Sys_EnterCriticalSection(CRITSECT_COM_ERROR);
     timeEndPeriod(1u);
     Sys_SpawnQuitProcess();
@@ -1559,6 +1575,13 @@ void __cdecl Sys_Print(char *msg)
 #endif
     if ( enable_OutputDebugString )
         OutputDebugStringA(msg);
+#if !defined(__SWITCH__)
+    if ( ServerTui_Active() )
+    {
+        ServerTui_Print(msg);
+        return;
+    }
+#endif
     Conbuf_AppendTextInMainThread(msg);
 }
 
@@ -1677,7 +1700,11 @@ sysEvent_t *__cdecl Win_GetEvent(sysEvent_t *result)
             }
         }
         
+#if !defined(__SWITCH__)
+        s = ServerTui_Active() ? (char *)Sys_ServerTuiFrame() : Sys_ConsoleInput();
+#else
         s = Sys_ConsoleInput();
+#endif
         if ( s )
         {
             v2 = strlen(s);
@@ -2431,6 +2458,12 @@ int __stdcall WinMain(HINSTANCE__ *hInstance, HINSTANCE__ *hPrevInstance, char *
         if ( immDisableIme )
             immDisableIme((DWORD)-1);
     }
+#if !defined(__SWITCH__)
+    // phase 8: the server's curses console, unless '+set bo1_tui 0' (scripted runs); without an interactive terminal
+    // ServerTui_Start refuses and the plain console stays
+    if ( s_server && Sys_CmdlineIntValue(lpCmdLine, "bo1_tui", 1) )
+        ServerTui_Start();
+#endif
     if ( !StartingDedicatedServer(lpCmdLine) && !s_headless && CheckRemoteSession() )
         return 0;
     g_allowMature = 1;

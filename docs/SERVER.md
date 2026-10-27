@@ -15,6 +15,28 @@ The server is the game's own executable started with `+set bo1_server 1` (`BO1Zo
 error ends the process instead of showing a message. Every console line goes to `<fs_h>/main/console_mp.log`
 (`logfile 2`).
 
+### The console
+
+In a terminal (Linux) or with its own console window (Windows), the server shows a curses console:
+
+    BO1 Zombies server | BO1 Linux TUI test | zombie_theater | 1/4 players | port 29070 | up 0:01:50
+      #   name                     address                 ping  state        points
+    > 0   Player                   172.23.0.1:29060          31  active          500
+      1   -
+    -- console ----------------------------------------------------------------------
+    ...the console log...
+     F2/F3 player  F8 kick  F10 restart  PgUp/PgDn log  Up/Down history  Esc clear  'quit' stops the server
+    > status
+
+- The command line takes any console command (`status`, `map zombie_cosmodrome`, `set g_password x`, `quit`, ...);
+  Up/Down recall the last 100.
+- F2 / F3 select the previous / next player. F8 writes `clientkick <player>` and F10 `map_restart` on the command
+  line: nothing runs until Enter (Esc clears it).
+- PgUp / PgDn scroll the log (5000 lines kept), End goes back to the newest line. Everything also goes to
+  `<fs_h>/main/console_mp.log`.
+- `+set bo1_tui 0` keeps the plain console (stdout and stdin), and so does a server whose output is not a terminal
+  (`nohup`, a service, a redirection).
+
 ### Settings and their order
 
 1. Server defaults: `bo1_zombies 1`, `sv_maxclients 4`.
@@ -80,5 +102,5 @@ them. Checked: a Linux server with a Windows client, and Windows with Windows. S
 
 ## Not done yet
 
-The curses console, admin commands (god, revive, points, perks, reset, mods), client logs sent to the server, joining
-a game in progress and more than 4 players: see the plan in `docs/PORTING.md`, phase 8.
+Admin commands (god, revive, points, perks, reset, mods), client logs sent to the server, joining a game in progress
+and more than 4 players: see the plan in `docs/PORTING.md`, phase 8.

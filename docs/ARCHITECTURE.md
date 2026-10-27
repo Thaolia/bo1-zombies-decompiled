@@ -282,3 +282,10 @@ handles). A client of a remote dedicated server has none of that, so three paths
   writes no hunk file data.
 
 Status and the server's own layers (bind, curses console, admin commands, logs): `docs/PORTING.md`, phase 8.
+
+### Server console (phase 8)
+
+`src/server_tui/` is the dedicated server's curses console: `sv_tui.cpp` (curses only, no engine header) and
+`sv_tui_engine.cpp` (the server's state into a plain struct). `win_main.cpp` routes `Sys_Print` to it and takes its
+command line in `Sys_GetEvent` while it is active. PDCurses (`third_party/pdcurses`) on Windows, ncurses on posix, not
+on the Switch.

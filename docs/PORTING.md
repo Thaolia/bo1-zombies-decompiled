@@ -130,7 +130,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | in progress: the devkitA64 + libnx build compiles, links and packages `BO1Zombies.nro` (null backend), reusing the posix SDL2/Win32-shim layer with a thin `src/platform/switch/` and `#if defined(__SWITCH__)` deltas. **Boots on Ryujinx 1.1.1375**: the libnx entry runs (applet type = Application), romfs mounts, the engine's `WinMain` runs ~30 s with no crash (SD `boot.log`). Prereqs fixed: the libgcc GCS/SME NOP patch (`switch/tools/patch_ryujinx_mrs.py`, POST_BUILD) for Ryujinx's JIT, and a one-file embedded romfs (`switch/romfs`) so `romfsInit` does not crash the emulator. With the converted zones staged on the SD, the engine **loads the pre-gfx code zones** (`en_code_pre_gfx_mp`, `code_pre_gfx_mp`) — the ffconv AArch64 path proven end to end — and runs `FS_Startup`. Four fixes got there: the GCS/SME NOP patch and embedded romfs (boot), `chdir` to the install dir (language + `fs_basepath`), a `pread` EOF fix for libnx's past-EOF `lseek` (zone read-ahead), and reading the win64 IWffs ABI tag (layout-identical, `--check-switch`). With the iwds staged and a `device:`-prefix fix in `Bo1_PosixPath`, it then boots through FS_Startup (103814 iwd files), R_Init, the frontend, and `+devmap zombie_theater` into a **map load** (common_zombie 78 MB, the Kino zones) — before crashing part way through `en_zombie_theater` on a guest invalid memory access (a 64-bit bug in the zombie map asset stream, to debug on the posix x86-64 build). Then GL (EGL on nwindow) and audio |
 | 6 | Stabilisation, all base maps, docs | todo |
 | 7 | (optional) deko3d backend behind the same `gfx_backend.h` | in progress: opt-in on the Switch build (`gfx.cfg` = deko3d, `shaders.dksh` from uam); renders the main menu's 3D scene and Kino in game with its HUD on Ryujinx (2026-10-26, see the deko3d notes below); not yet run on the console in game |
-| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part deferred until `_new` and `_server` are merged into `switch`; see "Dedicated server (phase 8)" |
+| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part deferred until `_new` and `_server` are merged into `switch`; step 3 done on Linux (2026-10-27: curses console), its Windows window still to be seen; see "Dedicated server (phase 8)" |
 
 ## Verification per phase
 - **0**: the `win32-msvc` preset still builds and `Play.bat` reaches the zombies menu and plays Kino der Toten.
@@ -1710,3 +1710,26 @@ game overs) had none. To compare against a listen-server run before blaming the 
   client times out (`EXE_ERR_SERVER_TIMEOUT`), retries, and is active again 35 s after the server restarted, without
   any input; it keeps retrying at growing intervals once the server is gone, and quits normally (exit 0). `connect
   203.0.113.1` is refused with the message and the menu stays up; with `cl_allowWanConnect 1` it goes `CA_CONNECTING`.
+
+**Step 3, the server's curses console (2026-10-27).** Operator's view in `docs/SERVER.md` ("The console").
+
+- `src/server_tui/sv_tui.cpp` is the curses side (status line, player slots, a 5000-line log, the command line with a
+  100-entry history, F2/F3 selection, F8/F10 fill the command line, PgUp/PgDn/End). It includes no engine header:
+  curses.h defines `move`, `clear`, `refresh`, `timeout`, `scroll`. `sv_tui_engine.cpp` fills a plain status struct
+  from `svs.clients`, `sv_hostname`, `mapname`, `net_port`, `sv_maxclients` and `G_GetClientScore`.
+- `win_main.cpp`: started after the headless set-up when `bo1_server` and `bo1_tui` (default 1); `ServerTui_Start`
+  refuses without a terminal (`isatty` on posix; on Windows it opens a console with `AllocConsole`). `Sys_Print`
+  feeds it instead of the plain console (any thread, under a mutex); `Sys_GetEvent` takes its command line instead of
+  `Sys_ConsoleInput` and runs its frame (keys, redraw at most 10 times a second). `Sys_Quit`, `Sys_Error` (which ends a
+  headless process with `TerminateProcess`, so no `atexit`) and the headless exception filter restore the terminal.
+- Build: PDCurses 3.9 (public domain) vendored in `third_party/pdcurses` (core, wincon port, `common/acs437.h`) as its
+  own static library on Windows, so the engine's forced includes stay out of it, with the engine's CRT (the engine's
+  project is `MultiThreadedDLL`: CMake 3.16's `MSVC_RUNTIME_LIBRARY` wins over the `/MT` in `CMAKE_CXX_FLAGS`; forcing
+  `/MT` on PDCurses gave `LNK4098`). posix links the system ncurses; the Switch has neither.
+- Command lines end with `\n`, as `win_syscon.cpp` returns them: `Sys_GetEvent` copies `strlen - 1` characters. The
+  TUI's first command arrived as `statu`. `posix_syscon.cpp` had the same bug (it stripped the newline, so a typed
+  `status` ran as `statu`): fixed the same way.
+- Verified on Linux in a 120x40 `tmux` pane: the screen above with a win64 client joined (selected with F3, F8 filled
+  `clientkick 0`, Esc cleared it), `status` run from the command line printed the server's table into the log, `quit`
+  ended the server with code 0 and gave the terminal back. The Windows console window (`AllocConsole`) is built but
+  not yet looked at: a run would open a window on the desktop.

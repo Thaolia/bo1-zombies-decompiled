@@ -416,6 +416,25 @@ else()
     endif()
 endif()
 
+# The dedicated server's curses console (src/server_tui, docs/SERVER.md): PDCurses (third_party/pdcurses, public
+# domain, its own library so the engine's forced includes stay out of it) on Windows, the system ncurses on posix. The
+# Switch runs no server and has no terminal.
+set(SERVER_TUI_FILES "${SRC_DIR}/server_tui/sv_tui.cpp" "${SRC_DIR}/server_tui/sv_tui_engine.cpp")
+if(BO1_PLATFORM STREQUAL "win32")
+    file(GLOB BO1_PDCURSES_FILES
+         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pdcurses/pdcurses/*.c"
+         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pdcurses/wincon/*.c")
+    add_library(pdcurses STATIC ${BO1_PDCURSES_FILES})
+    target_include_directories(pdcurses PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pdcurses")
+    target_compile_definitions(pdcurses PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_sources(BO1Zombies PRIVATE ${SERVER_TUI_FILES})
+    target_link_libraries(BO1Zombies PRIVATE pdcurses)
+elseif(BO1_PLATFORM STREQUAL "posix")
+    find_package(Curses REQUIRED)
+    target_sources(BO1Zombies PRIVATE ${SERVER_TUI_FILES})
+    target_link_libraries(BO1Zombies PRIVATE ${CURSES_LIBRARIES})
+endif()
+
 # Mods live apart from the base game: mods/<name>/ is copied next to the exe on every build and is only
 # loaded with +set fs_game mods/<name> (see mods/sandbox/README.md), or several at once with +set fs_mods "a b c"
 # (mods/_stack/maps/_modstack.gsc). Without fs_game / fs_mods nothing in it is read.
