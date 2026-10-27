@@ -106,8 +106,25 @@ Add `+set cl_allowWanConnect 1` for a server beyond the LAN.
 `cl_autoConnect <address>` joins that server once the main menu is up (a `+connect` on the command line would be
 undone by the menu's own load), and again whenever the client is back at the menu or disconnected: server restarted,
 timeout (`cl_timeout`, 40 s by default), kick. It waits 2 s the first time, then 5 s, doubled after each attempt that
-did not reach the game, up to 60 s. `set cl_autoConnect ""` in the console stops it. The Switch reads
-`sdmc:/switch/bo1zm/launch.cfg` already; joining a server from the Switch comes later (its network start-up is not done).
+did not reach the game, up to 60 s. `set cl_autoConnect ""` in the console stops it.
+
+## Joining from a Switch
+
+In the start menu, **Serveur** (A) opens the server screen:
+- **Connexion**: on to join a server, off for a solo game;
+- **Adresse IP** and **Port** (3074 by default): typed with the console's keyboard;
+- **Nom du joueur**: the name on the server; empty keeps the game's own;
+- the console's own network address, or a warning when it has none (Wi-Fi off, airplane mode).
+
+Start then writes `+set name <name> +set cl_allowWanConnect 1 +set cl_autoConnect <address>:<port>` into
+`sdmc:/switch/bo1zm/launch.cfg`, with no `+devmap`: the game opens its own menu and joins as a PC client does. The
+server picks the map and god mode, so those menu lines are greyed out. The menu refuses to start with no address, or
+with the connection on and no network. In game, a `connect` to a remote address without a network prints `connect: the
+console has no network connection` and leaves the menu as it is.
+
+A `skip_menu` boot reads `launch.cfg` as it is, so a hand-written one can join too; several lines read as one, as on
+PC. The console opens its sockets at start-up (`socketInitializeDefault`, `nifm` for its address, both logged in
+`boot.log` as `network:` lines) and closes them at exit.
 
 ## Checking a server
 
@@ -129,7 +146,8 @@ one query every 50 ms.
 ## Platforms
 
 A server and its clients may run on different platforms: the network messages are encoded the same way on all of
-them. Checked: a Linux server with a Windows client, and Windows with Windows. Switch clients come with step 2.
+them. Checked: a Linux server with a Windows client, and Windows with Windows. A Switch client: see `docs/PORTING.md`,
+phase 8, step 2.
 
 ## Not done yet
 

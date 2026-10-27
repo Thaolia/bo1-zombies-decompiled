@@ -2322,6 +2322,7 @@ set(PHYSICS_FILES
 # ----- src/platform -----
 set(SRC_PLATFORM
 	"${SRC_DIR}/platform/compat.h"
+	"${SRC_DIR}/platform/launch_cfg.h"
 	"${SRC_DIR}/platform/minmax.h"
 )
 source_group("platform" FILES ${SRC_PLATFORM})
@@ -2382,6 +2383,8 @@ set(SRC_PLATFORM_SWITCH
 	"${SRC_DIR}/platform/switch/launcher_config.h"
 	"${SRC_DIR}/platform/switch/switch_launcher.cpp"
 	"${SRC_DIR}/platform/switch/switch_launcher.h"
+	"${SRC_DIR}/platform/switch/switch_net.cpp"
+	"${SRC_DIR}/platform/switch/switch_net.h"
 	"${SRC_DIR}/platform/switch/switch_libc_stubs.cpp"
 	"${SRC_DIR}/platform/switch/switch_main.cpp"
 )

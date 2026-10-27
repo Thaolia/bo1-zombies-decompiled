@@ -11,6 +11,9 @@
 #include <win32/win_main.h>
 
 #include "switch_launcher.h"
+#include "switch_net.h"
+
+#include <platform/launch_cfg.h>
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -116,9 +119,7 @@ void LoadLaunchArgs()
         std::fclose(f);
     }
     s_commandLine[n] = '\0';
-    while (n && (s_commandLine[n - 1] == '\n' || s_commandLine[n - 1] == '\r' || s_commandLine[n - 1] == ' ' ||
-                 s_commandLine[n - 1] == '\t'))
-        s_commandLine[--n] = '\0';
+    n = LaunchCfg_Normalize(s_commandLine, n);
     if (n == 0)
         std::snprintf(s_commandLine, sizeof(s_commandLine), "%s", kDefaultArgs);
 }
@@ -312,6 +313,9 @@ int main(int, char **)
         stamp[n && stamp[n - 1] == '\n' ? n - 1 : n] = '\0';
     }
     BootLog("build %s", stamp);
+    // Before the menu, which shows the console's address, and in every boot: the engine's UDP needs the sockets even
+    // for the menu's own local server.
+    SwitchNet_Init();
 
     // The start menu writes launch.cfg and gfx.cfg and hands back what it wrote; skip_menu boots on the files as they
     // are (hand-edited, or left by the last Start).

@@ -13,13 +13,16 @@ zombies on the base maps. It is a work in progress: see `docs/PORTING.md` for th
 `docs/ARCHITECTURE.md` for how the port is layered.
 
 On the console the game starts in a text menu, where you choose:
+- a solo game, or a dedicated server to join: the **Serveur** line opens its own screen, with the connection on or
+  off, the server's IP address and port (typed with the console's keyboard), your player name, and the console's own
+  network address (`docs/SERVER.md`, "Joining from a Switch");
 - the map;
 - the aim assist and its slowdown, lock-on and auto-aim;
 - god mode;
 - the renderer (deko3d or OpenGL), the frame-rate cap, shadows, texture filtering and the FPS/battery counter;
 - the controllers (the list of detected pads, and the system screen to connect them).
 
-**+** starts the game straight on the map. The choices are kept in `sdmc:/switch/bo1zm/menu.cfg`, and Start writes
+**+** starts the game straight on the map, or opens the game's menu, which then joins the server by itself. The choices are kept in `sdmc:/switch/bo1zm/menu.cfg`, and Start writes
 `launch.cfg` and `gfx.cfg`. An empty `skip_menu` file there boots without the menu, on those two files as they are
 (handy on an emulator). `docs/ARCHITECTURE.md` lists the files.
 

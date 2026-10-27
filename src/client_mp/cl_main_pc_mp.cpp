@@ -348,6 +348,10 @@ bool __cdecl CL_CDKeyValidate(netadr_t addr)
     return Steam_UpdateClientAuthTicket(addr);
 }
 
+#if defined(__SWITCH__)
+extern "C" int Switch_NetworkAvailable(); // switch_net.cpp
+#endif
+
 void __cdecl CL_Connect_f()
 {
     int ControllerIndex; // eax
@@ -358,6 +362,18 @@ void __cdecl CL_Connect_f()
 
     if ( Cmd_Argc() == 2 )
     {
+#if defined(__SWITCH__)
+        // zombies: without a network (Wi-Fi off, airplane mode) the console cannot reach any server: refuse before the
+        // menu's local server is killed below, which would leave the player disconnected with no menu. localhost still
+        // goes through.
+        netadr_t loopback;
+        if ( !Switch_NetworkAvailable() && !(NET_StringToAdr(Cmd_Argv(1), &loopback) && NET_IsLocalAddress(loopback)) )
+        {
+            Com_Printf(14, "connect: the console has no network connection (Wi-Fi off or airplane mode); %s not joined\n",
+                Cmd_Argv(1));
+            return;
+        }
+#endif
         // zombies: refuse an address beyond the LAN before anything is torn down (the menu's local server included);
         // cl_allowWanConnect lifts it. An address that does not resolve still goes through the "Bad server address" path.
         netadr_t target;

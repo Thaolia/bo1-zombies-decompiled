@@ -29,6 +29,7 @@
 #include <universal/q_parse.h>
 #include <universal/timing.h>
 #include "win_wndproc.h"
+#include <platform/launch_cfg.h>
 #include <client/screen_placement.h>
 #include <client_mp/cl_input_mp.h>
 #include <ui/ui_utils.h>
@@ -2417,13 +2418,7 @@ static char *Sys_PrependLaunchCfg(char *cmdLine)
     if (!ReadFile(f, s_launchCommandLine, sizeof(s_launchCommandLine) - 2, &n, NULL)) // room for the blank and the 0
         n = 0;
     CloseHandle(f);
-    for (DWORD i = 0; i < n; ++i)
-    {
-        if (s_launchCommandLine[i] == '\r' || s_launchCommandLine[i] == '\n' || s_launchCommandLine[i] == '\t')
-            s_launchCommandLine[i] = ' ';
-    }
-    while (n && s_launchCommandLine[n - 1] == ' ')
-        --n;
+    n = (DWORD)LaunchCfg_Normalize(s_launchCommandLine, n);
     if (!n)
         return cmdLine;
     s_launchCommandLine[n++] = ' ';
