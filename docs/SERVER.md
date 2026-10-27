@@ -178,6 +178,7 @@ Typed in the server's console, run from `server.cfg`, or sent over rcon once the
 | `zm_kill <player>` | kills a player (god goes off first): no last stand, the player spectates until the round ends |
 | `zm_respawn <player>` | brings a spectator back now instead of at the end of the round |
 | `zm_round <n>` | goes to round `n` (between rounds: once the next round starts) |
+| `zm_power` | turns the map's power on, as a player using the switch (Kino's `use_elec_switch`; a map with only the `power_on` flag gets the flag) |
 | `zm_reset` | loads the current map again (a new game) |
 | `zm_map <map>` | loads another map |
 | `zm_mods "<mods>"` | sets `fs_mods` (quoted, `""` for none) and loads the current map again with it; alone, prints it |
@@ -198,9 +199,10 @@ Players who join after the game started: the game sets its players up once, as s
 time are in (a slower client, or one that drops during a map load, comes in after that). mods/admin gives such a
 player a start point (without one the end-of-round respawn stopped with a script error in `spectator_respawn`) and
 defines the start points for every player count (without them the power-up drops stopped once a second player
-was in). Such a player spectates until the round ends unless `zm_respawn` brings them in, and the game respawns
+was in). Such a player spectates until the round ends unless `zm_respawn` brings them in. The game respawns
 spectators at the end of a round only when that round started with more than one player (`round_think` counts the
-players at the start of the round): a player killed in the round they joined comes back one round later.
+players at the start of the round); mods/admin starts the same respawn when a round started with one player and
+ends with more, so a player who joined during round 1 comes back at its end.
 
 Known limits: a Quick Revive given while only one player is in the game takes the solo path (an extra life, the
 machine hidden), as a solo purchase would, and its retail thread then logs script errors once more players are in.

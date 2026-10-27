@@ -1946,7 +1946,21 @@ with `cl_autoConnect` and `name`. Usage in `docs/SERVER.md` ("Start scripts", "J
   `+right` from `bo1_clientCommands` changed nothing), so a player-to-player revive over the network is still to be
   checked with real clients. `UseButtonPressed` reads usercmd bits 3 and 5, which the headless window-repair test
   drives.
-- Known: a Quick Revive given while one player is in takes the solo path (`give_perk`: `players.size == 1`), and its
-  retail `solo_revive_buy_trigger_move` thread then logs `self.lives` errors once a second player is in, as a solo
-  purchase followed by a join would. A joiner can come in as a spectator until the round ends (step 6); with only
-  that player alive, a down ends the game.
+- Second game (PC + Switch, 2026-10-27): no script error; the Switch, in during round 1 (one player at its start),
+  stayed a spectator at its end: `round_think` takes `get_players()` before "start_of_round" and calls
+  `spectators_respawn` at the end only when that count is not 1. mods/admin counts the players at "start_of_round"
+  and starts `spectators_respawn` itself when it was 1 and is more at "end_of_round" (checked: Alpha alone at round
+  1, Bravo in, `zm_kill 1`, `zm_round 2` → "round 1 started with one player: respawning the spectators", Bravo
+  `playing`).
+- The PC client crashed when the power came on in Kino: `cscr_animtree.cpp(1979)` "index not in [1,
+  xanim_num[SCR_XANIM_CLIENT]]: 10 not in [1, 0]", stack `CG_PreProcess_GetDObj` → `CG_GetAnimations` →
+  `Scr_GetClientAnims` (a script model's `animtreeIndex` 10). A remote client compiles the server's scripts only to
+  rebuild the server's tree list (step 0, `CGScr_LoadScriptsAndAnims`), and `CG_Init` then frees that script VM with
+  `Scr_FreeScripts(SCRIPTINSTANCE_SERVER)`, which zeroes `xanim_num[0]` and `[1]`: every non-zero `animtreeIndex`
+  (script models, an actor on another tree than the default) asserts. The XAnims are in the low hunk
+  (`Hunk_AllocXAnimCreate`) until the map ends, so `CG_Init` keeps the count on an SP level
+  (`zombies: remote server, N server anim trees kept for the snapshots`) and `CG_ShutdownOnceForAllClients` clears
+  it. The always-stacked server mods change no index (`_stack`'s only `#using_animtree`, `_thief.gsc`, compiles with
+  `bo1_mod_zones` only and names `generic_human`, already listed). Checked: a win64 client of a win64 server,
+  `zm_power` (new: Kino's `use_elec_switch` as a player's use) → no assert, the client still `active` a minute later.
+  The fix is client side: PC and Switch clients need a build with it.

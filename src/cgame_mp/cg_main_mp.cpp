@@ -61,6 +61,7 @@
 #include <bgame/bg_dog_animations_mp.h>
 #include <bgame/bg_vehicle_anim.h>
 #include <clientscript/cscr_vm.h>
+#include <clientscript/cscr_animtree.h>
 #include <cgame/cg_info.h>
 #include <gfx_d3d/r_stream.h>
 #include <qcommon/com_profilemapload.h>
@@ -3101,7 +3102,20 @@ void __cdecl CG_Init(int localClientNum, int serverMessageNum, int serverCommand
     Com_StripExtension(&cgs->mapname[5], mapname);
     CG_LoadAnimTrees(localClientNum, cgameGlob, mapname, loaded_client_scripts);
     if ( loaded_server_scripts )
+    {
+        // zombies: on a remote server's SP level, the snapshots' animtreeIndex goes through this client's copy of the
+        // server's tree list (Scr_GetClientAnims: CG_GetAnimations for a script model, CG_SP_GetActorClientAnims for
+        // an actor), which Scr_FreeScripts empties with the script VM: the first animated script model (Kino's power
+        // switch) asserted "10 not in [1, 0]". Its XAnims stay in the low hunk (Hunk_AllocXAnimCreate) until the map
+        // ends, so keep the count; CG_ShutdownOnceForAllClients clears it.
+        const unsigned int clientTrees = gScrAnimPub[SCRIPTINSTANCE_SERVER].xanim_num[0];
         Scr_FreeScripts(SCRIPTINSTANCE_SERVER, 1u);
+        if ( Com_IsSPLevel() )
+        {
+            gScrAnimPub[SCRIPTINSTANCE_SERVER].xanim_num[0] = clientTrees;
+            Com_Printf(14, "zombies: remote server, %u server anim trees kept for the snapshots\n", clientTrees);
+        }
+    }
     if ( !cgs->localServer )
         GScr_LoadConsts();
     CG_LoadingString(localClientNum, "collision map");
@@ -4028,7 +4042,10 @@ void __cdecl CG_ShutdownOnceForAllClients()
     Scr_ShutdownGameStrings(SCRIPTINSTANCE_CLIENT);
     Scr_FreeEntityList(SCRIPTINSTANCE_CLIENT);
     if ( !com_sv_running->current.enabled )
+    {
         Scr_ShutdownGameStrings(SCRIPTINSTANCE_SERVER);
+        gScrAnimPub[SCRIPTINSTANCE_SERVER].xanim_num[0] = 0; // zombies: the tree count CG_Init kept (see there)
+    }
     BG_ShutdownFire();
     CG_ClearCompassPingData();
     CG_ShutdownConsoleCommands();

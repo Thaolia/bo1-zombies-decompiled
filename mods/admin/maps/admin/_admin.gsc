@@ -103,16 +103,25 @@ admin_who()
 }
 
 
-// as mods/sandbox: round_think() notifies "start_of_round" once round_spawning() runs, "end_of_round" when it is over
+// as mods/sandbox: round_think() notifies "start_of_round" once round_spawning() runs, "end_of_round" when it is over.
+// round_think() reads get_players() before "start_of_round" and, at the round's end, respawns the spectators only when
+// that count was not 1: a round that started with one player keeps a player who joined during it spectating for one
+// more round. Then start the same retail respawn (maps\_zombiemode::spectators_respawn) here.
 admin_round_tracker()
 {
 	for ( ;; )
 	{
 		level waittill( "start_of_round" );
 		level.admin_round_active = true;
-		admin_log( "round " + level.round_number + " started" );
+		started_with = get_players().size;
+		admin_log( "round " + level.round_number + " started, players " + started_with );
 		level waittill( "end_of_round" );
 		level.admin_round_active = false;
+		if ( started_with == 1 && get_players().size > 1 )
+		{
+			admin_log( "round " + level.round_number + " started with one player: respawning the spectators" );
+			level thread maps\_zombiemode::spectators_respawn();
+		}
 	}
 }
 
@@ -177,6 +186,9 @@ admin_run( cmd, arg )
 		break;
 	case "down":
 		self admin_down();
+		break;
+	case "power":
+		self admin_power();
 		break;
 	case "round":
 		admin_goto_round( int( arg ) );
@@ -391,6 +403,32 @@ admin_kill()
 	}
 	self.bleedout_time = 0;
 	admin_log( "killed " + self admin_who() );
+}
+
+
+// turns the power on as a player using the map's switch does (Kino's electric_switch waits on use_elec_switch's
+// "trigger"); a map with only the "power_on" flag gets the flag, as the devgui does
+admin_power()
+{
+	if ( !level flag_exists( "power_on" ) )
+	{
+		admin_log( "power: this map has no power switch" );
+		return;
+	}
+	if ( flag( "power_on" ) )
+	{
+		admin_log( "power: already on" );
+		return;
+	}
+	trig = GetEnt( "use_elec_switch", "targetname" );
+	if ( IsDefined( trig ) )
+	{
+		trig notify( "trigger", self );
+		admin_log( "power: switch used by " + self admin_who() );
+		return;
+	}
+	flag_set( "power_on" );
+	admin_log( "power: power_on set" );
 }
 
 

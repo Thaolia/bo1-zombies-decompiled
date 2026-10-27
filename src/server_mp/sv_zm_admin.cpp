@@ -267,6 +267,14 @@ void ZmDown_f()
     ZmDamageCommand("zm_down", "down");
 }
 
+// the map's power switch, used by any player in the game
+void ZmPower_f()
+{
+    int targets[ZM_MAX_CLIENTS];
+    if ( ZmTargets("all", CS_ACTIVE, targets) )
+        ZmQueue(targets[0], "power", "");
+}
+
 // the level's round: run by mods/admin from any player in the game
 void ZmRound_f()
 {
@@ -370,7 +378,7 @@ ZmCommandDef s_commands[] = {
     { "zm_perk", ZmPerk_f },     { "zm_revive", ZmRevive_f },   { "zm_respawn", ZmRespawn_f },
     { "zm_kill", ZmKill_f },     { "zm_down", ZmDown_f },       { "zm_round", ZmRound_f },
     { "zm_reset", ZmReset_f },   { "zm_map", ZmMap_f },         { "zm_mods", ZmMods_f },
-    { "zm_admin", ZmAdmin_f },
+    { "zm_power", ZmPower_f },   { "zm_admin", ZmAdmin_f },
 };
 
 // hands the player's oldest queued command to mods/admin's "zm_admin" waittill (one per player and frame: a second

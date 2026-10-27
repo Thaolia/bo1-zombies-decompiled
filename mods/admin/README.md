@@ -19,7 +19,8 @@ The script side of the `zm_*` console commands of the dedicated zombies server (
   - kill: what `maps\_zombiemode` does to a player outside the playable area (no life left, down, bled out at once);
   - down: `DoDamage( health + 1000 )`, the game's own last stand;
   - respawn: `[[level.spawnPlayer]]` with `maps\_zombiemode::spectator_respawn`, as `spectators_respawn` between rounds;
-  - round: the devgui's `zombie_devgui_goto_round`, as mods/sandbox does it.
+  - round: the devgui's `zombie_devgui_goto_round`, as mods/sandbox does it;
+  - power: Kino's `use_elec_switch` trigger notified as a player's use (`electric_switch`), else the `power_on` flag.
 - Each reply is a `LogPrint` line starting with `admin: `; the server also prints those to its console (and so to its
   curses console).
 
@@ -28,7 +29,9 @@ The script side of the `zm_*` console commands of the dedicated zombies server (
 The game sets its players up when `all_players_connected` is set (`maps\_load_common`), which on a dedicated server is
 as soon as the players connected at that time are in. For a later player, `_admin.gsc` gives a start point
 (`spectator_respawn`, the struct the end-of-round respawn spawns at) and defines `zombie_score_start_<n>p` /
-`zombie_team_score_start_<n>p` for 1 to 4 players (the power-up drop reads them for the current count).
+`zombie_team_score_start_<n>p` for 1 to 4 players (the power-up drop reads them for the current count). A round
+that started with one player and ends with more gets the retail `maps\_zombiemode::spectators_respawn`, which
+`round_think` skips then.
 
 ## Dvars
 
