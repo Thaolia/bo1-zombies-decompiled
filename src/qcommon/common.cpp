@@ -95,6 +95,7 @@
 #include <game_sp/g_sp_measure.h>
 #include <cgame/cg_sp_playtrace.h>
 #include <bgame/bg_misc.h>
+#include <platform/netlog.h>
 
 cmd_function_s Com_Error_f_VAR;
 cmd_function_s Com_Crash_f_VAR;
@@ -487,6 +488,12 @@ void __cdecl Com_PrintMessage(int channel, char *msg, int error)
             }
             if ( channel != 7 && com_logfile && com_logfile->current.integer )
                 Com_LogPrintMessage(channel, msg);
+#if !defined(__SWITCH__)
+            // phase 8: the lines console_mp.log gets also go to the server (the Switch sends its whole boot log,
+            // Switch_BootLogWrite)
+            if ( channel != 7 )
+                NetLog_Print(msg);
+#endif
         }
     }
 }
@@ -1949,6 +1956,9 @@ void __cdecl Com_Init_Try_Block_Function(char *commandLine)
     Cbuf_Init();
     Cmd_Init();
     Com_StartupVariable(0);
+    // phase 8: the command line's +set (cl_autoConnect, bo1_logserver) are dvars now; the log sender starts here, not at
+    // the first client frame, which comes after more than a megabyte of start-up log
+    NetLog_ClientFrame();
     Com_InitDvars();
     IK_InitSystem();
     initStartTime = 0;

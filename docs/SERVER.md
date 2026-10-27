@@ -71,7 +71,7 @@ In a terminal (Linux) or with its own console window (Windows), the server shows
       1   -
     -- console ----------------------------------------------------------------------
     ...the console log...
-     F2/F3 player  F4 god  F5 revive  F6 respawn  F7 points  F8 kick  F10 reset  PgUp/PgDn log  Up/Down history ...
+     F2/F3 player  F4 god  F5 revive  F6 respawn  F7 points  F8 kick  F10 reset  Tab player's log  PgUp/PgDn log ...
     > status
 
 - The command line takes any console command (`status`, `map zombie_cosmodrome`, `set g_password x`, `quit`, ...);
@@ -80,7 +80,7 @@ In a terminal (Linux) or with its own console window (Windows), the server shows
   the `zm_*` states on (G god, D demigod, N notarget, C noclip).
 - F2 / F3 select the previous / next player. F4 writes `zm_god <player>`, F5 `zm_revive <player>`, F6
   `zm_respawn <player>`, F7 `zm_points <player> ` (type the amount), F8 `clientkick <player>` and F10 `zm_reset` on
-  the command line: nothing runs until Enter (Esc clears it).
+  the command line: nothing runs until Enter (Esc clears it). Tab shows the selected player's own log ("Client logs").
 - PgUp / PgDn scroll the log (5000 lines kept), End goes back to the newest line. Everything also goes to
   `<fs_h>/main/console_mp.log`.
 - `+set bo1_tui 0` keeps the plain console (stdout and stdin), and so does a server whose output is not a terminal
@@ -226,7 +226,25 @@ Known limits: a Quick Revive given while only one player is in the game takes th
 machine hidden), as a solo purchase would, and its retail thread then logs script errors once more players are in.
 Joining in progress is step 6.
 
+## Client logs
+
+Every client (PC and Switch) sends its console log to the server it joins, so a player's log is on the server
+without anyone copying files:
+
+- The server listens on UDP **game port + 1** (3075 for 3074; open it in the firewall too) and writes each client run
+  to `<fs_h>/logs/<name>_<date>-<time>_<session>.log` (`build\server\logs\` with `Server.bat`). The console says
+  `netlog: <name> (<address>) -> logs/<file>` when a run starts.
+- The log starts at the client's launch: a client keeps its lines (1 MiB) until it knows the server, so the lines
+  from before the connection come too, then sends as they are written, also during loads and freezes (its own
+  socket and thread, not the game connection). Its last lines go before it quits. The Switch sends its whole
+  `boot.log` (start menu, deko3d lines included).
+- Missing packets are marked in the file: `[netlog: lost N packets]`; a full client buffer:
+  `[netlog: N bytes dropped, the buffer was full]`. The server accepts 2 MB/s per address (4 MB in a burst).
+- In the curses console, **Tab** shows the selected player's log instead of the server's (PgUp / PgDn / End scroll
+  it, Tab again goes back); its title gives the file and the packets lost.
+- On the client: `bo1_netlog 0` stops it; `bo1_logserver <host[:port]>` sends to another server than the
+  `cl_autoConnect` one (the game port: the log goes to port + 1).
+
 ## Not done yet
 
-Client logs sent to the server, joining a game in progress and more than 4 players: see the plan in
-`docs/PORTING.md`, phase 8.
+Joining a game in progress and more than 4 players: see the plan in `docs/PORTING.md`, phase 8.

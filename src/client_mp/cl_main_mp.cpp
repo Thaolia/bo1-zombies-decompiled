@@ -96,6 +96,7 @@
 #include <win32/win_steam.h>
 #include <universal/base64.h>
 #include <game_sp/g_sp_playtrace.h>
+#include <platform/netlog.h>
 
 const dvar_t *cl_noprint;
 const dvar_t *playlist;
@@ -3263,6 +3264,7 @@ void __cdecl CL_Frame(int localClientNum, int msec)
         CL_CheckUserinfo(localClientNum);
         CL_CheckForResend(localClientNum);
         CL_AutoConnectFrame(localClientNum);
+        NetLog_ClientFrame(); // phase 8: the console log to the server (src/platform/netlog.cpp)
         CL_CheckTimeout(localClientNum);
         if ( DL_InProgress() )
             CL_WWWDownload();

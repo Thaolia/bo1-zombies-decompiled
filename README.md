@@ -61,7 +61,8 @@ on Windows or Linux: no window, listening on UDP on every interface, `server.cfg
 <address>:<port>` in a `launch.cfg` next to the program, and `tools/server_status.py <address>` shows the map and
 players. Admin commands typed in its console (or over rcon, `tools/server_rcon.py`): `zm_god`, `zm_points`, `zm_perk`,
 `zm_revive`, `zm_kill`, `zm_respawn`, `zm_round`, `zm_reset`, `zm_map`, `zm_mods`, and `zm_startpoints` /
-`zm_startperks` for the start of a game. See `docs/SERVER.md`.
+`zm_startperks` for the start of a game. Each client's console log is sent to the server (UDP game port + 1) and
+written to its `logs/` folder; Tab in the server's console shows the selected player's. See `docs/SERVER.md`.
 
 ## Packages
 

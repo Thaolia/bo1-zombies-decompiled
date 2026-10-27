@@ -97,3 +97,10 @@ extern "C" int Switch_NetworkAvailable()
     u32 ip;
     return s_socketsUp && CurrentIp(&ip);
 }
+
+// For src/platform/netlog.cpp, which cannot include libnx next to the Win32 shim: a thread made with std::thread runs
+// on its creator's core unless pinned (applications get cores 0-2).
+extern "C" void Switch_PinCurrentThread(int core)
+{
+    svcSetThreadCoreMask(CUR_THREAD_HANDLE, core, 1u << core);
+}

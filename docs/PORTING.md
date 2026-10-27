@@ -132,7 +132,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | in progress: the devkitA64 + libnx build compiles, links and packages `BO1Zombies.nro` (null backend), reusing the posix SDL2/Win32-shim layer with a thin `src/platform/switch/` and `#if defined(__SWITCH__)` deltas. **Boots on Ryujinx 1.1.1375**: the libnx entry runs (applet type = Application), romfs mounts, the engine's `WinMain` runs ~30 s with no crash (SD `boot.log`). Prereqs fixed: the libgcc GCS/SME NOP patch (`switch/tools/patch_ryujinx_mrs.py`, POST_BUILD) for Ryujinx's JIT, and a one-file embedded romfs (`switch/romfs`) so `romfsInit` does not crash the emulator. With the converted zones staged on the SD, the engine **loads the pre-gfx code zones** (`en_code_pre_gfx_mp`, `code_pre_gfx_mp`) — the ffconv AArch64 path proven end to end — and runs `FS_Startup`. Four fixes got there: the GCS/SME NOP patch and embedded romfs (boot), `chdir` to the install dir (language + `fs_basepath`), a `pread` EOF fix for libnx's past-EOF `lseek` (zone read-ahead), and reading the win64 IWffs ABI tag (layout-identical, `--check-switch`). With the iwds staged and a `device:`-prefix fix in `Bo1_PosixPath`, it then boots through FS_Startup (103814 iwd files), R_Init, the frontend, and `+devmap zombie_theater` into a **map load** (common_zombie 78 MB, the Kino zones) — before crashing part way through `en_zombie_theater` on a guest invalid memory access (a 64-bit bug in the zombie map asset stream, to debug on the posix x86-64 build). Then GL (EGL on nwindow) and audio |
 | 6 | Stabilisation, all base maps, docs | todo |
 | 7 | (optional) deko3d backend behind the same `gfx_backend.h` | in progress: opt-in on the Switch build (`gfx.cfg` = deko3d, `shaders.dksh` from uam); renders the main menu's 3D scene and Kino in game with its HUD on Ryujinx (2026-10-26, see the deko3d notes below); not yet run on the console in game |
-| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part done (2026-10-27: sockets, `nifm`, the start menu's server screen; a console joined a win64 server and played; Ryujinx's BSD `RecvFrom` throws); step 3 done (2026-10-27: curses console, Linux and Windows); step 4 done on win64 (2026-10-27: `zm_*` admin commands, mods/admin); see "Dedicated server (phase 8)" |
+| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part done (2026-10-27: sockets, `nifm`, the start menu's server screen; a console joined a win64 server and played; Ryujinx's BSD `RecvFrom` throws); step 3 done (2026-10-27: curses console, Linux and Windows); step 4 done on win64 (2026-10-27: `zm_*` admin commands, mods/admin); step 5 done on PC (2026-10-27: client logs on UDP port + 1, `logs/`, Tab in the TUI), its Switch side built, not yet run; see "Dedicated server (phase 8)" |
 
 ## Verification per phase
 - **0**: the `win32-msvc` preset still builds and `Play.bat` reaches the zombies menu and plays Kino der Toten.
@@ -2004,3 +2004,39 @@ with `cl_autoConnect` and `name`. Usage in `docs/SERVER.md` ("Start scripts", "J
   `bo1_mod_zones` only and names `generic_human`, already listed). Checked: a win64 client of a win64 server,
   `zm_power` (new: Kino's `use_elec_switch` as a player's use) → no assert, the client still `active` a minute later.
   The fix is client side: PC and Switch clients need a build with it.
+**Step 5, client logs on the server (2026-10-27).** Operator's view in `docs/SERVER.md` ("Client logs").
+
+- Client, `src/platform/netlog.cpp` (every platform): `NetLog_Print` copies each console line into a 1 MiB byte ring
+  under a mutex, from `Com_PrintMessage` next to `console_mp.log` (channel 7 excepted, as there), or on the Switch
+  from `Switch_BootLogWrite`, the boot log's one writer, so its start menu and deko3d lines go too and the engine's
+  lines once. A thread sends it on a UDP socket of its own to the server's port + 1 (`bo1_logserver`, else the
+  `cl_autoConnect` server; `bo1_netlog 0` stops it), at most 40 packets of 1200 bytes per 50 ms; on the Switch it is
+  pinned to core 2 (`Switch_PinCurrentThread`, `switch_net.cpp`: libnx and the Win32 shim do not share a file).
+  Winsock calls everywhere: the posix shim maps them to BSD sockets.
+- Packet: `BO1L`, version 1, name length, 2 reserved bytes, a session id per process, a sequence number (little
+  endian), the player's name, then up to 1200 bytes of the log stream (lines may be cut between packets).
+- Start-up: the sender first started at the first client frame, after 1.27 MB of start-up log; with a 256 KiB ring
+  (the plan's) and 240 KB/s, the server's file began with "1008854 bytes dropped". It now starts in `Com_Init`
+  right after the first `Com_StartupVariable(0)` (the command line's and `launch.cfg`'s `+set` are dvars there), with
+  1 MiB and ~960 KB/s: a map load prints about a megabyte within seconds.
+- Exit: `Sys_Quit` calls `NetLog_Shutdown` before `exit` (the sender gets a second to empty the ring), and it is
+  registered with `atexit` too.
+- Server, `src/server_mp/sv_netlog.cpp`: a non-blocking socket on `net_port + 1` (on `net_ip`'s interface when it
+  names one, 1 MB receive buffer), read on the server thread each frame (`SV_RunFrame`, up to 128 packets). Checks
+  the magic, version and sizes; 2 MB/s per address with a 4 MB burst; one session per (address, session id), up to
+  32, each written to `<fs_h>/logs/<name>_<date>-<time>_<session>.log` and flushed per packet, with the last 2000
+  lines kept for the TUI. A sequence gap writes `[netlog: lost N packets]`, a first packet past 0
+  `[netlog: N packets before this one did not arrive]`; a late or duplicate packet is dropped.
+- TUI: Tab shows the selected player's session (matched by address, then by name: two clients of one PC) with
+  its file and lost packets in the title, redrawn at the 10 Hz cap; read before the TUI's own log lock, as the
+  server thread prints while it holds the sessions' lock.
+- Verified (win64 server and client, Kino, 180 s client with `bo1_autoquit`): the server's file holds every line of
+  the client's own `console_mp.log` for that run (sorted diff: 0 missing) plus the 16 lines written before the
+  client opened its log file, ends with the client's last shutdown line, and has no loss marker. Crafted packets
+  (python, sequences 0 1 3 2 6 6 7): "lost 1 packets" before 3, 2 dropped as late, "lost 2 packets" before 6, the
+  second 6 dropped; bad magic, version 2, a 4-byte packet and a 1300-byte payload wrote nothing; a session whose
+  first packet is 5 starts with "5 packets before this one did not arrive". Linux server (`Server.sh` in `tmux`,
+  ext4) with a win64 client over the WSL address: `logs/` on the posix path, port 29181 bound, Tab shows
+  `client log: Alpha, logs/Alpha_..., lost 0 packets` and the client's lines. `switch` builds (the NRO holds the
+  sender's message); not yet run on a console or Ryujinx. Packet loss over a real network (`tc netem`) not tried.
+  `tools/syntax_check.py`: 1300 files, 0 errors with `mingw32-gcc` and `mingw32-clang`.

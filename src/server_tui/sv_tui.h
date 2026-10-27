@@ -4,6 +4,9 @@
 // the console log and a command line. sv_tui.cpp is the curses side and includes no engine header (curses.h defines
 // move, clear, refresh, timeout, scroll, ...); sv_tui_engine.cpp feeds it the server's state. Not on the Switch.
 
+#include <string>
+#include <vector>
+
 struct ServerTuiPlayer
 {
     int num;
@@ -39,3 +42,6 @@ const char *ServerTui_Frame(const ServerTuiStatus &status);
 
 // sv_tui_engine.cpp: fills the status from the server and runs ServerTui_Frame
 const char *Sys_ServerTuiFrame();
+// sv_tui_engine.cpp: the selected player's console log as the server received it (phase 8 step 5); false when that
+// player has sent none
+bool ServerTui_ClientLog(const ServerTuiPlayer &player, std::vector<std::string> &lines, std::string &title);

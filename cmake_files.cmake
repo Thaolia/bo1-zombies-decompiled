@@ -2324,6 +2324,8 @@ set(SRC_PLATFORM
 	"${SRC_DIR}/platform/compat.h"
 	"${SRC_DIR}/platform/launch_cfg.h"
 	"${SRC_DIR}/platform/minmax.h"
+	"${SRC_DIR}/platform/netlog.cpp"
+	"${SRC_DIR}/platform/netlog.h"
 )
 source_group("platform" FILES ${SRC_PLATFORM})
 
@@ -2601,6 +2603,8 @@ set(SRC_SERVER_MP
 	"${SRC_DIR}/server_mp/sv_main_pc_mp.h"
 	"${SRC_DIR}/server_mp/sv_net_chan_mp.cpp"
 	"${SRC_DIR}/server_mp/sv_net_chan_mp.h"
+	"${SRC_DIR}/server_mp/sv_netlog.cpp"
+	"${SRC_DIR}/server_mp/sv_netlog.h"
 	"${SRC_DIR}/server_mp/sv_zm_admin.cpp"
 	"${SRC_DIR}/server_mp/sv_zm_admin.h"
 	"${SRC_DIR}/server_mp/sv_snapshot_mp.cpp"

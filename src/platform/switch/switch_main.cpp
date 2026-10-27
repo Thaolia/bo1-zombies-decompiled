@@ -14,6 +14,7 @@
 #include "switch_net.h"
 
 #include <platform/launch_cfg.h>
+#include <platform/netlog.h>
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -192,6 +193,7 @@ void ShowAppletModeMessage()
 // lag or the crash). Committing costs an SD write, so it happens at most once a second.
 extern "C" void Switch_BootLogWrite(const char *text)
 {
+    NetLog_Print(text); // phase 8: the whole boot log to the server it joins (src/platform/netlog.cpp)
     static std::mutex lock;
     const std::lock_guard<std::mutex> guard(lock);
     static FILE *const f = std::fopen(kBootLogPath, "ab");

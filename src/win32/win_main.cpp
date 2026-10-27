@@ -30,6 +30,7 @@
 #include <universal/timing.h>
 #include "win_wndproc.h"
 #include <platform/launch_cfg.h>
+#include <platform/netlog.h>
 #include <client/screen_placement.h>
 #include <client_mp/cl_input_mp.h>
 #include <ui/ui_utils.h>
@@ -1555,6 +1556,7 @@ void __cdecl    Sys_Quit()
     if ( !com_errorEntered )
         track_shutdown(0);
     Con_ShutdownChannels();
+    NetLog_Shutdown(); // phase 8: the last of the console log to the server, before exit
     exit(0);
 }
 

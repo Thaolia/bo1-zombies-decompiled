@@ -2,6 +2,7 @@
 
 #include <server_mp/sv_main_mp.h>
 #include <server_mp/sv_zm_admin.h>
+#include <server_mp/sv_netlog.h>
 #include <server/server.h>
 #include <qcommon/common.h>
 #include <qcommon/net_chan_mp.h>
@@ -47,4 +48,9 @@ const char *Sys_ServerTuiFrame()
         }
     }
     return ServerTui_Frame(status);
+}
+
+bool ServerTui_ClientLog(const ServerTuiPlayer &player, std::vector<std::string> &lines, std::string &title)
+{
+    return SV_NetLog_Snapshot(player.address, player.name, lines, title);
 }

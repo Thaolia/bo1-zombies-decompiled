@@ -98,7 +98,13 @@ Commandes admin, tapées dans la console du serveur (ou en rcon avec `tools/serv
   passe ou bloque (distance, trigger, orientation, visée, touche utiliser).
 
 Dans la console curses : F4 god, F5 revive, F6 respawn, F7 points, F8 kick, F10 reset (la commande s'écrit sur la
-ligne, Entrée l'exécute). Le côté script est le mod `mods/admin`, que le serveur ajoute toujours à `fs_mods`. Détails
+ligne, Entrée l'exécute), Tab affiche le log du joueur sélectionné.
+
+Logs des clients : chaque client (PC et Switch) envoie son log console au serveur qu'il rejoint, en UDP sur le port de
+jeu + 1 (3075 pour 3074, à ouvrir aussi dans le pare-feu). Le serveur écrit chaque partie d'un client dans
+`<fs_h>/logs/<pseudo>_<date>-<heure>_<session>.log` (`build\server\logs\` avec `Server.bat`), depuis le lancement du
+client, chargements compris ; les paquets perdus y sont marqués (`[netlog: lost N packets]`). `bo1_netlog 0` coupe
+l'envoi côté client. Le côté script est le mod `mods/admin`, que le serveur ajoute toujours à `fs_mods`. Détails
 (en anglais) : `docs/SERVER.md`.
 
 

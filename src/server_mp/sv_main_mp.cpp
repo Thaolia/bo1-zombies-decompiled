@@ -35,6 +35,7 @@
 #include <client/cl_debugdata.h>
 #include "sv_bot_mp.h"
 #include "sv_zm_admin.h"
+#include "sv_netlog.h"
 #include <win32/win_main.h>
 #include <universal/com_workercmds.h>
 #include <universal/com_tasks.h>
@@ -1180,6 +1181,7 @@ void    SV_RunFrame()
     CL_FlushDebugServerData();
     G_SP_HeadlessTestClientFrame(false);
     SV_ZmAdmin_Frame(false);
+    SV_NetLog_Frame();
     SV_RunClientConnectCallbacks();
     // zombies (a1): SP Com_ServerLoop (SP 0x0087E2A0) reads the client packets (usercmds) inside every server frame,
     // not only when the server thread wakes: right after SV_RunClientConnectCallbacks (0x0087E45C, the event loop at

@@ -328,3 +328,11 @@ server thread). The cheat states (god, demigod, notarget, noclip) are engine fla
 everything else is queued and handed, one command per player and frame, to `mods/admin` as a `"zm_admin"` notify on
 the player's entity. The server always stacks `mods/admin` on `fs_mods` (`FS_ModStackNames`) and also reads mods from
 `fs_homepath/mods`; its `admin: ...` LogPrint replies are copied to the console by `G_LogPrintf`.
+
+### Client logs (phase 8)
+
+`src/platform/netlog.cpp` (every client, Windows, Linux and Switch) copies the console log into a 1 MiB buffer from
+the process start (`Com_PrintMessage` next to `console_mp.log`; on the Switch `Switch_BootLogWrite`, the boot log's
+one writer) and a thread of its own sends it over UDP to the joined server's port + 1, with Winsock calls that the
+posix shim maps to BSD sockets. `src/server_mp/sv_netlog.cpp` reads them on the server thread each frame, writes
+`<fs_h>/logs/` and keeps the last lines of each run for the curses console's Tab view.

@@ -37,6 +37,10 @@ int s_selected = -1; // selected player slot, -1 for none
 std::string s_command;
 std::chrono::steady_clock::time_point s_lastDraw;
 bool s_dirty = true;
+bool s_clientView; // Tab: the selected player's log instead of the server's
+int s_clientScroll;
+std::vector<std::string> s_clientLines;
+std::string s_clientTitle;
 
 // one log line per '\n'; the ^0..^@ colour codes are dropped (Conbuf_CleanText's rule)
 void AppendLog(const char *text)
@@ -164,15 +168,24 @@ void HandleKey(int ch, const ServerTuiStatus &status, int logRows)
         }
         break;
     case KEY_PPAGE:
-        s_scroll += logRows > 1 ? logRows - 1 : 1;
+        (s_clientView ? s_clientScroll : s_scroll) += logRows > 1 ? logRows - 1 : 1;
         break;
     case KEY_NPAGE:
-        s_scroll -= logRows > 1 ? logRows - 1 : 1;
-        if (s_scroll < 0)
-            s_scroll = 0;
+    {
+        int &scroll = s_clientView ? s_clientScroll : s_scroll;
+        scroll -= logRows > 1 ? logRows - 1 : 1;
+        if (scroll < 0)
+            scroll = 0;
         break;
+    }
     case KEY_END:
-        s_scroll = 0;
+        (s_clientView ? s_clientScroll : s_scroll) = 0;
+        break;
+    case '\t':
+        s_clientView = !s_clientView;
+        s_clientScroll = 0;
+        if (s_clientView && !FindPlayer(status, s_selected) && status.playerCount > 0)
+            s_selected = status.players[0].num;
         break;
     case KEY_F(2):
         SelectPlayer(status, -1);
@@ -266,12 +279,39 @@ void Draw(const ServerTuiStatus &status)
     const int sepRow = 2 + slots;
     const int logTop = sepRow + 1;
     const int logRows = rows - 2 - logTop;
+    const ServerTuiPlayer *viewed = s_clientView ? FindPlayer(status, s_selected) : nullptr;
+    if (s_clientView)
+    {
+        // read before s_logMutex: the server thread prints while it holds the client logs' lock
+        s_clientLines.clear();
+        if (!viewed)
+            s_clientTitle = "client log: select a player (F2/F3)";
+        else if (!ServerTui_ClientLog(*viewed, s_clientLines, s_clientTitle))
+            s_clientTitle = std::string("client log: nothing received from ") + viewed->name + " yet";
+        const int total = (int)s_clientLines.size();
+        if (s_clientScroll > total - logRows)
+            s_clientScroll = total - logRows > 0 ? total - logRows : 0;
+        std::snprintf(line, sizeof(line), "-- %s%s (Tab: server log) ", s_clientTitle.c_str(),
+                      s_clientScroll ? ", scrolled, End returns" : "");
+        attron(A_BOLD);
+        mvhline(sepRow, 0, '-', cols);
+        mvaddnstr(sepRow, 0, line, cols);
+        attroff(A_BOLD);
+        const int first = total - s_clientScroll - logRows;
+        for (int r = 0; r < logRows; ++r)
+        {
+            const int index = first + r;
+            if (index >= 0 && index < total)
+                mvaddnstr(logTop + r, 0, s_clientLines[index].c_str(), cols);
+        }
+    }
+    else
     {
         std::lock_guard<std::mutex> lock(s_logMutex);
         const int total = (int)s_log.size();
         if (s_scroll > total - logRows)
             s_scroll = total - logRows > 0 ? total - logRows : 0;
-        std::snprintf(line, sizeof(line), "-- console%s", s_scroll ? " (scrolled, End returns) " : " ");
+        std::snprintf(line, sizeof(line), "-- console%s(Tab: player's log) ", s_scroll ? " (scrolled, End returns) " : " ");
         attron(A_BOLD);
         mvhline(sepRow, 0, '-', cols);
         mvaddnstr(sepRow, 0, line, cols);
@@ -289,8 +329,8 @@ void Draw(const ServerTuiStatus &status)
     attron(A_REVERSE);
     mvhline(rows - 2, 0, ' ', cols);
     mvaddnstr(rows - 2, 0,
-              " F2/F3 player  F4 god  F5 revive  F6 respawn  F7 points  F8 kick  F10 reset  PgUp/PgDn log  Up/Down history"
-              "  Esc clear  'quit' stops the server",
+              " F2/F3 player  F4 god  F5 revive  F6 respawn  F7 points  F8 kick  F10 reset  Tab player's log  PgUp/PgDn log"
+              "  Up/Down history  Esc clear  'quit' stops the server",
               cols);
     attroff(A_REVERSE);
 
@@ -367,7 +407,8 @@ const char *ServerTui_Frame(const ServerTuiStatus &status)
         std::lock_guard<std::mutex> lock(s_logMutex);
         logChanged = s_logChanged;
     }
-    if (s_dirty || logChanged || now - s_lastDraw >= std::chrono::seconds(1))
+    // the client log view has no change signal: redraw it at the 10 Hz cap
+    if (s_dirty || logChanged || s_clientView || now - s_lastDraw >= std::chrono::seconds(1))
     {
         if (now - s_lastDraw >= std::chrono::milliseconds(100) || s_dirty)
         {
