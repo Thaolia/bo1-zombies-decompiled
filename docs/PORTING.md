@@ -130,7 +130,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | in progress: the devkitA64 + libnx build compiles, links and packages `BO1Zombies.nro` (null backend), reusing the posix SDL2/Win32-shim layer with a thin `src/platform/switch/` and `#if defined(__SWITCH__)` deltas. **Boots on Ryujinx 1.1.1375**: the libnx entry runs (applet type = Application), romfs mounts, the engine's `WinMain` runs ~30 s with no crash (SD `boot.log`). Prereqs fixed: the libgcc GCS/SME NOP patch (`switch/tools/patch_ryujinx_mrs.py`, POST_BUILD) for Ryujinx's JIT, and a one-file embedded romfs (`switch/romfs`) so `romfsInit` does not crash the emulator. With the converted zones staged on the SD, the engine **loads the pre-gfx code zones** (`en_code_pre_gfx_mp`, `code_pre_gfx_mp`) — the ffconv AArch64 path proven end to end — and runs `FS_Startup`. Four fixes got there: the GCS/SME NOP patch and embedded romfs (boot), `chdir` to the install dir (language + `fs_basepath`), a `pread` EOF fix for libnx's past-EOF `lseek` (zone read-ahead), and reading the win64 IWffs ABI tag (layout-identical, `--check-switch`). With the iwds staged and a `device:`-prefix fix in `Bo1_PosixPath`, it then boots through FS_Startup (103814 iwd files), R_Init, the frontend, and `+devmap zombie_theater` into a **map load** (common_zombie 78 MB, the Kino zones) — before crashing part way through `en_zombie_theater` on a guest invalid memory access (a 64-bit bug in the zombie map asset stream, to debug on the posix x86-64 build). Then GL (EGL on nwindow) and audio |
 | 6 | Stabilisation, all base maps, docs | todo |
 | 7 | (optional) deko3d backend behind the same `gfx_backend.h` | in progress: opt-in on the Switch build (`gfx.cfg` = deko3d, `shaders.dksh` from uam); renders the main menu's 3D scene and Kino in game with its HUD on Ryujinx (2026-10-26, see the deko3d notes below); not yet run on the console in game |
-| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; see "Dedicated server (phase 8)" |
+| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part deferred until `_new` and `_server` are merged into `switch`; see "Dedicated server (phase 8)" |
 
 ## Verification per phase
 - **0**: the `win32-msvc` preset still builds and `Play.bat` reaches the zombies menu and plays Kino der Toten.
@@ -1691,3 +1691,22 @@ game overs) had none. To compare against a listen-server run before blaming the 
   buffered); stdout keeps the lines. The curses console (step 3) will take the server's output.
 - Rule kept from the run: before each rebuild, stop the test servers and clients, Linux ones by their executable
   (`.claude/rules/server-test-processes.md`): three stale Linux servers once kept port 29070.
+
+**Step 2, PC clients (2026-10-27).** The Switch part (sockets, `nifm`, the shared `launch.cfg` reader) waits until the
+`_new` and `_server` worktrees are both merged into `switch` (user's order).
+
+- `launch.cfg` next to the program (`win_main.cpp`, `Sys_PrependLaunchCfg`, not on the Switch, which reads its own
+  from the same folder in `switch_main.cpp`): its text, newlines read as blanks, goes before the command line, so the
+  command line's values win. Read before the `bo1_*` flags, so it may hold them.
+- `cl_autoConnect <address>` (`cl_main_mp.cpp`, `CL_AutoConnectFrame`): a `+connect` on the command line is undone by
+  the menu's own load (phase 0), so the client connects once the menu's level is up, and again whenever it is back at
+  the menu or disconnected, after 2 s, then 5 s doubled per failed attempt up to 60 s. A short outage needs nothing:
+  the netchan rides it until `cl_timeout`.
+- `cl_allowWanConnect` (`cl_main_pc_mp.cpp`): `CL_Connect_f` now refuses a non-LAN address first, with a message, before
+  it tears anything down. Without that, step 0's kill of the menu's local server ran even for a refused address and left
+  the client disconnected with no menu level.
+- Verified (win64 server and client, `192.168.1.194`): with only `launch.cfg` (`developer 1`, `cl_autoConnect`,
+  `cl_timeout 15`, three lines) the client joins within 40 s of the server being up; the server killed in game, the
+  client times out (`EXE_ERR_SERVER_TIMEOUT`), retries, and is active again 35 s after the server restarted, without
+  any input; it keeps retrying at growing intervals once the server is gone, and quits normally (exit 0). `connect
+  203.0.113.1` is refused with the message and the menu stays up; with `cl_allowWanConnect 1` it goes `CA_CONNECTING`.

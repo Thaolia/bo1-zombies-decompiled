@@ -111,6 +111,8 @@ const dvar_t *cl_timeout;
 const dvar_t *cl_connectTimeout;
 const dvar_t *cl_connectionAttempts;
 const dvar_t *cl_shownet;
+const dvar_t *cl_autoConnect;
+const dvar_t *cl_allowWanConnect;
 const dvar_t *cl_shownuments;
 const dvar_t *cl_showServerCommands;
 const dvar_t *cl_showSend;
@@ -1974,6 +1976,46 @@ void __cdecl CL_InitDownloads(int localClientNum)
     CL_DownloadsComplete(localClientNum);
 }
 
+// zombies: cl_autoConnect <address> (docs/PORTING.md, phase 8). A connect on the command line is undone by the menu's
+// own load (Com_LoadFrontEnd), so the client connects once the menu's level is up, and again whenever it is back at the
+// menu or disconnected (server restarted, timeout, kick): after 2 s the first time, then 5 s, doubled after each attempt
+// that did not reach the game, up to 60 s. Clearing the dvar stops it.
+static void CL_AutoConnectFrame(int localClientNum)
+{
+    static bool menuSeen;
+    static bool attempted;
+    static int nextTime;
+    static int delay = 5000;
+
+    if ( !cl_autoConnect || !cl_autoConnect->current.string[0] )
+        return;
+    const connstate_t state = CL_GetLocalClientConnectionState(localClientNum);
+    const bool atMenu = com_sv_running->current.enabled && Com_IsSPFrontEndRunning() && state == CA_ACTIVE;
+    if ( atMenu )
+        menuSeen = true;
+    if ( state == CA_ACTIVE && !atMenu )
+    {
+        delay = 5000;
+        nextTime = 0;
+        return;
+    }
+    if ( !menuSeen || !(atMenu || state == CA_DISCONNECTED) )
+        return;
+    if ( !nextTime )
+    {
+        nextTime = cls.realtime + (attempted ? delay : 2000);
+        return;
+    }
+    if ( cls.realtime < nextTime )
+        return;
+    Com_Printf(14, "cl_autoConnect: connecting to %s\n", cl_autoConnect->current.string);
+    Cbuf_AddText(localClientNum, va("connect %s\n", cl_autoConnect->current.string));
+    if ( attempted && delay < 60000 )
+        delay = delay * 2 < 60000 ? delay * 2 : 60000;
+    attempted = true;
+    nextTime = 0;
+}
+
 void __cdecl CL_CheckForResend(int localClientNum)
 {
     __int64 Uid; // rax
@@ -3220,6 +3262,7 @@ void __cdecl CL_Frame(int localClientNum, int msec)
         CL_UpdateColor();
         CL_CheckUserinfo(localClientNum);
         CL_CheckForResend(localClientNum);
+        CL_AutoConnectFrame(localClientNum);
         CL_CheckTimeout(localClientNum);
         if ( DL_InProgress() )
             CL_WWWDownload();
@@ -4050,6 +4093,10 @@ void __cdecl CL_InitOnceForAllClients()
                                                         0,
                                                         "Maximum number of connection attempts before aborting");
     cl_shownet = _Dvar_RegisterInt("cl_shownet", 0, -2, 4, 0, "Display network debugging information");
+    cl_autoConnect = _Dvar_RegisterString("cl_autoConnect", "", 0,
+        "zombies: server address to join once the main menu is up, and again whenever the client is back at the menu");
+    cl_allowWanConnect = _Dvar_RegisterBool("cl_allowWanConnect", 0, 0,
+        "zombies: let connect reach addresses beyond the LAN");
     cl_shownuments = _Dvar_RegisterBool("cl_shownuments", 0, 0, "Show the number of entities");
     cl_showServerCommands = _Dvar_RegisterBool(
                                                         "cl_showServerCommands",

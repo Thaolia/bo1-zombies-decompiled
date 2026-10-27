@@ -37,9 +37,24 @@ Load the map either from `server.cfg` or from the command line, not from both (e
   says `Opening IP socket: ...`) on every interface. `+set net_ip <address>` binds one interface only.
 - Open that UDP port in the firewall of the server's machine. On Windows the first run does not show a firewall
   prompt (the server never opens a window): add an inbound UDP rule for the port or the program yourself.
-- Clients connect with `connect <server address>:<port>` (from the console, or from `launch.cfg` once step 2 is
-  done). Only LAN addresses are accepted by the client for now (10/8, 172.16/12, 192.168/16, 169.254/16 and the
-  client's own /24); connecting beyond the LAN comes with step 2.
+- Clients connect with `connect <server address>:<port>` from the console, or by themselves with `cl_autoConnect`
+  (below). A client accepts LAN addresses only (10/8, 172.16/12, 192.168/16, 169.254/16 and its own /24) unless
+  `cl_allowWanConnect 1` is set; a refused address prints `connect: ... is not a LAN address` and changes nothing.
+
+## Joining from a client (PC)
+
+Put a `launch.cfg` next to the client program (`BO1Zombies.exe`, or the Linux `BO1Zombies`). Its text is added before
+the command line (whose values win), several lines read as one, with no comments:
+
+    +set cl_autoConnect 192.168.1.20:3074
+
+Add `+set cl_allowWanConnect 1` for a server beyond the LAN.
+
+`cl_autoConnect <address>` joins that server once the main menu is up (a `+connect` on the command line would be
+undone by the menu's own load), and again whenever the client is back at the menu or disconnected: server restarted,
+timeout (`cl_timeout`, 40 s by default), kick. It waits 2 s the first time, then 5 s, doubled after each attempt that
+did not reach the game, up to 60 s. `set cl_autoConnect ""` in the console stops it. The Switch reads
+`sdmc:/switch/bo1zm/launch.cfg` already; joining a server from the Switch comes later (its network start-up is not done).
 
 ## Checking a server
 

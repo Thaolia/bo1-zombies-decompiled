@@ -358,6 +358,15 @@ void __cdecl CL_Connect_f()
 
     if ( Cmd_Argc() == 2 )
     {
+        // zombies: refuse an address beyond the LAN before anything is torn down (the menu's local server included);
+        // cl_allowWanConnect lifts it. An address that does not resolve still goes through the "Bad server address" path.
+        netadr_t target;
+        if ( NET_StringToAdr(Cmd_Argv(1), &target) && !NET_IsLocalAddress(target) && !Sys_IsLANAddress(target)
+            && !cl_allowWanConnect->current.enabled )
+        {
+            Com_Printf(14, "connect: %s is not a LAN address; set cl_allowWanConnect 1 to join it\n", Cmd_Argv(1));
+            return;
+        }
         SND_StopSounds(SND_STOP_ALL);
         CL_AllocatePerLocalClientMemory();
         clUI = CL_GetLocalClientUIGlobals(0);
@@ -393,7 +402,7 @@ void __cdecl CL_Connect_f()
                 v1);
             if ( NET_IsLocalAddress(clc->serverAddress) || CL_CDKeyValidate(clc->serverAddress) ) // ADD CDKey for steam
             {
-                if ( Sys_IsLANAddress(clc->serverAddress) 
+                if ( Sys_IsLANAddress(clc->serverAddress) || cl_allowWanConnect->current.enabled // zombies: phase 8
 #ifdef BO1_DW
                     || dwGetLogOnStatus(0) == 4 
 #endif

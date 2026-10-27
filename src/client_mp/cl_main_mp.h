@@ -1224,6 +1224,8 @@ extern const dvar_t *cl_timeout;
 extern const dvar_t *cl_connectTimeout;
 extern const dvar_t *cl_connectionAttempts;
 extern const dvar_t *cl_shownet;
+extern const dvar_t *cl_autoConnect; // zombies: phase 8, server to join once the menu is up
+extern const dvar_t *cl_allowWanConnect; // zombies: phase 8, connect beyond the LAN
 extern const dvar_t *cl_shownuments;
 extern const dvar_t *cl_showServerCommands;
 extern const dvar_t *cl_showSend;

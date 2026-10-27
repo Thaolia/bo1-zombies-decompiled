@@ -2359,11 +2359,54 @@ int __cdecl PrivateUnhandledExceptionFilter(_EXCEPTION_POINTERS *ExceptionInfo)
 
 char sys_cmdline[1024];
 char g_open_automate_benchmark[260];
+#if !defined(__SWITCH__)
+// zombies: launch.cfg next to the program (docs/SERVER.md, phase 8): its text, newlines read as blanks, goes before the
+// command line, whose values then win. A missing or empty file changes nothing. The Switch reads its own launch.cfg in
+// switch_main.cpp (the program's folder there is the same one).
+static char s_launchCommandLine[1024];
+
+static char *Sys_PrependLaunchCfg(char *cmdLine)
+{
+    char exePath[MAX_PATH];
+    char cfgPath[MAX_PATH + 16];
+    DWORD len = GetModuleFileNameA(NULL, exePath, sizeof(exePath));
+    char *slash = len && len < sizeof(exePath) ? strrchr(exePath, '\\') : NULL;
+    if (!slash)
+        return cmdLine;
+    *slash = 0;
+    _snprintf(cfgPath, sizeof(cfgPath) - 1, "%s\\launch.cfg", exePath);
+    cfgPath[sizeof(cfgPath) - 1] = 0;
+    HANDLE f = CreateFileA(cfgPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE)
+        return cmdLine;
+    DWORD n = 0;
+    if (!ReadFile(f, s_launchCommandLine, sizeof(s_launchCommandLine) - 2, &n, NULL)) // room for the blank and the 0
+        n = 0;
+    CloseHandle(f);
+    for (DWORD i = 0; i < n; ++i)
+    {
+        if (s_launchCommandLine[i] == '\r' || s_launchCommandLine[i] == '\n' || s_launchCommandLine[i] == '\t')
+            s_launchCommandLine[i] = ' ';
+    }
+    while (n && s_launchCommandLine[n - 1] == ' ')
+        --n;
+    if (!n)
+        return cmdLine;
+    s_launchCommandLine[n++] = ' ';
+    s_launchCommandLine[n] = 0;
+    I_strncat(s_launchCommandLine, sizeof(s_launchCommandLine), cmdLine);
+    return s_launchCommandLine;
+}
+#endif
+
 int __stdcall WinMain(HINSTANCE__ *hInstance, HINSTANCE__ *hPrevInstance, char *lpCmdLine, int nCmdShow)
 {
     char *v5; // eax
     //jpeg_decompress_struct *SCRIPT_DEBUGGER_SMOKE_TEST_SUCCESS_EXIT_CODE; // [esp+0h] [ebp-4h]
 
+#if !defined(__SWITCH__)
+    lpCmdLine = Sys_PrependLaunchCfg(lpCmdLine);
+#endif
     // zombies: decide headless first, before anything can open a window
     s_server = Sys_CmdlineIntValue(lpCmdLine, "bo1_server") != 0;
     s_headless = s_server || Sys_CmdlineIntValue(lpCmdLine, "bo1_headless") != 0;
