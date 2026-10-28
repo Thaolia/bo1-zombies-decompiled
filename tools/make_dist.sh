@@ -257,16 +257,25 @@ write_version() { # <dest> <platform> [extra line]
     } > "$1/VERSION.txt"
 }
 
+# Visual Studio's and System32's DLLs are read-only, and cp keeps that: the next run could not overwrite the copy.
+copy_writable() { # <file> <dest dir>
+    local to
+    to="$2/$(basename "$1")"
+    if [ -e "$to" ]; then chmod u+w "$to"; fi
+    cp "$1" "$to"
+    chmod u+w "$to"
+}
+
 copy_windows_runtimes() { # <dest>: what a Windows without Visual C++ or the DirectX runtime lacks, 64-bit
     local sys=/mnt/c/Windows/System32 crt f missing=()
     crt="$(ls -d /mnt/c/Program\ Files*/Microsoft\ Visual\ Studio/*/*/VC/Redist/MSVC/*/x64/Microsoft.VC14*.CRT 2>/dev/null | sort | tail -1 || true)"
     for f in msvcp140.dll vcruntime140.dll vcruntime140_1.dll; do
-        if [ -n "$crt" ] && [ -f "$crt/$f" ]; then cp "$crt/$f" "$1/"
-        elif [ -f "$sys/$f" ]; then cp "$sys/$f" "$1/"
+        if [ -n "$crt" ] && [ -f "$crt/$f" ]; then copy_writable "$crt/$f" "$1"
+        elif [ -f "$sys/$f" ]; then copy_writable "$sys/$f" "$1"
         else missing+=("$f"); fi
     done
     for f in d3dx9_43.dll xinput1_3.dll; do
-        if [ -f "$sys/$f" ]; then cp "$sys/$f" "$1/"; else missing+=("$f"); fi
+        if [ -f "$sys/$f" ]; then copy_writable "$sys/$f" "$1"; else missing+=("$f"); fi
     done
     [ ${#missing[@]} -eq 0 ] || echo "not found, the player needs the runtimes the README names: ${missing[*]}"
 }
