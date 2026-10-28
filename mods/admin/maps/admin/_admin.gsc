@@ -8,16 +8,21 @@
 // starting with "admin: ", which the server also prints to its console.
 //
 // Dvars read here: zm_startpoints (points each player starts with, 0 = the game's own), zm_startperks (perks each
-// player starts with: names or "all") and zm_debug_revive (1: while a player is down, log why each other player can
-// or cannot revive them).
+// player starts with: names or "all"), zm_jip_mode (a player who joins a game in progress: "immediate" plays at once,
+// "nextround" spectates until the round ends) and zm_debug_revive (1: while a player is down, log why each other
+// player can or cannot revive them).
 //
 // A dedicated server's players come in one by one, while the retail game sets up its players once, when
 // "all_players_connected" is set (maps\_load_common): as soon as the players connected at that time are in. A player
-// who joins later misses that set-up; admin_late_join_* fills in what the game reads later and would fail on.
+// who joins later misses that set-up; admin_late_join_vars and admin_join_in_progress fill in what the game reads
+// later and would fail on.
 
 main_end()
 {
 	level.admin_round_active = false;
+	level.admin_intro_done = false;
+	level thread admin_install_spawn_client();
+	level thread admin_intro_watch();
 	level thread admin_round_tracker();
 	level thread admin_connect_watch();
 	level thread admin_late_join_vars();
@@ -46,14 +51,135 @@ admin_late_join_vars()
 }
 
 
-// maps\_zombiemode::coop_player_spawn_placement gives a start point (the struct spectator_respawn spawns a dead player
-// at) to the players in at "all_players_connected" only; without one the end-of-round respawn stops with a script error
-admin_late_join_start_point()
+//-------------------------------------------------------------------------------
+// joining a game in progress (zm_jip_mode)
+//-------------------------------------------------------------------------------
+
+// maps\_callbackglobal::Callback_PlayerConnect runs level.spawnClient once per connection, after "connected"
+admin_install_spawn_client()
+{
+	while ( !IsDefined( level.spawnClient ) )
+	{
+		wait( 0.05 );
+	}
+	level.admin_retail_spawnClient = level.spawnClient;
+	level.spawnClient = ::admin_spawn_client;
+}
+
+
+// the game set up the players connected at "all_players_connected" (coop_player_spawn_placement gave each a start
+// point): a player without one joined after that
+admin_spawn_client()
+{
+	if ( flag( "all_players_connected" ) && !IsDefined( self.spectator_respawn ) )
+	{
+		self admin_join_in_progress();
+		return;
+	}
+	self [[level.admin_retail_spawnClient]]();
+}
+
+
+admin_jip_mode()
+{
+	mode = ToLower( GetDvar( #"zm_jip_mode" ) );
+	if ( mode != "nextround" && mode != "immediate" )
+	{
+		if ( mode != "" )
+		{
+			admin_log( "zm_jip_mode '" + mode + "' is neither immediate nor nextround: immediate" );
+		}
+		mode = "immediate";
+	}
+	return mode;
+}
+
+
+admin_join_in_progress()
 {
 	self endon( "disconnect" );
-	flag_wait( "all_players_connected" );
-	wait( 1 );
+	// the struct spectator_respawn spawns a player at; without one the end-of-round respawn stops with a script error
 	self admin_ensure_start_point();
+	if ( !IsDefined( self.spectator_respawn ) )
+	{
+		admin_log( self admin_who() + " joined in progress, but the map has no player start point: the game spawns them" );
+		self [[level.admin_retail_spawnClient]]();
+		return;
+	}
+	self thread admin_jip_unfreeze();
+	self thread admin_jip_points();
+	if ( admin_jip_mode() == "nextround" )
+	{
+		// as a player who bled out (maps\_zombiemode::zombify_player): the game respawns them when the round ends
+		admin_log( self admin_who() + " joined in progress: spectates until the round ends (zm_jip_mode nextround)" );
+		self thread maps\_zombiemode::spawnSpectator();
+		return;
+	}
+	// the retail respawn (from round 2 on the game's own level.custom_spawnPlayer): at a free spawn near the other
+	// players, where maps\_callbackglobal::spawnPlayer would leave a late player where their entity stands
+	if ( !IsDefined( level.custom_spawnPlayer ) )
+	{
+		level.custom_spawnPlayer = maps\_zombiemode::spectator_respawn;
+	}
+	admin_log( self admin_who() + " joined in progress: plays now (zm_jip_mode immediate)" );
+	self [[level.spawnPlayer]]();
+}
+
+
+// maps\_zombiemode::onPlayerSpawned freezes a player at their first spawn, and the intro's fade_in frees the players
+// in at that time: one who spawns after it would stay frozen
+admin_intro_watch()
+{
+	level waittill_any( "fade_in_complete", "start_of_round" );
+	level.admin_intro_done = true;
+}
+
+
+admin_jip_unfreeze()
+{
+	self endon( "disconnect" );
+	self waittill( "spawned_player" );
+	while ( !is_true( level.admin_intro_done ) )
+	{
+		wait( 0.05 );
+	}
+	// after onPlayerSpawned's freeze, which the same notify runs
+	wait( 0.05 );
+	self FreezeControls( false );
+	admin_log( self admin_who() + " spawned at " + self.origin + ", controls free" );
+}
+
+
+// maps\_zombiemode::difficulty_init gives the players in at the start the start points for their count; a player who
+// joins later has 0. Give them the same, and at least the 1500 the game's own respawn gives after round 6
+// (spectators_respawn). zm_startpoints, when set, replaces both (admin_start_kit).
+admin_jip_points()
+{
+	self endon( "disconnect" );
+	self waittill( "spawned_player" );
+	// after spectator_respawn's death penalty, which follows its notify
+	wait( 0.05 );
+	if ( GetDvarInt( #"zm_startpoints" ) > 0 )
+	{
+		return;
+	}
+	points = level.zombie_vars["zombie_score_start_" + get_players().size + "p"];
+	if ( !IsDefined( points ) )
+	{
+		return;
+	}
+	if ( level.round_number > 6 && points < 1500 )
+	{
+		points = 1500;
+	}
+	if ( self.score < points )
+	{
+		self.score = points;
+		self.score_total = points;
+		self.old_score = points;
+		self maps\_zombiemode_score::set_player_score_hud();
+	}
+	admin_log( "points for " + self admin_who() + " (joined in progress): " + self.score );
 }
 
 
@@ -150,13 +276,43 @@ admin_player()
 	}
 	self.admin_listening = true;
 	self thread admin_start_kit();
-	self thread admin_late_join_start_point();
+	self thread admin_life_log();
 	self thread admin_revive_debug_watch();
 	for ( ;; )
 	{
 		self waittill( "zm_admin", cmd, arg );
 		// a thread per command, so this loop is back in its waittill before the engine's next notify
 		self thread admin_run( cmd, arg );
+	}
+}
+
+
+// downs, bleed-outs and revives in the server log: a player's state column changes without saying why otherwise
+admin_life_log()
+{
+	self endon( "disconnect" );
+	for ( ;; )
+	{
+		event = self waittill_any_return( "player_downed", "bled_out", "player_revived" );
+		switch ( event )
+		{
+		case "player_downed":
+			// maps\_laststand::refire_player_downed notifies it again a second later for a player with perks
+			if ( !is_true( self.admin_down_logged ) )
+			{
+				self.admin_down_logged = true;
+				admin_log( self admin_who() + " is down" );
+			}
+			break;
+		case "bled_out":
+			self.admin_down_logged = false;
+			admin_log( self admin_who() + " bled out" );
+			break;
+		case "player_revived":
+			self.admin_down_logged = false;
+			admin_log( self admin_who() + " was revived" );
+			break;
+		}
 	}
 }
 

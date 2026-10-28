@@ -24,19 +24,33 @@ The script side of the `zm_*` console commands of the dedicated zombies server (
 - Each reply is a `LogPrint` line starting with `admin: `; the server also prints those to its console (and so to its
   curses console).
 
-## Players who join later
+## Players who join later (join in progress)
 
 The game sets its players up when `all_players_connected` is set (`maps\_load_common`), which on a dedicated server is
-as soon as the players connected at that time are in. For a later player, `_admin.gsc` gives a start point
-(`spectator_respawn`, the struct the end-of-round respawn spawns at) and defines `zombie_score_start_<n>p` /
-`zombie_team_score_start_<n>p` for 1 to 4 players (the power-up drop reads them for the current count). A round
-that started with one player and ends with more gets the retail `maps\_zombiemode::spectators_respawn`, which
-`round_think` skips then.
+as soon as the players connected at that time are in. `_admin.gsc` replaces `level.spawnClient`
+(`maps\_callbackglobal::Callback_PlayerConnect` runs it once per connection). It keeps the retail one for the players
+the game set up, that is those with a start point. A player without one is joining in progress, and mods/admin:
+
+- gives them a start point (`spectator_respawn`, the struct the end-of-round respawn spawns at);
+- spawns them by `zm_jip_mode`:
+  - `immediate`: through the retail `maps\_zombiemode::spectator_respawn`, near the team. The game's own
+    `spawnPlayer` would leave them where they connected;
+  - `nextround`: as a spectator through `maps\_zombiemode::spawnSpectator`, as after a bleed-out, until the
+    end-of-round respawn;
+- frees their controls once the intro is over. `onPlayerSpawned` freezes every player at their first spawn, and only
+  the intro's `fade_in` frees them;
+- gives them the start points of the current player count, at least 1500 after round 6 as `spectators_respawn` does.
+
+It also defines `zombie_score_start_<n>p` / `zombie_team_score_start_<n>p` for 1 to 4 players: the power-up drop reads
+them for the current count. A round that started with one player and ends with more gets the retail
+`maps\_zombiemode::spectators_respawn`, which `round_think` skips then. Each down, bleed-out and revive is logged.
 
 ## Dvars
 
 - `zm_startpoints <n>`: every player's points once they first spawn on a map (0, the default, keeps the game's own).
 - `zm_startperks "<perks>"`: perks every player gets at that time, e.g. `"jugg revive"` or `"all"`.
+- `zm_jip_mode immediate|nextround`: a player who joins a game in progress plays at once (the default) or spectates
+  until the round ends.
 - `zm_debug_revive 1`: while a player is down, logs each test of `maps\_laststand::can_revive` / `is_reviving` for
   every other player whenever the result changes.
 

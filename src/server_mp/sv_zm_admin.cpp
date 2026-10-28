@@ -346,8 +346,9 @@ void ZmMods_f()
 
 void ZmAdmin_f()
 {
-    Com_Printf(0, "zm_admin: start points %d, start perks \"%s\", fs_mods \"%s\"\n", Dvar_GetInt("zm_startpoints"),
-               Dvar_GetString("zm_startperks"), Dvar_GetString("fs_mods"));
+    Com_Printf(0, "zm_admin: start points %d, start perks \"%s\", join in progress %s, fs_mods \"%s\"\n",
+               Dvar_GetInt("zm_startpoints"), Dvar_GetString("zm_startperks"), Dvar_GetString("zm_jip_mode"),
+               Dvar_GetString("fs_mods"));
     if ( !com_sv_running->current.enabled )
         return;
     for ( int i = 0; i < ZmMaxClients(); ++i )
@@ -357,10 +358,11 @@ void ZmAdmin_f()
             continue;
         const unsigned int on = s_state[i].on;
         const gentity_s *ent = &g_entities[i];
-        Com_Printf(0, "  %2d %-24s %-10s health %4d%s%s%s%s\n", i, cl->name,
+        // FreezeControls is client flag 4 (PlayerCmd_FreezeControls)
+        Com_Printf(0, "  %2d %-24s %-10s health %4d%s%s%s%s%s\n", i, cl->name,
                    cl->header.state == CS_ACTIVE ? SV_ZmAdmin_GameState(i) : "loading", ent->client ? ent->health : 0,
                    on & ZM_GOD ? " god" : "", on & ZM_DEMIGOD ? " demigod" : "", on & ZM_NOTARGET ? " notarget" : "",
-                   on & ZM_NOCLIP ? " noclip" : "");
+                   on & ZM_NOCLIP ? " noclip" : "", ent->client && (ent->client->flags & 4) ? " frozen" : "");
     }
 }
 
@@ -424,6 +426,9 @@ void SV_ZmAdmin_AddCommands()
                       "zm_admin: points every player starts with (mods/admin); 0 keeps the game's own");
     _Dvar_RegisterString("zm_startperks", "", 0,
                          "zm_admin: perks every player starts with (mods/admin), e.g. \"jugg revive\" or \"all\"");
+    _Dvar_RegisterString("zm_jip_mode", "immediate", 0,
+                         "zm_admin: a player who joins a game in progress (mods/admin): \"immediate\" plays at once, "
+                         "\"nextround\" spectates until the round ends");
     // as the operator commands (SV_AddOperatorCommands): typed on the main thread, run on the server thread
     for ( ZmCommandDef &c : s_commands )
     {

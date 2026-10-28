@@ -93,7 +93,9 @@ Commandes admin, tapées dans la console du serveur (ou en rcon avec `tools/serv
   `zm_respawn <joueur>` (fait revenir un spectateur tout de suite) ;
 - `zm_round <n>`, `zm_reset` (relance la map), `zm_map <map>`, `zm_mods "<mods>"` (change `fs_mods` et relance) ;
 - `zm_admin` liste les joueurs et leur état ;
-- réglages `zm_startpoints <n>` et `zm_startperks "<perks>"` : points et perks de départ de chaque joueur.
+- réglages `zm_startpoints <n>` et `zm_startperks "<perks>"` : points et perks de départ de chaque joueur ;
+- `zm_jip_mode immediate|nextround` : un joueur qui rejoint une partie en cours joue tout de suite (par défaut, près
+  des autres joueurs, avec les points de départ), ou reste spectateur jusqu'à la fin du round.
 - `set zm_debug_revive 1` : quand un joueur est à terre, le log dit pour chaque autre joueur quelle condition du revive
   passe ou bloque (distance, trigger, orientation, visée, touche utiliser).
 

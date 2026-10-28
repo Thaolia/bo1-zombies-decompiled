@@ -202,8 +202,8 @@ Typed in the server's console, run from `server.cfg`, or sent over rcon once the
 | `zm_mods "<mods>"` | sets `fs_mods` (quoted, `""` for none) and loads the current map again with it; alone, prints it |
 
 Settings, in `server.cfg` or on the command line: `zm_startpoints <n>` (every player's points once they first spawn on
-a map; 0 keeps the game's own), `zm_startperks "<perks>"` (perks every player gets then, e.g. `"jugg revive"`) and
-`zm_debug_revive 1` (while a player is down, logs `admin: revive debug: ...` lines with each test of the game's
+a map; 0 keeps the game's own), `zm_startperks "<perks>"` (perks every player gets then, e.g. `"jugg revive"`),
+`zm_jip_mode immediate|nextround` (a player who joins a game in progress, below) and `zm_debug_revive 1` (while a player is down, logs `admin: revive debug: ...` lines with each test of the game's
 revive for every other player: distance, alive, down, touching the revive trigger, facing, sight and bullet traces,
 use button, the result).
 
@@ -213,18 +213,34 @@ of a command sent with rcon goes back to the rcon client, not to the console log
 this repository's `mods/` into the server's folder, where the server reads it; started otherwise, put `mods/` there
 (`<fs_h>/mods/admin`).
 
-Players who join after the game started: the game sets its players up once, as soon as the players connected at that
-time are in (a slower client, or one that drops during a map load, comes in after that). mods/admin gives such a
-player a start point (without one the end-of-round respawn stopped with a script error in `spectator_respawn`) and
-defines the start points for every player count (without them the power-up drops stopped once a second player
-was in). Such a player spectates until the round ends unless `zm_respawn` brings them in. The game respawns
-spectators at the end of a round only when that round started with more than one player (`round_think` counts the
-players at the start of the round); mods/admin starts the same respawn when a round started with one player and
-ends with more, so a player who joined during round 1 comes back at its end.
+## Joining a game in progress
+
+The game sets its players up once, as soon as the players connected at that time are in. A player who connects after
+that is joining in progress: a slower client, one that dropped during a map load, or a friend who comes in at round
+10. `zm_jip_mode` (an engine setting, read at each join) decides what happens:
+
+- `immediate` (the default): the player plays at once. They spawn at a free spot near the other players, as the
+  game's own respawn does, with the start points of the current player count (500 on the retail table), at least
+  1500 after round 6 as the game's respawn gives, or `zm_startpoints` when set. They get the starting pistol and
+  their character by player slot, as at the start of a game. The log says `admin: 1 (Bravo) joined in progress:
+  plays now`, then `spawned at (...), controls free`.
+- `nextround`: the player spectates, as a player who bled out, until the round ends, and then comes in with the
+  others (`admin: ... spectates until the round ends`). `zm_respawn` brings them in sooner.
+
+Without mods/admin, such a player stayed frozen for good: the game freezes each player at their first spawn, and only
+its intro frees them. In round 1 they also spawned at the spot where they connected, not at a start point. From round
+2 on, the respawn stopped with a script error, because the player had no start point. mods/admin also defines the
+start points for every player count: without them the power-up drops stopped once a second player was in. A round
+that started with one player and ends with more respawns its spectators: the game skips that case (`round_think`
+counts the players at the start of the round).
+
+`zm_admin` shows `frozen` next to a player whose controls the game holds. The log has a line for each down,
+bleed-out and revive (`admin: 1 (Bravo) is down`).
 
 Known limits: a Quick Revive given while only one player is in the game takes the solo path (an extra life, the
 machine hidden), as a solo purchase would, and its retail thread then logs script errors once more players are in.
-Joining in progress is step 6.
+A player alone at the start gets a random character (the game's solo rule), and a player who joins later takes the
+character of their slot, which can be the same one.
 
 ## Client logs
 
@@ -247,4 +263,4 @@ without anyone copying files:
 
 ## Not done yet
 
-Joining a game in progress and more than 4 players: see the plan in `docs/PORTING.md`, phase 8.
+More than 4 players: see the plan in `docs/PORTING.md`, phase 8 (step 7).

@@ -132,7 +132,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | in progress: the devkitA64 + libnx build compiles, links and packages `BO1Zombies.nro` (null backend), reusing the posix SDL2/Win32-shim layer with a thin `src/platform/switch/` and `#if defined(__SWITCH__)` deltas. **Boots on Ryujinx 1.1.1375**: the libnx entry runs (applet type = Application), romfs mounts, the engine's `WinMain` runs ~30 s with no crash (SD `boot.log`). Prereqs fixed: the libgcc GCS/SME NOP patch (`switch/tools/patch_ryujinx_mrs.py`, POST_BUILD) for Ryujinx's JIT, and a one-file embedded romfs (`switch/romfs`) so `romfsInit` does not crash the emulator. With the converted zones staged on the SD, the engine **loads the pre-gfx code zones** (`en_code_pre_gfx_mp`, `code_pre_gfx_mp`) — the ffconv AArch64 path proven end to end — and runs `FS_Startup`. Four fixes got there: the GCS/SME NOP patch and embedded romfs (boot), `chdir` to the install dir (language + `fs_basepath`), a `pread` EOF fix for libnx's past-EOF `lseek` (zone read-ahead), and reading the win64 IWffs ABI tag (layout-identical, `--check-switch`). With the iwds staged and a `device:`-prefix fix in `Bo1_PosixPath`, it then boots through FS_Startup (103814 iwd files), R_Init, the frontend, and `+devmap zombie_theater` into a **map load** (common_zombie 78 MB, the Kino zones) — before crashing part way through `en_zombie_theater` on a guest invalid memory access (a 64-bit bug in the zombie map asset stream, to debug on the posix x86-64 build). Then GL (EGL on nwindow) and audio |
 | 6 | Stabilisation, all base maps, docs | todo |
 | 7 | (optional) deko3d backend behind the same `gfx_backend.h` | in progress: opt-in on the Switch build (`gfx.cfg` = deko3d, `shaders.dksh` from uam); renders the main menu's 3D scene and Kino in game with its HUD on Ryujinx (2026-10-26, see the deko3d notes below); not yet run on the console in game |
-| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part done (2026-10-27: sockets, `nifm`, the start menu's server screen; a console joined a win64 server and played; Ryujinx's BSD `RecvFrom` throws); step 3 done (2026-10-27: curses console, Linux and Windows); step 4 done on win64 (2026-10-27: `zm_*` admin commands, mods/admin); step 5 done on PC (2026-10-27: client logs on UDP port + 1, `logs/`, Tab in the TUI), its Switch side built, not yet run; see "Dedicated server (phase 8)" |
+| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part done (2026-10-27: sockets, `nifm`, the start menu's server screen; a console joined a win64 server and played; Ryujinx's BSD `RecvFrom` throws); step 3 done (2026-10-27: curses console, Linux and Windows); step 4 done on win64 (2026-10-27: `zm_*` admin commands, mods/admin); step 5 done on PC (2026-10-27: client logs on UDP port + 1, `logs/`, Tab in the TUI), its Switch side built, not yet run; step 6 done on win64 (2026-10-28: join in progress, `zm_jip_mode`); see "Dedicated server (phase 8)" |
 
 ## Verification per phase
 - **0**: the `win32-msvc` preset still builds and `Play.bat` reaches the zombies menu and plays Kino der Toten.
@@ -2040,3 +2040,38 @@ with `cl_autoConnect` and `name`. Usage in `docs/SERVER.md` ("Start scripts", "J
   `client log: Alpha, logs/Alpha_..., lost 0 packets` and the client's lines. `switch` builds (the NRO holds the
   sender's message); not yet run on a console or Ryujinx. Packet loss over a real network (`tc netem`) not tried.
   `tools/syntax_check.py`: 1300 files, 0 errors with `mingw32-gcc` and `mingw32-clang`.
+
+**Step 6, join in progress (2026-10-28).** Operator's view in `docs/SERVER.md` ("Joining a game in progress").
+
+- What the retail scripts do with a player who connects after `all_players_connected` (read in the extracted
+  `_callbackglobal.gsc`, `_zombiemode.gsc`, `_zombiemode_load.gsc`): `Callback_PlayerConnect` runs `spawnClient`, then
+  `spawnPlayer`. In round 1 that spawns them where their entity stands, not at a start point. From round 2 on it goes
+  through the game's own `level.custom_spawnPlayer` (`spectator_respawn`), which reads a start point the late player
+  does not have. `maps\_zombiemode::onPlayerSpawned` freezes every player at their first spawn, and only the intro's
+  `fade_in` frees them, so a player who spawns after the intro stays frozen for good. Measured with `zm_admin`, which
+  now prints `frozen` (client flag 4, `PlayerCmd_FreezeControls`): `1 Bravo playing ... frozen`. The earlier
+  SERVER.md line "such a player spectates until the round ends" was wrong: a stationary test player was killed and
+  then spectated. The weapons and the character model come from `_zombiemode_load`'s `onPlayerSpawned` at every
+  spawn, by entity number, so a late player gets them without help.
+- mods/admin replaces `level.spawnClient`. It keeps the retail one for the players the game set up, that is those
+  with a start point. A player without one is joining in progress:
+  - mods/admin first gives them a start point;
+  - with `zm_jip_mode immediate` (the default, an engine dvar read at each join), they spawn through
+    `spectator_respawn`, at a free spawn near the other players;
+  - with `zm_jip_mode nextround`, they become a spectator through `maps\_zombiemode::spawnSpectator`, as a player who
+    bled out. The game, or the round tracker of step 4, then respawns them when the round ends.
+  - After the first spawn, mods/admin waits for the intro to be over (`fade_in_complete`, or `start_of_round`), then
+    frees the controls.
+  - It gives the start points of the current player count (`zombie_score_start_<n>p`, as `difficulty_init`), at
+    least 1500 after round 6, as the game's own respawn does. `zm_startpoints` overrides them.
+- mods/admin also logs each down, bleed-out and revive (`admin: 1 (Bravo) is down`), once per down:
+  `refire_player_downed` sends the notify a second time to a player who has perks.
+- Verified (win64 server and three win64 headless clients, Kino, god on each so that zombies do not kill a client
+  that stands still):
+  - Alpha starts the game.
+  - Bravo joins in round 1 and is `playing` with no `frozen`, `spawned at (-38, -1241, 94)` (next to Alpha), with
+    500 points.
+  - After `set zm_jip_mode nextround`, Charlie joins and is a `spectator`.
+  - `zm_round 3` ends the round, and mods/admin logs "round 2 started with one player: respawning the spectators".
+    Charlie is then `playing` near the others with 500 points, and round 3 starts with 3 players.
+  - Control run, with only the `FreezeControls( false )` line commented out: `1 Bravo playing health 100 god frozen`.
