@@ -16,11 +16,24 @@
 // "all_players_connected" is set (maps\_load_common): as soon as the players connected at that time are in. A player
 // who joins later misses that set-up; admin_late_join_vars and admin_join_in_progress fill in what the game reads
 // later and would fail on.
+//
+// The game has 4 characters, 4 start points and start points for 1 to 4 players; the server can take more players
+// (sv_maxclients). admin_assign_character, admin_player_spawn_placement, admin_late_join_vars and
+// admin_pad_coop_difficulty give the 5th player on what the game gives the first 4.
+
+main_start()
+{
+	// maps\_zombiemode::init_function_overrides sets the default only when the map has not set its own
+	level.admin_retail_Player_Spawn_func = level.Player_Spawn_func;
+	level.Player_Spawn_func = ::admin_player_spawn_placement;
+}
+
 
 main_end()
 {
 	level.admin_round_active = false;
 	level.admin_intro_done = false;
+	admin_pad_coop_difficulty();
 	level thread admin_install_spawn_client();
 	level thread admin_intro_watch();
 	level thread admin_round_tracker();
@@ -33,10 +46,13 @@ main_end()
 // maps\_zombiemode::difficulty_init sets the start points for the player count at that time only, and
 // maps\_zombiemode_powerups reads them for the current count ("zombie_score_start_" + players.size + "p"): with one
 // more player that var is undefined and the power-up drop thread dies. Set every count the same way (difficulty 1,
-// table column 2).
+// table column 2). mp/zombiemode.csv has rows for 1 to 4 players only: past 4, set_zombie_var falls back to its
+// default (3000) and difficulty_init gives everyone 3000. Past 4, take the 4-player values.
 admin_late_join_vars()
 {
 	flag_wait( "all_players_connected" );
+	// after post_all_players_connected's difficulty_init, which the same flag runs
+	waittillframeend;
 	for ( n = 1; n <= 4; n++ )
 	{
 		if ( !IsDefined( level.zombie_vars["zombie_score_start_" + n + "p"] ) )
@@ -48,6 +64,195 @@ admin_late_join_vars()
 			maps\_zombiemode_utility::set_zombie_var( "zombie_team_score_start_" + n + "p", 2000, false, 2 );
 		}
 	}
+	started = get_players().size;
+	given = level.zombie_vars["zombie_score_start_" + started + "p"];
+	for ( n = 5; n <= admin_max_players(); n++ )
+	{
+		level.zombie_vars["zombie_score_start_" + n + "p"] = level.zombie_vars["zombie_score_start_4p"];
+		level.zombie_vars["zombie_team_score_start_" + n + "p"] = level.zombie_vars["zombie_team_score_start_4p"];
+	}
+	if ( started <= 4 )
+	{
+		return;
+	}
+	points = level.zombie_vars["zombie_score_start_4p"];
+	players = get_players();
+	for ( i = 0; i < players.size; i++ )
+	{
+		if ( IsDefined( given ) && players[i].score == given && players[i].score_total == given )
+		{
+			players[i].score = points;
+			players[i].score_total = points;
+			players[i].old_score = points;
+			players[i] maps\_zombiemode_score::set_player_score_hud();
+		}
+	}
+	admin_log( started + " players at the start: " + points + " points each, as with 4 (the game would give "
+		+ given + ")" );
+}
+
+
+admin_max_players()
+{
+	return GetDvarInt( #"sv_maxclients" );
+}
+
+
+// maps\_gameskill::getCoopValue reads level.difficultySettings[<name>][<skill>][players.size - 1], which setSkill
+// fills for 1 to 4 players: with 5, coop_damage_and_accuracy_scaling and the coop watchers stop with script errors
+// and the player damage settings stay unset. Past 4, take the 4-player values.
+admin_pad_coop_difficulty()
+{
+	if ( !IsDefined( level.difficultySettings ) )
+	{
+		return;
+	}
+	names = [];
+	names[0] = "coopEnemyAccuracyScalar";
+	names[1] = "coopFriendlyAccuracyScalar";
+	names[2] = "coopFriendlyThreatBiasScalar";
+	names[3] = "coopPlayer_deathInvulnerableTime";
+	names[4] = "coopPlayerDifficultyHealth";
+	skills = [];
+	skills[0] = "easy";
+	skills[1] = "normal";
+	skills[2] = "hardened";
+	skills[3] = "veteran";
+	count = admin_max_players();
+	for ( n = 0; n < names.size; n++ )
+	{
+		for ( s = 0; s < skills.size; s++ )
+		{
+			if ( !IsDefined( level.difficultySettings[names[n]] ) )
+			{
+				continue;
+			}
+			values = level.difficultySettings[names[n]][skills[s]];
+			if ( !IsDefined( values ) || !IsDefined( values[3] ) )
+			{
+				continue;
+			}
+			for ( i = 4; i < count; i++ )
+			{
+				if ( !IsDefined( values[i] ) )
+				{
+					values[i] = values[3];
+				}
+			}
+			level.difficultySettings[names[n]][skills[s]] = values;
+		}
+	}
+}
+
+
+//-------------------------------------------------------------------------------
+// more than 4 players
+//-------------------------------------------------------------------------------
+
+// The game's character is the player's entity number: model, arms (maps\_loadout::give_model or the map's
+// zombiemode_give_player_model_override, maps\_zombiemode_load::player_set_viewmodel), voice
+// (maps\_zombiemode_weapons::get_player_index) and respawn point (check_for_valid_spawn_near_team) all switch on
+// self.entity_num or self.zm_random_char, and do nothing past 3. Give a 5th player the character fewest players
+// have, and so a player of slots 0-3 whose character another player already has: a solo player's random character
+// (onPlayerSpawned), or a 5th player's. Both fields are read at the first spawn, which follows spawnClient.
+admin_assign_character()
+{
+	num = self GetEntityNumber();
+	if ( IsDefined( self.admin_character ) )
+	{
+		self.entity_num = self.admin_character;
+		self.zm_random_char = self.admin_character;
+		return;
+	}
+	counts = [];
+	for ( c = 0; c < 4; c++ )
+	{
+		counts[c] = 0;
+	}
+	players = get_players();
+	for ( i = 0; i < players.size; i++ )
+	{
+		c = players[i].entity_num;
+		if ( players[i] != self && IsDefined( c ) && c >= 0 && c < 4 )
+		{
+			counts[c]++;
+		}
+	}
+	if ( num < 4 )
+	{
+		if ( counts[num] == 0 )
+		{
+			return;
+		}
+	}
+	best = 0;
+	for ( c = 1; c < 4; c++ )
+	{
+		if ( counts[c] < counts[best] )
+		{
+			best = c;
+		}
+	}
+	self.admin_character = best;
+	self.entity_num = best;
+	self.zm_random_char = best;
+	if ( num < 4 )
+	{
+		admin_log( self admin_who() + " plays character " + best + " (another player has character " + num + ")" );
+	}
+	else
+	{
+		admin_log( self admin_who() + " plays character " + best + " (the game has 4)" );
+	}
+}
+
+
+// coop_player_spawn_placement (and the maps' own, zombie_cod5_sumpf, zombie_cod5_asylum) give player i the start
+// struct i, and stop with a script error on the 5th player when all of them are in at the start (a map_restart).
+// Repeat the structs up to sv_maxclients first: a 5th player starts where the 1st does.
+admin_player_spawn_placement()
+{
+	count = admin_max_players();
+	admin_pad_structs( "initial_spawn_points", "targetname", count );
+	admin_pad_structs( "north_spawn", "script_noteworthy", count );
+	admin_pad_structs( "south_spawn", "script_noteworthy", count );
+	if ( IsDefined( level.admin_retail_Player_Spawn_func ) )
+	{
+		level thread [[level.admin_retail_Player_Spawn_func]]();
+	}
+	else
+	{
+		level thread maps\_zombiemode::coop_player_spawn_placement();
+	}
+}
+
+
+admin_pad_structs( name, type, count )
+{
+	if ( !IsDefined( level.struct_class_names ) || !IsDefined( level.struct_class_names[type] ) )
+	{
+		return;
+	}
+	structs = level.struct_class_names[type][name];
+	if ( !IsDefined( structs ) || structs.size == 0 || structs.size >= count )
+	{
+		return;
+	}
+	size = structs.size;
+	for ( i = size; i < count; i++ )
+	{
+		from = structs[i % size];
+		s = SpawnStruct();
+		s.origin = from.origin;
+		s.angles = from.angles;
+		s.targetname = from.targetname;
+		s.target = from.target;
+		s.script_noteworthy = from.script_noteworthy;
+		s.script_int = from.script_int;
+		structs[i] = s;
+	}
+	level.struct_class_names[type][name] = structs;
+	admin_log( type + " " + name + ": " + size + " structs, repeated to " + count + " for sv_maxclients" );
 }
 
 
@@ -71,6 +276,7 @@ admin_install_spawn_client()
 // point): a player without one joined after that
 admin_spawn_client()
 {
+	self admin_assign_character();
 	if ( flag( "all_players_connected" ) && !IsDefined( self.spectator_respawn ) )
 	{
 		self admin_join_in_progress();
@@ -275,6 +481,8 @@ admin_player()
 		return;
 	}
 	self.admin_listening = true;
+	// spawnClient may have run before admin_install_spawn_client replaced it
+	self admin_assign_character();
 	self thread admin_start_kit();
 	self thread admin_life_log();
 	self thread admin_revive_debug_watch();
@@ -371,6 +579,7 @@ admin_start_kit()
 	}
 	// after the game's own start points (maps\_zombiemode sets them once all players are connected)
 	wait( 1 );
+	admin_log( self admin_who() + " is character " + self.entity_num + ", model " + self.model );
 	points = GetDvarInt( #"zm_startpoints" );
 	if ( points > 0 )
 	{

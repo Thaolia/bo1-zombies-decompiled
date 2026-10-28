@@ -120,8 +120,10 @@ static void CG_ScoreBarZombieColor(const char *dvarName, int clientNum, float *c
     case 3:
         Com_sprintf(name, 0x20, "%s_3", dvarName);
         break;
-    default: // SP reads its uninitialised buffer here; clients 0-3 are the only ones SP zombies has
-        name[0] = 0;
+    default:
+        // SP reads its uninitialised buffer here; clients 0-3 are the only ones SP zombies has. A dedicated server
+        // takes more (docs/SERVER.md, "More than 4 players"): the colour of the same slot of 4
+        Com_sprintf(name, 0x20, "%s_%d", dvarName, clientNum % 4);
         break;
     }
     Dvar_GetUnpackedColorByName(name, color);

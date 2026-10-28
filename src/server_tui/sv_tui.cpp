@@ -251,18 +251,30 @@ void Draw(const ServerTuiStatus &status)
     mvaddnstr(0, 0, line, cols);
     attroff(A_REVERSE);
 
-    // the slots, at most a third of the screen so the log keeps room
+    // the slots, at most a third of the screen so the log keeps room. With more slots than that (sv_maxclients past
+    // 4), the connected players only, scrolled to keep the selected one in view
     int slots = status.maxClients;
     if (slots > rows / 3)
         slots = rows / 3 > 1 ? rows / 3 : 1;
+    const bool everySlot = slots == status.maxClients;
+    int first = 0;
+    for (int i = 0; !everySlot && i < status.playerCount; ++i)
+    {
+        if (status.players[i].num == s_selected && i >= slots)
+            first = i - slots + 1;
+    }
     std::snprintf(line, sizeof(line), "  %-3s %-24s %-22s %5s  %-10s %8s %s", "#", "name", "address", "ping", "state",
                   "points", "admin");
     attron(A_BOLD);
     DrawLine(1, line, cols);
     attroff(A_BOLD);
-    for (int slot = 0; slot < slots; ++slot)
+    for (int row = 0; row < slots; ++row)
     {
-        const ServerTuiPlayer *p = FindPlayer(status, slot);
+        const ServerTuiPlayer *p = everySlot ? FindPlayer(status, row)
+                                             : (first + row < status.playerCount ? &status.players[first + row] : nullptr);
+        const int slot = p ? p->num : row;
+        if (!p && !everySlot)
+            continue;
         if (p)
             std::snprintf(line, sizeof(line), "%c %-3d %-24.24s %-22.22s %5d  %-10s %8d %s",
                           slot == s_selected ? '>' : ' ', slot, p->name, p->address, p->ping, StateName(*p), p->score,
@@ -271,7 +283,7 @@ void Draw(const ServerTuiStatus &status)
             std::snprintf(line, sizeof(line), "%c %-3d -", slot == s_selected ? '>' : ' ', slot);
         if (slot == s_selected)
             attron(A_REVERSE);
-        DrawLine(2 + slot, line, cols);
+        DrawLine(2 + row, line, cols);
         if (slot == s_selected)
             attroff(A_REVERSE);
     }

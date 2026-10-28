@@ -132,7 +132,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | in progress: the devkitA64 + libnx build compiles, links and packages `BO1Zombies.nro` (null backend), reusing the posix SDL2/Win32-shim layer with a thin `src/platform/switch/` and `#if defined(__SWITCH__)` deltas. **Boots on Ryujinx 1.1.1375**: the libnx entry runs (applet type = Application), romfs mounts, the engine's `WinMain` runs ~30 s with no crash (SD `boot.log`). Prereqs fixed: the libgcc GCS/SME NOP patch (`switch/tools/patch_ryujinx_mrs.py`, POST_BUILD) for Ryujinx's JIT, and a one-file embedded romfs (`switch/romfs`) so `romfsInit` does not crash the emulator. With the converted zones staged on the SD, the engine **loads the pre-gfx code zones** (`en_code_pre_gfx_mp`, `code_pre_gfx_mp`) — the ffconv AArch64 path proven end to end — and runs `FS_Startup`. Four fixes got there: the GCS/SME NOP patch and embedded romfs (boot), `chdir` to the install dir (language + `fs_basepath`), a `pread` EOF fix for libnx's past-EOF `lseek` (zone read-ahead), and reading the win64 IWffs ABI tag (layout-identical, `--check-switch`). With the iwds staged and a `device:`-prefix fix in `Bo1_PosixPath`, it then boots through FS_Startup (103814 iwd files), R_Init, the frontend, and `+devmap zombie_theater` into a **map load** (common_zombie 78 MB, the Kino zones) — before crashing part way through `en_zombie_theater` on a guest invalid memory access (a 64-bit bug in the zombie map asset stream, to debug on the posix x86-64 build). Then GL (EGL on nwindow) and audio |
 | 6 | Stabilisation, all base maps, docs | todo |
 | 7 | (optional) deko3d backend behind the same `gfx_backend.h` | in progress: opt-in on the Switch build (`gfx.cfg` = deko3d, `shaders.dksh` from uam); renders the main menu's 3D scene and Kino in game with its HUD on Ryujinx (2026-10-26, see the deko3d notes below); not yet run on the console in game |
-| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part done (2026-10-27: sockets, `nifm`, the start menu's server screen; a console joined a win64 server and played; Ryujinx's BSD `RecvFrom` throws); step 3 done (2026-10-27: curses console, Linux and Windows); step 4 done on win64 (2026-10-27: `zm_*` admin commands, mods/admin); step 5 done on PC (2026-10-27: client logs on UDP port + 1, `logs/`, Tab in the TUI), its Switch side built, not yet run; step 6 done on win64 (2026-10-28: join in progress, `zm_jip_mode`); see "Dedicated server (phase 8)" |
+| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress, more than 4 players (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part done (2026-10-27: sockets, `nifm`, the start menu's server screen; a console joined a win64 server and played; Ryujinx's BSD `RecvFrom` throws); step 3 done (2026-10-27: curses console, Linux and Windows); step 4 done on win64 (2026-10-27: `zm_*` admin commands, mods/admin); step 5 done on PC (2026-10-27: client logs on UDP port + 1, `logs/`, Tab in the TUI), its Switch side built, not yet run; step 6 done on win64 (2026-10-28: join in progress, `zm_jip_mode`); step 7 done on win64 (2026-10-28: more than 4 players with `sv_maxclients`, 5 clients checked), its curses part checked on Linux; see "Dedicated server (phase 8)" |
 
 ## Verification per phase
 - **0**: the `win32-msvc` preset still builds and `Play.bat` reaches the zombies menu and plays Kino der Toten.
@@ -2075,3 +2075,52 @@ with `cl_autoConnect` and `name`. Usage in `docs/SERVER.md` ("Start scripts", "J
   - `zm_round 3` ends the round, and mods/admin logs "round 2 started with one player: respawning the spectators".
     Charlie is then `playing` near the others with 500 points, and round 3 starts with 3 players.
   - Control run, with only the `FreezeControls( false )` line commented out: `1 Bravo playing health 100 god frozen`.
+
+**Step 7, more than 4 players (2026-10-28).** Operator's view in `docs/SERVER.md` ("More than 4 players").
+
+- The engine needed nothing to take more players: `sv_maxclients` goes up to 32 on a dedicated server
+  (`sv_dedicatedmaxclients`), the cgame's score rows hold 32, and `bo1_server` keeps 4 as its default. What stops at 4
+  is the retail script and table data, read in the extracted scripts of every zombies map:
+  - the character (model, arms, voice, respawn point) switches on `self.entity_num` / `self.zm_random_char` with cases
+    0-3 only (`maps\_loadout::give_model`, the maps' `zombiemode_give_player_model_override`, all of which take
+    `zm_random_char` first; `player_set_viewmodel`, `get_player_index`, `check_for_valid_spawn_near_team`);
+  - `coop_player_spawn_placement` (and zombie_cod5_sumpf's and zombie_cod5_asylum's own) gives player i start struct
+    i, and maps have 4: a game with 5 players in at the start (after a game over or `zm_reset`) stops there;
+  - `mp/zombiemode.csv` has `zombie_score_start_<n>p` for 1-4: `set_zombie_var` falls back to 3000, so
+    `difficulty_init` gave 5 players 3000 points each (measured: `the game would give 3000`);
+  - `maps\_gameskill::getCoopValue` reads `level.difficultySettings[<name>][<skill>][players.size - 1]` from arrays of
+    4: with 5 at the start, `coop_damage_and_accuracy_scaling` stopped with 6 script errors and left
+    `player_damageMultiplier` / `player_deathInvulnerableTime` unset. A search of every map's scripts for other
+    player-count indexes or switches found nothing else (the per-round zombie count is linear in the player count).
+- mods/admin gives the 5th player on what the game has for 4 (`mods/admin/README.md`): the least-taken character
+  (also for a slot 0-3 player whose character a solo player's random pick took), the start structs repeated up to
+  `sv_maxclients` before the map's placement runs (`level.Player_Spawn_func` wrapped at `_zombiemode_ffotd::main_start`,
+  before `init_function_overrides`), the 4-player start points and coop difficulty values past 4. Each player's
+  character and model are logged at their first spawn.
+- Engine: the score list's name colour for a client past 3 read `Dvar_GetUnpackedColorByName("")` (white); it now
+  takes the same slot of 4 (`cg_sp_hud.cpp`, clients 0-3 unchanged). The client error `CachedTag_UpdateTagInternal:
+  Cannot find dobj on entity` now names the entity and its type. The curses console lists the connected players only
+  when the slots do not fit in its top third, scrolled to the selected one.
+- Verified (win64 server at normal priority, `sv_maxclients 8`, 5 headless win64 clients on Kino, god on each):
+  - joins one by one: Echo (slot 4) `plays character 0 (the game has 4)`, `is character 0, model
+    c_usa_dempsey_body`, spawned near the team with 500 points; no script error;
+  - `zm_reset` with all 5 in: all back, `5 players at the start: 500 points each, as with 4 (the game would give
+    3000)`, one model per player, `round 1 started, players 5`, no `_gameskill` error;
+  - `zm_kill 4` then `zm_round 3`: Echo `spectator`, then `playing` at the round change, `round 3 started, players 5`;
+  - 4 clients: Alpha, alone at the start, drew character 1; Bravo (slot 1) `plays character 0 (another player has
+    character 1)`; the 4 had 4 different characters;
+  - back-buffer screenshots of two clients with all 5 in: the bottom-right score list has 5 rows (Echo's own at the
+    bottom on his screen), the other players' models and overhead names are drawn;
+  - Linux server (`Server.sh` in an 80x14 then 80x8 `tmux` pane, `sv_maxclients 8`, 3 win64 clients over the WSL
+    address): the list shows the 3 players only; at 8 rows (2 list rows) F3 to Charlie scrolls to Bravo and Charlie.
+  - `linux64-clang` and `switch` build; the new client message is in both binaries.
+- Remaining, seen once: in the first restart test one client stopped with `CachedTag_UpdateTagInternal: Cannot find
+  dobj on entity` right after the 5-player start (the friendly-name or aim code read a player entity without a
+  model), went back to its menu and rejoined in progress; it did not happen in the next runs. The message now names
+  the entity. A retail script error on every player death (`_gameskill.gsc` line 2201: `map_is_early_in_the_game`
+  returns `level.early_level[level.script]`, which only a `/# #/` block defines) is not tied to the player count.
+- Test harness: `tools/headless.ps1` starts games at below-normal priority. With other work keeping the PC at 100 %
+  CPU, the server got 17 s of CPU in 6 minutes and logged 7-16 s frames (`Hitch warning`); at normal priority
+  (`-Priority Normal`) there was one hitch in a whole run. Five clients reloading Kino at once also overran
+  `sv_connectTimeout` (80 s) after `zm_reset` and were dropped in a loop; the restart tests set it to 600.
+- Not measured: bandwidth per client and server frame time with many players, a real LAN, Switch clients.
