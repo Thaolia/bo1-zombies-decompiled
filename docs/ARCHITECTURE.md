@@ -328,6 +328,9 @@ server thread). The cheat states (god, demigod, notarget, noclip) are engine fla
 everything else is queued and handed, one command per player and frame, to `mods/admin` as a `"zm_admin"` notify on
 the player's entity. The server always stacks `mods/admin` on `fs_mods` (`FS_ModStackNames`) and also reads mods from
 `fs_homepath/mods`; its `admin: ...` LogPrint replies are copied to the console by `G_LogPrintf`.
+Players past 4 (`sv_maxclients`) need no engine change beyond the score list's name colour: the game's 4-player
+limits are script and table data (characters by entity number, 4 start structs, per-count tables), which
+`mods/admin` extends at map load.
 
 ### Client logs (phase 8)
 

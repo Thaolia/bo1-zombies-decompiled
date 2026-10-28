@@ -4,6 +4,7 @@
 
 register()
 {
-	// every map: the shared hook of maps\_zombiemode::main()
+	// every map: the shared hooks of maps\_zombiemode::main(); main_start runs before its init_function_overrides
+	maps\_modstack::add( "_zombiemode_ffotd::main_start", maps\admin\_admin::main_start );
 	maps\_modstack::add( "_zombiemode_ffotd::main_end", maps\admin\_admin::main_end );
 }

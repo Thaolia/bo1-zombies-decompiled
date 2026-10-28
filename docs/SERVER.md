@@ -88,8 +88,8 @@ In a terminal (Linux) or with its own console window (Windows), the server shows
 
 ### Settings and their order
 
-1. Server defaults: `bo1_zombies 1`, `sv_maxclients 4`, `g_inactivity 0` (the dedicated configs' 120 s idle kick is
-   multiplayer's; zombies has none. `set g_inactivity 120` brings it back).
+1. Server defaults: `bo1_zombies 1`, `sv_maxclients 4` (up to 32: "More than 4 players"), `g_inactivity 0` (the
+   dedicated configs' 120 s idle kick is multiplayer's; zombies has none. `set g_inactivity 120` brings it back).
 2. The command line's `+set` values, which override the defaults.
 3. `server.cfg`, run with `exec` from the game's search path (put it in `<fs_h>/main/`). An `exec` runs after every
    startup `+set`, so its values override both. A missing `server.cfg` only prints an error.
@@ -239,8 +239,8 @@ bleed-out and revive (`admin: 1 (Bravo) is down`).
 
 Known limits: a Quick Revive given while only one player is in the game takes the solo path (an extra life, the
 machine hidden), as a solo purchase would, and its retail thread then logs script errors once more players are in.
-A player alone at the start gets a random character (the game's solo rule), and a player who joins later takes the
-character of their slot, which can be the same one.
+A player alone at the start gets a random character (the game's solo rule); a player who joins later and whose
+slot's character is that one gets another (see "More than 4 players").
 
 ## Client logs
 
@@ -261,6 +261,31 @@ without anyone copying files:
 - On the client: `bo1_netlog 0` stops it; `bo1_logserver <host[:port]>` sends to another server than the
   `cl_autoConnect` one (the game port: the log goes to port + 1).
 
-## Not done yet
+## More than 4 players
 
-More than 4 players: see the plan in `docs/PORTING.md`, phase 8 (step 7).
+The server takes 4 players by default. For more, set `sv_maxclients` in `server.cfg` or on the command line, before
+the map loads (`set sv_maxclients 8`); the dedicated server accepts up to 32. The game itself is made for 4: 4
+characters, 4 start points, start points and difficulty tables for 1 to 4 players. mods/admin gives the 5th player
+on what the game gives the first 4:
+
+- **Character**: the 5th player gets the character fewest players have (`admin: 4 (Echo) plays character 0 (the
+  game has 4)`), with that character's model, arms and voice. A player of slots 1-3 whose character is already taken
+  (the random character of a player who was alone at the start, or a 5th player's) gets one the same way. With more
+  than 4 players, characters repeat. The log gives each player's character and model at their first spawn
+  (`admin: 4 (Echo) is character 0, model c_usa_dempsey_body`).
+- **Start point**: the map's start points are repeated up to `sv_maxclients` when the map loads (`admin: targetname
+  initial_spawn_points: 4 structs, repeated to 8`), so a game where everyone is in at the start (after a game over or
+  `zm_reset`) places every player; a 5th player starts on the 1st one's spot. The respawn at the end of a round is the
+  game's own, near the team.
+- **Points and difficulty**: past 4 players, the start points (500), the team points and the game's coop difficulty
+  settings (damage taken, invulnerable time after a hit, enemy accuracy) are the 4-player ones. Without mods/admin,
+  5 players at the start each got 3000 points, and `maps/_gameskill.gsc` stopped with script errors. The zombie
+  count per round grows with the player count, as in the game (`zombie_ai_per_player`).
+- **HUD**: the score list at the bottom right shows every player (5 rows seen on two of the clients), the 5th in
+  the colour of the 1st slot. In the scoreboard, a name past the 4th takes the colour of the same slot of 4.
+- **Console**: with more slots than fit in the top third of the terminal, the player list shows the connected players
+  only, scrolled so that the selected one stays in view.
+
+Checked with 5 headless win64 clients on Kino (`sv_maxclients 8`): joins one by one, a `zm_reset` with all 5 in, a
+death, and the round-end respawn. Not measured yet: the bandwidth per client and the frame time with many players,
+on a PC server or with Switch clients (`docs/PORTING.md`, phase 8 step 7).

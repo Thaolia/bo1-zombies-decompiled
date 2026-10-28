@@ -62,7 +62,8 @@ on Windows or Linux: no window, listening on UDP on every interface, `server.cfg
 players. Admin commands typed in its console (or over rcon, `tools/server_rcon.py`): `zm_god`, `zm_points`, `zm_perk`,
 `zm_revive`, `zm_kill`, `zm_respawn`, `zm_round`, `zm_reset`, `zm_map`, `zm_mods`, and `zm_startpoints` /
 `zm_startperks` for the start of a game. Players can join a game in progress (`zm_jip_mode immediate` or
-`nextround`). Each client's console log is sent to the server (UDP game port + 1) and
+`nextround`), and `sv_maxclients` lets more than 4 play (up to 32; characters repeat past 4). Each client's
+console log is sent to the server (UDP game port + 1) and
 written to its `logs/` folder; Tab in the server's console shows the selected player's. See `docs/SERVER.md`.
 
 ## Packages

@@ -2769,7 +2769,9 @@ int __cdecl CachedTag_UpdateTagInternal(
     }
     else
     {
-        Com_Error(ERR_DROP, "CachedTag_UpdateTagInternal: Cannot find dobj on entity\n");
+        // zombies: which entity, so that a client log sent to a dedicated server names it
+        Com_Error(ERR_DROP, "CachedTag_UpdateTagInternal: Cannot find dobj on entity %i (eType %i)\n",
+                  ent->nextState.number, ent->nextState.eType);
         return 0;
     }
 }

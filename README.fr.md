@@ -96,6 +96,9 @@ Commandes admin, tapées dans la console du serveur (ou en rcon avec `tools/serv
 - réglages `zm_startpoints <n>` et `zm_startperks "<perks>"` : points et perks de départ de chaque joueur ;
 - `zm_jip_mode immediate|nextround` : un joueur qui rejoint une partie en cours joue tout de suite (par défaut, près
   des autres joueurs, avec les points de départ), ou reste spectateur jusqu'à la fin du round.
+- `set sv_maxclients <n>` (dans `server.cfg`, avant la map ; 4 par défaut, 32 au plus) : plus de 4 joueurs. Le jeu n'a
+  que 4 personnages : à partir du 5e, chaque nouveau joueur prend le personnage le moins pris (modèle, bras et voix).
+  Les points de départ et la difficulté sont ceux d'une partie à 4.
 - `set zm_debug_revive 1` : quand un joueur est à terre, le log dit pour chaque autre joueur quelle condition du revive
   passe ou bloque (distance, trigger, orientation, visée, touche utiliser).
 

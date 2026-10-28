@@ -45,6 +45,23 @@ It also defines `zombie_score_start_<n>p` / `zombie_team_score_start_<n>p` for 1
 them for the current count. A round that started with one player and ends with more gets the retail
 `maps\_zombiemode::spectators_respawn`, which `round_think` skips then. Each down, bleed-out and revive is logged.
 
+## More than 4 players (`sv_maxclients`)
+
+The game is made for 4; past that `_admin.gsc` gives a player what the first 4 get:
+
+- **Character** (`admin_assign_character`, from `spawnClient`, before the first spawn): the model, arms, voice and
+  respawn point all switch on `self.entity_num` / `self.zm_random_char` (`maps\_loadout::give_model`, every map's
+  `zombiemode_give_player_model_override`, `player_set_viewmodel`, `get_player_index`,
+  `check_for_valid_spawn_near_team`) and do nothing past 3. A 5th player, and a player of slots 0-3 whose character
+  is taken (a solo player's random one), get the character fewest players have.
+- **Start points** (`admin_player_spawn_placement`, which replaces `level.Player_Spawn_func` at `main_start`): the
+  start structs (`initial_spawn_points`, and `north_spawn` / `south_spawn` for zombie_cod5_asylum) are repeated up to
+  `sv_maxclients`, then the map's own placement runs: it gives player i struct i.
+- **Tables** (`admin_late_join_vars`, `admin_pad_coop_difficulty`): `zombie_score_start_<n>p` and
+  `zombie_team_score_start_<n>p` past 4 take the 4-player values (`mp/zombiemode.csv` has rows for 1-4 only, so
+  `difficulty_init` would give 3000), and so do the coop arrays of `level.difficultySettings` that
+  `maps\_gameskill::getCoopValue` reads by player count.
+
 ## Dvars
 
 - `zm_startpoints <n>`: every player's points once they first spawn on a map (0, the default, keeps the game's own).
