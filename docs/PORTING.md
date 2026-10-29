@@ -2209,3 +2209,24 @@ setting by double click, `[ Sauvegarder ]` and `[ Oui ]` (read back applied), a 
 wheel in the Log (9 lines up) and its buttons, the Players legend (`zm_god all` sent), `[ Quitter ]` with the box
 ticked (server stopped, no process left). Not tried by hand: the mouse with PDCurses on Windows (not drivable from
 WSL; its constants and zones load, see below); a console with QuickEdit on may keep clicks for text selection.
+
+**Head icons over other players crashed the client (2026-10-29, console crash report).** A Switch client in a server
+game (Shi No Numa, after ~10 min) died with a data abort at address 0xb0: `Material_GetTechniqueSet(NULL)` on an FX
+worker (`FX_GenerateVerts` -> `FX_SpriteGenerateVerts` -> `FX_BuildQuadStampCodeMeshVerts` -> `R_AddCodeMeshDrawSurf`),
+symbolised with the NRO's own ELF. The only sprite source that can queue a null material is
+`CG_AddPlayerSpriteDrawSurf` (`cg_players_mp.cpp`), which draws the head, lag (`eFlags 0x80`), "talk balloon"
+(`eFlags 0x200000`, set by `bg_pmove` while button 29 is held, i.e. `+usereload`, the pads' X) and kill-cam icons
+over another player: upstream's rewrite of it ("aislop") always set `material = NULL`, put the height on Y, Z = NaN
+and left `flags` unset. It is rebuilt from the decompiled version kept under `#if 0`, whose stack variables Hex-Rays
+shifted by 12 bytes (the real `FxSprite` starts at `v8`). Missing icons are skipped: a zombies zone lacks
+`headiconyouinkillcam` and `headicon_american` (also `headicondisconnected`, `headicontalkballoon` in the console's
+log), and a missing material is the default one (`DB_IsXAssetDefault`; `Material_IsDefault` said "no" for these
+copies), which would float over the player. This changes win32-msvc too (it ran the same rewrite).
+
+Verified on win64-msvc with a dedicated server and two headless clients on Kino, client A forced by a temporary dvar
+to add one sprite per frame over client B: a null-material sprite (the old behaviour) asserts `r_material.h(553):
+material` and crashes (0x80000003, the console's stack); `white` and `headicontalkballoon` (present on PC) are drawn,
+`headiconyouinkillcam` (missing) is skipped, and each client quits normally after 200 s. Not reproduced through the
+game itself: freezing client B for 6 s set no `0x80` on A's copy of B, and a headless client holding `+usereload`
+set no `0x200000` (no input focus). The icon's look was not seen (the headless remote clients' screenshots are
+black). win32-msvc, win64-msvc and the Switch build compile; the console has not run the fix yet.
