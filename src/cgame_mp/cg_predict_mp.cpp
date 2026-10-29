@@ -1085,6 +1085,23 @@ void __cdecl CG_CopyFlagsFromSnapshotEntity(int localClientNum)
 
     cgameGlob = CG_GetLocalClientGlobals(localClientNum);
     Entity = CG_GetEntity(localClientNum, cgameGlob->clientNum);
+    // zombies: with the third-person / top-down view (otherFlags & 6) CG_SetNextSnap sets the local player's flag
+    // changes on its own centity, which is never processed: only this copy is (CG_ProcessEntity runs the client flag
+    // callbacks, then clears it). Copying every frame ran each pending callback every frame: zombietron's
+    // update_player_profile wrote the gamer profile and re-execed the pad configs ~26 times a second. The pending
+    // changes move to the copy once and are consumed on the source. MP keeps its decompiled copy.
+    if ( zombiemode && zombiemode->current.enabled )
+    {
+        if ( ((Entity->flagWord >> 22) & 1) != 0 )
+        {
+            cgameGlob->predictedPlayerEntity.flagState = (unsigned __int16)(
+                (cgameGlob->predictedPlayerEntity.flagState & ~Entity->flagIndex) | (Entity->flagState & Entity->flagIndex));
+            cgameGlob->predictedPlayerEntity.flagIndex |= Entity->flagIndex;
+            CG_ClientFlagResetAll(Entity);
+            Entity->flagWord &= ~0x400000u;
+        }
+        return;
+    }
     cgameGlob->predictedPlayerEntity.flagIndex = Entity->flagIndex;
     cgameGlob->predictedPlayerEntity.flagState = Entity->flagState;
 }

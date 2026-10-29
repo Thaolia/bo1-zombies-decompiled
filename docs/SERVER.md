@@ -59,7 +59,7 @@ its zone converted by `tools/ffconv` (`<zones>/zone/Common/<map>.ff` and `<map>_
 | `zombie_cod5_asylum` | Verrückt | not run yet |
 | `zombie_cod5_sumpf` | Shi No Numa | not run yet |
 | `zombie_cod5_factory` | Der Riese | not run yet |
-| `zombietron` | Dead Ops Arcade | not run yet (another game mode) |
+| `zombietron` | Dead Ops Arcade | win64 server + one client, 4 min, top-down view; server + two clients, one score bar per corner and the first-place ribbon (2026-10-29, `docs/PORTING.md`) |
 
 ### The console
 

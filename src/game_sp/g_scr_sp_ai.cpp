@@ -588,6 +588,7 @@ const BuiltinMethodDef g_sp_ai_methods[] =
     { "setdeathcontents", G_m_setdeathcontents, 0 },
     { "getaivelocity", G_m_getaivelocity, 0 },
     { "lookatentity", G_m_lookatentity, 0 },
+    { "haspath", G_m_haspath, 0 },
     { "getthreatbiasgroup", G_m_getthreatbiasgroup, 0 },
     { "issuppressed", G_m_issuppressed, 0 },
     { "stopshoot", G_m_stopshoot, 0 },

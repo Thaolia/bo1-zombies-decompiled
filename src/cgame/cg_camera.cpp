@@ -30,6 +30,9 @@
 #include <gfx_d3d/r_extracam.h>
 #include <client/client.h>
 #include <gfx_d3d/r_dpvs.h>
+#include <client_mp/cl_main_mp.h>
+#include <universal/com_math.h>
+#include <cmath>
 
 bool damped_spring;
 
@@ -3029,6 +3032,124 @@ void __cdecl CG_CalcExtraCamEntityViewValues(int localClientNum)
     cgameGlob->refdefViewAngles[0] = cent->pose.angles[0];
     cgameGlob->refdefViewAngles[1] = cent->pose.angles[1];
     cgameGlob->refdefViewAngles[2] = cent->pose.angles[2];
+}
+
+// zombies: the top-down camera (SP 0x00413b50), run by SP CG_CalcViewValues for SP camera mode 10, which is
+// KB's CAM_TOP_DOWN. Mode 1 pitches with the player's yaw, 2 uses the dvar angles, both offset from the player; 4 is
+// fixed at the centre position; 3 (zombietron) frames the players 0-3, pulls towards the arena centre, backs off as
+// they spread and eases each frame unless it jumps a kilometre or a camera tween runs.
+void __cdecl CG_CalcTopDownCamViewValues(int localClientNum)
+{
+    cg_s *cgameGlob = CG_GetLocalClientGlobals(localClientNum);
+    const int mode = player_topDownCamMode->current.integer;
+    const float *camAngles = player_topDownCamAngles->current.vector;
+    const float *camOffset = player_topDownCamOffset->current.vector;
+    const float *centerPos = player_topDownCamCenterPos->current.vector;
+
+    if ( mode == 1 )
+    {
+        cgameGlob->refdefViewAngles[0] = camAngles[0];
+        cgameGlob->refdefViewAngles[1] = cgameGlob->predictedPlayerState.viewangles[1];
+        cgameGlob->refdefViewAngles[2] = 0.0f;
+    }
+    else
+    {
+        cgameGlob->refdefViewAngles[0] = camAngles[0];
+        cgameGlob->refdefViewAngles[1] = camAngles[1];
+        cgameGlob->refdefViewAngles[2] = camAngles[2];
+    }
+    AnglesToAxis(cgameGlob->refdefViewAngles, cgameGlob->refdef.viewaxis);
+
+    if ( mode != 3 )
+    {
+        const float *base = mode == 4 ? centerPos : cgameGlob->predictedPlayerState.origin;
+        cgameGlob->refdef.vieworg[0] = base[0] + camOffset[0];
+        cgameGlob->refdef.vieworg[1] = base[1] + camOffset[1];
+        cgameGlob->refdef.vieworg[2] = base[2] + camOffset[2];
+        return;
+    }
+
+    float mins[3];
+    float maxs[3];
+    ClearBounds(mins, maxs);
+    int playerCount = 0;
+    for ( int clientNum = 0; clientNum < 4; ++clientNum )
+    {
+        centity_s *cent = CG_GetEntity(localClientNum, clientNum);
+        if ( (cent->flagWord & 2) == 0 )
+            continue;
+        float origin[3];
+        CG_GetPoseOrigin(&cent->pose, origin);
+        AddPointToBounds(origin, mins, maxs);
+        ++playerCount;
+    }
+    const float spreadX = maxs[0] - mins[0];
+    const float spreadY = maxs[1] - mins[1];
+    AddPointToBounds(centerPos, mins, maxs);
+    float center[3];
+    center[0] = (mins[0] + maxs[0]) * 0.5f;
+    center[1] = (mins[1] + maxs[1]) * 0.5f;
+    center[2] = (mins[2] + maxs[2]) * 0.5f;
+    if ( playerCount <= 1 )
+    {
+        center[0] = (center[0] - centerPos[0]) * 1.4f + centerPos[0];
+        center[1] = (center[1] - centerPos[1]) * 1.4f + centerPos[1];
+        center[2] = (center[2] - centerPos[2]) * 1.4f + centerPos[2];
+    }
+
+    const float (*axis)[3] = cgameGlob->refdef.viewaxis;
+    const float back = -camOffset[2];
+    float pos[3];
+    pos[0] = camOffset[1] * axis[2][0] + (axis[1][0] * camOffset[0] + (back * axis[0][0] + center[0]));
+    pos[1] = axis[2][1] * camOffset[1] + (axis[1][1] * camOffset[0] + (axis[0][1] * back + center[1]));
+    pos[2] = axis[2][2] * camOffset[1] + (axis[1][2] * camOffset[0] + (axis[0][2] * back + center[2]));
+
+    float zoomY = 0.0f;
+    if ( fabsf(spreadY) > 200.0f )
+    {
+        zoomY = (fabsf(spreadY) - 200.0f) / (1800.0f - 200.0f);
+        if ( cls.vidConfig.aspectRatioWindow == 4.0f / 3.0f )
+            zoomY = zoomY * 2.0f;
+    }
+    float zoom = 0.0f;
+    if ( fabsf(spreadX) > 50.0f )
+    {
+        zoom = (fabsf(spreadX) - 50.0f) / (600.0f - 50.0f);
+        const float pull = zoom >= 1.0f ? 1.0f : (zoom <= 0.0f ? 0.0f : zoom);
+        pos[1] = (centerPos[1] - pos[1]) * pull + pos[1];
+    }
+    if ( zoomY >= zoom )
+        zoom = zoomY;
+
+    float distance = 350.0f;
+    if ( playerCount > 1 )
+    {
+        const float lift = zoom > 1.0f ? zoom * 200.0f : 200.0f;
+        distance = 350.0f - 200.0f;
+        pos[0] = axis[0][0] * -lift + pos[0];
+        pos[1] = axis[0][1] * -lift + pos[1];
+        pos[2] = axis[0][2] * -lift + pos[2];
+    }
+    const float pullBack = -(distance * zoom);
+    pos[1] = axis[0][1] * pullBack + pos[1];
+    pos[0] = axis[0][0] * pullBack + pos[0];
+    pos[2] = axis[0][2] * pullBack + pos[2];
+
+    const float *last = cgameGlob->cameraData.lastViewOrg;
+    const float dx = pos[0] - last[0];
+    const float dy = pos[1] - last[1];
+    const float dz = pos[2] - last[2];
+    if ( dz * dz + dy * dy + dx * dx < 1000000.0f
+        && cgameGlob->cameraData.tweenDuration <= (float)(cgameGlob->time - cgameGlob->cameraData.tweenStartTime) * 0.001f )
+    {
+        const float ease = (float)cgameGlob->frametime * 0.001f * 5.0f;
+        pos[1] = dy * ease + last[1];
+        pos[2] = dz * ease + last[2];
+        pos[0] = ease * dx + last[0];
+    }
+    cgameGlob->refdef.vieworg[0] = pos[0];
+    cgameGlob->refdef.vieworg[1] = pos[1];
+    cgameGlob->refdef.vieworg[2] = pos[2];
 }
 
 void __cdecl CG_ExtraCam_GetViewOrigin(int localClientNum, float *out)

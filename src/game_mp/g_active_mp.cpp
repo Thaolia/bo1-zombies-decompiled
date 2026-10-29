@@ -42,6 +42,7 @@
 #include <game_sp/g_sp_player_state.h>
 #include <game_sp/g_sp_levelstart.h>
 #include <game_sp/g_sp_headless_move.h>
+#include <game_sp/g_scr_sp_players_x1.h>
 
 pmove_t g_pmove[32]; // i think this is 32
 
@@ -2512,6 +2513,8 @@ void __cdecl ClientEndFrame(gentity_s *ent)
     client->ps.deltaTime = 0;
     client->ps.gravity = G_SP_PlayerGravity(client, false); // zombies: SP ClientEndFrame 0x0047f67e
     client->ps.moveSpeedScaleMultiplier = ent->client->sess.moveSpeedScaleMultiplier;
+    if ( Com_IsSPLevel() && Dvar_GetBool("zombietron") )
+        G_SP_WriteZombietronColumns(client);
     // zombies: SP ClientEndFrame (SP 0x0047f6b8) also freezes the view while playerlinktoabsolute holds it.
     if ( (client->flags & 4) != 0 || (Com_IsSPLevel() && client->linkAnglesLocked) )
         v1 = client->ps.pm_flags | 0x800;

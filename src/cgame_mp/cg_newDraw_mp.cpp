@@ -499,6 +499,11 @@ void __cdecl CG_OwnerDraw(
         CG_SP_OwnerDraw_MiniScoreboard(localClientNum, &rect); // zombies: the points (SP CG_OwnerDrawHud 0x005accb0 -> 0x005bfed0)
         return;
     }
+    if ( ownerDraw == 354 && zombiemode && zombiemode->current.enabled )
+    {
+        CG_SP_OwnerDraw_ZombietronScores(localClientNum, &rect); // zombies: zombietron's bars (SP 0x005accb0 -> 0x0041fb80)
+        return;
+    }
     if ( ownerDraw > 284 )
     {
         switch ( ownerDraw )

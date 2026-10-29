@@ -242,15 +242,32 @@ void __cdecl player_die(
         if ( attacker->s.eType == 11 && attacker->r.ownerNum.isDefined() )
             attacker = attacker->r.ownerNum.ent();
         ScrNotify_FaceEvent(self, scr_const.death);
-        isFlared = self->client->ps.visionSetLerpRatio > 0.001;
-        Scr_AddBool(self->client->ps.poisoned, SCRIPTINSTANCE_SERVER);
-        Scr_AddBool(isFlared, SCRIPTINSTANCE_SERVER);
-        Scr_AddEntity(attacker, SCRIPTINSTANCE_SERVER);
-        Scr_Notify(self, scr_const.flared_or_tabuned_death, 3u);
-        Scr_AddString(weaponName, SCRIPTINSTANCE_SERVER);
-        Scr_AddBool(meansOfDeath == 9, SCRIPTINSTANCE_SERVER);
-        Scr_AddEntity(attacker, SCRIPTINSTANCE_SERVER);
-        Scr_Notify(self, scr_const.death, 3u);
+        if ( zombiemode && zombiemode->current.enabled )
+        {
+            // zombies: SP player_die (SP 0x00483074..0x004830DF) sends no flared_or_tabuned_death and gives death
+            // (attacker, means of death, weapon or undefined, inflictor), as zombietron's and _load_common's
+            // waittill( "death", attacker, cause, weaponName, inflicter ) read it.
+            Scr_AddEntity(inflictor, SCRIPTINSTANCE_SERVER);
+            if ( iWeapon )
+                Scr_AddString(BG_WeaponName(iWeapon), SCRIPTINSTANCE_SERVER);
+            else
+                Scr_AddUndefined(SCRIPTINSTANCE_SERVER);
+            Scr_AddConstString(*modNames[meansOfDeath], SCRIPTINSTANCE_SERVER);
+            Scr_AddEntity(attacker, SCRIPTINSTANCE_SERVER);
+            Scr_Notify(self, scr_const.death, 4u);
+        }
+        else
+        {
+            isFlared = self->client->ps.visionSetLerpRatio > 0.001;
+            Scr_AddBool(self->client->ps.poisoned, SCRIPTINSTANCE_SERVER);
+            Scr_AddBool(isFlared, SCRIPTINSTANCE_SERVER);
+            Scr_AddEntity(attacker, SCRIPTINSTANCE_SERVER);
+            Scr_Notify(self, scr_const.flared_or_tabuned_death, 3u);
+            Scr_AddString(weaponName, SCRIPTINSTANCE_SERVER);
+            Scr_AddBool(meansOfDeath == 9, SCRIPTINSTANCE_SERVER);
+            Scr_AddEntity(attacker, SCRIPTINSTANCE_SERVER);
+            Scr_Notify(self, scr_const.death, 3u);
+        }
         switch ( meansOfDeath )
         {
             case 0x11u:

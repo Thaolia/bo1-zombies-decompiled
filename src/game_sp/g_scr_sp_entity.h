@@ -31,3 +31,7 @@ void G_SP_NoteSnapshotSize(bool firstClient, int size);
 bool G_SP_GetScriptHintString(const gclient_s *client, int *hintString);
 // SP svFlags 0x100 set by transmittargetname (no reader ported yet).
 bool G_SP_TransmitsTargetname(const gentity_s *ent);
+// zombies: SP objective_add (SP 0x007f6c10 -> 0x007f6700), called by Scr_Objective_Add on an SP level.
+void G_SP_ObjectiveAdd();
+// zombies: SP physicstrace (SP 0x007f8560), called by Scr_PhysicsTrace on an SP level.
+void G_SP_PhysicsTrace();

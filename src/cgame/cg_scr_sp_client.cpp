@@ -1173,6 +1173,22 @@ static void __cdecl CScr_GiveGamerPicture()
 {
 }
 
+// zombies: showscores / hidescores (SP 0x00894720 / 0x00894790): cg+0xa9b38, KB's showScores (read by
+// the SP scoreboard, cg_sp_hud.cpp).
+static void __cdecl CScr_ShowScores()
+{
+    if (Scr_GetNumParam(SCRIPTINSTANCE_CLIENT) != 1)
+        Scr_Error(SCRIPTINSTANCE_CLIENT, "ShowScores() called with wrong params.\n", false);
+    CG_GetLocalClientGlobals(CScr_GetLocalClientNum(0))->showScores = 1;
+}
+
+static void __cdecl CScr_HideScores()
+{
+    if (Scr_GetNumParam(SCRIPTINSTANCE_CLIENT) != 1)
+        Scr_Error(SCRIPTINSTANCE_CLIENT, "HideScores() called with wrong params.\n", false);
+    CG_GetLocalClientGlobals(CScr_GetLocalClientNum(0))->showScores = 0;
+}
+
 const BuiltinFunctionDef g_csp_client_functions[] =
 {
     { "setsunlight", CScr_SetSunLight, 0 },
@@ -1203,6 +1219,8 @@ const BuiltinFunctionDef g_csp_client_functions[] =
     { "updatedvarsfromprofile", CScr_UpdateDvarsFromProfile, 0 },
     { "setcollectible", CScr_SetCollectible, 0 },
     { "givegamerpicture", CScr_GiveGamerPicture, 0 },
+    { "showscores", CScr_ShowScores, 0 },
+    { "hidescores", CScr_HideScores, 0 },
     { nullptr, nullptr, 0 } // end marker, keep last
 };
 const unsigned int g_csp_client_function_count = ARRAY_COUNT(g_csp_client_functions) - 1;

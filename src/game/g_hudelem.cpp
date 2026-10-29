@@ -12,6 +12,8 @@
 #include <bgame/bg_weapons_def.h>
 #include <stringed/stringed_hooks.h>
 #include <game_sp/g_scr_sp_players_x1.h>
+#include <ui/ui_main.h>
+#include <gfx_d3d/r_font.h>
 
 const game_hudelem_field_t fields_0[28] =
 {
@@ -2536,6 +2538,21 @@ void __cdecl HECmd_GetTextWidth(scr_entref_t entref)
     if ( !translation )
         translation = text;
     font = UI_GetFontHandleDefault(hud->elem.fontScale);
+    // phase 8: a dedicated server runs no UI, so sharedUiInfo holds no fonts and UI_TextWidth asserted on null
+    // (zombietron's speech bubbles, _zombietron_scenes::bubble_message). Look the same font up by the name the UI
+    // registers it under (UI_AssetCache), with UI_GetFontHandleDefault's thresholds; a fastfile font needs no renderer.
+    if ( !font )
+    {
+        const float scale = hud->elem.fontScale;
+        const char *fontName = "fonts/normalfont";
+        if ( ui_smallFont && ui_smallFont->current.value >= scale )
+            fontName = "fonts/smallfont";
+        else if ( ui_extraBigFont && scale >= ui_extraBigFont->current.value )
+            fontName = "fonts/extrabigfont";
+        else if ( ui_bigFont && scale >= ui_bigFont->current.value )
+            fontName = "fonts/bigfont";
+        font = R_RegisterFont(fontName, 0);
+    }
     width = UI_TextWidth(translation, 0, font, 1.0);
     Scr_AddInt(width / 2, SCRIPTINSTANCE_SERVER);
 }

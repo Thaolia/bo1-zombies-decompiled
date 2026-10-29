@@ -88,6 +88,8 @@ void __cdecl G_BroadcastEntity(gentity_s *ent);
 void __cdecl G_FreeEntityAfterEvent(gentity_s *ent);
 gentity_s *__cdecl G_TempEntity(const float *origin, entity_event_t event);
 extern int g_physExplosionSphereCount; // zombies: SP 0x01C08B38, live EV_PHYS_EXPLOSION_SPHERE temp ents
+extern int g_bulletHitTempEntCount;    // zombies: SP 0x01C08B30, live EV_BULLET_HIT temp ents
+extern int g_createDynEntTempEntCount; // zombies: SP 0x01C08B34, live EV_CREATE_DYNENT temp ents
 void __cdecl G_AddPredictableEvent(gentity_s *ent, unsigned int event, unsigned int eventParm);
 void __cdecl G_AddEvent(gentity_s *ent, unsigned int event, unsigned int eventParm);
 gentity_s *__cdecl G_PlaySoundAliasAtPoint(const float *origin, unsigned int alias);

@@ -49,6 +49,10 @@
 extern AimAssistGlobals aaGlobArray[1];
 
 static SPPlayerX1State s_x1State[32];
+// zombies: SP clientState +0xc8 "score.scoreMultiplier" (14 bit netfield, SP 0x00a5c1e8). Its only client
+// reader is the zombietron scoreboard, which is not ported, so it stays on the server. Kept out of
+// SPPlayerX1State, whose size is part of the client save image (g_sp_save_client.inl).
+static int s_scoreMultiplier[32];
 
 // zombies: SP CS 0xc27, the per-client last-stand vision info string. In BO1Zombies 0xc27 is
 // CS_HEAD_ICONS + 11 (MP head icons 0xc1c..0xc2a; a KB client registers any value there as a
@@ -70,6 +74,7 @@ void G_SP_ClearPlayerX1State(unsigned int clientNum)
     memset(&s_x1State[clientNum], 0, sizeof(s_x1State[clientNum]));
     // zombies: ClientSpawn writes client+0x1d10 = 0x3ff (SP 0x0048036c).
     s_x1State[clientNum].groundRefEnt = ENTITYNUM_NONE;
+    s_scoreMultiplier[clientNum] = 0;
 }
 
 void G_SP_ClearLevelX1State()
@@ -603,6 +608,53 @@ void PlayerCmdSP_getnormalizedcameramovement(scr_entref_t entref)
     movement[1] = (float)ent->client->sess.cmd.yawmove * -0.007874016f;
     movement[2] = 0.0f;
     Scr_AddVector(movement, SCRIPTINSTANCE_SERVER);
+}
+
+// zombies: cleardamageindicator (SP 0x007d9a90): client+0x1c3c = 0, which is KB's damage_blood (the
+// flags .. damage_fromWorld block matches, see the layout notes above).
+void PlayerCmdSP_cleardamageindicator(scr_entref_t entref)
+{
+    gentity_s *ent = SP_Player(entref);
+    if (!ent)
+        return;
+    ent->client->damage_blood = 0;
+}
+
+// zombies: getscoremultiplier / setscoremultiplier (SP 0x007d9bc0 / 0x007d9be0): the clientState field
+// (SP 0x005da470 +0xc8). SP looks the client state up without a player check; non-players get the
+// x1 guard's "entity %i is not a player" here instead of reading another client's slot.
+void PlayerCmdSP_getscoremultiplier(scr_entref_t entref)
+{
+    gentity_s *ent = SP_Player(entref);
+    if (!ent)
+        return;
+    Scr_AddInt(s_scoreMultiplier[ent->client - level.clients], SCRIPTINSTANCE_SERVER);
+}
+
+void PlayerCmdSP_setscoremultiplier(scr_entref_t entref)
+{
+    gentity_s *ent = SP_Player(entref);
+    if (!ent)
+        return;
+    s_scoreMultiplier[ent->client - level.clients] = Scr_GetInt(0, SCRIPTINSTANCE_SERVER);
+}
+
+static int G_SP_ColumnClamp(int value, int maxValue)
+{
+    return value < 0 ? 0 : (value > maxValue ? maxValue : value);
+}
+
+// zombies: zombietron's score bar reads SP clientState's score.downs / revives (the boosters and lives, set by the
+// scripts' update_hud) and score.scoreMultiplier, which BO1Zombies's clientState does not carry. On zombietron they
+// ride the 10-bit scoreboard columns whose types G_PopulateMatchState sets: 1 = lives << 4 | boosters (both capped
+// at 9 by zombie_vars), 2 = the multiplier's low nibble, 3 = its increment (0..512). Column 0 carries headshots.
+void G_SP_WriteZombietronColumns(gclient_s *client)
+{
+    const gclientSpExt &ext = G_ClientSpExt(client);
+    const int multiplier = s_scoreMultiplier[client - level.clients];
+    client->sess.cs.score.scoreboardColumns[1] = (G_SP_ColumnClamp(ext.revives, 15) << 4) | G_SP_ColumnClamp(ext.downs, 15);
+    client->sess.cs.score.scoreboardColumns[2] = multiplier & 0xF;
+    client->sess.cs.score.scoreboardColumns[3] = G_SP_ColumnClamp(multiplier >> 4, 1023);
 }
 
 // zombies: setvolfog, method form (SP 0x007fee10). SP's G_SetFog (0x007fe4d0) writes the fog under this

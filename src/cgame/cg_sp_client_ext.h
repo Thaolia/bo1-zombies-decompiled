@@ -45,6 +45,12 @@ struct CgSPClientExt
     float lastStandSway[3];      // cg+0xa4720: the downed view sway offset added to the view angles
     float lastStandSwayVel[3];   // cg+0xa472c
     float lastStandSwayGoal[3];  // cg+0xa4738 (SP 0x00791d20 picks a new goal when the sway stops closing in)
+    // zombietron score bar (SP CG_DrawPlayerScoreBar 0x00892860): the last lives / bombs / boosters / multiplier
+    // drawn (cg+0xce514..0xce517) and when each one's pulse ends (cg+0xce518..0xce524), one set per local
+    // client shared by every row as in SP; the friendly-name fade (cg+0xce528).
+    unsigned char ztLastValue[4];
+    int ztPulseEndTime[4];
+    float ztNameFade;
 };
 
 struct CgSPVisionSwap

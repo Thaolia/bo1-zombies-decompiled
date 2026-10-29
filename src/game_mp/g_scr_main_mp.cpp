@@ -78,6 +78,7 @@
 #include <gfx_d3d/r_primarylights.h>
 #include <game_sp/scr_sp_tables.h>
 #include <game_sp/g_sp_levelstart.h>
+#include <game_sp/g_scr_sp_entity.h>
 #include <game_sp/actor_sp_ext.h>
 #include <game_sp/g_sp_measure.h>
 #include <game_sp/g_anim_commands_sp.h>
@@ -5259,6 +5260,12 @@ void Scr_Objective_Add()
     unsigned __int16 stateName; // [esp+Ch] [ebp-8h]
     int objNum; // [esp+10h] [ebp-4h]
 
+    // zombies: SP's objective_add takes the text third and the position fourth (zombietron's exits)
+    if ( G_SP_IsSPLevel() )
+    {
+        G_SP_ObjectiveAdd();
+        return;
+    }
     numParam = Scr_GetNumParam(SCRIPTINSTANCE_SERVER);
     if ( numParam < 2 )
         Scr_Error(
@@ -6821,6 +6828,12 @@ void Scr_PhysicsTrace()
     int iSurfaceTypeIndex; // [esp+D8h] [ebp-8h]
     unsigned __int16 hitEntId; // [esp+DCh] [ebp-4h]
 
+    // zombies: SP's physicstrace returns the end position, not MP's result array (zombietron's spawn points)
+    if ( G_SP_IsSPLevel() )
+    {
+        G_SP_PhysicsTrace();
+        return;
+    }
     maskType = 1;
     pIgnoreEnt = 0;
     iIgnoreEntNum = 1023;

@@ -134,6 +134,7 @@ extern const dvar_t *sv_punkbuster;
 extern const dvar_t *sv_security;
 extern const dvar_t *sv_ranked;
 extern const dvar_t *sv_maxPhysExplosionSpheres;
+extern const dvar_t *sv_restrictedTempEnts;
 extern const dvar_t *ui_ranked;
 extern const dvar_t *sv_dedicatedmaxclients;
 extern const dvar_t *sv_maxclients;

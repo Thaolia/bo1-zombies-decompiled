@@ -586,7 +586,7 @@ gclient_s *__cdecl G_GetPlayerState(unsigned int clientNum)
 
 int __cdecl G_GetClientSize()
 {
-    return 10720;
+    return sizeof(gclient_s);
 }
 
 void __cdecl G_FreeEntities(bool clearTargets)
@@ -2397,8 +2397,9 @@ void G_PrintAllFastFileErrors()
     // zombies: SP G_InitGame (0x0051E8F0) has no MP-zone error-report pass.
     // Keep the build-error checks, using the SP zones selected by the zombie loader.
     G_PrintFastFileErrors(G_SP_IsSPLevel() ? (char*)"code_post_gfx" : (char*)"code_post_gfx_mp");
-    // zombies: the SP front end loads no common zone (SP 0x004C8940..0x004C8966): nothing to report there.
-    if ( !Com_IsSPFrontEndRunning() )
+    // zombies: the SP front end loads no common zone (SP 0x004C8940..0x004C8966), nor does zombietron
+    // (Com_LoadCommonFastFile): nothing to report there.
+    if ( !Com_IsSPFrontEndRunning() && !Dvar_GetBool("zombietron") )
         G_PrintFastFileErrors(G_SP_IsSPLevel() ? (char*)"common_zombie" : (char*)"common_mp");
     G_PrintFastFileErrors((char *)sv_mapname->current.string);
 }
@@ -3792,8 +3793,12 @@ void __cdecl G_RunFrameForEntity(gentity_s *ent)
         {
             if ( ent->freeAfterEvent )
             {
-                // zombies: SP 0x007E34D0 gives an EV_PHYS_EXPLOSION_SPHERE temp ent's slot back to G_TempEntity's cap
-                if ( ent->s.eType == ET_EVENTS + EV_PHYS_EXPLOSION_SPHERE && g_physExplosionSphereCount )
+                // zombies: SP 0x007E34D0 gives a capped temp ent's slot back to G_TempEntity's caps
+                if ( ent->s.eType == ET_EVENTS + EV_BULLET_HIT && g_bulletHitTempEntCount )
+                    --g_bulletHitTempEntCount;
+                else if ( ent->s.eType == ET_EVENTS + EV_CREATE_DYNENT && g_createDynEntTempEntCount )
+                    --g_createDynEntTempEntCount;
+                else if ( ent->s.eType == ET_EVENTS + EV_PHYS_EXPLOSION_SPHERE && g_physExplosionSphereCount )
                     --g_physExplosionSphereCount;
                 G_FreeEntity(ent);
                 return;
@@ -3919,6 +3924,14 @@ int G_PopulateMatchState()
         level.matchState.unarchivedState.scoreboardColumnTypes[1] = SB_TYPE_NONE;
         level.matchState.unarchivedState.scoreboardColumnTypes[2] = SB_TYPE_NONE;
         level.matchState.unarchivedState.scoreboardColumnTypes[3] = SB_TYPE_NONE;
+        // zombies: zombietron's score bar values ride columns 1-3 (G_SP_WriteZombietronColumns); the MP types are
+        // only labels the client looks them up by
+        if ( Dvar_GetBool("zombietron") )
+        {
+            level.matchState.unarchivedState.scoreboardColumnTypes[1] = SB_TYPE_DEFENDS;
+            level.matchState.unarchivedState.scoreboardColumnTypes[2] = SB_TYPE_PLANTS;
+            level.matchState.unarchivedState.scoreboardColumnTypes[3] = SB_TYPE_DEFUSES;
+        }
     }
     return result;
 }

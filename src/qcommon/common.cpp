@@ -2634,11 +2634,20 @@ void __cdecl Com_InitCodeXAssets()
         // holds SP configs only; this exe's init needs its own (default_mp.cfg, init_dvars_pc_dedicated_mp.cfg and the
         // mp/devconsole_restrict_access_*.csv tables, which are requested before code_post_gfx brings the default
         // stringtable). It adds 68 localize entries and no snddriverglobals, so the SP post-gfx set still fits.
-        zoneInfo[0].name = "code_pre_gfx_mp";
-        zoneInfo[0].allocFlags = 1;
-        zoneInfo[0].freeFlags = 0;
-        zoneCount = 1;
-        DB_LoadXAssets(zoneInfo, 1u, 0);
+        // With bo1_zombies, SP's code_pre_gfx loads first with the same flags: code_pre_gfx_mp, loading after it,
+        // keeps every asset both define (DB_OverrideAsset), and SP's own configs become reachable, among them
+        // buttons_zombietron.cfg, which forcegamemodemappings execs for zombietron (cg_scr_sp_client.cpp).
+        zoneCount = 0;
+        if ( bo1_zombies->current.enabled )
+        {
+            zoneInfo[zoneCount].name = "code_pre_gfx";
+            zoneInfo[zoneCount].allocFlags = 1;
+            zoneInfo[zoneCount++].freeFlags = 0;
+        }
+        zoneInfo[zoneCount].name = "code_pre_gfx_mp";
+        zoneInfo[zoneCount].allocFlags = 1;
+        zoneInfo[zoneCount++].freeFlags = 0;
+        DB_LoadXAssets(zoneInfo, zoneCount, 0);
         DB_SyncXAssets();
     }
 }

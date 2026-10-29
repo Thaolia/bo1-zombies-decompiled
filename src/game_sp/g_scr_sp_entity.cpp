@@ -42,6 +42,8 @@
 #include <sound/snd_bank.h>
 #include <game/g_missile.h>
 #include <game/bullet.h>
+#include <game/actor_corpse.h>
+#include <bgame/bg_weapons_load_obj.h>
 #include <qcommon/cm_world.h>
 #include <xanim/xanim.h>
 #include <universal/com_math_anglevectors.h>
@@ -54,6 +56,7 @@
 #include <qcommon/cm_load_obj.h>
 #include "g_sp_player_state.h"
 #include <cmath>
+#include <cctype>
 
 // Existing vehicle-path storage (g_vehicle_path.cpp).
 extern vehicle_node_t s_nodes[2000];
@@ -1315,6 +1318,18 @@ static void G_m_setexploderid(scr_entref_t entref)
     ent->s.lerp.u.scriptMover.exploderIndex = (__int16)Scr_GetInt(0, SCRIPTINSTANCE_SERVER);
 }
 
+// zombies: setscale (SP 0x007f4bc0): script movers only, scale * 6553.5 + 0.5 truncated into SP s+0x6E,
+// "lerp.u.scriptMover.scale" (16 bit netfield). KB's script-mover state has the field at s+0x6A, but no
+// netfield sends it and no KB client reads it, so the model is still drawn at scale 1.
+static void G_m_setscale(scr_entref_t entref)
+{
+    gentity_s *ent = GetEntity(entref);
+    const float scale = Scr_GetFloat(0, SCRIPTINSTANCE_SERVER);
+    if (ent->s.eType != ET_SCRIPTMOVER)
+        Scr_Error(SCRIPTINSTANCE_SERVER, "Can only set scale on script movers", 0);
+    ent->s.lerp.u.scriptMover.scale = (unsigned __int16)(int)(scale * 6553.5f + 0.5f);
+}
+
 // zombies: transmittargetname (SP 0x005e6d50). SP clears SVF_NOCLIENT and sets bit 0x100 of its 16-bit
 // svFlags; KB's svFlags is 8 bits, so bit 0x100 is kept here per entity (no KB reader yet).
 static bool s_spTransmitTargetname[MAX_GENTITIES_SV];
@@ -1789,6 +1804,278 @@ void Path_SP_ResetLinkOverrides(int restart)
     g_pathnodeLinkMap.m_tree_root = 0;
 }
 
+// zombies: getdvarvector, server form (SP 0x007f0380): as CScr_GetDvarVector, with SP's own message for
+// a missing dvar, after which it returns.
+static void G_f_getdvarvector()
+{
+    const dvar_s *dvar;
+    if (Scr_GetType(0, SCRIPTINSTANCE_SERVER) == 6)
+        dvar = Dvar_FindVar(Scr_GetInt(0, SCRIPTINSTANCE_SERVER));
+    else
+        dvar = Dvar_FindVar(Scr_GetString(0, SCRIPTINSTANCE_SERVER));
+    if (!dvar)
+    {
+        Scr_Error(SCRIPTINSTANCE_SERVER, "Invalid Dvar passed into GetDvarVec", 0);
+        return;
+    }
+    if (dvar->type != DVAR_TYPE_FLOAT_3)
+        Scr_Error(SCRIPTINSTANCE_SERVER, "dvar is not a vector in but GetDvarVec has been called on it", 0);
+    Scr_AddVector((float *)&dvar->current.value, SCRIPTINSTANCE_SERVER);
+}
+
+// zombies: clearallcorpses (SP 0x008003d0 -> 0x005953a0, the same loop as G_RemoveAllActorCorpses).
+static void G_f_clearallcorpses()
+{
+    G_RemoveAllActorCorpses();
+}
+
+static int G_SP_ObjectiveIndex()
+{
+    const int objNum = Scr_GetInt(0, SCRIPTINSTANCE_SERVER);
+    if ((unsigned int)objNum >= ARRAY_COUNT(level.objectives))
+        Scr_Error(SCRIPTINSTANCE_SERVER, va("index %i is an illegal objective index. Valid indexes are 0 to %i\n", objNum, 31), 0);
+    return objNum;
+}
+
+// The checks SP runs on an objective's text before storing it (SP 0x007f6f0a / 0x007f762a). 20 and 21 are
+// allowed control characters.
+static void G_SP_ValidateObjectiveString(char *text)
+{
+    const int len = (int)strlen(text);
+    if (len >= 1024)
+        Scr_Error(SCRIPTINSTANCE_SERVER, va("Objective strings is too long (> %i): %s\n", 1023, text), 0);
+    if (!Info_Validate(text) || strchr(text, '\\'))
+        Scr_Error(SCRIPTINSTANCE_SERVER, va("Objective strings can not have a \", a ;, or a \\ in them. Illegal objective string: %s\n", text), 0);
+    for (int i = 0; i < len; ++i)
+    {
+        const unsigned char c = (unsigned char)text[i];
+        if ((c >= 1 && c <= 31 && c != 20 && c != 21) || c >= 127)
+            Scr_Error(SCRIPTINSTANCE_SERVER, va("Illegal character '%c'(ascii %i) in objective string: %s\n", (char)c, c, text), 0);
+    }
+}
+
+// zombies: objective_string (SP 0x007f70b0 -> 0x007f6e80 with notify 1). SP keeps the text under "str" in
+// the objective's info string, CS 0x142 + index, and when the objective is not in one state sends the
+// players 'V' (the "objective updated" message). Neither is ported: KB uses CS 0x142.. for other strings,
+// its objectives travel in level.objectives, and its cgame has no 'V' command. The text is checked as SP
+// does.
+static void G_f_objective_string()
+{
+    G_SP_ObjectiveIndex();
+    char text[1024];
+    Scr_ConstructMessageString(1, Scr_GetNumParam(SCRIPTINSTANCE_SERVER) - 1, "Objective String", text, sizeof(text));
+    G_SP_ValidateObjectiveString(text);
+}
+
+// zombies: objective_set3d (SP 0x007f7530): index, use3d [, color [, text [, flags [, offset]]]]. SP
+// clears and sets the objective's use3D / color (same fields as KB's objective_t) and writes them with
+// the text and offset to CS 0x142 + index under txt3d / use3d / col3d / offx / offy / offz. The info
+// string is not ported (see objective_string); no KB client draws the 3D marker.
+static void G_f_objective_set3d()
+{
+    const int numParam = Scr_GetNumParam(SCRIPTINSTANCE_SERVER);
+    objective_t *obj = &level.objectives[G_SP_ObjectiveIndex()];
+    obj->use3D = 0;
+    obj->color = 0;
+    char text[1024];
+    text[0] = 0;
+    float offset[3] = { 0.0f, 0.0f, 0.0f };
+    switch (numParam)
+    {
+    case 6:
+        Scr_GetVector(5, offset, SCRIPTINSTANCE_SERVER);
+        [[fallthrough]];
+    case 5:
+    {
+        const int flags = Scr_GetInt(4, SCRIPTINSTANCE_SERVER);
+        obj->use3D |= ((flags >= 0 ? flags + 1 : 0) & 0xF) << 1;
+        [[fallthrough]];
+    }
+    case 4:
+        Scr_ConstructMessageString(3, 3, "Objective String", text, sizeof(text));
+        G_SP_ValidateObjectiveString(text);
+        [[fallthrough]];
+    case 3:
+    {
+        const char *color = Scr_GetString(2, SCRIPTINSTANCE_SERVER);
+        if (!I_stricmp(color, "white"))
+            obj->color = 1;
+        else if (!I_stricmp(color, "red"))
+            obj->color = 2;
+        else if (!I_stricmp(color, "green"))
+            obj->color = 3;
+        else if (!I_stricmp(color, "blue"))
+            obj->color = 4;
+        else if (!I_stricmp(color, "ltblue"))
+            obj->color = 5;
+        [[fallthrough]];
+    }
+    case 2:
+        obj->use3D |= Scr_GetInt(1, SCRIPTINSTANCE_SERVER) & 1;
+        break;
+    default:
+        Scr_Error(SCRIPTINSTANCE_SERVER, va("Invalid argument count. Expected 2-6, given %d\n", numParam), 0);
+        break;
+    }
+}
+
+// zombies: objective_add on an SP level (SP 0x007f6c10 -> 0x007f6700): index state [string] [position or entity]
+// [icon]. KB's MP form takes the position third and the icon fourth. SP writes the text, position and icon to the
+// objective's info string (CS 0x142 + index, not ported, see objective_string) and sends 'J' "3" and the 'V'
+// notification (not ported either); the objective_t fields are written as SP does.
+void G_SP_ObjectiveAdd()
+{
+    const int numParam = Scr_GetNumParam(SCRIPTINSTANCE_SERVER);
+    if (numParam < 2)
+        Scr_Error(SCRIPTINSTANCE_SERVER, "objective_add needs at least the first two parameters out of its parameter list of: index state [string] [position]\n", 0);
+    const int objNum = G_SP_ObjectiveIndex();
+    objective_t *obj = &level.objectives[objNum];
+    level.objectivesClientMask[objNum][0] = 0;
+    level.objectivesClientMask[objNum][1] = 0;
+    const unsigned int stateName = Scr_GetConstString(1, SCRIPTINSTANCE_SERVER);
+    objectiveState_t state;
+    if (!ObjectiveStateIndexFromString(&state, stateName))
+        Scr_Error(SCRIPTINSTANCE_SERVER, va("Illegal objective state \"%s\". Valid states are \"empty\", \"active\", \"invisible\", \"done\", \"current\", \"failed\"\n",
+            SL_ConvertToString(stateName, SCRIPTINSTANCE_SERVER)), 0);
+    ClearObjective_OnEntity(obj);
+    obj->state = state;
+    obj->alt_3D_text = nullptr;
+    obj->use3D = 0;
+    if (numParam > 2)
+    {
+        if (Scr_GetType(2, SCRIPTINSTANCE_SERVER) == VAR_ISTRING)
+        {
+            const char *ref = Scr_GetIString(2, SCRIPTINSTANCE_SERVER);
+            const int len = (int)strlen(ref);
+            for (int i = 0; len > 1 && i < len; ++i)
+            {
+                if (!isalnum((unsigned char)ref[i]) && ref[i] != '_')
+                    Scr_ParamError(2, va("Illegal localized string reference: %s must contain only alpha-numeric characters and underscores", ref), SCRIPTINSTANCE_SERVER);
+            }
+        }
+        else
+        {
+            char text[1024];
+            I_strncpyz(text, Scr_GetString(2, SCRIPTINSTANCE_SERVER), sizeof(text));
+            G_SP_ValidateObjectiveString(text);
+        }
+    }
+    if (numParam > 3)
+    {
+        if (Scr_GetType(3, SCRIPTINSTANCE_SERVER) == VAR_VECTOR)
+            Scr_GetVector(3, obj->origin, SCRIPTINSTANCE_SERVER);
+        else
+            obj->entNum = Scr_GetEntity(3)->s.number;
+    }
+    if (numParam > 4)
+        SetObjectiveIcon(obj, 4);
+    obj->teamNum = 0;
+}
+
+// zombies: physicstrace on an SP level (SP 0x007f8560): start, end [, mins [, maxs]] returns the end position
+// only, where MP returns its result array; SP traces with the fixed mask 0x820011. With five arguments SP asks
+// for the ignore entity at index 5, one past the last, which raises "parameter 6 does not exist", as here.
+void G_SP_PhysicsTrace()
+{
+    float start[3] = { 0.0f, 0.0f, 0.0f };
+    float end[3] = { 0.0f, 0.0f, 0.0f };
+    float mins[3] = { 0.0f, 0.0f, 0.0f };
+    float maxs[3] = { 0.0f, 0.0f, 0.0f };
+    int ignoreEntNum = ENTITYNUM_NONE;
+    switch (Scr_GetNumParam(SCRIPTINSTANCE_SERVER))
+    {
+    case 5:
+        if (Scr_GetType(5, SCRIPTINSTANCE_SERVER) == VAR_POINTER && Scr_GetPointerType(5, SCRIPTINSTANCE_SERVER) == VAR_ENTITY)
+            ignoreEntNum = Scr_GetEntity(5)->s.number;
+        [[fallthrough]];
+    case 4:
+        Scr_GetVector(3, maxs, SCRIPTINSTANCE_SERVER);
+        [[fallthrough]];
+    case 3:
+        Scr_GetVector(2, mins, SCRIPTINSTANCE_SERVER);
+        [[fallthrough]];
+    case 2:
+        Scr_GetVector(0, start, SCRIPTINSTANCE_SERVER);
+        Scr_GetVector(1, end, SCRIPTINSTANCE_SERVER);
+        break;
+    default:
+        Scr_Error(SCRIPTINSTANCE_SERVER, "illegal call to PhysicsTrace()", 0);
+        break;
+    }
+    col_context_t context;
+    trace_t trace;
+    G_TraceCapsule(&trace, start, mins, maxs, end, ignoreEntNum, 0x820011, &context);
+    float endpos[3];
+    endpos[0] = (end[0] - start[0]) * trace.fraction + start[0];
+    endpos[1] = (end[1] - start[1]) * trace.fraction + start[1];
+    endpos[2] = (end[2] - start[2]) * trace.fraction + start[2];
+    Scr_AddVector(endpos, SCRIPTINSTANCE_SERVER);
+}
+
+// zombies: setweapon (SP 0x0052cd10): the weapon fire() shoots from this entity. SP writes the byte
+// s+0xd4, KB's 16-bit s.weapon.
+static void G_f_setweapon()
+{
+    gentity_s *ent = Scr_GetEntity(0);
+    const char *weapName = Scr_GetString(1, SCRIPTINSTANCE_SERVER);
+    const int weapon = G_GetWeaponIndexForName((char *)weapName);
+    if (!weapon)
+        Scr_Error(SCRIPTINSTANCE_SERVER, va("SetWeapon called with unknown weapon name %s\n", weapName), 0);
+    ent->s.weapon = (unsigned __int16)weapon;
+}
+
+// zombies: fire (SP 0x00472990): fire( ent, attacker ) shoots ent's s.weapon from ent's origin along its
+// angles, as MagicBullet's zombies branch picks the fire function, then raises EV_FIRE_WEAPON on ent.
+static void G_f_fire()
+{
+    gentity_s *self = Scr_GetEntity(0);
+    gentity_s *attacker = Scr_GetEntity(1);
+    const unsigned int weapon = self->s.weapon;
+    weaponParms wp = {};
+    Weapon_SetWeaponParamsWeapon(&wp, weapon);
+    AngleVectors(self->r.currentAngles, wp.forward, nullptr, nullptr);
+    Vec3Copy(self->r.currentOrigin, wp.muzzleTrace);
+    float targetOffset[3] = { 0.0f, 0.0f, 0.0f };
+    float spread = 0.0f;
+    if (wp.weapDef->weapType == WEAPTYPE_GRENADE || wp.weapDef->weapType == WEAPTYPE_MINE)
+        Scr_Error(SCRIPTINSTANCE_SERVER, "Fire() does not work with grenade-type weapons.\n", 0);
+    if (wp.weapDef->weapClass == WEAPCLASS_SPREAD)
+    {
+        spread = wp.weapDef->fHipSpreadStandMin;
+        PerpendicularVector(wp.forward, wp.right);
+        Vec3Cross(wp.forward, wp.right, wp.up);
+    }
+    switch (wp.weapDef->weapType)
+    {
+    case WEAPTYPE_BULLET:
+        Bullet_Fire(attacker, spread, &wp, self, level.time);
+        break;
+    case WEAPTYPE_PROJECTILE:
+        switch (wp.weapDef->weapClass)
+        {
+        case WEAPCLASS_GRENADE:
+            Weapon_GrenadeLauncher_Fire(attacker, weapon, 0, &wp);
+            break;
+        case WEAPCLASS_PISTOL:
+        case WEAPCLASS_ROCKETLAUNCHER:
+        case WEAPCLASS_TURRET:
+            Weapon_RocketLauncher_Fire(attacker, weapon, 0.0f, &wp, vec3_origin, nullptr, targetOffset);
+            break;
+        default:
+            Scr_Error(SCRIPTINSTANCE_SERVER, "Fire(): Unhandled projectile weapClass.\n", 0);
+            break;
+        }
+        break;
+    case WEAPTYPE_GAS:
+        Weapon_Flamethrower_Fire(self, &wp);
+        break;
+    default:
+        Scr_Error(SCRIPTINSTANCE_SERVER, va("Fire(): Unhandled weapType \"%s\".\n", BG_GetWeaponTypeName(wp.weapDef->weapType)), 0);
+        break;
+    }
+    G_AddEvent(self, EV_FIRE_WEAPON, 0);
+}
+
 static void G_f_zerogravityvolumeon();
 static void G_f_zerogravityvolumeoff();
 
@@ -1845,6 +2132,12 @@ const BuiltinFunctionDef g_sp_entity_functions[] =
     { "setmissiondvar", G_f_setmissiondvar, 0 },
     { "modelhasphyspreset", G_f_modelhasphyspreset, 0 },
     { "isturretactive", G_f_isturretactive, 0 },
+    { "getdvarvector", G_f_getdvarvector, 0 },
+    { "clearallcorpses", G_f_clearallcorpses, 0 },
+    { "objective_string", G_f_objective_string, 0 },
+    { "objective_set3d", G_f_objective_set3d, 0 },
+    { "setweapon", G_f_setweapon, 0 },
+    { "fire", G_f_fire, 0 },
     { nullptr, nullptr, 0 } // end marker, keep last
 };
 const unsigned int g_sp_entity_function_count = ARRAY_COUNT(g_sp_entity_functions) - 1;
@@ -2050,6 +2343,7 @@ const BuiltinMethodDef g_sp_entity_methods[] =
     { "setvehicleattachments", G_m_setvehicleattachments, 0 },
     { "stopsound", G_m_stopsound, 0 },
     { "setexploderid", G_m_setexploderid, 0 },
+    { "setscale", G_m_setscale, 0 },
     { "transmittargetname", G_m_transmittargetname, 0 },
     { "getlinkedent", G_m_getlinkedent, 0 },
     { "bloodimpact", G_m_bloodimpact, 0 },

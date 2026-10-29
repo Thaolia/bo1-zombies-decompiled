@@ -95,6 +95,16 @@ void G_m_lookatentity(scr_entref_t entref)
     }
 }
 
+// zombies: haspath (SP 0x00802ad0): Path_Exists on the actor's path (SP 0x00656c50 -> 0x00453550).
+void G_m_haspath(scr_entref_t entref)
+{
+    gentity_s *ent = GetEntity(entref);
+    if (!ent->actor)
+        Scr_Error(va("haspath must be called on an AI, not on a '%s'",
+            SL_ConvertToString(ent->classname, SCRIPTINSTANCE_SERVER)), false);
+    Scr_AddInt(Path_Exists(&ent->actor->Path), SCRIPTINSTANCE_SERVER);
+}
+
 // zombies: getthreatbiasgroup (SP 0x00819630). Group 0 is the unnamed default: "" is returned.
 void G_m_getthreatbiasgroup(scr_entref_t entref)
 {

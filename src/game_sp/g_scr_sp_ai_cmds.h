@@ -8,6 +8,7 @@
 void G_m_setdeathcontents(scr_entref_t entref);     // SP 0x007f54e0
 void G_m_getaivelocity(scr_entref_t entref);        // SP 0x007f53e0
 void G_m_lookatentity(scr_entref_t entref);         // SP 0x008061b0
+void G_m_haspath(scr_entref_t entref);              // SP 0x00802ad0
 void G_m_getthreatbiasgroup(scr_entref_t entref);   // SP 0x00819630
 void G_m_issuppressed(scr_entref_t entref);         // SP 0x007cb9d0
 void G_m_stopshoot(scr_entref_t entref);            // SP 0x007c9cb0

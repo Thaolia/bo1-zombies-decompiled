@@ -21,6 +21,14 @@
 #include <client_mp/cl_cgame_mp.h>
 #include <win32/win_shared.h>
 #include <sound/snd_public_async.h>
+#include <cgame/cg_sp_client_ext.h>
+#include <cgame_mp/cg_ents_mp.h>
+#include <cgame_mp/cg_main_mp.h>
+#include <client/cl_voice.h>
+#include <client_mp/cl_main_pc_mp.h>
+#include <client_mp/cl_ui_mp.h>
+#include <stringed/stringed_hooks.h>
+#include <cmath>
 
 // SP dvars BO1Zombies's MP client does not register (SP registers them at 0x005c7860..0x005c7ae6, in the
 // same function as cg_scoreboardItemHeight / cg_scoreboardFont). Defaults and bounds are the exe's.
@@ -28,6 +36,7 @@ static const dvar_t *cg_ScoresColor_Player;
 static const dvar_t *cg_ScoresColor_Transparency;
 static const dvar_t *cg_ScoresColor_Zombie;
 static const dvar_t *cg_ScoresColor_TransparencyZombie;
+static const dvar_t *cl_scoreDraw; // SP 0x02f67b2c, registered at SP 0x004a5705; zombietron's scripts toggle it
 
 void CG_SP_RegisterScoreBarDvars()
 {
@@ -44,6 +53,13 @@ void CG_SP_RegisterScoreBarDvars()
     _Dvar_RegisterColor("cg_ScoresColor_Gamertag_1", 0.0f, 0.0f, 0.0f, 1.0f, 0, "");
     _Dvar_RegisterColor("cg_ScoresColor_Gamertag_2", 0.0f, 0.0f, 0.0f, 1.0f, 0, "");
     _Dvar_RegisterColor("cg_ScoresColor_Gamertag_3", 0.0f, 0.0f, 0.0f, 1.0f, 0, "");
+    cl_scoreDraw = _Dvar_RegisterBool("cl_scoreDraw", 1, 0, "");
+}
+
+// SP CG_MapRestart sets cl_scoreDraw 1 (SP 0x004908b7).
+void CG_SP_ResetScoreDraw()
+{
+    Dvar_SetBool((dvar_s *)cl_scoreDraw, true);
 }
 
 // SP registers cg_scoreboardHeight 330 (SP 0x005c7724) and cg_scoreboardTextOffset 0.62 (SP 0x005c77c7), MP
@@ -167,10 +183,57 @@ static void CG_DrawScoreBarColumnText(
     UI_DrawText(scrPlace, text, 0x7FFFFFFF, font, x + dx, y, horzAlign, vertAlign, scale, color, style);
 }
 
-// CG_DrawPlayerScoreBar (SP 0x00892860). Five's zombiemode table and the no-mode table are ported. The
-// zombietron table (SP 0x00a60680, 6 rows: column types 8, 9, 10, 11, 12 and its bomb / lives icons) is
-// NOT ported: Dead Ops Arcade is not Five; with zombietron set this draws nothing.
-static void CG_DrawPlayerScoreBar(
+static int CG_SP_ScoreColumn(const cg_s *cgameGlob, const score_s *score, scoreboardColumnType_t columnType);
+
+// The zombietron bar's values. SP reads them from score_s (assists +0x14, downs +0x28, revives +0x2c, headshots +0x30,
+// scoreMultiplier +0x34), which zombietron's update_hud fills with the bombs, boosters and lives; headshots is the
+// weapon / respawn meter (0..1000) and scoreMultiplier is (increment << 4) | (multiplier - 1). BO1Zombies's
+// clientState carries assists only; the server sends the rest as scoreboard columns (G_SP_WriteZombietronColumns).
+struct ZombietronScore
+{
+    int lives;
+    int bombs;
+    int boosters;
+    int meter;
+    int multiplier;
+};
+
+static ZombietronScore CG_SP_ZombietronScore(const cg_s *cgameGlob, const score_s *score)
+{
+    ZombietronScore zt;
+    const int livesBoosters = CG_SP_ScoreColumn(cgameGlob, score, SB_TYPE_DEFENDS);
+    zt.lives = livesBoosters >> 4;
+    zt.boosters = livesBoosters & 0xF;
+    zt.bombs = score->assists;
+    zt.meter = CG_SP_ScoreColumn(cgameGlob, score, SB_TYPE_HEADSHOTS);
+    zt.multiplier = (CG_SP_ScoreColumn(cgameGlob, score, SB_TYPE_DEFUSES) << 4) | CG_SP_ScoreColumn(cgameGlob, score, SB_TYPE_PLANTS);
+    return zt;
+}
+
+// SP's pulse when a zombietron counter goes up: one second, peaking half-way at a quarter of the font scale.
+static float CG_SP_ZombietronPulse(int localClientNum, int slot, int value, float scale)
+{
+    const cg_s *cgameGlob = CG_GetLocalClientGlobals(localClientNum);
+    CgSPClientExt *ext = CG_SP_GetClientExt(localClientNum);
+    if ( ext->ztLastValue[slot] != (unsigned int)value )
+    {
+        if ( ext->ztLastValue[slot] < (unsigned char)value )
+            ext->ztPulseEndTime[slot] = cgameGlob->time + 1000;
+        ext->ztLastValue[slot] = (unsigned char)value;
+    }
+    if ( cgameGlob->time < ext->ztPulseEndTime[slot] )
+        scale = (1.0f - fabsf(500.0f - (float)(ext->ztPulseEndTime[slot] - cgameGlob->time)) * 0.002f) * 0.25f + scale;
+    return scale;
+}
+
+// zombietron's table, SP 0x00a60680: lives, bombs, boosters, points, multiplier bar, meter and name
+static const scoreBarColumn_s s_scoreBarColumnsZombietron[6] = {
+    { 10, 0.1f, "", 0 }, { 8, 0.1f, "", 0 }, { 9, 0.3f, "", 0 }, { 2, 0.4f, "", 2 }, { 12, 0.1f, "", 0 }, { 11, 0.0f, "", 0 } };
+
+// CG_DrawPlayerScoreBar (SP 0x00892860). Five's zombiemode table, zombietron's and the no-mode table are ported.
+// Returns y less the row height plus 9 in zombiemode and 3 for the local row, which the caller steps from;
+// zombietron's meter and multiplier columns move y for the columns after them, and that moved y is returned.
+static float CG_DrawPlayerScoreBar(
     int localClientNum,
     int clientNum,
     const float *baseColor,
@@ -185,6 +248,7 @@ static void CG_DrawPlayerScoreBar(
 {
     cg_s *cgameGlob = CG_GetLocalClientGlobals(localClientNum);
     const ScreenPlacement *scrPlace = &scrPlaceView[localClientNum];
+    const bool zombietron = Dvar_GetBool("zombietron");
     const scoreBarColumn_s *columns;
     int columnCount;
     float rowHeight;
@@ -193,16 +257,20 @@ static void CG_DrawPlayerScoreBar(
     float widthCut;
     float barX;
     float scaleDelta;
+    float scale;
     Material *material;
     Font_s *font;
     const char *materialName;
 
     rowHeight = (float)cg_scoreboardItemHeight->current.integer - (float)(isLocal ? 0 : 3) + (float)(zombiemode->current.enabled ? 9 : 0);
     if ( !cgameGlob->bgs.clientinfo[clientNum].infoValid )
-        return;
-    if ( Dvar_GetBool("zombietron") )
-        return; // NOT PORTED: the zombietron table (see above)
-    if ( zombiemode->current.enabled )
+        return y;
+    if ( zombietron )
+    {
+        columns = s_scoreBarColumnsZombietron;
+        columnCount = 6;
+    }
+    else if ( zombiemode->current.enabled )
     {
         columns = s_scoreBarColumnsZombie;
         columnCount = 1;
@@ -215,7 +283,11 @@ static void CG_DrawPlayerScoreBar(
     color[0] = baseColor[0];
     color[1] = baseColor[1];
     color[2] = baseColor[2];
-    if ( zombiemode->current.enabled )
+    if ( zombietron )
+    {
+        color[3] = 1.0f;
+    }
+    else if ( zombiemode->current.enabled )
     {
         color[0] = (isLocal ? 0.05f : 0.0f) + color[0];
         color[3] = cg_ScoresColor_TransparencyZombie->current.value * (isLocal ? 2.0f : 0.8f) * baseColor[3];
@@ -223,6 +295,16 @@ static void CG_DrawPlayerScoreBar(
     else
     {
         color[3] = cg_ScoresColor_Transparency->current.value * baseColor[3];
+    }
+    CgSPClientExt *ext = CG_SP_GetClientExt(localClientNum);
+    if ( zombietron && !ext->ztPulseEndTime[0] )
+    {
+        ext->ztLastValue[0] = 3;
+        ext->ztLastValue[1] = 1;
+        ext->ztLastValue[2] = 2;
+        ext->ztLastValue[3] = 1;
+        for ( int i = 0; i < 4; ++i )
+            ext->ztPulseEndTime[i] = cgameGlob->time;
     }
     widthCut = (float)(isLocal ? 0 : 20);
     if ( zombiemode->current.enabled )
@@ -245,7 +327,13 @@ static void CG_DrawPlayerScoreBar(
     }
     UI_DrawHandlePic(scrPlace, barX, y, w - widthCut, rowHeight, horzAlign, vertAlign, color, material);
     font = UI_GetFontHandle(scrPlace, cg_scoreboardFont->current.integer, 0.35f);
-    if ( zombiemode->current.enabled )
+    if ( zombietron )
+    {
+        textColor[0] = 1.0f;
+        textColor[1] = 1.0f;
+        textColor[2] = 1.0f;
+    }
+    else if ( zombiemode->current.enabled )
     {
         CG_ScoreBarZombieColor("cg_ScoresColor_Gamertag", clientNum, textColor);
     }
@@ -263,6 +351,10 @@ static void CG_DrawPlayerScoreBar(
     }
     textColor[3] = baseColor[3];
     scaleDelta = isLocal ? 0.04f : -0.05f;
+    scale = scaleDelta;
+    const ZombietronScore zt = zombietron ? CG_SP_ZombietronScore(cgameGlob, score) : ZombietronScore{};
+    // SP 0x00892860 keeps the x it was given: the meters, the name and its voice icon start there, not at their column
+    const float startX = x;
     for ( int i = 0; i < columnCount; ++i )
     {
         float colWidth = columns[i].widthFrac * w;
@@ -272,19 +364,172 @@ static void CG_DrawPlayerScoreBar(
         {
             int value = CG_ScoreBarColumnValue(clientNum, score->score);
             char *text = va("%i", value);
-            if ( zombiemode->current.enabled )
-                CG_DrawScoreBarColumnText(localClientNum, text, font, x + 5.0f, y, colWidth, horzAlign, vertAlign, columns[i].alignment, scaleDelta + 0.35f, 3, textColor, rowHeight);
+            if ( zombietron )
+                CG_DrawScoreBarColumnText(localClientNum, text, font, x - 10.0f, y, colWidth, horzAlign, vertAlign, columns[i].alignment, scale + 0.45f, 3, textColor, rowHeight);
+            else if ( zombiemode->current.enabled )
+                CG_DrawScoreBarColumnText(localClientNum, text, font, x + 5.0f, y, colWidth, horzAlign, vertAlign, columns[i].alignment, scale + 0.35f, 3, textColor, rowHeight);
             else
-                CG_DrawScoreBarColumnText(localClientNum, text, font, x, y, colWidth, horzAlign, vertAlign, columns[i].alignment, scaleDelta + 0.35f, 3, textColor, rowHeight);
+                CG_DrawScoreBarColumnText(localClientNum, text, font, x, y, colWidth, horzAlign, vertAlign, columns[i].alignment, scale + 0.35f, 3, textColor, rowHeight);
+            break;
+        }
+        case 8:
+        case 9:
+        case 10:
+        {
+            // NOT PORTED: these columns outside zombietron (SP draws the bare number at x + 5 in zombiemode); no
+            // other ported table has them
+            if ( !zombietron )
+                break;
+            int slot;
+            int value;
+            float textX;
+            float iconX;
+            const char *iconName;
+            if ( columns[i].type == 10 )
+            {
+                slot = 0;
+                value = zt.lives;
+                textX = 10.0f;
+                iconX = 11.0f;
+                iconName = "stance_stand";
+            }
+            else if ( columns[i].type == 8 )
+            {
+                slot = 1;
+                value = zt.bombs;
+                textX = 14.0f;
+                iconX = 16.0f;
+                iconName = "hud_zombie_bomb";
+            }
+            else
+            {
+                slot = 2;
+                value = zt.boosters;
+                textX = 20.0f;
+                iconX = 20.0f;
+                iconName = "hud_lightning_bolt";
+            }
+            scale = CG_SP_ZombietronPulse(localClientNum, slot, value, scale);
+            CG_DrawScoreBarColumnText(localClientNum, va("%i", value), font, x + textX, y, colWidth, horzAlign, vertAlign, columns[i].alignment, scale + 0.35f, 3, textColor, rowHeight);
+            UI_DrawHandlePic(scrPlace, x + iconX, y, rowHeight, rowHeight, horzAlign, vertAlign, textColor, Material_RegisterHandle(iconName, 7));
+            scale = scaleDelta;
+            break;
+        }
+        case 11:
+        {
+            if ( !zombietron )
+                break;
+            // SP tests its EF_DEAD (0x400000) on the player's current state; KB's MP numbering has it at 0x40000
+            const bool dead = (CG_GetEntity(localClientNum, clientNum)->currentState.eFlags & 0x40000) != 0;
+            const float meter = (float)zt.meter * 0.001f;
+            const float barW = w - 58.0f;
+            if ( zt.meter )
+            {
+                if ( vertAlign == 10 )
+                    y = y - 14.0f;
+                else
+                    y = y + 3.0f;
+                if ( !dead )
+                {
+                    Material *bullets = Material_RegisterHandle("hud_bullets_rifle_full", 7);
+                    if ( bullets )
+                    {
+                        float glow = meter + 0.3f;
+                        if ( glow > 1.0f )
+                            glow = 1.0f;
+                        if ( glow < 0.0f )
+                            glow = 0.0f;
+                        const float bulletsColor[4] = { 1.0f, glow, glow, 1.0f };
+                        CL_DrawStretchPic(scrPlace, startX + 5.0f, y, barW * meter, 11.0f, horzAlign, vertAlign, 0.0f, 0.0f, meter * 0.5f, 1.0f, bulletsColor, bullets);
+                    }
+                }
+                else
+                {
+                    y = y + 3.0f;
+                    if ( Material_RegisterHandle("progress_bar_bg_small", 7) )
+                    {
+                        static const float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+                        CL_DrawStretchPic(scrPlace, startX + 5.0f, y, barW, 4.0f, horzAlign, vertAlign, 0.0f, 0.0f, 1.0f, 1.0f, white, Material_RegisterHandle("progress_bar_fg_small", 7));
+                        CL_DrawStretchPic(scrPlace, startX + 5.0f, y, barW * meter, 4.0f, horzAlign, vertAlign, 0.0f, 0.0f, meter, 1.0f, white, Material_RegisterHandle("progress_bar_bg_small", 7));
+                    }
+                }
+                y = y + 2.0f;
+            }
+            if ( vertAlign == 10 )
+                y = y - 25.0f;
+            const float fadeStep = (float)cgameGlob->frametime * 0.0002f;
+            if ( cg_drawFriendlyNames->current.enabled )
+                ext->ztNameFade = fadeStep + ext->ztNameFade;
+            else
+                ext->ztNameFade = ext->ztNameFade - fadeStep;
+            float fade = ext->ztNameFade - 1.0f < 0.0f ? ext->ztNameFade : 1.0f;
+            if ( -ext->ztNameFade >= 0.0f )
+                fade = 0.0f;
+            ext->ztNameFade = fade;
+            float nameColor[4] = { textColor[0], textColor[1], textColor[2], fade };
+            Material *voice = nullptr;
+            if ( CL_IsPlayerMuted(localClientNum, clientNum) )
+            {
+                voice = Material_RegisterHandle("voice_off", 7);
+            }
+            else if ( CL_IsPlayerTalking(localClientNum, clientNum) )
+            {
+                voice = Material_RegisterHandle("voice_on", 7);
+                nameColor[3] = 1.0f;
+            }
+            if ( !onlinegame->current.enabled && !Dvar_GetBool("systemlink") )
+                voice = nullptr;
+            char name[64];
+            name[0] = 0;
+            if ( CL_GetClientName(localClientNum, clientNum, name, sizeof(name), false) )
+            {
+                if ( dead && zt.meter )
+                {
+                    const char *reviving = SEH_SafeTranslateString("GAME_REVIVING");
+                    I_strncat(name, sizeof(name), " ");
+                    I_strncat(name, sizeof(name), reviving ? reviving : "GAME_REVIVING");
+                    nameColor[3] = 1.0f;
+                }
+                CG_DrawScoreBarColumnText(localClientNum, name, font, startX + 5.0f, y, w, horzAlign, vertAlign, columns[i].alignment, scale + 0.35f, 3, nameColor, rowHeight);
+            }
+            if ( voice )
+            {
+                const float voiceColor[4] = { 1.0f, 1.0f, 1.0f, baseColor[3] };
+                const float itemHeight = (float)cg_scoreboardItemHeight->current.integer;
+                const float nameWidth = (float)UI_TextWidth(name, 0, font, scale + 0.35f);
+                UI_DrawHandlePic(scrPlace, nameWidth + startX + 9.0f, y + 4.0f, itemHeight, itemHeight, horzAlign, vertAlign, voiceColor, voice);
+            }
+            break;
+        }
+        case 12:
+        {
+            // NOT PORTED: this column outside zombietron (the no-mode table's colour square, SP 0x00893b5b)
+            if ( !zombietron )
+                break;
+            const float fill = (float)(zt.multiplier >> 4) * 0.001953125f;
+            const int multiplier = (zt.multiplier & 0xF) + 1;
+            const float barW = w - 58.0f;
+            if ( vertAlign == 10 )
+                y = y - 4.0f;
+            else
+                y = y + h;
+            if ( Material_RegisterHandle("progress_bar_bg_small", 7) )
+            {
+                static const float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+                CL_DrawStretchPic(scrPlace, startX + 5.0f, y - 2.0f, barW, 4.0f, horzAlign, vertAlign, 0.0f, 0.0f, 1.0f, 1.0f, white, Material_RegisterHandle("progress_bar_fg_small", 7));
+                CL_DrawStretchPic(scrPlace, startX + 5.0f, y - 2.0f, barW * fill, 4.0f, horzAlign, vertAlign, 0.0f, 0.0f, fill, 1.0f, white, Material_RegisterHandle("progress_bar_bg_small", 7));
+            }
+            scale = CG_SP_ZombietronPulse(localClientNum, 3, multiplier, scale);
+            CG_DrawScoreBarColumnText(localClientNum, va("x%i", multiplier), font, x - 30.0f, y - 15.0f, 25.0f, horzAlign, vertAlign, columns[i].alignment, scale + 0.35f, 3, textColor, rowHeight);
+            scale = scaleDelta;
             break;
         }
         default:
-            // NOT PORTED: column type 12 of the no-mode table (SP 0x00892860's other switch arms). Five's
-            // zombiemode table has only type 2.
             break;
         }
         x = colWidth + x;
     }
+    return ((float)(zombiemode->current.enabled ? 9 : 0) + (float)(isLocal ? 3 : 0)) + (y - rowHeight);
 }
 
 // CG_DrawCompetitiveModeScores (SP 0x00893e50; the item rect in EAX)
@@ -322,22 +567,19 @@ static void CG_DrawCompetitiveModeScores(int localClientNum, const rectDef_s *re
         bool isLocal = clientNum == cgameGlob->clientNum;
         Dvar_GetUnpackedColor(cg_ScoresColor_Zombie, color);
         color[3] = itemColor[3];
-        CG_DrawPlayerScoreBar(
-            localClientNum,
-            clientNum,
-            color,
-            &cgameGlob->bgs.clientinfo[clientNum].score,
-            rect->x,
-            y - (float)((zombiemode->current.enabled ? 9 : 0) + (isLocal ? 3 : 0)),
-            rect->w,
-            rect->h,
-            rect->horzAlign,
-            rect->vertAlign,
-            isLocal);
-        // MEASURED: SP sets the next row's y from xmm0 after CG_DrawPlayerScoreBar returns (an LTCG
-        // register value the decompile does not show), minus (1 - (zombiemode ? 4 : 0)). Five solo has
-        // one row, so only the row step for co-op is unknown; here each row steps up by the row height.
-        y = y - ((float)cg_scoreboardItemHeight->current.integer + (float)(zombiemode->current.enabled ? 9 : 0))
+        // SP steps to the next row from the y CG_DrawPlayerScoreBar returns in xmm0 (SP 0x00893e50)
+        y = CG_DrawPlayerScoreBar(
+                localClientNum,
+                clientNum,
+                color,
+                &cgameGlob->bgs.clientinfo[clientNum].score,
+                rect->x,
+                y - (float)((zombiemode->current.enabled ? 9 : 0) + (isLocal ? 3 : 0)),
+                rect->w,
+                rect->h,
+                rect->horzAlign,
+                rect->vertAlign,
+                isLocal)
             - (float)(1 - (zombiemode->current.enabled ? 4 : 0));
     }
 }
@@ -350,6 +592,80 @@ bool CG_SP_OwnerDraw_MiniScoreboard(int localClientNum, const rectDef_s *rect)
     if ( cl_paused->current.integer )
         return false;
     CG_DrawCompetitiveModeScores(localClientNum, rect, white);
+    return true;
+}
+
+// ownerdraw 354, the zombietron score bars (SP 0x0041fb80): one bar per player slot in a screen corner, client
+// info slot 0 top left, 1 top right, 2 bottom left, 3 bottom right, and the first-place icon on the one player
+// whose score is the highest.
+bool CG_SP_OwnerDraw_ZombietronScores(int localClientNum, const rectDef_s *rect)
+{
+    static const float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    cg_s *cgameGlob = CG_GetLocalClientGlobals(localClientNum);
+    const int numClients = cgameGlob->snap->numClients;
+    const clientInfo_t *ci = cgameGlob->bgs.clientinfo;
+    int bestScore = 0;
+    int leader = -1;
+    float color[4];
+
+    if ( numClients < 1 || !cl_scoreDraw->current.enabled || cl_paused->current.integer )
+        return false;
+    // a tie for the best score (or a best score of 0) leaves no leader
+    if ( ci[0].infoValid && ci[0].score.score >= 0 )
+    {
+        bestScore = ci[0].score.score;
+        leader = bestScore ? ci[0].clientNum : -1;
+    }
+    for ( int i = 1; i < 4; ++i )
+    {
+        if ( ci[i].infoValid && bestScore <= ci[i].score.score )
+        {
+            leader = bestScore == ci[i].score.score ? -1 : ci[i].clientNum;
+            bestScore = ci[i].score.score;
+        }
+    }
+    for ( int i = 0; i < 4; ++i )
+    {
+        if ( !ci[i].infoValid )
+            continue;
+        const int clientNum = ci[i].clientNum;
+        // SP .rdata 0x009f1f1c, 0x009cf7c0, 0x00a2a2f8, 0x00a16838 / 0x009f1e54
+        switch ( clientNum )
+        {
+            case 0: color[0] = 0.35f; color[1] = 1.0f; color[2] = 0.35f; break;
+            case 1: color[0] = 0.37f; color[1] = 0.37f; color[2] = 1.0f; break;
+            case 2: color[0] = 1.0f; color[1] = 0.1f; color[2] = 0.1f; break;
+            default: color[0] = 0.7f; color[1] = 0.7f; color[2] = 0.2f; break;
+        }
+        color[3] = 1.0f;
+        float x = 5.0f;
+        float y = 5.0f;
+        int horzAlign = 8;
+        int vertAlign = 8;
+        if ( i == 1 || i == 3 )
+        {
+            x = -rect->w;
+            horzAlign = 10;
+        }
+        if ( i == 2 || i == 3 )
+        {
+            y = -rect->h;
+            vertAlign = 10;
+        }
+        CG_DrawPlayerScoreBar(localClientNum, clientNum, color, &ci[i].score, x, y, rect->w, rect->h, horzAlign,
+            vertAlign, false);
+        Material *firstPlace = Material_RegisterHandle("hud_firstplace", 7);
+        if ( firstPlace && clientNum == leader && numClients > 1 )
+        {
+            if ( horzAlign == 8 )
+                x = (rect->w - 20.0f) + x;
+            else
+                x = x - 45.0f;
+            if ( vertAlign == 10 )
+                y = y - 12.0f;
+            UI_DrawHandlePic(&scrPlaceView[localClientNum], x, y, 45.0f, 45.0f, horzAlign, vertAlign, white, firstPlace);
+        }
+    }
     return true;
 }
 

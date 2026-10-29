@@ -1526,6 +1526,9 @@ void __cdecl CG_CopyScoreFromClientState(int localClientNum, clientInfo_t *ci, c
         ci->score.place = cs->score.place;
         ci->score.score = cs->score.score;
         ci->score.deaths = cs->score.deaths;
+        // zombies: zombietron's score bar draws the bombs from the assists (SP 0x00892860 reads score + 0x14)
+        if ( zombiemode && zombiemode->current.enabled )
+            ci->score.assists = cs->score.assists;
         for ( column = 0; column < 4; ++column )
             ci->score.scoreboardColumns[column] = cs->score.scoreboardColumns[column];
         if ( ci->score.status_icon != cs->score.status_icon )

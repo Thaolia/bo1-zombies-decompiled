@@ -2336,6 +2336,12 @@ void __cdecl CG_CalcViewValues(int localClientNum)
                     {
                         CG_RadiantCamCalcView(localClientNum);
                     }
+                    // zombies: SP CG_CalcViewValues (SP 0x00794334) runs the top-down camera for its mode 10 here,
+                    // instead of the first-person offset; KB's MP code had no case for CAM_TOP_DOWN.
+                    else if (camMode == CAM_TOP_DOWN && zombiemode && zombiemode->current.enabled)
+                    {
+                        CG_CalcTopDownCamViewValues(localClientNum);
+                    }
                     else if (cgameGlob->renderingThirdPerson != TP_FOR_MODEL)
                     {
                         CG_OffsetFirstPersonView(cgameGlob);

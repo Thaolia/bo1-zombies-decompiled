@@ -51,6 +51,7 @@
 #include <gfx_d3d/r_model.h>
 #include "cg_ui_animate_mp.h"
 #include <ui_mp/ui_main_mp.h>
+#include <cgame/cg_sp_hud.h>
 
 GfxFog cg_serverVolFog;
 
@@ -534,9 +535,12 @@ void __cdecl CG_MapRestart(int localClientNum, int savepersist)
         Com_Printf(14, "CG_MapRestart\n");
     // zombies (L4): SP CG_MapRestart (0x00490840) closes the UI (UI_SetActiveMenu(lc, 0) at 0x00490887) and clears
     // the cgame's cl_paused (0x004908AA) before the rest of the restart, so a Restart Level from the pause menu comes
-    // back unpaused with no menu. SP also sets cl_scoreDraw 1 (0x004908B7), an SP-only dvar KB does not have.
+    // back unpaused with no menu, and sets cl_scoreDraw 1 (0x004908B7).
     if ( zombiemode && zombiemode->current.enabled )
+    {
         UI_SetActiveMenu(localClientNum, UIMENU_NONE);
+        CG_SP_ResetScoreDraw();
+    }
     CG_ClearCenterPrint(localClientNum);
     cgameGlob->cursorHintFade = 0;
     cgameGlob->lastHealthLerpDelay = 1;

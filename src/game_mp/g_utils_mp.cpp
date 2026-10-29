@@ -8,6 +8,7 @@
 #include <qcommon/dobj_management.h>
 #include <clientscript/cscr_stringlist.h>
 #include <server_mp/sv_init_mp.h>
+#include <server_mp/sv_main_mp.h>
 #include <clientscript/scr_const.h>
 #include <clientscript/cscr_vm.h>
 #include "g_main_mp.h"
@@ -2223,7 +2224,29 @@ void __cdecl G_FreeEntityAfterEvent(gentity_s *ent)
     ent->freeAfterEvent = 1;
 }
 
+// zombies: SP keeps these just past level_locals_t (G_InitGame clears 0x01C03140..0x01C08B13 only), so a map
+// change never resets them, as here.
 int g_physExplosionSphereCount; // zombies: SP 0x01C08B38
+int g_bulletHitTempEntCount;    // zombies: SP 0x01C08B30
+int g_createDynEntTempEntCount; // zombies: SP 0x01C08B34
+
+// zombies: SP's dropped temp entity (SP 0x01CFFFE8; SP clears one field of it, KB clears the whole dummy).
+static gentity_s *G_SP_DroppedTempEntity()
+{
+    static gentity_s dummy;
+    memset(&dummy, 0, sizeof(dummy));
+    return &dummy;
+}
+
+static bool G_SP_HasRemoteClient()
+{
+    for ( int i = 0; i < com_maxclients->current.integer; ++i )
+    {
+        if ( svs.clients[i].header.state > CS_ZOMBIE && svs.clients[i].header.netchan.remoteAddress.type != NA_LOOPBACK )
+            return true;
+    }
+    return false;
+}
 
 gentity_s *__cdecl G_TempEntity(const float *origin, entity_event_t event)
 {
@@ -2231,18 +2254,39 @@ gentity_s *__cdecl G_TempEntity(const float *origin, entity_event_t event)
     gentity_s *e; // [esp+Ch] [ebp-4h]
     int savedregs; // [esp+10h] [ebp+0h] BYREF
 
-    // zombies: SP G_TempEntity (SP 0x00456E70) caps live EV_PHYS_EXPLOSION_SPHERE temp ents (SP event 0x49) at
-    // sv_maxPhysExplosionSpheres when it is >= 0 and hands back a dummy entity past the cap (SP 0x01CFFFE8; SP clears
-    // one field of it, KB clears the whole dummy). G_RunFrameForEntity gives the count back on free. SP's other two
-    // throttles (events 0x34 / 0x4d while a client is connected) are not ported.
+    // zombies: SP G_TempEntity (SP 0x00456E70) throttles events while a remote client is connected (SP events are
+    // KB's + 1 here): live EV_BULLET_HIT temp ents are capped at 5 and EV_CREATE_DYNENT at 4, and with
+    // sv_restrictedTempEnts set (zombietron) EV_BULLET_HIT_CLIENT_SMALL / LARGE are dropped. It also caps live
+    // EV_PHYS_EXPLOSION_SPHERE temp ents (SP event 0x49) at sv_maxPhysExplosionSpheres when it is >= 0, on every
+    // level. Past a cap it hands back a dummy entity; G_RunFrameForEntity gives the counts back on free
+    // (SP 0x007E3520).
+    if ( G_SP_IsSPLevel() && G_SP_HasRemoteClient() )
+    {
+        switch ( event )
+        {
+        case EV_BULLET_HIT:
+            if ( g_bulletHitTempEntCount >= 5 )
+                return G_SP_DroppedTempEntity();
+            ++g_bulletHitTempEntCount;
+            break;
+        case EV_BULLET_HIT_CLIENT_SMALL:
+        case EV_BULLET_HIT_CLIENT_LARGE:
+            if ( sv_restrictedTempEnts->current.enabled )
+                return G_SP_DroppedTempEntity();
+            break;
+        case EV_CREATE_DYNENT:
+            if ( g_createDynEntTempEntCount >= 4 )
+                return G_SP_DroppedTempEntity();
+            ++g_createDynEntTempEntCount;
+            break;
+        default:
+            break;
+        }
+    }
     if ( event == EV_PHYS_EXPLOSION_SPHERE && sv_maxPhysExplosionSpheres && sv_maxPhysExplosionSpheres->current.integer >= 0 )
     {
         if ( sv_maxPhysExplosionSpheres->current.integer <= g_physExplosionSphereCount )
-        {
-            static gentity_s dummy;
-            memset(&dummy, 0, sizeof(dummy));
-            return &dummy;
-        }
+            return G_SP_DroppedTempEntity();
         ++g_physExplosionSphereCount;
     }
     // mod (L65): above the retail 32 actors an event that finds no networked entity left is dropped (the same dummy
@@ -2250,10 +2294,8 @@ gentity_s *__cdecl G_TempEntity(const float *origin, entity_event_t event)
     // its callers only write its fields. Retail never gets here (G_Spawn behaves as before at 32 actors).
     if ( G_ModTempGuard() && G_ModFreeEntities(1) < 1 )
     {
-        static gentity_s dropped;
-        memset(&dropped, 0, sizeof(dropped));
         ++g_bo1TempDrop[1];
-        return &dropped;
+        return G_SP_DroppedTempEntity();
     }
     e = G_Spawn();
     AssignToSmallerType<entityType_t>(&e->s.eType, ET_EVENTS + event);

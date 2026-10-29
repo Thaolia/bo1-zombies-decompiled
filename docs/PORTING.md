@@ -2230,3 +2230,85 @@ material` and crashes (0x80000003, the console's stack); `white` and `headiconta
 game itself: freezing client B for 6 s set no `0x80` on A's copy of B, and a headless client holding `+usereload`
 set no `0x200000` (no input focus). The icon's look was not seen (the headless remote clients' screenshots are
 black). win32-msvc, win64-msvc and the Switch build compile; the console has not run the fix yet.
+
+**Dead Ops Arcade (`zombietron`) loads and plays (2026-10-29).** The map stopped at its script compile on PC, solo and
+dedicated alike: `maps/_zombietron_scenes.gsc` calls `GetDvarVector`, which only the client had. An inventory of every
+call in the retail zombietron scripts (extracted read-only from `zombietron.ff` / `zombietron_patch.ff`) against the
+engine's tables found 13 missing builtins. Each was disassembled in the SP exe from its row of SP's builtin tables:
+- lane E (`g_scr_sp_entity.cpp`): `getdvarvector` (server form, SP 0x007f0380), `clearallcorpses` (SP 0x008003d0,
+  `G_RemoveAllActorCorpses`), `setweapon` / `fire` (SP 0x0052cd10 / 0x00472990: an entity's `s.weapon` fired from its
+  origin and angles through MagicBullet's fire functions, then `EV_FIRE_WEAPON`), `objective_string` and
+  `objective_set3d` (SP 0x007f70b0 / 0x007f7530), the method `setscale` (SP 0x007f4bc0, script movers'
+  `lerp.u.scriptMover.scale`);
+- lane C (`g_scr_sp_players_x1.cpp`): `cleardamageindicator` (SP gclient+0x1c3c = KB `damage_blood`),
+  `getscoremultiplier` / `setscoremultiplier` (SP clientState+0xc8 `score.scoreMultiplier`);
+- lane G: `haspath` (SP 0x00802ad0, `Path_Exists`), until now a not-ported stub (removed from the generated table by
+  hand, the generator is not in the repository);
+- lane F (client): `showscores` / `hidescores` (cg+0xa9b38, KB `showScores`).
+SP's objectives live in an info string per objective (CS 0x142 + index: `str`, `state`, `txt3d`, `use3d`, `col3d`,
+`offx/y/z`, `org0`, `ent0`, `icon`) and notify the players with 'V'. KB uses those configstring slots for other
+strings and its cgame has no 'V', so only the `objective_t` fields SP also writes are kept (state, origin, entity,
+icon, `use3D`, `color`); no client draws a 3D objective. `setscale`'s field has no netfield and no reader, so scaled
+models still draw at scale 1. The score multiplier reaches the clients through the zombietron score bar (below).
+
+What the running map needed after the compile:
+- `sv_restrictedTempEnts` (SP 0x0069856A, bool, flags 0x1000): zombietron's `init_dvars` stopped at its
+  `SetSavedDvar`, so the top-down camera dvars after it were never set. It is the gate of SP G_TempEntity's throttles
+  (SP 0x00456E70), ported with them: while a remote client is connected, live `EV_BULLET_HIT` temp ents are capped
+  at 5, `EV_CREATE_DYNENT` at 4, and `EV_BULLET_HIT_CLIENT_SMALL/LARGE` are dropped when the dvar is set (SP events
+  are KB's + 1 there); SP levels only. SP keeps the counts just past `level_locals_t`, so a map change does not reset
+  them.
+- `G_PrintAllFastFileErrors` asserted on `common_zombie`: zombietron loads no common zone (`Com_LoadCommonFastFile`).
+- `objective_add` on an SP level takes SP's arguments (index, state, text, position or entity, icon); MP's takes the
+  position third. `physicstrace` on an SP level returns the end position (SP 0x007f8560), not MP's result array; the
+  common zombie scripts' `groundPos = physicstrace(...)` read it the same way.
+- `player_die`'s `death` notify on an SP level is SP's (attacker, means of death, weapon, inflictor; SP 0x00483074)
+  instead of MP's flared notify and headshot flag; zombietron's players die for real.
+- `buttons_zombietron.cfg` (the pad bindings `forcegamemodemappings` execs) is in SP's `code_pre_gfx`, which this exe
+  did not load. With `bo1_zombies` that zone now loads just before `code_pre_gfx_mp`, which keeps every asset both
+  define; it adds SP's configs only.
+- The local player's client flags ran their callbacks every frame with the top-down view: `CG_SetNextSnap` sets them
+  on the player's own centity, which is never processed, and `CG_CopyFlagsFromSnapshotEntity` copied them each frame
+  to the predicted entity, which is. zombietron's `update_player_profile` wrote the profile and re-execed the pad
+  configs 3391 times in two minutes; on an SP level the pending flags now move to the copy once (3 times).
+- The camera: SP camera mode 10 (KB `CAM_TOP_DOWN`) is the `player_topDownCam*` view (SP 0x00413b50), which KB's MP
+  `CG_CalcViewValues` never handled, so the map played in first person. Ported as `CG_CalcTopDownCamViewValues`
+  (`cg_camera.cpp`): mode 3 frames players 0-3, pulls to `player_topDownCamCenterPos`, backs off as they spread,
+  doubles the vertical zoom on a 4:3 screen and eases unless a camera tween runs.
+- A dedicated server asserted in `HECmd_GetTextWidth` (zombietron's end-of-game speech bubbles): no UI, no fonts. It
+  now looks the font up by name (`fonts/normalfont`, ...), which a fastfile serves without a renderer.
+- The HUD. `ui/hud_zombie.txt` hides `competitivemodescores` (ownerdraw 288) when `zombietron` is set and shows
+  `zombietronscores` instead, whose one item is ownerdraw 354 (found with `uiscript_debug 1`, which logs each menu
+  its `visible when` hides, then a dump of the menu's RPN). SP's `CG_OwnerDrawHud` (0x005accb0) sends 354 to
+  0x0041fb80, ported as `CG_SP_OwnerDraw_ZombietronScores` (`cg_sp_hud.cpp`): client info slots 0-3 get a bar in
+  the top-left, top-right, bottom-left and bottom-right corners, coloured green, blue, red, yellow by client number,
+  and the `hud_firstplace` ribbon goes on the one player with the strictly highest score when two or more play. It
+  draws only while `cl_scoreDraw` (SP-only, bool 1, registered beside the SP score bar dvars) is set and the game is
+  not paused; the scripts clear it during their scenes, and `CG_MapRestart` sets it back as SP does (0x004908b7).
+  The bar is SP's `CG_DrawPlayerScoreBar` (0x00892860) with zombietron's column table (0x00a60680). Its values are
+  the fields the scripts reuse (`_zombietron_score.gsc` `update_hud`: `revives` = lives, `assists` = bombs, `downs` =
+  boosters, `headshots` = the power-up meter, `setscoremultiplier` = multiplier and its progress). On the server
+  `G_SP_WriteZombietronColumns` (`ClientEndFrame`) packs them into scoreboard columns 1-3 (`revives << 4 | downs`,
+  multiplier low and high bits), and `G_PopulateMatchState` gives those columns the types the client reads them by.
+  KB's `CG_CopyScoreFromClientState` never copied `score.assists`, which the bar reads at score + 0x14 for the bombs:
+  it now does in zombiemode. The meters, the name and the voice icon start at the bar's own x, as in SP, not at the
+  x the column loop has reached (the right-hand bar's meter ran off the screen).
+
+Verified on win64-msvc, headless: solo `+devmap zombietron` plays (zombies come out of the skull, the round ends, the
+end-of-game summary and its map restart run) with the top-down view on screen, no crash, no script error except
+retail `animscripts/zombie_melee.gsc` reading `self.enemy` after the enemy died (lines 144 / 202). A dedicated server
+with one client ran 243 s, both quit normally. The HUD, checked on screenshots: solo, one bar top left (3 lives, 1
+bomb, 2 boosters, 0 points, x1 at the start; the idle headless player then loses lives); a dedicated server with two
+clients, green bar top left and blue top right on both clients, the ribbon on the one ahead (1200 against 800).
+A dedicated server with two clients then stopped at an assert in `GetFollowPlayerStateLocal` (`sv_archive_mp.cpp`,
+"`!memcmp( &ps->hud.current[index], &g_dummyHudCurrent, ...)`"): the archived player state of client 1 held hud
+elements of type 255 behind free ones, while `level.clients[1]` itself was clean at every point of the frame. The
+archive reads client `n` at `svsHeader.firstPlayerState + n * svsHeader.clientSize`, and `G_GetClientSize()`
+returned a literal 10720, the 32-bit `sizeof(gclient_s)` (measured with clang on i686; `ps` is at offset 0). On 64
+bits every client after the first was read from the middle of the previous one. By the code, everything served
+from that archive for client 1 and up (`SV_GetArchivedClientInfo`: spectating and following a player, the killcam)
+got a wrong state on every map (not tested); zombietron's data there happened to trip the assert. It returns
+`sizeof(gclient_s)` now (`codediff`: the function is unchanged on 32 bits). The other functions returning a size
+literal are the stats and match-record buffer sizes of `live_storage.cpp`, raw byte buffers.
+Not ported: objective text and 3D markers, scaled models, zombietron's full scoreboard. Not tested: real input
+(headless clients have none), the Switch and Linux builds on this map (both build).

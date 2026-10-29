@@ -18,6 +18,8 @@ enum CameraMode : __int32
 // shares its value with CAM_RADIANT as in SP
 static const CameraMode CAM_EXTRACAM_ENTITY = CAM_RADIANT;
 void __cdecl CG_CalcExtraCamEntityViewValues(int localClientNum);
+// zombies: SP camera mode 10 (KB CAM_TOP_DOWN), the player_topDownCam* view (SP 0x00413b50).
+void __cdecl CG_CalcTopDownCamViewValues(int localClientNum);
 
 struct cg_s;
 

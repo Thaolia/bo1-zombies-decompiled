@@ -21,6 +21,9 @@ void G_SP_ClearPlayerX1State(unsigned int clientNum);
 void G_SP_ClearLevelX1State();
 // zombies: Touch_Item_Auto's SP early return (SP 0x00562e70).
 bool G_SP_NoAutoPickup(const gentity_s *other, int touched);
+// zombies: zombietron's score bar values (lives, boosters, score multiplier) into the scoreboard columns 1-3, from
+// ClientEndFrame on zombietron.
+void G_SP_WriteZombietronColumns(gclient_s *client);
 
 // player methods
 void PlayerCmdSP_startrevive(scr_entref_t entref);
@@ -54,6 +57,9 @@ void PlayerCmdSP_enableweaponfire(scr_entref_t entref);
 void PlayerCmdSP_disableweaponreload(scr_entref_t entref);
 void PlayerCmdSP_enableweaponreload(scr_entref_t entref);
 void PlayerCmdSP_setloweredweapon(scr_entref_t entref);
+void PlayerCmdSP_cleardamageindicator(scr_entref_t entref);
+void PlayerCmdSP_getscoremultiplier(scr_entref_t entref);
+void PlayerCmdSP_setscoremultiplier(scr_entref_t entref);
 // actor methods
 void ActorCmdSP_dropweapon(scr_entref_t entref);
 void ActorCmdSP_enterprone(scr_entref_t entref);
