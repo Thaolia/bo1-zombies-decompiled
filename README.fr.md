@@ -113,14 +113,24 @@ client, chargements compris ; les paquets perdus y sont marqués (`[netlog: lost
 l'envoi côté client. Le côté script est le mod `mods/admin`, que le serveur ajoute toujours à `fs_mods`. Détails
 (en anglais) : `docs/SERVER.md`.
 
+Console d'administration : `tools/zmadmin` (Python et curses, compilée avec Nuitka en `zmadmin` / `zmadmin.exe` dans
+les paquets). `zmadmin <adresse> -p <rcon_password>` pilote un serveur : vues Serveurs, Joueurs (une touche par
+commande `zm_*`), Partie (round, courant, relance, map, mods), Réglages, Console rcon et Log. Dans la vue
+Réglages, rien ne part avant le bouton **Sauvegarder** (ou Ctrl+S) : il envoie les commandes, relit chaque valeur et
+marque ce qui est appliqué ou refusé ; chaque réglage est expliqué sous le formulaire, et `?` explique les touches
+de chaque vue. Posée dans un dossier de `make_dist.sh`, elle lance aussi le serveur de ce dossier avec un mot de
+passe rcon qu'elle garde, et suit son log en direct. Le serveur n'accepte qu'une commande rcon toutes les 0,5 s et
+ne renvoie pas son log en rcon : à distance, les réponses `admin:` du mod ne s'affichent pas. Détails :
+`tools/zmadmin/README.md`.
+
 
 ## Paquets prêts à copier
 `tools/make_dist.sh` (bash, depuis WSL) part d'un arbre de sources où `setup.ps1` a copié le jeu. Il produit dans
 `build/dist` un dossier prêt à copier et une archive par plateforme :
-- `BO1Zombies_windows/` (`.zip`) : le client et le serveur 64 bits. `Play.bat` lance le jeu, `Play.bat net
+- `BO1Zombies_windows/` (`.zip`) : le client et le serveur 64 bits, et `zmadmin.exe`. `Play.bat` lance le jeu, `Play.bat net
   <adresse[:port]> [nom]` rejoint un serveur, `Server.bat [map] [port]` lance un serveur. Les DLL d'exécution 64 bits
   sont incluses ;
-- `BO1Zombies_linux/` (`.tar.gz`) : le client et le serveur Linux, avec `play.sh` (`./play.sh net ...`),
+- `BO1Zombies_linux/` (`.tar.gz`) : le client et le serveur Linux, `zmadmin`, avec `play.sh` (`./play.sh net ...`),
   `server.sh [map] [port]` et `shaders.pack` ;
 - `BO1Zombies_switch/` (`.zip`) : une arborescence de carte SD, `switch/bo1zm/` avec le `.nro`, `shaders.pack` et
   `shaders.dksh`.

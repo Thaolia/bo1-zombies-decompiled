@@ -332,6 +332,17 @@ Players past 4 (`sv_maxclients`) need no engine change beyond the score list's n
 limits are script and table data (characters by entity number, 4 start structs, per-count tables), which
 `mods/admin` extends at map load.
 
+### Admin console (phase 8)
+
+`tools/zmadmin` is a separate Python program (curses; `windows-curses` on Windows), not part of the engine: it only
+uses the server's UDP queries, `getstatus` and rcon. A network thread per server (`link.py`) polls getstatus every
+second and `zm_admin` every few seconds, runs the user's commands one at a time 550 ms apart (rcon's 500 ms limit),
+and hands events to the curses loop through a queue; the views never wait on the network. The Settings form is
+plain data (`settings.py`, unit-tested without curses). It starts a package folder's server itself (`launcher.py`,
+the folder's `server.sh` / `Server.bat` command line) and follows that server's `console_mp.log`, the only way to see
+the mod's `admin:` replies: rcon returns a command's immediate output only. Built into one executable per platform by
+Nuitka (`tools/zmadmin/build.sh`, run by `tools/make_dist.sh`).
+
 ### Client logs (phase 8)
 
 `src/platform/netlog.cpp` (every client, Windows, Linux and Switch) copies the console log into a 1 MiB buffer from

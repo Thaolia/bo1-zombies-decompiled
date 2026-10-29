@@ -132,7 +132,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 5 | Switch build (`.nro`), memory/threads/applet checks, profiling | in progress: the devkitA64 + libnx build compiles, links and packages `BO1Zombies.nro` (null backend), reusing the posix SDL2/Win32-shim layer with a thin `src/platform/switch/` and `#if defined(__SWITCH__)` deltas. **Boots on Ryujinx 1.1.1375**: the libnx entry runs (applet type = Application), romfs mounts, the engine's `WinMain` runs ~30 s with no crash (SD `boot.log`). Prereqs fixed: the libgcc GCS/SME NOP patch (`switch/tools/patch_ryujinx_mrs.py`, POST_BUILD) for Ryujinx's JIT, and a one-file embedded romfs (`switch/romfs`) so `romfsInit` does not crash the emulator. With the converted zones staged on the SD, the engine **loads the pre-gfx code zones** (`en_code_pre_gfx_mp`, `code_pre_gfx_mp`) — the ffconv AArch64 path proven end to end — and runs `FS_Startup`. Four fixes got there: the GCS/SME NOP patch and embedded romfs (boot), `chdir` to the install dir (language + `fs_basepath`), a `pread` EOF fix for libnx's past-EOF `lseek` (zone read-ahead), and reading the win64 IWffs ABI tag (layout-identical, `--check-switch`). With the iwds staged and a `device:`-prefix fix in `Bo1_PosixPath`, it then boots through FS_Startup (103814 iwd files), R_Init, the frontend, and `+devmap zombie_theater` into a **map load** (common_zombie 78 MB, the Kino zones) — before crashing part way through `en_zombie_theater` on a guest invalid memory access (a 64-bit bug in the zombie map asset stream, to debug on the posix x86-64 build). Then GL (EGL on nwindow) and audio |
 | 6 | Stabilisation, all base maps, docs | todo |
 | 7 | (optional) deko3d backend behind the same `gfx_backend.h` | in progress: opt-in on the Switch build (`gfx.cfg` = deko3d, `shaders.dksh` from uam); renders the main menu's 3D scene and Kino in game with its HUD on Ryujinx (2026-10-26, see the deko3d notes below); not yet run on the console in game |
-| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress, more than 4 players (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part done (2026-10-27: sockets, `nifm`, the start menu's server screen; a console joined a win64 server and played; Ryujinx's BSD `RecvFrom` throws); step 3 done (2026-10-27: curses console, Linux and Windows); step 4 done on win64 (2026-10-27: `zm_*` admin commands, mods/admin); step 5 done on PC (2026-10-27: client logs on UDP port + 1, `logs/`, Tab in the TUI), its Switch side built, not yet run; step 6 done on win64 (2026-10-28: join in progress, `zm_jip_mode`); step 7 done on win64 (2026-10-28: more than 4 players with `sv_maxclients`, 5 clients checked), its curses part checked on Linux; see "Dedicated server (phase 8)" |
+| 8 | Dedicated server: curses console, UDP clients from `launch.cfg`, client logs, admin commands, join in progress, more than 4 players (branch `server`) | in progress: step 0 done (2026-10-26), a win64 client of a remote win64 dedicated server plays Kino over UDP; step 1 done (2026-10-27), `bo1_server` on Windows and Linux, LAN clients of both, `getstatus`; step 2 done for PC clients (2026-10-27: `launch.cfg`, `cl_autoConnect` with reconnection, `cl_allowWanConnect`), its Switch part done (2026-10-27: sockets, `nifm`, the start menu's server screen; a console joined a win64 server and played; Ryujinx's BSD `RecvFrom` throws); step 3 done (2026-10-27: curses console, Linux and Windows); step 4 done on win64 (2026-10-27: `zm_*` admin commands, mods/admin); step 5 done on PC (2026-10-27: client logs on UDP port + 1, `logs/`, Tab in the TUI), its Switch side built, not yet run; step 6 done on win64 (2026-10-28: join in progress, `zm_jip_mode`); step 7 done on win64 (2026-10-28: more than 4 players with `sv_maxclients`, 5 clients checked), its curses part checked on Linux; step 8 done (2026-10-29: `tools/zmadmin`, a Python curses admin console over rcon, built by Nuitka for Linux and Windows, in the packages); see "Dedicated server (phase 8)" |
 
 ## Verification per phase
 - **0**: the `win32-msvc` preset still builds and `Play.bat` reaches the zombies menu and plays Kino der Toten.
@@ -2143,3 +2143,54 @@ with `cl_autoConnect` and `name`. Usage in `docs/SERVER.md` ("Start scripts", "J
   `fs_mods: hooks of mods/zinfo` then `mods/admin`, and 13 `zinfo: alive` lines once a headless client joined.
   Not seen yet: the counter drawn on a remote client's screen (the test's `+scores` was split off by the command
   line's `+`) and on the console.
+
+**Step 8, admin console (2026-10-29).** `tools/zmadmin` (`tools/zmadmin/README.md`; operator's view in
+`docs/SERVER.md`, "Admin tool (zmadmin)").
+
+- No engine change: it uses getstatus and rcon only. The live log is local-only: the engine sends nothing of its log
+  over the network (rcon's redirect holds the command's immediate output; the mod's `admin:` replies come a frame
+  later), and streaming it was left out by choice. ZmAdmin follows `console_mp.log` when it runs the server itself.
+- What the server allows, read in `SVC_RemoteCommand` and checked on a win64 server: one rcon command every 500 ms
+  for all senders (a sooner one is dropped with no reply); several commands in one rcon with `;` (one reply line set
+  per dvar: the Settings view reads and writes all its dvars in one command each); `"name" is: "value^7" default:
+  ...` for a dvar; `Invalid password.`; every command logged as `Rcon from <address>:` plus its first word.
+- The `+set` values of a command line all apply before `server.cfg` runs (`Com_StartupVariable`), and a later `+set`
+  is not run again (`Com_AddStartupCommands` skips it); a `+rcon_password <pw>` command runs after the `exec`, in
+  order (`Dvar_Command`). The local server gets both, so a `server.cfg` `rcon_password` cannot lock ZmAdmin out
+  (checked: the server took ZmAdmin's password, `fromcfg` from `server.cfg` was refused).
+- `sv_maxclients` set over rcon reads back at once and applies at the next map load (`set sv_maxclients 6`, then
+  `zm_reset`: `repeated to 6 for sv_maxclients`). Save offers `zm_reset` for it; `fs_mods` goes through `zm_mods`.
+- Found by the tests: `RconClient` first stripped colour codes from replies, and `parse_dvars` needs the `^7` that
+  ends each value (now stripped only for display); on Windows a UDP socket gets the ICMP port-unreachable of an earlier
+  send as `WSAECONNRESET` on its next receive (server down or loading), now ignored as Linux does; `cbreak` mode left
+  Ctrl+S (Save) to the terminal as XOFF, the UI runs in `raw` mode.
+- Verified: 16 unit tests against a fake UDP server (Linux Python 3.14 and Windows Python 3.13); on a win64 server
+  with a headless client, from tmux at 80x24: god (flag G), points (500 to 1500), perks, `zm_reset` from the Game
+  view, the Settings form (hostname, start points, revive debug saved by the button and read back as applied; then
+  `rcon_password` changed and the views went on with the new one); a local server on Linux from a package-shaped
+  folder: launch, live log and `admin:` lines in the Console, `server.cfg` written by the checkbox (other lines kept),
+  stop by `quit` with no process left, quit leaving it running and a new ZmAdmin attaching to it; on Windows (the
+  Windows Python, then `zmadmin.exe`): start without a window, PID check through `QueryFullProcessImageNameW`, found
+  again from its state file, `quit`, no process left; `zmadmin.exe --status` / `--rcon`; the curses UI drawn in a
+  console window (screenshot). Both binaries build with Nuitka (Linux 9.0 MB, gcc; Windows 6.3 MB, MSVC).
+- The Windows curses UI was not driven by keys (no way from WSL); the first start of a server from a new folder showed
+  Windows' firewall question.
+
+**Fix found from a ZmAdmin test (2026-10-29): `cpose_t`'s union read through the wrong member.** A win64 client of
+a dedicated Kino server broke on `cg_scr_main.cpp(10254): !cent->pose.general.mins[2]` (`CG_EntityContact`, an
+entity touching a client-side `trigger_radius`); the Switch had logged the same assert 1011 times in one Call of the
+Dead game without stopping (`assertive.cpp`). The decompiled cgame writes the pose union through whichever member Hex-Rays
+named for an offset, and `CEntPlayerInfo` starts with a pointer (`control`): on 64-bit its later members sit 4
+bytes further, so `player.waterHeight` / `nextWaterHeightCheck` / `nextRippleTime` / `tag[0]` reached other fields
+than on 32-bit. Every `pose.player.*` access was read for the entity type it runs on; the ones on another type now
+name the member at the same 32-bit offset:
+- `CG_SP_trigger_radius`: `general.mins[1]` / `mins[2]` (it put `-radius` in `mins[2]`: the assert);
+- `CG_Actor_PreControllers`, `CG_Actor_DoControllers`: `actor.height` (they used `actor.waterHeight` on 64-bit);
+- turrets (`CG_mg42_PreControllers`, `CG_mg42_DoControllers`): `turret.firingOffset`, `turret.pivotOffset` (the pivot
+  offset landed on `playerUsing`, so a turret with one read its angle pair as a `viewAngles` pointer);
+- client-side triggers' "linked once" flag: `general.linked` (it wrote 1 into the low byte of `mins[0]`).
+
+The remaining `pose.player.*` accesses run on players. `codediff` (mingw32-gcc): `cg_spawn.cpp` and `cg_ents_mp.cpp`
+identical; `cg_actors_mp.cpp` and `cg_pose_mp.cpp` store or copy the same 32-bit offsets (0x74, 0x7c) as a float
+instead of an int (same bits). Not reproduced headless: a solo Kino client standing still for 2 min hit no contact
+with either exe; the user's networked client did (noclip).

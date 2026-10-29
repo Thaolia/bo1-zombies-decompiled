@@ -464,9 +464,11 @@ void __cdecl CG_SP_trigger_radius(int localClientNum, centity_s *ent, char spawn
     }
     if ( CG_InitTrigger(localClientNum, ent) )
     {
+        // the union members at the 32-bit offsets of general.mins: player's shift by 4 on 64-bit (its control
+        // pointer), which put -radius in mins[2] (assert in CG_EntityContact)
         ent->pose.turret.barrelPitch = -radius;
-        ent->pose.player.waterHeight = -radius;
-        ent->pose.player.nextWaterHeightCheck = 0;
+        ent->pose.general.mins[1] = -radius;
+        ent->pose.general.mins[2] = 0.0f;
         ent->pose.turret.firingOffset = radius;
         ent->pose.general.maxs[1] = radius;
         ent->pose.general.maxs[2] = height;

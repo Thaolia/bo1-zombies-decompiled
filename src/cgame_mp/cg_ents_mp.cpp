@@ -206,7 +206,7 @@ void __cdecl CG_mg42_PreControllers(DObj *obj, centity_s *cent)
     }
     else
     {
-        cent->pose.player.nextRippleTime = 0;
+        cent->pose.turret.firingOffset = 0.0f;
     }
     if ( cent->pose.turret.playerUsing )
     {
@@ -234,7 +234,8 @@ void __cdecl CG_mg42_PreControllers(DObj *obj, centity_s *cent)
     DObjGetBoneIndex(obj, scr_const.tag_flash, &cent->pose.turret.tag_flash, -1);
     DObjGetBoneIndex(obj, scr_const.tag_weapon, &cent->pose.turret.tag_weapon, -1);
     DObjGetTree(obj);
-    cent->pose.player.waterHeight = cent->nextState.lerp.u.turret.pivotOffset;
+    // turret.pivotOffset, which player.waterHeight aliased on 32-bit only: on 64-bit it landed on playerUsing
+    cent->pose.turret.pivotOffset = cent->nextState.lerp.u.turret.pivotOffset;
 }
 
 float g_entMoveTolVec[3] = { 16.0, 16.0, 16.0 };
@@ -1716,10 +1717,10 @@ void __cdecl CG_ProcessFakeEntity(int localClientNum, fake_centity_s *fakeEnt)
             case 0:
                 if ( ((cent->flagWord >> 15) & 1) != 0 )
                 {
-                    if ( !cent->pose.player.tag[0] )
+                    if ( !cent->pose.general.linked )
                     {
                         CG_LinkEntity(localClientNum, cent->nextState.number);
-                        cent->pose.player.tag[0] = 1;
+                        cent->pose.general.linked = 1;
                     }
                     if ( cg_debug_triggers->current.enabled )
                     {

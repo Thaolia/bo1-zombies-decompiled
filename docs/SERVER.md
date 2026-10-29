@@ -107,8 +107,10 @@ Load the map either from `server.cfg` or from the command line, not from both (e
 
 - The server listens on UDP port `net_port` (default 3074; the next free one up to +9 if it is taken: the console log
   says `Opening IP socket: ...`) on every interface. `+set net_ip <address>` binds one interface only.
-- Open that UDP port in the firewall of the server's machine. On Windows the first run does not show a firewall
-  prompt (the server never opens a window): add an inbound UDP rule for the port or the program yourself.
+- Open that UDP port in the firewall of the server's machine. On Windows a server started by `Server.bat` showed no
+  firewall prompt (the server never opens a window): add an inbound UDP rule for the port or the program yourself.
+  Started by ZmAdmin (`tools/zmadmin`) from a new folder, Windows did ask ("Voulez-vous autoriser les réseaux publics
+  et privés...") the first time: allow it for players on other machines.
 - Clients connect with `connect <server address>:<port>` from the console, or by themselves with `cl_autoConnect`
   (below). A client accepts LAN addresses only (10/8, 172.16/12, 192.168/16, 169.254/16 and its own /24) unless
   `cl_allowWanConnect 1` is set; a refused address prints `connect: ... is not a LAN address` and changes nothing.
@@ -170,6 +172,20 @@ and, per connected player, the points, ping and state (`connected`, `loading`, `
 Any tool can send it: the packet is `\xff\xff\xff\xffgetstatus`, the reply `\xff\xff\xff\xffstatusResponse\n`, the
 serverinfo string, then one line per client: `<number> <points> <ping> <state> "<name>"`. The server answers at most
 one query every 50 ms.
+
+## Admin tool (zmadmin)
+
+`tools/zmadmin` is a curses admin console over the same queries (`tools/zmadmin/README.md`):
+`python3 tools/zmadmin/main.py <address>[:port] -p <rcon_password>`, or the `zmadmin` / `zmadmin.exe` binary that
+`tools/make_dist.sh` puts in the Linux and Windows packages. Views: servers, players (one key per `zm_*` action), game
+(round, power, reset, map, mods), settings (a form sent with a Save button, each setting explained), console, and the
+local server's log. Placed in a package folder it also starts that folder's server, with an rcon password it keeps,
+and finds it again after a restart.
+
+It works within the server's limits: rcon runs one command every 500 ms for all senders (ZmAdmin spaces its commands
+and batches the settings with `;`), returns only a command's immediate output (the mod's `admin:` lines are in the log,
+which ZmAdmin reads only for its local server), and logs every command it receives (`Rcon from ...`, a few per
+minute from the players view's `zm_admin` reads; `--admin-poll 0` stops them).
 
 ## Platforms
 
