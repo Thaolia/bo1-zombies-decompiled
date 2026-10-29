@@ -76,7 +76,6 @@ void __cdecl CG_Destructible_DoControllers(const cpose_t *pose, const DObj *obj,
 void __cdecl CG_Actor_DoControllers(const cpose_t *pose, const DObj *obj, int *partBits)
 {
     float *v3; // eax
-    int nextWaterHeightCheck; // [esp+0h] [ebp-20h]
     float v5; // [esp+4h] [ebp-1Ch]
     float offset[3]; // [esp+10h] [ebp-10h] BYREF
     DObjAnimMat *mat; // [esp+1Ch] [ebp-4h]
@@ -95,10 +94,9 @@ void __cdecl CG_Actor_DoControllers(const cpose_t *pose, const DObj *obj, int *p
             v3 = &mat->quat[1];
             mat->quat[3] = cos(v5);
             *v3 = sin(v5);
-            nextWaterHeightCheck = pose->player.nextWaterHeightCheck;
             offset[0] = 0.0f;
             offset[1] = 0.0f;
-            LODWORD(offset[2]) = nextWaterHeightCheck;
+            offset[2] = pose->actor.height;
             DObjSetTrans(mat, offset);
         }
     }
@@ -659,7 +657,7 @@ void __cdecl CG_mg42_DoControllers(const cpose_t *pose, const DObj *obj, int *pa
         turretYaw = pose->turret.angles.yaw;
     }
     angles[2] = 0.0f;
-    ofsDist = pose->player.waterHeight;
+    ofsDist = pose->turret.pivotOffset;
     memset(totOfs, 0, sizeof(totOfs));
     if ( pose->turret.tag_aim_pivot == 255 )
     {

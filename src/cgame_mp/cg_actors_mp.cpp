@@ -327,10 +327,11 @@ void __cdecl CG_ResetActorEntity(int localClientNum, cg_s *cgameGlob, centity_s 
 
 void __cdecl CG_Actor_PreControllers(int localClientNum, centity_s *cent)
 {
-    cent->pose.player.nextWaterHeightCheck = 0;
+    // actor.height is at player.nextWaterHeightCheck's 32-bit offset; player's members shift on 64-bit
+    cent->pose.actor.height = 0.0f;
     cent->pose.turret.barrelPitch = 0.0f;
     cent->pose.fx.triggerTime = 1;
-    cent->pose.player.nextWaterHeightCheck = 0;
+    cent->pose.actor.height = 0.0f;
 }
 
 // zombies: actor client script / eye state transitions (SP 0x005812E4..0x005813C3).

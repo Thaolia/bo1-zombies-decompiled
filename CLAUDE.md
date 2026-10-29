@@ -38,6 +38,9 @@ Fork of `MisaDev4/bo1-zombies-decompiled` (remote `upstream`, branch `main`). Al
   Write `sizeof`/`offsetof` instead; `tools/litsizes.py` lists the ones it can see. It cannot see a pointer difference
   scaled by a literal (`((char *)b - (char *)base) >> 4`, `/ 96`, `p + 16 * n`): measure the element on both targets
   and write `b - base` or `/ (ptrdiff_t)sizeof(T)` (keeps the signed division the 32-bit code compiles to).
+- A decompiled union is written through whichever member Hex-Rays named for the offset (`pose.player.waterHeight` on a
+  trigger). If that member's struct holds a pointer before the field, the offset moves on 64-bit: name the member of
+  the entity's real type at the same 32-bit offset (`cpose_t`, `docs/PORTING.md` phase 8, "`cpose_t`'s union").
 - Write `double`, never `long double`: MSVC compiles it as `double`, GCC and clang as 80-bit x87 (x86-64) or 128-bit
   soft-float (AArch64), which changes struct layouts, results and speed.
 - A decompiled byte shuffle (vec_perm / pshufb) that reads `v.unitVec[0].array[i]` with a computed `i` above 3 is out
