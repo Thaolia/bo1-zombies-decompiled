@@ -207,7 +207,7 @@ VIEW_HELP = {
         "",
         "Entrée      envoyer la commande",
         "Haut/Bas    historique (gardé entre les sessions)",
-        "PgPréc/Suiv faire défiler ; PgSuiv jusqu'en bas revient aux dernières lignes",
+        "PgPréc/Suiv faire défiler (ou la molette) ; PgSuiv jusqu'en bas revient aux dernières lignes",
         "Échap       effacer la ligne",
         "",
         "Exemples : status, zm_admin, zm_god all 1, set g_password secret, quit.",
@@ -220,7 +220,7 @@ VIEW_HELP = {
         "",
         "/           filtrer (texte à chercher ; vide pour tout montrer)",
         "Espace      pause / reprise du défilement",
-        "PgPréc/Suiv faire défiler ; Fin revenir aux dernières lignes",
+        "PgPréc/Suiv faire défiler (ou la molette) ; Fin revenir aux dernières lignes",
         "",
         "Seulement quand ZmAdmin tourne sur la machine du serveur, dans son dossier BO1Zombies : le moteur n'envoie "
         "pas son log en rcon.",
@@ -230,4 +230,7 @@ VIEW_HELP = {
 GLOBAL_HELP = [
     "F1 Serveurs  F2 Joueurs  F3 Partie  F4 Réglages  F5 Console  F6 Log   (ou Tab / Maj+Tab)",
     "?  ou F9    cette aide                q  ou F10   quitter",
+    "Souris      clic : choisir un onglet, une ligne, un bouton ou une action de la légende ; double-clic : ouvrir "
+    "ou exécuter la ligne ; molette : défiler. Pour sélectionner du texte dans le terminal, tenir Maj (ou lancer "
+    "zmadmin --no-mouse).",
 ]

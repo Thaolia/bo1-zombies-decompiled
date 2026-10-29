@@ -117,7 +117,7 @@ les paquets). `zmadmin <adresse> -p <rcon_password>` pilote un serveur : vues Se
 commande `zm_*`), Partie (round, courant, relance, map, mods), Réglages, Console rcon et Log. Dans la vue
 Réglages, rien ne part avant le bouton **Sauvegarder** (ou Ctrl+S) : il envoie les commandes, relit chaque valeur et
 marque ce qui est appliqué ou refusé ; chaque réglage est expliqué sous le formulaire, et `?` explique les touches
-de chaque vue. Posée dans un dossier de `make_dist.sh`, elle lance aussi le serveur de ce dossier avec un mot de
+de chaque vue. Tout se fait au clavier ou à la souris (clic, double-clic, molette). Posée dans un dossier de `make_dist.sh`, elle lance aussi le serveur de ce dossier avec un mot de
 passe rcon qu'elle garde, et suit son log en direct. Le serveur n'accepte qu'une commande rcon toutes les 0,5 s et
 ne renvoie pas son log en rcon : à distance, les réponses `admin:` du mod ne s'affichent pas. Détails :
 `tools/zmadmin/README.md`.

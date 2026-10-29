@@ -2175,3 +2175,18 @@ The remaining `pose.player.*` accesses run on players. `codediff` (mingw32-gcc):
 identical; `cg_actors_mp.cpp` and `cg_pose_mp.cpp` store or copy the same 32-bit offsets (0x74, 0x7c) as a float
 instead of an int (same bits). Not reproduced headless: a solo Kino client standing still for 2 min hit no contact
 with either exe; the user's networked client did (noclip).
+
+**ZmAdmin mouse (2026-10-29, asked by the user).** Every view and dialog registers the cells it draws as zones
+(`widgets.HitMap`, rebuilt each frame); `KEY_MOUSE` goes to the top dialog's zones, or to the view's and the tab
+bar's. A click picks, a double click opens or runs, the wheel scrolls (Console and Log by 3 lines, lists by one
+item). New buttons where only a key existed: Servers (Connecter, Ajouter, Modifier, Retirer, Lancer / Arrêter le
+serveur local), the Players legend and its "tous" box, Game's `[ Exécuter ]`, Log's Filtrer / Pause / Fin, every
+dialog's OK / Annuler, `[ Aide ]` / `[ Quitter ]` on the message line. A click acts on `BUTTON1_CLICKED` or
+`BUTTON1_RELEASED`, never on `PRESSED`, so a slow click acts once. `--no-mouse` leaves the mouse to the terminal.
+Verified: 19 unit tests (state decoding, zones, dialog zones); from tmux at 80x24 with X10 mouse reports sent to the
+pane, by mouse only: add a server through the form (fields focused by click, `[ OK ]`), select and remove it, tabs,
+help and `[ Fermer ]`, double-click the local server, double-click Kino, `[ OK ]` (the server started), toggle a
+setting by double click, `[ Sauvegarder ]` and `[ Oui ]` (read back applied), a Game action and `[ Exécuter ]`, the
+wheel in the Log (9 lines up) and its buttons, the Players legend (`zm_god all` sent), `[ Quitter ]` with the box
+ticked (server stopped, no process left). Not tried by hand: the mouse with PDCurses on Windows (not drivable from
+WSL; its constants and zones load, see below); a console with QuickEdit on may keep clicks for text selection.

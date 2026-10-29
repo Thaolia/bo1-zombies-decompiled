@@ -21,6 +21,7 @@ from zmadmin.link import ServerLink  # noqa: E402
 from zmadmin.logtail import LogTail  # noqa: E402
 from zmadmin.model import merge_players, parse_dvars, parse_zm_admin  # noqa: E402
 from zmadmin.settings import APPLIED, REFUSED, Form, update_server_cfg  # noqa: E402
+from zmadmin.widgets import ChecklistDialog, ConfirmDialog, HitMap, mouse_kind  # noqa: E402
 
 OOB = b"\xff\xff\xff\xff"
 ZM_ADMIN = ('zm_admin: start points 0, start perks "jugg", join in progress immediate, fs_mods ""\n'
@@ -280,6 +281,51 @@ class LauncherTest(unittest.TestCase):
     def test_not_a_dist(self):
         with tempfile.TemporaryDirectory() as d:
             self.assertIsNone(launcher.find_dist(d))
+
+
+class MouseTest(unittest.TestCase):
+    def test_kinds(self):
+        import curses
+        self.assertEqual(mouse_kind(curses.BUTTON1_CLICKED), "click")
+        self.assertEqual(mouse_kind(curses.BUTTON1_RELEASED), "click")
+        self.assertEqual(mouse_kind(curses.BUTTON1_DOUBLE_CLICKED), "double")
+        # a press alone does nothing: its release (or the merged click) acts, so a click never acts twice
+        self.assertIsNone(mouse_kind(curses.BUTTON1_PRESSED))
+        if getattr(curses, "BUTTON4_PRESSED", 0):
+            self.assertEqual(mouse_kind(curses.BUTTON4_PRESSED), "up")
+
+    def test_hitmap(self):
+        hits, calls = HitMap(), []
+        hits.add(3, 10, 5, lambda: calls.append("a"), lambda: calls.append("A"))
+        hits.add(3, 12, 2, lambda: calls.append("b"))
+        hits.add(4, 0, 0, lambda: calls.append("empty"))
+        self.assertIsNone(hits.dispatch(3, 9, "click"))
+        self.assertIsNone(hits.dispatch(3, 15, "click"))
+        hits.dispatch(3, 10, "click")
+        hits.dispatch(3, 11, "double")
+        hits.dispatch(3, 12, "click")      # the zone added last wins
+        hits.dispatch(3, 13, "double")     # no double action: its click runs
+        hits.dispatch(4, 0, "click")
+        self.assertEqual(calls, ["a", "A", "b", "b"])
+        hits.clear()
+        self.assertIsNone(hits.find(3, 10))
+
+    def test_dialog_zones(self):
+        said = []
+        d = ConfirmDialog("t", ["?"], said.append, checkbox="box")
+        d.origin = (5, 7)
+        d.zone(2, 2, 7, d.yes)
+        d.zone(1, 2, 7, d.toggle)
+        self.assertFalse(d.mouse(6, 9, "click"))   # the checkbox: ticked, dialog stays
+        self.assertFalse(d.mouse(0, 0, "click"))   # outside every zone
+        self.assertTrue(d.mouse(7, 12, "click"))   # Oui
+        self.assertEqual(said, [True])
+        c = ChecklistDialog("t", [("x", "X"), ("y", "Y")], [], said.append)
+        c.tick(1)
+        c.tick(0)
+        c.tick(1)
+        self.assertTrue(c.submit())
+        self.assertEqual(said[-1], ["x"])
 
 
 if __name__ == "__main__":
