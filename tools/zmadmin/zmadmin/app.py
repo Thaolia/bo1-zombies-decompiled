@@ -13,16 +13,20 @@ from .model import merge_players
 from .protocol import strip_colors
 from .settings import Form, update_server_cfg
 from .views import ConsoleView, GameView, LogView, PlayersView, ServersView, SettingsView
-from .widgets import (BTAB, CTRL_C, C_ERR, C_INFO, C_OK, C_TITLE, C_WARN, ESC, TAB, ChecklistDialog, ConfirmDialog,
-                      InputDialog, MessageDialog, color, cursor, fill, init_colors, normalize_key, put)
+from .widgets import (BTAB, CTRL_C, C_ERR, C_INFO, C_OK, C_TITLE, C_WARN, ESC, MOUSE_MASK, TAB, ChecklistDialog,
+                      ConfirmDialog, HitMap, InputDialog, MessageDialog, color, cursor, fill, init_colors,
+                      normalize_key, put, read_mouse)
 
 STOP_TIMEOUT = 15.0
 MIN_H, MIN_W = 24, 80
+MOUSE_BUTTONS_W = 21    # "[ Aide ] [ Quitter ]" at the right of the message line
 
 
 class App:
-    def __init__(self, scr, config, dist, initial=None, admin_every=5.0):
+    def __init__(self, scr, config, dist, initial=None, admin_every=5.0, mouse=True):
         self.scr = scr
+        self.mouse = mouse
+        self.hits = HitMap()
         self.config = config
         self.dist = dist
         self.local = LocalServer(dist) if dist else None
@@ -69,6 +73,9 @@ class App:
 
     def open(self, dialog):
         self.modals.append(dialog)
+
+    def show_help(self):
+        self.open(MessageDialog(f"Aide : {self.view.title}", H.VIEW_HELP[self.view.name] + [""] + H.GLOBAL_HELP))
 
     def show(self, index):
         self.current = index % len(self.views)
@@ -299,6 +306,7 @@ class App:
     def draw(self):
         scr = self.scr
         scr.erase()
+        self.hits.clear()
         h, w = scr.getmaxyx()
         if h < MIN_H or w < MIN_W:
             put(scr, 0, 0, f"Fenêtre trop petite ({w}x{h}) : il faut au moins {MIN_W}x{MIN_H}.")
@@ -309,12 +317,20 @@ class App:
         for i, v in enumerate(self.views):
             label = f" F{i + 1} {v.title} "
             put(scr, 0, x, label, (curses.A_REVERSE | curses.A_BOLD) if i == self.current else color(C_TITLE))
+            self.hits.add(0, x, len(label), lambda i=i: self.show(i))
             x += len(label) + 1
         put(scr, 0, x + 1, "ZmAdmin", color(C_TITLE) | curses.A_BOLD)
         self.draw_status_line(scr, w)
         text, pair, at = self.message
+        buttons = MOUSE_BUTTONS_W if self.mouse else 0
         if text and time.monotonic() - at < 12:
-            put(scr, h - 2, 1, text, color(pair), width=w - 2)
+            put(scr, h - 2, 1, text, color(pair), width=w - 2 - buttons)
+        if self.mouse:
+            x = w - buttons
+            for label, action in (("[ Aide ]", self.show_help), ("[ Quitter ]", self.ask_quit)):
+                put(scr, h - 2, x, label, curses.A_BOLD)
+                self.hits.add(h - 2, x, len(label), action)
+                x += len(label) + 1
         fill(scr, h - 1, color(C_TITLE))
         put(scr, h - 1, 1, self.view.hints, color(C_TITLE), width=w - 2)
         cursor(False)
@@ -362,7 +378,24 @@ class App:
             x += len(text)
 
     # ---------------------------------------------------------------------------------------------------- keys
+    def handle_mouse(self):
+        event = read_mouse()
+        if event is None:
+            return
+        y, x, kind = event
+        if self.modals:
+            dialog = self.modals[-1]
+            if dialog.mouse(y, x, kind):
+                self.modals.remove(dialog)
+        elif kind in ("up", "down"):
+            self.view.wheel(-1 if kind == "up" else 1)
+        else:
+            self.hits.dispatch(y, x, kind)
+
     def handle(self, k):
+        if k == curses.KEY_MOUSE:
+            self.handle_mouse()
+            return
         if k == curses.KEY_RESIZE:
             try:
                 curses.resize_term(0, 0)
@@ -386,7 +419,7 @@ class App:
             self.show(self.current - 1)
             return
         if k == curses.KEY_F9 or (k == "?" and not self.view.captures_text):
-            self.open(MessageDialog(f"Aide : {self.view.title}", H.VIEW_HELP[self.view.name] + [""] + H.GLOBAL_HELP))
+            self.show_help()
             return
         if k == curses.KEY_F10 or (k == "q" and not self.view.captures_text):
             self.ask_quit()
@@ -423,6 +456,8 @@ class App:
         curses.raw()
         self.scr.timeout(100)
         self.scr.keypad(True)
+        if self.mouse:
+            curses.mousemask(MOUSE_MASK)
         cursor(False)
         while self.running:
             now = time.monotonic()

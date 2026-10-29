@@ -62,6 +62,8 @@ def main(argv=None):
     parser.add_argument("--admin-poll", type=float, default=5.0, metavar="SECONDS",
                         help="how often the Players and Game views read zm_admin (0: never; each read is one rcon "
                              "command, logged by the server)")
+    parser.add_argument("--no-mouse", action="store_true",
+                        help="keyboard only: leave the mouse to the terminal (text selection without Shift)")
     parser.add_argument("--config", help="ZmAdmin's settings folder (servers.json, history)")
     parser.add_argument("--version", action="version", version=f"zmadmin {__version__}")
     args = parser.parse_args(argv)
@@ -88,4 +90,4 @@ def main(argv=None):
     locale.setlocale(locale.LC_ALL, "")
     os.environ.setdefault("ESCDELAY", "25")  # Esc closes a dialog at once instead of after 1 s
     from .app import App
-    return curses.wrapper(lambda scr: App(scr, config, dist, initial, args.admin_poll).run()) or 0
+    return curses.wrapper(lambda scr: App(scr, config, dist, initial, args.admin_poll, not args.no_mouse).run()) or 0

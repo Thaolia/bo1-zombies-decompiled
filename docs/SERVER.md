@@ -179,7 +179,7 @@ one query every 50 ms.
 `python3 tools/zmadmin/main.py <address>[:port] -p <rcon_password>`, or the `zmadmin` / `zmadmin.exe` binary that
 `tools/make_dist.sh` puts in the Linux and Windows packages. Views: servers, players (one key per `zm_*` action), game
 (round, power, reset, map, mods), settings (a form sent with a Save button, each setting explained), console, and the
-local server's log. Placed in a package folder it also starts that folder's server, with an rcon password it keeps,
+local server's log, driven by keyboard or mouse. Placed in a package folder it also starts that folder's server, with an rcon password it keeps,
 and finds it again after a restart.
 
 It works within the server's limits: rcon runs one command every 500 ms for all senders (ZmAdmin spaces its commands

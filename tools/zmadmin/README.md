@@ -10,7 +10,7 @@ shows are in French, the players' language.
     python3 tools/zmadmin/main.py --rcon zm_admin 192.168.1.20 -p secret
 
 `--admin-poll SECONDS` sets how often the Players and Game views read `zm_admin` (5 by default, 0 never),
-`--dist DIR` the folder whose server it may start, `--config DIR` its settings folder.
+`--dist DIR` the folder whose server it may start, `--config DIR` its settings folder, `--no-mouse` keyboard only.
 
 ## Views
 
@@ -22,6 +22,11 @@ shows are in French, the players' language.
 | F4 | Settings | a form of the live settings (`sv_hostname`, `g_password`, `rcon_password`, `zm_startpoints`, `zm_startperks`, `zm_jip_mode`, `zm_debug_revive`, `g_inactivity`, `sv_maxclients`, `fs_mods`) |
 | F5 | Console | any command over rcon, with its reply and a saved history |
 | F6 | Log | the local server's `console_mp.log`, live, with a filter |
+
+**Mouse or keyboard.** A click picks a tab, a row, a button or an action of the Players legend, a double click opens
+or runs the row (connect, launch, edit a setting, run a game action), the wheel scrolls; each dialog has its buttons
+(`[ OK ]`, `[ Annuler ]`, ...) and the message line `[ Aide ]` / `[ Quitter ]`. Clicks act on release (a slow click
+never acts twice). The terminal then keeps its own text selection behind Shift; `--no-mouse` leaves the mouse to it.
 
 `?` (or F9) explains every key of the view; the Settings view explains the selected setting below the form (what it
 does, its values and default, when it takes effect).

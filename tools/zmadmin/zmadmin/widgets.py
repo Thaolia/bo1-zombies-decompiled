@@ -1,4 +1,4 @@
-"""curses building blocks: safe drawing, key names, a line editor and the modal dialogs."""
+"""curses building blocks: safe drawing, key names, mouse zones, a line editor and the modal dialogs."""
 import curses
 import os
 import re
@@ -65,6 +65,66 @@ def normalize_key(k):
     if k == curses.KEY_BTAB:
         return BTAB
     return k
+
+
+# Mouse: a click picks, a double click opens or runs, the wheel scrolls. A slow click comes as PRESSED then RELEASED
+# (only RELEASED is used), a quick one as CLICKED; PRESSED alone is ignored so a click never acts twice.
+WHEEL_UP = getattr(curses, "BUTTON4_PRESSED", 0)
+WHEEL_DOWN = getattr(curses, "BUTTON5_PRESSED", 0)
+MOUSE_MASK = (curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED | curses.BUTTON1_CLICKED
+              | curses.BUTTON1_DOUBLE_CLICKED | WHEEL_UP | WHEEL_DOWN)
+
+
+def mouse_kind(bstate):
+    """'double', 'click', 'up', 'down' (the wheel) or None for a mouse state."""
+    if bstate & curses.BUTTON1_DOUBLE_CLICKED:
+        return "double"
+    if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_RELEASED):
+        return "click"
+    if WHEEL_UP and bstate & WHEEL_UP:
+        return "up"
+    if WHEEL_DOWN and bstate & WHEEL_DOWN:
+        return "down"
+    return None
+
+
+def read_mouse():
+    """(y, x, kind) of the pending mouse event, or None."""
+    try:
+        _, x, y, _, bstate = curses.getmouse()
+    except curses.error:
+        return None
+    kind = mouse_kind(bstate)
+    return (y, x, kind) if kind else None
+
+
+class HitMap:
+    """The clickable zones of one drawn frame, in screen cells. The last zone added wins where zones overlap."""
+
+    def __init__(self):
+        self.zones = []
+
+    def clear(self):
+        self.zones.clear()
+
+    def add(self, y, x, width, click, double=None):
+        """click() on a click; double() on a double click (click() when there is none)."""
+        if width > 0:
+            self.zones.append((y, x, x + width, click, double))
+
+    def find(self, y, x):
+        for zone in reversed(self.zones):
+            if zone[0] == y and zone[1] <= x < zone[2]:
+                return zone
+        return None
+
+    def dispatch(self, y, x, kind):
+        """Runs the zone under (y, x); returns its result, or None when there is no zone."""
+        zone = self.find(y, x)
+        if zone is None:
+            return None
+        action = zone[4] if kind == "double" and zone[4] else zone[3]
+        return action()
 
 
 def put(win, y, x, text, attr=0, width=None):
@@ -154,10 +214,14 @@ class LineEdit:
 
 
 class Dialog:
-    """A centred box. `key` returns True when the dialog is done (then the app drops it)."""
+    """A centred box. `key` and `mouse` return True when the dialog is done (then the app drops it)."""
 
     title = ""
     cursor = False
+
+    def __init__(self):
+        self.hits = HitMap()
+        self.origin = (0, 0)
 
     def size(self, h, w):
         return min(h - 2, 20), min(w - 4, 76)
@@ -170,7 +234,23 @@ class Dialog:
         win.erase()
         win.box()
         put(win, 0, 2, f" {self.title} ", curses.A_BOLD)
+        self.origin = (y, x)
+        self.hits.clear()
         return win
+
+    def zone(self, y, x, width, click, double=None):
+        """A clickable zone at (y, x) of the dialog's window."""
+        self.hits.add(self.origin[0] + y, self.origin[1] + x, width, click, double)
+
+    def button(self, win, y, x, text, attr, click):
+        put(win, y, x, text, attr)
+        self.zone(y, x, len(text), click)
+        return x + len(text) + 1
+
+    def mouse(self, y, x, kind):
+        if kind in ("up", "down"):
+            return self.key(curses.KEY_UP if kind == "up" else curses.KEY_DOWN)
+        return bool(self.hits.dispatch(y, x, kind))
 
     def draw(self, scr):
         raise NotImplementedError
@@ -181,6 +261,7 @@ class Dialog:
 
 class MessageDialog(Dialog):
     def __init__(self, title, lines):
+        super().__init__()
         self.title = title
         self.source = lines
         self.lines = lines
@@ -198,8 +279,9 @@ class MessageDialog(Dialog):
         self.top = max(0, min(self.top, len(self.lines) - rows))
         for i, line in enumerate(self.lines[self.top:self.top + rows]):
             put(win, 1 + i, 2, line, width=dw - 4)
-        more = " Haut/Bas : défiler " if len(self.lines) > rows else ""
-        put(win, dh - 1, 2, f"{more} Entrée/Échap : fermer ", color(C_INFO))
+        x = self.button(win, dh - 1, 2, "[ Fermer ]", curses.A_BOLD, lambda: True)
+        more = " Haut/Bas, molette : défiler " if len(self.lines) > rows else ""
+        put(win, dh - 1, x, f"{more} Entrée/Échap : fermer ", color(C_INFO))
 
     def key(self, k):
         if k in (curses.KEY_UP, curses.KEY_PPAGE):
@@ -215,6 +297,7 @@ class ConfirmDialog(Dialog):
     """Lines, an optional checkbox, [ Oui ] [ Non ]. on_yes(checked)."""
 
     def __init__(self, title, lines, on_yes, checkbox=None, checked=False):
+        super().__init__()
         self.title = title
         # commands keep their line; prose wraps to the dialog's width
         self.lines = [w for line in lines for w in (wrap(line, 70) if line and not line.startswith("  ") else [line])]
@@ -236,10 +319,19 @@ class ConfirmDialog(Dialog):
         y = dh - 2
         if self.checkbox:
             mark = "[x]" if self.checked else "[ ]"
-            put(win, y - 2, 2, f"{mark} {self.checkbox}", curses.A_REVERSE if self.focus == 2 else 0)
-        put(win, y, 2, "[ Oui ]", curses.A_REVERSE if self.focus == 0 else 0)
-        put(win, y, 11, "[ Non ]", curses.A_REVERSE if self.focus == 1 else 0)
+            self.button(win, y - 2, 2, f"{mark} {self.checkbox}", curses.A_REVERSE if self.focus == 2 else 0,
+                        self.toggle)
+        self.button(win, y, 2, "[ Oui ]", curses.A_REVERSE if self.focus == 0 else 0, self.yes)
+        self.button(win, y, 11, "[ Non ]", curses.A_REVERSE if self.focus == 1 else 0, lambda: True)
         put(win, y, 20, "o/n, Tab, Espace : cocher" if self.checkbox else "o/n, Tab", color(C_INFO))
+
+    def yes(self):
+        self.on_yes(self.checked)
+        return True
+
+    def toggle(self):
+        self.checked = not self.checked
+        return False
 
     def key(self, k):
         if k in ("o", "O", "y", "Y"):
@@ -270,6 +362,7 @@ class FormDialog(Dialog):
     cursor = True
 
     def __init__(self, title, fields, on_ok, intro=None):
+        super().__init__()
         self.title = title
         self.fields = fields
         self.edits = [LineEdit(str(initial), mask=mask) for _, _, initial, _, mask in fields]
@@ -294,6 +387,7 @@ class FormDialog(Dialog):
         focus_pos = None
         for i, (key, label, _, help_text, _) in enumerate(self.fields):
             put(win, y, 2, label, curses.A_BOLD if i == self.focus else 0)
+            self.zone(y, 2, dw - 4, lambda i=i: self.focus_field(i))
             if i == self.focus:
                 focus_pos = (y, 2 + label_w)
             else:
@@ -301,7 +395,9 @@ class FormDialog(Dialog):
             put(win, y + 1, 2 + label_w, help_text, color(C_DIM), width=dw - label_w - 5)
             y += 2
         put(win, dh - 2, 2, self.error, color(C_ERR), width=dw - 4)
-        put(win, dh - 1, 2, " Entrée : valider  Tab/Haut/Bas : champ  Échap : annuler ", color(C_INFO))
+        x = self.button(win, dh - 1, 2, "[ OK ]", curses.A_BOLD, self.submit)
+        x = self.button(win, dh - 1, x, "[ Annuler ]", curses.A_BOLD, lambda: True)
+        put(win, dh - 1, x, " Entrée : valider  Tab : champ  Échap : annuler ", color(C_INFO))
         if focus_pos:
             self.edits[self.focus].draw(win, focus_pos[0], focus_pos[1], dw - label_w - 5)
 
@@ -313,12 +409,19 @@ class FormDialog(Dialog):
         elif k in (BTAB, curses.KEY_UP):
             self.focus = (self.focus - 1) % len(self.fields)
         elif k == ENTER:
-            values = {f[0]: e.text for f, e in zip(self.fields, self.edits)}
-            self.error = self.on_ok(values) or ""
-            return not self.error
+            return self.submit()
         else:
             self.edits[self.focus].key(k)
         return False
+
+    def focus_field(self, i):
+        self.focus = i
+        return False
+
+    def submit(self):
+        values = {f[0]: e.text for f, e in zip(self.fields, self.edits)}
+        self.error = self.on_ok(values) or ""
+        return not self.error
 
 
 class InputDialog(FormDialog):
@@ -330,6 +433,7 @@ class ChoiceDialog(Dialog):
     """A list to pick one item from. items: (value, label, description)."""
 
     def __init__(self, title, items, on_pick, current=None):
+        super().__init__()
         self.title = title
         self.items = items
         self.on_pick = on_pick
@@ -346,10 +450,21 @@ class ChoiceDialog(Dialog):
         for i, (value, label, _) in enumerate(self.items[top:top + rows]):
             n = top + i
             put(win, 1 + i, 2, f" {label} ".ljust(dw - 4), curses.A_REVERSE if n == self.sel else 0)
+            self.zone(1 + i, 2, dw - 4, lambda n=n: self.select(n), lambda n=n: self.pick(n))
         desc = self.items[self.sel][2] if self.items else ""
         for i, line in enumerate(wrap(desc, dw - 4)[:2]):
             put(win, dh - 4 + i, 2, line, color(C_DIM), width=dw - 4)
-        put(win, dh - 1, 2, " Entrée : choisir  Échap : annuler ", color(C_INFO))
+        x = self.button(win, dh - 1, 2, "[ Choisir ]", curses.A_BOLD, lambda: self.pick(self.sel))
+        x = self.button(win, dh - 1, x, "[ Annuler ]", curses.A_BOLD, lambda: True)
+        put(win, dh - 1, x, " Entrée, double-clic : choisir  Échap : annuler ", color(C_INFO))
+
+    def select(self, n):
+        self.sel = n
+        return False
+
+    def pick(self, n):
+        self.on_pick(self.items[n][0])
+        return True
 
     def key(self, k):
         if k == ESC:
@@ -359,8 +474,7 @@ class ChoiceDialog(Dialog):
         elif k == curses.KEY_DOWN:
             self.sel = (self.sel + 1) % len(self.items)
         elif k == ENTER:
-            self.on_pick(self.items[self.sel][0])
-            return True
+            return self.pick(self.sel)
         return False
 
 
@@ -368,6 +482,7 @@ class ChecklistDialog(Dialog):
     """Items to tick. items: (value, label). on_ok(list of ticked values)."""
 
     def __init__(self, title, items, ticked, on_ok, intro=None):
+        super().__init__()
         self.title = title
         self.items = list(items)
         self.ticked = set(ticked)
@@ -394,24 +509,31 @@ class ChecklistDialog(Dialog):
             n = top + i
             mark = "[x]" if value in self.ticked else "[ ]"
             put(win, y + i, 2, f" {mark} {label} ".ljust(dw - 4), curses.A_REVERSE if n == self.sel else 0)
-        put(win, dh - 1, 2, " Espace : cocher  Entrée : valider  Échap : annuler ", color(C_INFO))
+            self.zone(y + i, 2, dw - 4, lambda n=n: self.tick(n))
+        x = self.button(win, dh - 1, 2, "[ Valider ]", curses.A_BOLD, self.submit)
+        x = self.button(win, dh - 1, x, "[ Annuler ]", curses.A_BOLD, lambda: True)
+        put(win, dh - 1, x, " Espace, clic : cocher  Entrée : valider ", color(C_INFO))
+
+    def tick(self, n):
+        self.sel = n
+        self.ticked.symmetric_difference_update({self.items[n][0]})
+        return False
+
+    def submit(self):
+        self.on_ok([v for v, _ in self.items if v in self.ticked])
+        return True
 
     def key(self, k):
         if k == ESC:
             return True
         if not self.items:
-            if k == ENTER:
-                self.on_ok([])
-                return True
-            return False
+            return self.submit() if k == ENTER else False
         if k == curses.KEY_UP:
             self.sel = (self.sel - 1) % len(self.items)
         elif k == curses.KEY_DOWN:
             self.sel = (self.sel + 1) % len(self.items)
         elif k == " ":
-            v = self.items[self.sel][0]
-            self.ticked.symmetric_difference_update({v})
+            self.tick(self.sel)
         elif k == ENTER:
-            self.on_ok([v for v, _ in self.items if v in self.ticked])
-            return True
+            return self.submit()
         return False

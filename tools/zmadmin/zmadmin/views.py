@@ -31,6 +31,19 @@ class View:
     def key(self, k):
         return False
 
+    def wheel(self, step):
+        """The mouse wheel, -1 up, 1 down: moves the selection by default."""
+        self.key(curses.KEY_UP if step < 0 else curses.KEY_DOWN)
+
+    def zone(self, y, x, width, click, double=None):
+        self.app.hits.add(y, x, width, click, double)
+
+    def button(self, scr, y, x, text, attr, click):
+        """A clickable label; returns the column after it."""
+        put(scr, y, x, text, attr)
+        self.zone(y, x, len(text), click)
+        return x + len(text) + 2
+
 
 def _int_field(text, minimum=None):
     text = text.strip()
@@ -45,7 +58,7 @@ def _int_field(text, minimum=None):
 # ---------------------------------------------------------------------------------------------------------- Servers
 class ServersView(View):
     name, title = "servers", "Serveurs"
-    hints = "Entrée connecter  a ajouter  e modifier  x retirer  l lancer local  S arrêter local  ? aide"
+    hints = "Entrée/double-clic connecter  a ajouter  e modifier  x retirer  l lancer local  S arrêter local  ? aide"
 
     def __init__(self, app):
         super().__init__(app)
@@ -78,7 +91,19 @@ class ServersView(View):
                 state = ("connecté" if app.link.online else "hors ligne") + (f", {state}" if state else "")
             attr = curses.A_REVERSE if i == self.sel else 0
             put(scr, y, 1, f"{'':2}{name[:25]:<26}{addr[:27]:<28}{state}".ljust(width - 2), attr)
+            self.zone(y, 1, width - 2, lambda i=i: self.select(i), lambda i=i: self.select(i, ENTER))
             y += 1
+        y += 1
+        rows = [[("Connecter", ENTER, bool(entries)), ("Ajouter", "a", True), ("Modifier", "e", bool(entries)),
+                 ("Retirer", "x", bool(entries))],
+                [("Lancer le serveur local", "l", bool(app.dist)), ("Arrêter le serveur local", "S", bool(app.dist))]]
+        for row in rows:
+            x = 3
+            for label, k, shown in row:
+                if shown:
+                    x = self.button(scr, y, x, f"[ {label} ]", 0, lambda k=k: self.key(k))
+            if x > 3:
+                y += 1
         y += 1
         if app.dist:
             text = [f"Dossier BO1Zombies : {app.dist.root}",
@@ -92,6 +117,11 @@ class ServersView(View):
             for line in wrap(paragraph, width - 6):
                 put(scr, y, 3, line, color(C_DIM), width=width - 4)
                 y += 1
+
+    def select(self, i, then=None):
+        self.sel = i
+        if then:
+            self.key(then)
 
     def key(self, k):
         entries = self.entries()
@@ -187,7 +217,7 @@ class ServersView(View):
 class PlayersView(View):
     name, title = "players", "Joueurs"
     uses_admin = True
-    hints = "Haut/Bas choisir un joueur  lettre : action (légende ci-dessus)  a : tous  ? : aide détaillée"
+    hints = "Haut/Bas, clic : un joueur  lettre ou clic sur la légende : action  a : tous  ? : aide détaillée"
 
     def __init__(self, app):
         super().__init__(app)
@@ -219,22 +249,30 @@ class PlayersView(View):
             put(scr, y, 1, f"{r.slot:>3}  {r.name[:21]:<22}", attr)
             put(scr, y, 28, f"{state:<12}", attr | (0 if sel else state_attr))
             put(scr, y, 40, f"{health:>5}{r.score:>8}{r.ping:>6}  {flags}", attr)
+            self.zone(y, 1, width - 2, lambda slot=r.slot: self.select(slot))
             y += 1
         y = top + height - 10
-        legend = [f"{key} {label}" for key, label, _, _ in H.PLAYER_ACTIONS]
-        for i in range(0, len(legend), 4):
-            put(scr, y, 1, "".join(f"{item:<16}" for item in legend[i:i + 4]), color(C_INFO), width=width - 2)
-            y += 1
-        y += 1
+        # the legend doubles as buttons: a click runs the action on the target below
+        for i, (key, label, _, _) in enumerate(H.PLAYER_ACTIONS):
+            ly, lx = y + i // 4, 1 + 16 * (i % 4)
+            put(scr, ly, lx, f"{key} {label}"[:15], color(C_INFO))
+            self.zone(ly, lx, 15, lambda key=key: self.key(key))
+        y += (len(H.PLAYER_ACTIONS) + 3) // 4 + 1
         if app.status:
             put(scr, y, 1, f"{len(rows)}/{app.status.max_clients} places occupées", color(C_DIM))
         target = "TOUS les joueurs (all)" if self.all_mode else (
             f"joueur {self.sel_slot}" if self.sel_slot is not None else "aucun joueur")
-        put(scr, y + 1, 1, f"Cible de la prochaine action : {target}", color(C_WARN) if self.all_mode else 0)
+        line = f"Cible de la prochaine action : {target}"
+        put(scr, y + 1, 1, line, color(C_WARN) if self.all_mode else 0)
+        self.button(scr, y + 1, len(line) + 3, f"[{'x' if self.all_mode else ' '}] tous (a)", 0,
+                    lambda: self.key("a"))
         note = ("Drapeaux : G god, D demigod, N notarget, C noclip, F gelé. État et vie viennent de zm_admin, relu "
                 "toutes les quelques secondes : un changement apparaît après l'action du mod admin.")
         for i, line in enumerate(wrap(note, width - 3)[:3]):
             put(scr, y + 2 + i, 1, line, color(C_DIM), width=width - 2)
+
+    def select(self, slot):
+        self.sel_slot = slot
 
     def key(self, k):
         rows = self.app.rows
@@ -296,7 +334,7 @@ class PlayersView(View):
 class GameView(View):
     name, title = "game", "Partie"
     uses_admin = True
-    hints = "Haut/Bas choisir une action  Entrée exécuter  ? aide"
+    hints = "Haut/Bas, clic : choisir une action  Entrée, double-clic, [ Exécuter ] : exécuter  ? aide"
 
     def __init__(self, app):
         super().__init__(app)
@@ -323,11 +361,19 @@ class GameView(View):
         y += 1
         for i, (_, label, _) in enumerate(H.GAME_ACTIONS):
             put(scr, y, 2, f" {label} ".ljust(36), curses.A_REVERSE if i == self.sel else 0)
+            self.zone(y, 2, 36, lambda i=i: self.select(i), lambda i=i: self.select(i, ENTER))
+            if i == self.sel:
+                self.button(scr, y, 40, "[ Exécuter ]", curses.A_BOLD, lambda: self.key(ENTER))
             y += 1
         y += 1
         for line in wrap(H.GAME_ACTIONS[self.sel][2], width - 6):
             put(scr, y, 4, line, color(C_DIM))
             y += 1
+
+    def select(self, i, then=None):
+        self.sel = i
+        if then:
+            self.key(then)
 
     def key(self, k):
         if k == curses.KEY_UP:
@@ -379,7 +425,7 @@ class GameView(View):
 # --------------------------------------------------------------------------------------------------------- Settings
 class SettingsView(View):
     name, title = "settings", "Réglages"
-    hints = "Haut/Bas choisir  Entrée modifier  Espace basculer  Ctrl+S sauvegarder  ? aide"
+    hints = "Haut/Bas, clic : choisir  Entrée, double-clic : modifier  Espace basculer  Ctrl+S sauvegarder  ? aide"
     BUTTON_HELP = {
         "save": ("Sauvegarder", "Envoie au serveur toutes les modifications marquées *, en une seule commande rcon, "
                  "puis relit chaque réglage pour vérifier qu'il est appliqué. Une fenêtre montre d'abord les commandes."),
@@ -500,6 +546,9 @@ class SettingsView(View):
                 put(scr, y, 60, f"{OK_MARK if ok else BAD_MARK} {s.name}", attr | color(C_OK if ok else C_ERR))
             else:
                 put(scr, y, 60, f"  {s.name}", attr | (0 if sel else color(C_DIM)))
+            item = ("setting", s.name)
+            self.zone(y, 1, width - 2, lambda item=item: self.select(item),
+                      lambda item=item: self.select(item, ENTER))
             y += 1
         y += 1
         x = 2
@@ -511,8 +560,9 @@ class SettingsView(View):
             if b == "save" and form.dirty:
                 text = f"[ {label} ({len(form.edits)}) ]"
             sel = items[self.focus] == ("button", b)
-            put(scr, y, x, text, curses.A_REVERSE if sel else (color(C_WARN) if b == "save" and form.dirty else 0))
-            x += len(text) + 2
+            x = self.button(scr, y, x, text,
+                            curses.A_REVERSE if sel else (color(C_WARN) if b == "save" and form.dirty else 0),
+                            lambda b=b: self.select(("button", b), ENTER))
         y += 2
         kind, name = items[self.focus]
         if kind == "setting":
@@ -549,6 +599,13 @@ class SettingsView(View):
         else:
             return False
         return True
+
+    def select(self, item, then=None):
+        items = self.focus_items()
+        if item in items:
+            self.focus = items.index(item)
+            if then:
+                self.key(then)
 
     def toggle_cfg(self):
         self.write_cfg = not self.write_cfg
@@ -635,7 +692,7 @@ class SettingsView(View):
 class ConsoleView(View):
     name, title = "console", "Console"
     captures_text = True
-    hints = "Entrée envoyer  Haut/Bas historique  PgPréc/PgSuiv défiler  F9 aide"
+    hints = "Entrée envoyer  Haut/Bas historique  PgPréc/PgSuiv, molette : défiler  F9 aide"
 
     def __init__(self, app):
         super().__init__(app)
@@ -665,6 +722,9 @@ class ConsoleView(View):
         put(scr, top + height - 1, 1, prompt, curses.A_BOLD)
         self.edit.draw(scr, top + height - 1, 1 + len(prompt), width - len(prompt) - 3)
 
+    def wheel(self, step):
+        self.scroll = max(0, self.scroll - 3 * step)
+
     def key(self, k):
         if k == curses.KEY_PPAGE:
             self.scroll += 10
@@ -687,7 +747,7 @@ class ConsoleView(View):
 # -------------------------------------------------------------------------------------------------------------- Log
 class LogView(View):
     name, title = "log", "Log"
-    hints = "/ filtrer  Espace pause  PgPréc/PgSuiv défiler  Fin dernières lignes  ? aide"
+    hints = "/ filtrer  Espace pause  PgPréc/PgSuiv, molette : défiler  Fin dernières lignes  ? aide"
 
     def __init__(self, app):
         super().__init__(app)
@@ -724,8 +784,19 @@ class LogView(View):
             state.append("EN PAUSE (Espace pour reprendre)")
         elif self.scroll:
             state.append(f"{self.scroll} lignes plus bas (Fin)")
+        buttons = (("[ Filtrer ]", "/"), ("[ Reprendre ]" if self.paused else "[ Pause ]", " "),
+                   ("[ Fin ]", curses.KEY_END))
+        bw = sum(len(b) + 1 for b, _ in buttons)
         put(scr, top + height - 1, 1, " | ".join(state) or self.app.dist.log, color(C_WARN if state else C_DIM),
-            width=width - 2)
+            width=width - 3 - bw)
+        x = width - bw
+        for label, k in buttons:
+            put(scr, top + height - 1, x, label, curses.A_BOLD)
+            self.zone(top + height - 1, x, len(label), lambda k=k: self.key(k))
+            x += len(label) + 1
+
+    def wheel(self, step):
+        self.scroll = max(0, self.scroll - 3 * step)
 
     def key(self, k):
         if k == "/":
