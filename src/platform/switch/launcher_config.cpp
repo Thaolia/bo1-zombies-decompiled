@@ -97,6 +97,8 @@ void Apply(LauncherSettings *s, const std::string &key, const std::string &value
         ParseBool(value, &s->aimAutoaim);
     else if (key == "god")
         ParseBool(value, &s->god);
+    else if (key == "zinfo")
+        ParseBool(value, &s->tabInfo);
     else if (key == "backend")
     {
         for (int i = 0; i < LAUNCHER_BACKEND_COUNT; ++i)
@@ -152,6 +154,7 @@ std::string Launcher_FormatSettings(const LauncherSettings &s)
     out += std::string("aim_lockon=") + (s.aimLockon ? "1" : "0") + "\n";
     out += std::string("aim_autoaim=") + (s.aimAutoaim ? "1" : "0") + "\n";
     out += std::string("god=") + (s.god ? "1" : "0") + "\n";
+    out += std::string("zinfo=") + (s.tabInfo ? "1" : "0") + "\n";
     out += std::string("backend=") + kBackendNames[s.backend] + "\n";
     out += "maxfps=" + std::to_string(s.maxFps) + "\n";
     out += std::string("shadows=") + (s.shadows ? "1" : "0") + "\n";
@@ -175,6 +178,10 @@ std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::strin
     // playing client around each server frame (G_SP_HeadlessTestClientFrame).
     // Only a local server reads it: the dedicated server decides god mode for its players.
     line += std::string(" +set bo1_testclient_god ") + (s.god && !join ? "1" : "0");
+    // The dedicated server stacks mods/zinfo for all its players itself (FS_ModStackNames). Before the extra, so a
+    // launch_extra.cfg that sets its own fs_mods wins.
+    if (s.tabInfo && !join)
+        line += " +set fs_mods zinfo";
     line += " +set com_maxfps " + std::to_string(s.maxFps);
     line += std::string(" +set sm_enable ") + (s.shadows ? "1" : "0");
     line += std::string(" +set bo1_fpscounter ") + (s.fpsCounter ? "1" : "0");

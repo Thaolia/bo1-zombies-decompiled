@@ -209,7 +209,9 @@ use button, the result).
 
 The engine checks the arguments and prints `zm_admin: ...` at once; the script side (mods/admin, which the server
 always adds to `fs_mods`) replies with `admin: ...` lines once it has acted, also written to `games_mp.log`. Output
-of a command sent with rcon goes back to the rcon client, not to the console log. `Server.bat` and `Server.sh` link
+of a command sent with rcon goes back to the rcon client, not to the console log. The server also always stacks
+mods/zinfo: every player, PC or Switch, sees the zombies alive and left this round beside the Tab scoreboard;
+`set zinfo 0` on the server hides it for everyone. `Server.bat` and `Server.sh` link
 this repository's `mods/` into the server's folder, where the server reads it; started otherwise, put `mods/` there
 (`<fs_h>/mods/admin`).
 

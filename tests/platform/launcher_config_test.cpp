@@ -30,7 +30,7 @@ void CheckLine(const std::string &got, const std::string &want, const char *what
 bool SameSettings(const LauncherSettings &a, const LauncherSettings &b)
 {
     return a.join == b.join && a.serverHost == b.serverHost && a.serverPort == b.serverPort && a.playerName == b.playerName && a.map == b.map && a.aimAssist == b.aimAssist && a.aimSlowdown == b.aimSlowdown &&
-           a.aimLockon == b.aimLockon && a.aimAutoaim == b.aimAutoaim && a.god == b.god && a.backend == b.backend &&
+           a.aimLockon == b.aimLockon && a.aimAutoaim == b.aimAutoaim && a.god == b.god && a.tabInfo == b.tabInfo && a.backend == b.backend &&
            a.maxFps == b.maxFps && a.shadows == b.shadows && a.fpsCounter == b.fpsCounter && a.texFilter == b.texFilter;
 }
 } // namespace
@@ -44,15 +44,17 @@ int main()
 
     CheckLine(Launcher_BuildLaunchLine(defaults, ""),
               "+set bo1_zombies 1 +set bo1_aimassist 1 +set aim_slowdown_enabled 1 +set aim_lockon_enabled 1"
-              " +set aim_autoaim_enabled 0 +set bo1_testclient_god 0 +set com_maxfps 60 +set sm_enable 1"
-              " +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0 +devmap zombie_theater",
-              "the default line");
+              " +set aim_autoaim_enabled 0 +set bo1_testclient_god 0 +set fs_mods zinfo +set com_maxfps 60"
+              " +set sm_enable 1 +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0"
+              " +devmap zombie_theater",
+              "the default line, with the Tab zombie counter");
 
     LauncherSettings custom;
     custom.map = 5; // Moon
     custom.aimAssist = false;
     custom.aimAutoaim = true;
     custom.god = true;
+    custom.tabInfo = false;
     custom.backend = LAUNCHER_BACKEND_GL;
     custom.maxFps = 30;
     custom.shadows = false;
@@ -82,8 +84,8 @@ int main()
                                                         "backend=vulkan\ntexfilter=aniso3\nunknown=1\nno equals sign\n");
     Check(SameSettings(bad, defaults), "unknown maps, invalid values and unknown keys keep the defaults");
 
-    const LauncherSettings crlf = Launcher_ParseSettings(" map = zombie_pentagon \r\ngod=1\r\nmaxfps=30\r\n");
-    Check(std::string(kLauncherMaps[crlf.map].bsp) == "zombie_pentagon" && crlf.god && crlf.maxFps == 30,
+    const LauncherSettings crlf = Launcher_ParseSettings(" map = zombie_pentagon \r\ngod=1\r\nmaxfps=30\r\nzinfo=0\r\n");
+    Check(std::string(kLauncherMaps[crlf.map].bsp) == "zombie_pentagon" && crlf.god && crlf.maxFps == 30 && !crlf.tabInfo,
           "spaces and CRLF line ends are tolerated");
 
     for (int i = 0; i < kLauncherMapCount; ++i)
@@ -107,7 +109,7 @@ int main()
               " +set aim_autoaim_enabled 0 +set bo1_testclient_god 0 +set com_maxfps 60 +set sm_enable 1"
               " +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0 +set name Switch1"
               " +set bo1_frameperf 200 +set cl_allowWanConnect 1 +set cl_autoConnect 192.168.1.20:29070",
-              "a join: the game's menu, then cl_autoConnect, no +devmap and no local god mode");
+              "a join: the game's menu, then cl_autoConnect, no +devmap, no local god mode, no fs_mods (the server's)");
     Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(join)), join), "menu.cfg round-trips a join");
 
     LauncherSettings noServer;
@@ -115,8 +117,9 @@ int main()
     noServer.god = true;
     CheckLine(Launcher_BuildLaunchLine(noServer, ""),
               "+set bo1_zombies 1 +set bo1_aimassist 1 +set aim_slowdown_enabled 1 +set aim_lockon_enabled 1"
-              " +set aim_autoaim_enabled 0 +set bo1_testclient_god 1 +set com_maxfps 60 +set sm_enable 1"
-              " +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0 +devmap zombie_theater",
+              " +set aim_autoaim_enabled 0 +set bo1_testclient_god 1 +set fs_mods zinfo +set com_maxfps 60"
+              " +set sm_enable 1 +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0"
+              " +devmap zombie_theater",
               "a join without a server address starts the solo game");
 
     LauncherSettings noName = join;

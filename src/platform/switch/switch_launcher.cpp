@@ -1,9 +1,9 @@
-// The start menu of the Switch build. Map, aim assist, god mode, graphics and controllers are chosen with the pad on
-// libnx's text console before the engine starts, so a game opens straight on its map without the front end. A second
-// view sets up joining a dedicated server instead (docs/SERVER.md): the game then opens on its own menu and joins by
-// itself. The choices persist in menu.cfg; Start writes launch.cfg and gfx.cfg from them (launcher_config.cpp), which a
-// skip_menu boot (emulator, scripted runs) then reuses as they are. The console font is ASCII only: no accents in the
-// text.
+// The start menu of the Switch build. Map, aim assist, god mode, the Tab zombie counter, graphics and controllers are
+// chosen with the pad on libnx's text console before the engine starts, so a game opens straight on its map without the
+// front end. A second view sets up joining a dedicated server instead (docs/SERVER.md): the game then opens on its own
+// menu and joins by itself. The choices persist in menu.cfg; Start writes launch.cfg and gfx.cfg from them
+// (launcher_config.cpp), which a skip_menu boot (emulator, scripted runs) then reuses as they are. The console font is
+// ASCII only: no accents in the text.
 
 // libnx before anything that could pull the Win32 shim (switch_main.cpp explains why).
 #include <switch.h>
@@ -103,6 +103,7 @@ enum Item
     ITEM_AIM_LOCKON,
     ITEM_AIM_AUTOAIM,
     ITEM_GOD,
+    ITEM_TABINFO,
     ITEM_BACKEND,
     ITEM_MAXFPS,
     ITEM_SHADOWS,
@@ -136,12 +137,13 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_MAIN, 12, "  Verrouillage", "La visee suit le zombie vise."},
     {VIEW_MAIN, 13, "  Visee auto", "En visant (ZL), le reticule saute sur le zombie le plus proche."},
     {VIEW_MAIN, 15, "God mode", "Les zombies ne peuvent pas tuer le joueur (partie solo)."},
-    {VIEW_MAIN, 18, "Rendu", "deko3d: le plus rapide. OpenGL: l'ancien chemin, plus lent."},
-    {VIEW_MAIN, 19, "Limite de FPS", "30: plus stable et plus econome en batterie. 60: plus fluide."},
-    {VIEW_MAIN, 20, "Ombres", "Ombres dynamiques. Les couper fait gagner des FPS."},
-    {VIEW_MAIN, 21, "Filtre de texture", "Nettete des textures au loin. 16x: le plus net. Bilineaire: le plus leger."},
-    {VIEW_MAIN, 22, "Compteur FPS", "Compteur de FPS et de batterie en haut a droite."},
-    {VIEW_MAIN, 24, "Manettes", "A: ecran de la Switch pour connecter ou changer de manette."},
+    {VIEW_MAIN, 16, "Compteur zombies", "Zombies en vie et restants dans la manche, a cote du tableau des scores."},
+    {VIEW_MAIN, 19, "Rendu", "deko3d: le plus rapide. OpenGL: l'ancien chemin, plus lent."},
+    {VIEW_MAIN, 20, "Limite de FPS", "30: plus stable et plus econome en batterie. 60: plus fluide."},
+    {VIEW_MAIN, 21, "Ombres", "Ombres dynamiques. Les couper fait gagner des FPS."},
+    {VIEW_MAIN, 22, "Filtre de texture", "Nettete des textures au loin. 16x: le plus net. Bilineaire: le plus leger."},
+    {VIEW_MAIN, 23, "Compteur FPS", "Compteur de FPS et de batterie en haut a droite."},
+    {VIEW_MAIN, 25, "Manettes", "A: ecran de la Switch pour connecter ou changer de manette."},
     {VIEW_MAIN, 35, "DEMARRER", "Lance la partie avec ces reglages (aussi: bouton +)."},
     {VIEW_SERVER, 7, "Connexion", "Activee: la partie rejoint ce serveur au lieu d'une partie solo."},
     {VIEW_SERVER, 9, "Adresse IP", "A: l'adresse IP du PC qui fait tourner le serveur (Server.bat, Server.sh)."},
@@ -149,8 +151,8 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_SERVER, 11, "Nom du joueur", "A: votre nom sur le serveur (lettres, chiffres, _ - .), vide: celui du jeu."},
     {VIEW_SERVER, 14, "RETOUR", "Revient au menu (aussi: bouton B)."},
 };
-const int kGraphicsHeaderRow = 17;
-const int kControllerFirstRow = 25;
+const int kGraphicsHeaderRow = 18;
+const int kControllerFirstRow = 26;
 const int kControllerMaxRows = 9; // handheld + players 1-8
 const int kNetInfoRow = 17;
 const int kHelpRow = 37;
@@ -163,8 +165,8 @@ bool Selectable(const LauncherSettings &s, View view, int item)
         return false;
     if (item == ITEM_AIM_SLOWDOWN || item == ITEM_AIM_LOCKON || item == ITEM_AIM_AUTOAIM)
         return s.aimAssist;
-    // A dedicated server picks the map and decides god mode.
-    if (item == ITEM_MAP || item == ITEM_GOD)
+    // A dedicated server picks the map and decides god mode and the zombie counter.
+    if (item == ITEM_MAP || item == ITEM_GOD || item == ITEM_TABINFO)
         return !s.join;
     return true;
 }
@@ -206,6 +208,8 @@ std::string ValueText(const LauncherSettings &s, int item)
         return YesNo(s.aimAutoaim);
     case ITEM_GOD:
         return YesNo(s.god);
+    case ITEM_TABINFO:
+        return YesNo(s.tabInfo);
     case ITEM_BACKEND:
         return s.backend == LAUNCHER_BACKEND_DEKO3D ? "deko3d" : "OpenGL";
     case ITEM_MAXFPS:
@@ -255,6 +259,9 @@ void Change(LauncherSettings *s, int item, int dir)
         break;
     case ITEM_GOD:
         s->god = !s->god;
+        break;
+    case ITEM_TABINFO:
+        s->tabInfo = !s->tabInfo;
         break;
     case ITEM_BACKEND:
         s->backend = s->backend == LAUNCHER_BACKEND_DEKO3D ? LAUNCHER_BACKEND_GL : LAUNCHER_BACKEND_DEKO3D;
@@ -527,7 +534,7 @@ void Draw(const LauncherSettings &s, View view, int selected, const Screen &scre
             std::printf("Il reessaie tout seul si le serveur n'est pas encore lance ou redemarre.");
         }
         At(kNetInfoRow + 7, 3);
-        std::printf("%sLe serveur choisit la map et le god mode.%s", kColorDisabled, kColorNormal);
+        std::printf("%sLe serveur choisit la map, le god mode et le compteur de zombies.%s", kColorDisabled, kColorNormal);
     }
 
     At(kHelpRow, 3);

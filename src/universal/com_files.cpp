@@ -2393,7 +2393,7 @@ bool FS_ModsActive()
 
 bool FS_ModStackActive()
 {
-    // phase 8: the dedicated zombies server always stacks mods/admin, its admin commands' script side
+    // phase 8: the dedicated zombies server always stacks mods/admin (its admin commands' script side) and mods/zinfo
     return (fs_modsVar && *fs_modsVar->current.string) || Sys_IsDedicatedZombiesServer();
 }
 
@@ -2441,6 +2441,21 @@ static int FS_ModStackParse(const char *p, char (*names)[64], int count, int max
     return count;
 }
 
+// a full stack gives up its last name: the name appended last always stays
+static int FS_ModStackAppend(char (*names)[64], int count, int max, const char *name)
+{
+    int m = 0;
+    while ( m < count && I_stricmp(names[m], name) )
+        ++m;
+    if ( m == count )
+    {
+        if ( count == max )
+            --count;
+        I_strncpyz(names[count++], name, 64);
+    }
+    return count;
+}
+
 int FS_ModStackNames(char (*names)[64], int max)
 {
     char game[1][64];
@@ -2449,15 +2464,9 @@ int FS_ModStackNames(char (*names)[64], int max)
     int count = FS_ModStackParse(fs_modsVar->current.string, names, 0, max, false);
     if ( Sys_IsDedicatedZombiesServer() )
     {
-        int m = 0;
-        while ( m < count && I_stricmp(names[m], "admin") )
-            ++m;
-        if ( m == count )
-        {
-            if ( count == max )
-                --count;
-            I_strncpyz(names[count++], "admin", 64);
-        }
+        // phase 8: the Tab zombie counter (mods/zinfo) is on for every player of the server; set zinfo 0 hides it
+        count = FS_ModStackAppend(names, count, max, "zinfo");
+        count = FS_ModStackAppend(names, count, max, "admin");
     }
     const char *g = fs_gameDirVar ? fs_gameDirVar->current.string : "";
     if ( (!I_strnicmp(g, "mods/", 5) || !I_strnicmp(g, "mods\\", 5)) && FS_ModStackParse(g, game, 0, 1, true) )

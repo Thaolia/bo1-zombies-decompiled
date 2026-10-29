@@ -34,7 +34,8 @@ Au lancement, un menu texte s'ouvre avant le jeu. On y choisit :
   L'écran montre aussi l'adresse réseau de la console (`docs/SERVER.md`, « Joining from a Switch ») ;
 - la map, parmi les 10 maps zombies ;
 - l'aim assist : activé ou non, avec ralentissement, verrouillage et visée auto ;
-- le god mode ;
+- le compteur de zombies à côté du tableau des scores (mod zinfo : zombies en vie et restants dans la manche),
+  activé par défaut ;
 - le rendu (deko3d ou OpenGL), la limite de FPS (30 ou 60), les ombres, le filtre de texture et le compteur
   FPS/batterie ;
 - les manettes : la liste des manettes détectées, et l'écran de la Switch pour en connecter.

@@ -6,6 +6,10 @@ Tab (the scoreboard), two numbers show at the left, above the round number, in i
 - **zombies alive** - `get_enemy_count()`: zombies, dogs and specials alive now.
 - **left this round** - `level.zombie_total` (not spawned yet) + alive.
 
+On by default where the port starts the game: the dedicated server always stacks it (`set zinfo 0` hides it for
+every player), and the solo launches add it (the Switch start menu's "Compteur zombies" line, `Play.bat` and
+`play.sh` of the packages, the ticked box in `tools\mod-launcher.hta`). `BO1Zombies.exe` started by hand stays vanilla.
+
 Start with `+set fs_game mods/zinfo` or `+set fs_mods zinfo` (stacks with other mods, e.g. `fs_mods horde zinfo`;
 or tick "Tab: zombie counter" in `tools\mod-launcher.hta`). `zinfo 0` in the console hides the counter.
 Script: `maps/zinfo/_zinfo.gsc` sends the numbers with SetClientDvars twice a second; the engine draws them only

@@ -294,10 +294,11 @@ package_windows() {
 rem Black Ops 1 Zombies, 64-bit. "Play.bat" opens the game's menu (Zombies, Solo, a map).
 rem "Play.bat net <address[:port]> [name]" joins a dedicated server once the menu is up, and again whenever the game
 rem is back at the menu. Example: Play.bat net 192.168.1.20:3074 Player2
+rem Solo games show the zombie counter beside the Tab scoreboard (mods\zinfo); on a server, the server decides.
 setlocal
 set "HERE=%~dp0"
 set "HERE=%HERE:~0,-1%"
-set "NETARGS=+set net_ip 127.0.0.1"
+set "NETARGS=+set net_ip 127.0.0.1 +set fs_mods zinfo"
 if /i not "%~1"=="net" goto run
 if "%~2"=="" (echo usage: Play.bat net ^<address[:port]^> [name] & pause & exit /b 1)
 set "NETARGS=+set cl_autoConnect %~2"
@@ -345,6 +346,8 @@ REJOINDRE   Play.bat net 192.168.1.20:3074 MonNom
 SERVEUR     Server.bat [map] [port]          par défaut : zombie_theater 3074
             Réglages dans server\main\server.cfg, journal dans server\main\console_mp.log.
             Ouvrez le port UDP dans le pare-feu de Windows pour les joueurs d'autres machines.
+TAB         en tenant Tab, les zombies en vie et ceux qui restent dans la manche s'affichent à gauche
+            (mod zinfo, actif par défaut en solo et sur le serveur ; « zinfo 0 » dans la console le cache).
 
 Un fichier launch.cfg posé à côté de BO1Zombies.exe est ajouté à la ligne de commande, par exemple :
     +set cl_autoConnect 192.168.1.20:3074
@@ -373,6 +376,7 @@ package_linux() {
 #   ./play.sh net <address[:port]> [name]   joins a dedicated server once the menu is up, and again whenever the game
 #                                           is back at the menu
 #   FULLSCREEN=1 ./play.sh                  full screen instead of a 1280x720 window
+# Solo games show the zombie counter beside the Tab scoreboard (mods/zinfo); on a server, the server decides.
 set -eu
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ARGS=(+set bo1_zombies 1 +set fs_b "$HERE" +set fs_h "$HERE" +set logfile 2)
@@ -381,7 +385,7 @@ if [ "${1:-}" = net ]; then
     ARGS+=(+set cl_autoConnect "$2")
     if [ -n "${3:-}" ]; then ARGS+=(+set name "$3"); fi
 else
-    ARGS+=(+set net_ip 127.0.0.1)
+    ARGS+=(+set net_ip 127.0.0.1 +set fs_mods zinfo)
 fi
 if [ "${FULLSCREEN:-0}" = 1 ]; then
     ARGS+=(+set r_fullscreen 1 +set r_borderless 0)
@@ -419,6 +423,8 @@ REJOINDRE   ./play.sh net 192.168.1.20:3074 MonNom
 SERVEUR     ./server.sh [map] [port]      par défaut : zombie_theater 3074
             Dans un terminal, il affiche sa console curses. Réglages dans server/main/server.cfg, journal dans
             server/main/console_mp.log.
+TAB         en tenant Tab, les zombies en vie et ceux qui restent dans la manche s'affichent à gauche
+            (mod zinfo, actif par défaut en solo et sur le serveur ; « zinfo 0 » dans la console le cache).
 
 Prérequis : SDL2 et ncurses (Debian, Ubuntu : sudo apt install libsdl2-2.0-0 libncurses6) et un pilote OpenGL 4.3.
 Gardez ce dossier sur un système de fichiers Linux (ext4) : depuis /mnt/c sous WSL, une map met des minutes à charger.
@@ -453,7 +459,9 @@ LANCEMENT (mode application obligatoire)
   Choisissez « BO1 Zombies ».
 
 MENU DE DÉPART
-  Map, aim assist, god mode, rendu, limite de FPS, ombres, filtre de texture, manettes. + lance la partie.
+  Map, aim assist, god mode, compteur de zombies, rendu, limite de FPS, ombres, filtre de texture, manettes.
+  + lance la partie. Le compteur de zombies (activé par défaut) affiche les zombies en vie et ceux qui restent
+  dans la manche à côté du tableau des scores ; sur un serveur, c'est le serveur qui le décide.
   « Serveur » ouvre l'écran de connexion : activez-la, entrez l'adresse IP et le port du PC qui fait tourner le
   serveur (Server.bat ou server.sh, port 3074 par défaut) et votre nom. La console doit être en Wi-Fi.
 

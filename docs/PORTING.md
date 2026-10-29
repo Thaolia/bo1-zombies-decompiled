@@ -2124,3 +2124,22 @@ with `cl_autoConnect` and `name`. Usage in `docs/SERVER.md` ("Start scripts", "J
   (`-Priority Normal`) there was one hitch in a whole run. Five clients reloading Kino at once also overran
   `sv_connectTimeout` (80 s) after `zm_reset` and were dropped in a loop; the restart tests set it to 600.
 - Not measured: bandwidth per client and server frame time with many players, a real LAN, Switch clients.
+
+**Tab zombie counter on by default (2026-10-29, asked by the user: mods/zinfo active by default in SP and MP).**
+
+- Dedicated server: `FS_ModStackNames` (`com_files.cpp`) always stacks `zinfo` next to `admin` (`FS_ModStackAppend`,
+  admin kept last so a full stack never loses it). The server sends the numbers to every player with
+  `SetClientDvars`, and the MP client draws them through the SP scoreboard (`cg_draw_mp.cpp` → `CG_SP_DrawScoreboard`
+  → `CG_SP_DrawTabInfo`): PC and Switch clients alike. `set zinfo 0` on the server hides it. A normal PC run never
+  takes that path, so win32-msvc is unchanged.
+- Solo launches add `+set fs_mods zinfo`: the Switch start menu's "Compteur zombies" line (`tabInfo`, `menu.cfg` key
+  `zinfo`, default on, greyed out when joining a server, written before `launch_extra.cfg` so the extra can set its
+  own `fs_mods`), the packages' `Play.bat` and `play.sh` (solo branch only), and the box ticked by default in
+  `tools/mod-launcher.hta`. `BO1Zombies.exe` started by hand stays vanilla.
+- Verified: `launcher_config_test` (default line with `fs_mods zinfo`, none when joining, `zinfo=0` read back),
+  `d3d9emu_test`, `gb_gl_test` (46 checks), `gamepad_test`; win64-msvc, win32-msvc, linux64-clang and Switch build
+  (the NRO has the new line, no `cntvct_el0`). win64 headless runs on Kino: solo with `fs_mods zinfo`,
+  `games_mp.log` has `zinfo: alive 1..6 left 6 round 1`; a dedicated server with `fs_mods ""` logs
+  `fs_mods: hooks of mods/zinfo` then `mods/admin`, and 13 `zinfo: alive` lines once a headless client joined.
+  Not seen yet: the counter drawn on a remote client's screen (the test's `+scores` was split off by the command
+  line's `+`) and on the console.

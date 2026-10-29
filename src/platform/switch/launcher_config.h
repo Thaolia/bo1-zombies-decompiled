@@ -46,6 +46,7 @@ struct LauncherSettings
     bool aimLockon = true;
     bool aimAutoaim = false;
     bool god = false;
+    bool tabInfo = true; // mods/zinfo: zombies alive / left this round beside the Tab scoreboard
     LauncherBackend backend = LAUNCHER_BACKEND_DEKO3D;
     int maxFps = 60; // 30 or 60
     bool shadows = true;

@@ -19,6 +19,7 @@ On the console the game starts in a text menu, where you choose:
 - the map;
 - the aim assist and its slowdown, lock-on and auto-aim;
 - god mode;
+- the zombie counter beside the scoreboard (mods/zinfo: zombies alive and left this round), on by default;
 - the renderer (deko3d or OpenGL), the frame-rate cap, shadows, texture filtering and the FPS/battery counter;
 - the controllers (the list of detected pads, and the system screen to connect them).
 
