@@ -1,8 +1,8 @@
 #!/bin/bash
 # Build the port and package it as ready-to-copy folders and archives, from a source tree where setup.ps1 has copied
 # the game into build/Release (README.md, "Packages"):
-#   windows  BO1Zombies_windows/   the 64-bit client and dedicated server (Play.bat, Server.bat)
-#   linux    BO1Zombies_linux/     the Linux client and dedicated server (play.sh, server.sh)
+#   windows  BO1Zombies_windows/   the 64-bit client and dedicated server (Play.bat, Server.bat), zmadmin.exe
+#   linux    BO1Zombies_linux/     the Linux client and dedicated server (play.sh, server.sh), zmadmin
 #   switch   BO1Zombies_switch/    an SD card tree: switch/bo1zm/ with the .nro and its data
 #
 #   tools/make_dist.sh [options] [windows] [linux] [switch]        no platform: all three
@@ -18,8 +18,9 @@
 #
 # What it builds when needed (unless --no-build): the win64-msvc preset (Visual Studio, from WSL), the Linux and
 # Switch programs (in --work, on ext4: from /mnt/c every header read waits on 9p), the converted zones when they are
-# missing or older than the converter's sources (ffconv, about 6 minutes, from WSL), and shaders.dksh when the
-# shaders.pack it came from changed. The windows package and the conversion need WSL (they run Windows programs).
+# missing or older than the converter's sources (ffconv, about 6 minutes, from WSL), shaders.dksh when the
+# shaders.pack it came from changed, and ZmAdmin when tools/zmadmin changed (Nuitka, tools/zmadmin/build.sh). The
+# windows package and the conversion need WSL (they run Windows programs).
 #
 # The packages hold your own game files: keep them for your own devices, never publish them.
 set -euo pipefail
@@ -216,8 +217,30 @@ build_dksh() {
 
 need() { [ -e "$1" ] || die "$2 not found: $1 (run without --no-build to build it)"; }
 
-if wants windows; then [ "$BUILD" = 1 ] && build_windows; need "$ROOT/build/win64-msvc/Release/BO1Zombies.exe" "the win64 program"; fi
-if wants linux; then [ "$BUILD" = 1 ] && build_linux; need "$WORK/linux/Release/BO1Zombies" "the Linux program"; fi
+# ZmAdmin (tools/zmadmin, the server's admin console) is built again when one of its files is newer than the binary.
+ZMADMIN_VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$ROOT/tools/zmadmin/zmadmin/__init__.py")"
+build_zmadmin() { # <linux|windows> <binary>
+    if [ -f "$2" ] && [ -z "$(find "$ROOT/tools/zmadmin" -type f \( -name '*.py' -o -name build.sh \) -not -path '*/__pycache__/*' -newer "$2" -print -quit)" ]; then
+        echo "zmadmin ($1) up to date"
+        return
+    fi
+    [ "$BUILD" = 1 ] || die "zmadmin for $1 is missing or older than tools/zmadmin: $2 (run without --no-build)"
+    [ "$1" = linux ] || have_wsl || die "zmadmin.exe builds with the Windows Python and Visual Studio and needs WSL"
+    step "$1: building zmadmin with Nuitka"
+    run_logged "zmadmin-$1" env ZMADMIN_WORK="$WORK/zmadmin" "$ROOT/tools/zmadmin/build.sh" "$1"
+    tail -1 "$LOGS/zmadmin-$1.log"
+}
+
+if wants windows; then
+    [ "$BUILD" = 1 ] && build_windows
+    need "$ROOT/build/win64-msvc/Release/BO1Zombies.exe" "the win64 program"
+    build_zmadmin windows "$ROOT/build/zmadmin/windows/zmadmin.exe"
+fi
+if wants linux; then
+    [ "$BUILD" = 1 ] && build_linux
+    need "$WORK/linux/Release/BO1Zombies" "the Linux program"
+    build_zmadmin linux "$ROOT/build/zmadmin/linux/zmadmin"
+fi
 if wants switch; then
     [ "$BUILD" = 1 ] && build_switch
     need "$WORK/switch/Release/BO1Zombies.nro" "the Switch program"
@@ -284,7 +307,7 @@ package_windows() {
     local d="$OUT/BO1Zombies_windows"
     step "windows: $d"
     mkdir -p "$d/main"
-    cp "$ROOT/build/win64-msvc/Release/BO1Zombies.exe" "$d/"
+    cp "$ROOT/build/win64-msvc/Release/BO1Zombies.exe" "$ROOT/build/zmadmin/windows/zmadmin.exe" "$d/"
     copy_windows_runtimes "$d"
     rsync -a --delete "$ROOT/mods/" "$d/mods/"
     rsync -a "$ROOT/data/main/" "$d/main/"
@@ -345,6 +368,9 @@ REJOINDRE   Play.bat net 192.168.1.20:3074 MonNom
 SERVEUR     Server.bat [map] [port]          par défaut : zombie_theater 3074
             Réglages dans server\main\server.cfg, journal dans server\main\console_mp.log.
             Ouvrez le port UDP dans le pare-feu de Windows pour les joueurs d'autres machines.
+ADMIN       zmadmin.exe                      console d'administration du serveur (joueurs, partie, réglages,
+            log). Depuis ce dossier, elle lance aussi le serveur avec un mot de passe rcon qu'elle garde.
+            zmadmin.exe 192.168.1.20 -p <rcon_password> pilote un serveur distant. ? : aide dans chaque vue.
 
 Un fichier launch.cfg posé à côté de BO1Zombies.exe est ajouté à la ligne de commande, par exemple :
     +set cl_autoConnect 192.168.1.20:3074
@@ -355,14 +381,14 @@ Redistributable 2015-2022 (x64) » et le « DirectX End-User Runtime » (juin 20
 
 Ce dossier contient vos propres fichiers de jeu : gardez-le pour vos machines, ne le publiez pas.
 EOF
-    write_version "$d" windows
+    write_version "$d" windows "zmadmin: $ZMADMIN_VERSION"
 }
 
 package_linux() {
     local d="$OUT/BO1Zombies_linux"
     step "linux: $d"
     mkdir -p "$d/main"
-    cp "$WORK/linux/Release/BO1Zombies" "$d/"
+    cp "$WORK/linux/Release/BO1Zombies" "$ROOT/build/zmadmin/linux/zmadmin" "$d/"
     rsync -a --delete "$ROOT/mods/" "$d/mods/"
     rsync -a "$ROOT/data/main/" "$d/main/"
     game_data "$d" video
@@ -407,7 +433,7 @@ mkdir -p "$HERE/server/main"
 cd "$HERE"
 exec ./BO1Zombies +set fs_b "$HERE" +set fs_h "$HERE/server" +set bo1_server 1 +set net_ip 0.0.0.0 +set net_port "$PORT" "$@" +devmap "$MAP"
 EOF
-    chmod +x "$d/BO1Zombies" "$d/play.sh" "$d/server.sh"
+    chmod +x "$d/BO1Zombies" "$d/zmadmin" "$d/play.sh" "$d/server.sh"
     cat > "$d/LISEZMOI.txt" << 'EOF'
 BO1 Zombies, portage Linux x86-64 : client (OpenGL 4.3) et serveur dédié
 ========================================================================
@@ -419,6 +445,9 @@ REJOINDRE   ./play.sh net 192.168.1.20:3074 MonNom
 SERVEUR     ./server.sh [map] [port]      par défaut : zombie_theater 3074
             Dans un terminal, il affiche sa console curses. Réglages dans server/main/server.cfg, journal dans
             server/main/console_mp.log.
+ADMIN       ./zmadmin                     console d'administration du serveur (joueurs, partie, réglages, log).
+            Depuis ce dossier, elle lance aussi le serveur avec un mot de passe rcon qu'elle garde.
+            ./zmadmin 192.168.1.20 -p <rcon_password> pilote un serveur distant. ? : aide dans chaque vue.
 
 Prérequis : SDL2 et ncurses (Debian, Ubuntu : sudo apt install libsdl2-2.0-0 libncurses6) et un pilote OpenGL 4.3.
 Gardez ce dossier sur un système de fichiers Linux (ext4) : depuis /mnt/c sous WSL, une map met des minutes à charger.
@@ -426,7 +455,7 @@ Le client n'a pas encore de son ni de manette.
 
 Ce dossier contient vos propres fichiers de jeu : gardez-le pour vos machines, ne le publiez pas.
 EOF
-    write_version "$d" linux
+    write_version "$d" linux "zmadmin: $ZMADMIN_VERSION"
 }
 
 package_switch() {

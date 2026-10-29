@@ -64,7 +64,10 @@ players. Admin commands typed in its console (or over rcon, `tools/server_rcon.p
 `zm_startperks` for the start of a game. Players can join a game in progress (`zm_jip_mode immediate` or
 `nextround`), and `sv_maxclients` lets more than 4 play (up to 32; characters repeat past 4). Each client's
 console log is sent to the server (UDP game port + 1) and
-written to its `logs/` folder; Tab in the server's console shows the selected player's. See `docs/SERVER.md`.
+written to its `logs/` folder; Tab in the server's console shows the selected player's. `tools/zmadmin` is an
+admin console for it (curses, Python, built with Nuitka into `zmadmin` / `zmadmin.exe` in the packages): players,
+game, settings saved with a button, rcon console, and the local server's log; in a package folder it also starts
+that folder's server with an rcon password. See `docs/SERVER.md` and `tools/zmadmin/README.md`.
 
 ## Packages
 
@@ -73,8 +76,8 @@ folders and archives in `build/dist`, one per platform:
 
 | Package | Holds | Archive |
 |---|---|---|
-| `BO1Zombies_windows/` | the 64-bit client and dedicated server, `Play.bat` (`Play.bat net <address[:port]> [name]` joins a server), `Server.bat [map] [port]`, the 64-bit runtime DLLs | `.zip` |
-| `BO1Zombies_linux/` | the Linux client and dedicated server, `play.sh` (`./play.sh net ...`), `server.sh [map] [port]`, `shaders.pack` | `.tar.gz` |
+| `BO1Zombies_windows/` | the 64-bit client and dedicated server, `Play.bat` (`Play.bat net <address[:port]> [name]` joins a server), `Server.bat [map] [port]`, `zmadmin.exe`, the 64-bit runtime DLLs | `.zip` |
+| `BO1Zombies_linux/` | the Linux client and dedicated server, `play.sh` (`./play.sh net ...`), `server.sh [map] [port]`, `zmadmin`, `shaders.pack` | `.tar.gz` |
 | `BO1Zombies_switch/` | an SD card tree, `switch/bo1zm/` with the `.nro`, `shaders.pack` and `shaders.dksh` | `.zip` |
 
 Each also holds the converted zones, the install's `main/*.iwd` and `localization.txt` (and `main/video` on PC), a
