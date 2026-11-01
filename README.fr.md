@@ -32,7 +32,7 @@ Au lancement, un menu texte s'ouvre avant le jeu. On y choisit :
 - une partie solo, ou un serveur dédié à rejoindre. La ligne **Serveur** ouvre son propre écran. On y active ou non
   la connexion, on y saisit l'adresse IP et le port du serveur avec le clavier de la console, et son nom de joueur.
   L'écran montre aussi l'adresse réseau de la console (`docs/SERVER.md`, « Joining from a Switch ») ;
-- la map, parmi les 10 maps zombies ;
+- la map, parmi les 10 maps zombies et Dead Ops Arcade ;
 - l'aim assist : activé ou non, avec ralentissement, verrouillage et visée auto ;
 - le compteur de zombies à côté du tableau des scores (mod zinfo : zombies en vie et restants dans la manche),
   activé par défaut ;

@@ -4,6 +4,7 @@
 #include <cstring>
 
 // The labels of tools/mod-launcher.hta's MAPS, Kino first: it is the default and the map every console test used.
+// Dead Ops Arcade is not in the .hta's list.
 const LauncherMap kLauncherMaps[] = {
     {"zombie_theater", "Kino der Toten"},
     {"zombie_pentagon", "Five"},
@@ -15,6 +16,7 @@ const LauncherMap kLauncherMaps[] = {
     {"zombie_cod5_asylum", "Verruckt"},
     {"zombie_cod5_sumpf", "Shi No Numa"},
     {"zombie_cod5_factory", "Der Riese"},
+    {"zombietron", "Dead Ops Arcade"},
 };
 const int kLauncherMapCount = int(sizeof(kLauncherMaps) / sizeof(kLauncherMaps[0]));
 

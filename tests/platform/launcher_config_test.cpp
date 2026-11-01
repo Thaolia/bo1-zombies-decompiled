@@ -39,7 +39,8 @@ int main()
 {
     const LauncherSettings defaults;
     Check(std::string(kLauncherMaps[defaults.map].bsp) == "zombie_theater", "the default map is Kino");
-    Check(kLauncherMapCount == 10, "the ten zombies maps are listed");
+    Check(kLauncherMapCount == 11, "the ten zombies maps and Dead Ops Arcade are listed");
+    Check(std::string(kLauncherMaps[kLauncherMapCount - 1].bsp) == "zombietron", "Dead Ops Arcade is the last map");
     Check(SameSettings(Launcher_ParseSettings(""), defaults), "an empty menu.cfg gives the defaults");
 
     CheckLine(Launcher_BuildLaunchLine(defaults, ""),
