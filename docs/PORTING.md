@@ -2312,3 +2312,17 @@ got a wrong state on every map (not tested); zombietron's data there happened to
 literal are the stats and match-record buffer sizes of `live_storage.cpp`, raw byte buffers.
 Not ported: objective text and 3D markers, scaled models, zombietron's full scoreboard. Not tested: real input
 (headless clients have none), the Switch and Linux builds on this map (both build).
+
+**The local player was invisible on its own screen (2026-11-01, user report on PC and Switch).** The screenshots
+above show the player's ring empty: KB's MP `CG_UpdateThirdPerson` leaves `renderingThirdPerson` at `TP_OFF` under
+the top-down camera, so `CG_Player` skips the local player's model. SP's (0x00792e50) sets it to 1 when
+`cameraData.lastCamMode == 10` (top-down) and the player is not in a vehicle (`eFlags & 0x4000`, SP 0x00792eed); it
+does so now in zombiemode. SP's `CG_CalcViewValues` runs the top-down camera instead of the third-person offset (its
+mode-10 branch, 0x0079432f, jumps past it), so KB's later `CG_OffsetThirdPersonView` call is skipped for
+`CAM_TOP_DOWN` too, otherwise it would put the view back behind the player. Verified on win64-msvc, headless: solo
+`+devmap zombietron` and a dedicated server with one remote client both show the player with its weapon in its
+ring, the camera still top-down.
+The same report said the PC dedicated server "keeps restarting". Its log (one `Server Initialization`, no
+`map_restart`) shows no restart: the invisible player was killed every 12-15 s (`bo1_death`, 3 lives), and the
+server logged 22 `Hitch warning` frames of 0.6-20 s while the client played on the same PC. The same test here
+(server at normal priority, one client, 160 s) logged one hitch, at load.

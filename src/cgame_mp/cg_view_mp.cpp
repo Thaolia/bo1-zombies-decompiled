@@ -2363,7 +2363,10 @@ void __cdecl CG_CalcViewValues(int localClientNum)
             }
             AnglesToAxis(cgameGlob->refdefViewAngles, cgameGlob->refdef.viewaxis);
             CG_ApplyViewAnimation(localClientNum);
-            if (cgameGlob->renderingThirdPerson == TP_FOR_MODEL && CG_ShouldRenderThirdPerson(camMode))
+            // zombies: SP's top-down camera (SP 0x0079432f) takes the place of the third-person offset, which would
+            // move the view back to behind the player.
+            const bool spTopDownView = camMode == CAM_TOP_DOWN && zombiemode && zombiemode->current.enabled;
+            if (cgameGlob->renderingThirdPerson == TP_FOR_MODEL && CG_ShouldRenderThirdPerson(camMode) && !spTopDownView)
             {
                 CG_OffsetThirdPersonView(localClientNum);
             }
@@ -3914,6 +3917,14 @@ void __cdecl CG_UpdateThirdPerson(int localClientNum, bool forExtraCam)
         cgameGlob->renderingThirdPerson = TP_FOR_MODEL;
     if ( forExtraCam )
         cgameGlob->renderingThirdPerson = TP_FOR_MODEL;
+    // zombies: SP CG_UpdateThirdPerson (SP 0x00792eed) draws the local player's model under the top-down camera
+    // (SP mode 10, KB CAM_TOP_DOWN) unless it rides a vehicle; KB's MP code never did, so zombietron's player was
+    // invisible on its own screen.
+    if ( zombiemode && zombiemode->current.enabled && cgameGlob->cameraData.lastCamMode == CAM_TOP_DOWN
+        && (cgameGlob->predictedPlayerState.eFlags & 0x4000) == 0 )
+    {
+        cgameGlob->renderingThirdPerson = TP_FOR_MODEL;
+    }
     if ( !r_enablePlayerShadow->current.enabled
         || cgameGlob->renderingThirdPerson
         || (cgameGlob->nextSnap->ps.eFlags & 0x4000) != 0 )

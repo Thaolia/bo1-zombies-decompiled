@@ -506,7 +506,7 @@ make_archive() { # <package dir name> <default kind>
     local kind="$ARCHIVE" name="$1"
     [ "$kind" = auto ] && kind="$2"
     case "$kind" in
-    none) return ;;
+    none) return 0 ;;
     zip)
         step "archive: $name.zip"
         rm -f "$OUT/$name.zip"
