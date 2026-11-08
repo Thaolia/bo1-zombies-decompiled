@@ -2266,6 +2266,11 @@ local server + join. No engine change.
 - Mistake of this session: the Windows client runs used `bo1_headless_client` started directly, which opens the game
   window on the user's desktop (only `tools/headless.ps1 -Client` keeps it on its private desktop). Two windows
   appeared; client runs on Windows go through `headless.ps1` from now on.
+- Folder browser (2026-11-08, asked by the user): the Installation view's install chooser also opens a curses folder
+  browser (`dirbrowser.py`: arrows, Enter, Backspace, type-ahead, Space to pick; Windows lists the drives above their
+  roots; installs are marked). Its test found that `is_install` looked for `zone/common` in lower case: a Steam
+  install names it `Common`, so on a case-sensitive file system (a Linux Steam library) a real install was refused;
+  `/mnt/c` and Windows hid it. The folder is now compared without regard to case, as in ffconv.
 - Not ours, seen once: the `--play` horde run (Kino with `bo1_mod_zones zombie_temple`) ended at `bo1_autoquit` with
   `Com_ERROR: free does not match allocation` while unloading `zombie_theater` after `zombie_temple`. Same flags as
   the `.hta`; not investigated.

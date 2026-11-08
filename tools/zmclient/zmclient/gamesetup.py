@@ -68,8 +68,16 @@ def library_folders(steam_root):
 
 
 def is_install(path):
-    return bool(path) and os.path.isdir(os.path.join(path, "zone", "common")) \
-        and os.path.isfile(os.path.join(path, "localization.txt")) \
+    """zone/ with its common folder, localization.txt and main/*.iwd. Steam names the folder "Common": compared
+    without regard to case, for a case-sensitive file system (a Linux Steam library)."""
+    if not path:
+        return False
+    try:
+        common = any(n.lower() == "common" and os.path.isdir(os.path.join(path, "zone", n))
+                     for n in os.listdir(os.path.join(path, "zone")))
+    except OSError:
+        return False
+    return common and os.path.isfile(os.path.join(path, "localization.txt")) \
         and bool(glob.glob(os.path.join(path, "main", "*.iwd")))
 
 

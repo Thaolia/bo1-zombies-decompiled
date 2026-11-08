@@ -10,6 +10,7 @@ from zmadmin.widgets import (BAD_MARK, C_DIM, C_ERR, C_INFO, C_OK, C_WARN, CTRL_
 
 from . import gamesetup
 from . import help as H
+from .dirbrowser import FolderDialog, start_folder
 from .gamecfg import BY_NAME, SETTINGS, valid_bind_key, validate
 from .profile import (DEFAULT_PORT, MAP_LABELS, check_extra, map_installed, map_label, nightmare_available,
                       parse_size, quote_command, resolve_map, solo_maps, specials_available, valid_host, valid_name,
@@ -892,21 +893,29 @@ class SetupView(View):
                 y += 1
 
     def choose_install(self):
+        def keep(path):
+            path = path.strip().strip('"')
+            if not gamesetup.is_install(path):
+                return "pas une installation de Black Ops (zone/, main/*.iwd, localization.txt)"
+            self.app.profile["steam_install"] = os.path.normpath(os.path.abspath(path))
+            self.app.save_profile()
+            return None
+
         def typed():
-            def ok(v):
-                path = v.strip().strip('"')
-                if not gamesetup.is_install(path):
-                    return "pas une installation de Black Ops (zone/, main/*.iwd, localization.txt)"
-                self.app.profile["steam_install"] = os.path.normpath(path)
-                self.app.save_profile()
-                return None
             self.app.open(InputDialog("Installation de Black Ops", "Dossier", self.app.profile["steam_install"],
-                                      "le dossier qui contient BlackOps.exe", ok))
+                                      "le dossier qui contient BlackOps.exe", keep))
+
+        def browse():
+            start = start_folder(self.app.profile["steam_install"], self.installs or [])
+            self.app.open(FolderDialog("Choisir le dossier de Black Ops", start, keep))
         items = [(p, p, "trouvée dans une bibliothèque Steam") for p in self.installs or []]
+        items.append(("__browse__", "(parcourir les dossiers…)", "naviguer dans les dossiers avec les flèches"))
         items.append(("__typed__", "(taper le chemin…)", "un autre dossier"))
 
         def picked(v):
-            if v == "__typed__":
+            if v == "__browse__":
+                browse()
+            elif v == "__typed__":
                 typed()
             else:
                 self.app.profile["steam_install"] = v

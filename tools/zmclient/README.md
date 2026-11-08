@@ -34,7 +34,7 @@ the local server's rcon password lives), `--no-mouse` keyboard only.
 | F4 | Lancement | player name, window mode and size, the port's FPS counter, gamepad aim assist (each "game setting" / on / off), the local server's map, port and rcon password |
 | F5 | Config du jeu | a form of `players/config.cfg`: mouse, gamepad, FOV, resolution, vsync, FPS cap, gamma, MSAA, anisotropy, texture quality, shadows, depth of field, blood, subtitles; any other dvar; key binds |
 | F6 | Dvars libres | free command lines, each one a `+line` before the map or the connection, enabled one by one |
-| F7 | Installation | the Black Ops install (found in Steam's libraries, or typed), the state of each part, Install, progress |
+| F7 | Installation | the Black Ops install (found in Steam's libraries, picked in a folder browser, or typed), the state of each part, Install, progress |
 | F8 | Journal | the running game's `console_mp.log`, live, with a filter |
 
 Mouse and keyboard work as in ZmAdmin: a click picks, a double click edits or runs, the wheel scrolls; `?` (or F9)
@@ -62,6 +62,13 @@ also written to `players/bo1_shared.cfg`, which the engine reads after `config.c
 `r_picmip_manual` and the `r_picmip*` family together (`r_picmip` alone is read-only while `r_picmip_manual` is 0).
 
 ## Installing the game files
+
+The install is found in Steam's libraries, typed, or picked in a folder browser (`dirbrowser.py`): arrows and Enter go
+into a folder, Backspace or Left up to its parent (on Windows, above a drive's root, the list of drives), a letter
+jumps to the next folder starting with it, Space picks the folder shown. Each folder that is a Black Ops install is
+marked, and the browser opens on the chosen install, else on a Steam library's `steamapps/common`. Hidden and system
+folders (`.*`, `$*`, `System Volume Information`) are left out; the install marks are not looked up in a folder of
+more than 300 subfolders.
 
 From the player's Call of Duty: Black Ops install (Steam's `libraryfolders.vdf` is read to find it), the Installation
 view copies `localization.txt`, `main/*.iwd` and, optionally, `main/video/`, then converts the zombies zones with the
