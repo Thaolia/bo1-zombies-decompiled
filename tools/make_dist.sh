@@ -1,8 +1,10 @@
 #!/bin/bash
 # Build the port and package it as ready-to-copy folders and archives, from a source tree where setup.ps1 has copied
 # the game into build/Release (README.md, "Packages"):
-#   windows  BO1Zombies_windows/   the 64-bit client and dedicated server (Play.bat, Server.bat), zmadmin.exe
-#   linux    BO1Zombies_linux/     the Linux client and dedicated server (play.sh, server.sh), zmadmin
+#   windows  BO1Zombies_windows/   the 64-bit client and dedicated server (Play.bat, Server.bat), zmclient.exe,
+#                                  zmadmin.exe and ffconv.exe
+#   linux    BO1Zombies_linux/     the Linux client and dedicated server (play.sh, server.sh), zmclient, zmadmin,
+#                                  ffconv.exe
 #   switch   BO1Zombies_switch/    an SD card tree: switch/bo1zm/ with the .nro and its data
 #
 #   tools/make_dist.sh [options] [windows] [linux] [switch]        no platform: all three
@@ -14,15 +16,19 @@
 #   --dxsdk DIR      June 2010 DirectX SDK root (Include/)           default: /mnt/c/SDKs/DXSDK_Jun10/DXSDK
 #   --archive KIND   auto | zip | tar | none     auto: zip for windows and switch, tar.gz for linux
 #   --no-build       package what is built; fail if anything is missing or out of date
+#   --no-game-data   windows and linux packages without any file of the game, in BO1Zombies_<platform>_nodata/:
+#                    the player installs them from their own Black Ops with ZmClient (Installation view)
 #   --jobs N         parallel jobs                                   default: the CPU count
 #
 # What it builds when needed (unless --no-build): the win64-msvc preset (Visual Studio, from WSL), the Linux and
 # Switch programs (in --work, on ext4: from /mnt/c every header read waits on 9p), the converted zones when they are
 # missing or older than the converter's sources (ffconv, about 6 minutes, from WSL), shaders.dksh when the
-# shaders.pack it came from changed, and ZmAdmin when tools/zmadmin changed (Nuitka, tools/zmadmin/build.sh). The
-# windows package and the conversion need WSL (they run Windows programs).
+# shaders.pack it came from changed, ZmAdmin and ZmClient when their sources changed (Nuitka, tools/zmadmin/build.sh,
+# tools/zmclient/build.sh), and ffconv (shipped so that ZmClient converts the player's own zones). The windows package
+# and the conversion need WSL (they run Windows programs).
 #
-# The packages hold your own game files: keep them for your own devices, never publish them.
+# The packages hold your own game files: keep them for your own devices, never publish them. Those made with
+# --no-game-data hold none.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -33,6 +39,7 @@ ZONES="$ROOT/build/zones64"
 DXSDK="/mnt/c/SDKs/DXSDK_Jun10/DXSDK"
 ARCHIVE=auto
 BUILD=1
+GAME_DATA=1
 JOBS="$(nproc)"
 PLATFORMS=()
 CMAKE_EXE="${CMAKE_EXE:-/mnt/c/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe}"
@@ -54,6 +61,7 @@ while [ $# -gt 0 ]; do
     --dxsdk) DXSDK="$2"; shift ;;
     --archive) ARCHIVE="$2"; shift ;;
     --no-build) BUILD=0 ;;
+    --no-game-data) GAME_DATA=0 ;;
     --jobs) JOBS="$2"; shift ;;
     -h | --help) usage ;;
     *) echo "make_dist: unknown argument: $1" >&2; usage 2 ;;
@@ -64,6 +72,12 @@ done
 mapfile -t PLATFORMS < <(printf '%s\n' "${PLATFORMS[@]}" | awk '!seen[$0]++')
 case "$ARCHIVE" in auto | zip | tar | none) ;; *) die "--archive takes auto, zip, tar or none" ;; esac
 wants() { local p; for p in "${PLATFORMS[@]}"; do [ "$p" = "$1" ] && return 0; done; return 1; }
+# A package without game data takes another folder: one that held the game files would keep them.
+SUFFIX=""
+if [ "$GAME_DATA" = 0 ]; then
+    wants switch && die "--no-game-data is for windows and linux: the Switch has no installer (ZmClient runs on a PC)"
+    SUFFIX="_nodata"
+fi
 
 OUT="$(abspath "$OUT")"
 WORK="$(abspath "$WORK")"
@@ -83,8 +97,10 @@ run_logged() {
 have_wsl() { [ -e /proc/sys/fs/binfmt_misc/WSLInterop ] && command -v wslpath > /dev/null; }
 
 # ---------------------------------------------------------------- inputs
-[ -f "$GAME/localization.txt" ] && ls "$GAME"/main/*.iwd > /dev/null 2>&1 ||
-    die "no game files in $GAME: run setup.ps1 first (or pass --game)"
+if [ "$GAME_DATA" = 1 ]; then
+    [ -f "$GAME/localization.txt" ] && ls "$GAME"/main/*.iwd > /dev/null 2>&1 ||
+        die "no game files in $GAME: run setup.ps1 first (or pass --game)"
+fi
 
 # The zones are stale when a converter source is newer than their shaders.pack: the pack must match the engine's
 # shader interface (input locations, constant layout), or the renderers read the wrong inputs.
@@ -100,13 +116,22 @@ zones_state() {
     fi
 }
 
-convert_zones() {
-    have_wsl || die "the zone conversion runs ffconv.exe and needs WSL; convert on a Windows PC, then pass --zones"
+# ffconv.exe goes in the windows and linux packages too: ZmClient converts the player's zones with the converter
+# built from the same sources as the program, so both agree on the stream and the shader interface.
+FFCONV_EXE="$ROOT/build/ffconv/ffconv.exe"
+build_ffconv() {
+    [ -n "${FFCONV_BUILT:-}" ] && return
     step "ffconv: building the converter"
     if [ ! -f "$ROOT/build/ffconv/CMakeCache.txt" ]; then
         run_logged ffconv-configure bash -c "cd '$ROOT/tools/ffconv' && cmake --preset ffconv"
     fi
     run_logged ffconv-build bash -c "cd '$ROOT/tools/ffconv' && cmake --build --preset ffconv -j '$JOBS'"
+    FFCONV_BUILT=1
+}
+
+convert_zones() {
+    have_wsl || die "the zone conversion runs ffconv.exe and needs WSL; convert on a Windows PC, then pass --zones"
+    build_ffconv
     local next="$ZONES.new"
     rm -rf "$next"
     mkdir -p "$next"
@@ -129,16 +154,22 @@ convert_zones() {
     rm -rf "$ZONES.old"
 }
 
-step "zones: $ZONES"
-state="$(zones_state)"
-case "$state" in
-ok) echo "up to date" ;;
-*)
-    [ "$BUILD" = 1 ] || die "zones are $state in $ZONES (run without --no-build to convert them)"
-    echo "$state: converting"
-    convert_zones
-    ;;
-esac
+if [ "$GAME_DATA" = 1 ]; then
+    step "zones: $ZONES"
+    state="$(zones_state)"
+    case "$state" in
+    ok) echo "up to date" ;;
+    *)
+        [ "$BUILD" = 1 ] || die "zones are $state in $ZONES (run without --no-build to convert them)"
+        echo "$state: converting"
+        convert_zones
+        ;;
+    esac
+fi
+if wants windows || wants linux; then
+    [ "$BUILD" = 1 ] && build_ffconv
+    [ -f "$FFCONV_EXE" ] || die "ffconv not found: $FFCONV_EXE (run without --no-build to build it)"
+fi
 
 # ---------------------------------------------------------------- builds
 mirror_sources() {
@@ -231,15 +262,31 @@ build_zmadmin() { # <linux|windows> <binary>
     tail -1 "$LOGS/zmadmin-$1.log"
 }
 
+# ZmClient (tools/zmclient, the client's launcher) imports ZmAdmin's package: a change in either rebuilds it.
+ZMCLIENT_VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$ROOT/tools/zmclient/zmclient/__init__.py")"
+build_zmclient() { # <linux|windows> <binary>
+    if [ -f "$2" ] && [ -z "$(find "$ROOT/tools/zmclient" "$ROOT/tools/zmadmin/zmadmin" -type f \( -name '*.py' -o -name build.sh \) -not -path '*/__pycache__/*' -newer "$2" -print -quit)" ]; then
+        echo "zmclient ($1) up to date"
+        return
+    fi
+    [ "$BUILD" = 1 ] || die "zmclient for $1 is missing or older than its sources: $2 (run without --no-build)"
+    [ "$1" = linux ] || have_wsl || die "zmclient.exe builds with the Windows Python and Visual Studio and needs WSL"
+    step "$1: building zmclient with Nuitka"
+    run_logged "zmclient-$1" env ZMCLIENT_WORK="$WORK/zmclient" "$ROOT/tools/zmclient/build.sh" "$1"
+    tail -1 "$LOGS/zmclient-$1.log"
+}
+
 if wants windows; then
     [ "$BUILD" = 1 ] && build_windows
     need "$ROOT/build/win64-msvc/Release/BO1Zombies.exe" "the win64 program"
     build_zmadmin windows "$ROOT/build/zmadmin/windows/zmadmin.exe"
+    build_zmclient windows "$ROOT/build/zmclient/windows/zmclient.exe"
 fi
 if wants linux; then
     [ "$BUILD" = 1 ] && build_linux
     need "$WORK/linux/Release/BO1Zombies" "the Linux program"
     build_zmadmin linux "$ROOT/build/zmadmin/linux/zmadmin"
+    build_zmclient linux "$ROOT/build/zmclient/linux/zmclient"
 fi
 if wants switch; then
     [ "$BUILD" = 1 ] && build_switch
@@ -259,6 +306,7 @@ game_data() { # <dest> [video]: the game files every platform reads, from the in
 
 check_space() { # <dest dir>: each package is about the game data's size, and as much again when archived
     local per need avail have factor=2
+    [ "$GAME_DATA" = 1 ] || return 0
     [ "$ARCHIVE" = none ] && factor=1
     per=$(du -sbc "$GAME"/main/*.iwd "$GAME/main/video" "$ZONES/zone" | tail -1 | cut -f1)
     need=$(( per * ${#PLATFORMS[@]} * factor ))
@@ -268,6 +316,16 @@ check_space() { # <dest dir>: each package is about the game data's size, and as
     avail=$(df --output=avail -B1 "$1" | tail -1)
     if [ "$avail" -lt "$need" ]; then
         die "$(( need >> 30 )) GB may be needed in $1, $(( avail >> 30 )) GB free (try --out elsewhere or --archive none)"
+    fi
+}
+
+# The last line of each LISEZMOI.txt: what the folder holds of the game.
+data_note() { # <devices word>
+    if [ "$GAME_DATA" = 1 ]; then
+        echo "Ce dossier contient vos propres fichiers de jeu : gardez-le pour vos $1, ne le publiez pas."
+    else
+        echo "Ce dossier ne contient aucun fichier du jeu : avant de jouer, lancez zmclient, vue Installation (F7),"
+        echo "qui les copie depuis votre installation de Call of Duty: Black Ops (Steam) et convertit les zones."
     fi
 }
 
@@ -304,14 +362,15 @@ copy_windows_runtimes() { # <dest>: what a Windows without Visual C++ or the Dir
 }
 
 package_windows() {
-    local d="$OUT/BO1Zombies_windows"
+    local d="$OUT/BO1Zombies_windows$SUFFIX"
     step "windows: $d"
     mkdir -p "$d/main"
-    cp "$ROOT/build/win64-msvc/Release/BO1Zombies.exe" "$ROOT/build/zmadmin/windows/zmadmin.exe" "$d/"
+    cp "$ROOT/build/win64-msvc/Release/BO1Zombies.exe" "$ROOT/build/zmadmin/windows/zmadmin.exe" \
+        "$ROOT/build/zmclient/windows/zmclient.exe" "$FFCONV_EXE" "$d/"
     copy_windows_runtimes "$d"
     rsync -a --delete "$ROOT/mods/" "$d/mods/"
     rsync -a "$ROOT/data/main/" "$d/main/"
-    game_data "$d" video
+    if [ "$GAME_DATA" = 1 ]; then game_data "$d" video; fi
     cat > "$d/Play.bat" << 'EOF'
 @echo off
 rem Black Ops 1 Zombies, 64-bit. "Play.bat" opens the game's menu (Zombies, Solo, a map).
@@ -363,6 +422,9 @@ EOF
 BO1 Zombies, portage 64 bits pour Windows : client et serveur dédié
 ===================================================================
 
+CLIENT      zmclient.exe       lanceur : partie solo (map, mods, horde, nightmare), rejoindre un serveur (favoris et
+            serveurs du réseau local), ou lancer le serveur local et le rejoindre ; réglages de config.cfg,
+            dvars libres, et installation des fichiers du jeu depuis votre Black Ops. ? : aide dans chaque vue.
 JOUER       Play.bat           ouvre le menu du jeu (Zombies, Solo, une map).
 REJOINDRE   Play.bat net 192.168.1.20:3074 MonNom
             rejoint un serveur dédié dès que le menu est prêt, et y revient tout seul après une coupure.
@@ -382,20 +444,23 @@ Un fichier launch.cfg posé à côté de BO1Zombies.exe est ajouté à la ligne 
 Prérequis : Windows 10 ou 11 en 64 bits. Si le jeu ne démarre pas faute de DLL, installez le « Visual C++
 Redistributable 2015-2022 (x64) » et le « DirectX End-User Runtime » (juin 2010) de Microsoft.
 
-Ce dossier contient vos propres fichiers de jeu : gardez-le pour vos machines, ne le publiez pas.
 EOF
-    write_version "$d" windows "zmadmin: $ZMADMIN_VERSION"
+    data_note machines >> "$d/LISEZMOI.txt"
+    write_version "$d" windows "zmadmin: $ZMADMIN_VERSION, zmclient: $ZMCLIENT_VERSION"
 }
 
 package_linux() {
-    local d="$OUT/BO1Zombies_linux"
+    local d="$OUT/BO1Zombies_linux$SUFFIX"
     step "linux: $d"
     mkdir -p "$d/main"
-    cp "$WORK/linux/Release/BO1Zombies" "$ROOT/build/zmadmin/linux/zmadmin" "$d/"
+    cp "$WORK/linux/Release/BO1Zombies" "$ROOT/build/zmadmin/linux/zmadmin" "$ROOT/build/zmclient/linux/zmclient" \
+        "$FFCONV_EXE" "$d/"
     rsync -a --delete "$ROOT/mods/" "$d/mods/"
     rsync -a "$ROOT/data/main/" "$d/main/"
-    game_data "$d" video
-    cp "$ZONES/shaders.pack" "$d/"
+    if [ "$GAME_DATA" = 1 ]; then
+        game_data "$d" video
+        cp "$ZONES/shaders.pack" "$d/"
+    fi
     cat > "$d/play.sh" << 'EOF'
 #!/bin/bash
 # Black Ops 1 Zombies, Linux client (OpenGL 4.3). ./play.sh opens the game's menu (Zombies, Solo, a map).
@@ -437,11 +502,14 @@ mkdir -p "$HERE/server/main"
 cd "$HERE"
 exec ./BO1Zombies +set fs_b "$HERE" +set fs_h "$HERE/server" +set bo1_server 1 +set net_ip 0.0.0.0 +set net_port "$PORT" "$@" +devmap "$MAP"
 EOF
-    chmod +x "$d/BO1Zombies" "$d/zmadmin" "$d/play.sh" "$d/server.sh"
+    chmod +x "$d/BO1Zombies" "$d/zmadmin" "$d/zmclient" "$d/play.sh" "$d/server.sh"
     cat > "$d/LISEZMOI.txt" << 'EOF'
 BO1 Zombies, portage Linux x86-64 : client (OpenGL 4.3) et serveur dédié
 ========================================================================
 
+CLIENT      ./zmclient                    lanceur : partie solo (map, mods, horde, nightmare), rejoindre un serveur
+            (favoris et réseau local), ou lancer le serveur local et le rejoindre ; config.cfg, dvars libres,
+            installation des fichiers du jeu (la conversion des zones lance ffconv.exe avec wine).
 JOUER       ./play.sh                     ouvre le menu du jeu (Zombies, Solo, une map).
             FULLSCREEN=1 ./play.sh        en plein écran.
 REJOINDRE   ./play.sh net 192.168.1.20:3074 MonNom
@@ -459,9 +527,9 @@ Prérequis : SDL2 et ncurses (Debian, Ubuntu : sudo apt install libsdl2-2.0-0 li
 Gardez ce dossier sur un système de fichiers Linux (ext4) : depuis /mnt/c sous WSL, une map met des minutes à charger.
 Le client n'a pas encore de son ni de manette.
 
-Ce dossier contient vos propres fichiers de jeu : gardez-le pour vos machines, ne le publiez pas.
 EOF
-    write_version "$d" linux "zmadmin: $ZMADMIN_VERSION"
+    data_note machines >> "$d/LISEZMOI.txt"
+    write_version "$d" linux "zmadmin: $ZMADMIN_VERSION, zmclient: $ZMCLIENT_VERSION"
 }
 
 package_switch() {
@@ -522,10 +590,14 @@ make_archive() { # <package dir name> <default kind>
 }
 
 check_space "$OUT"
-wants windows && { package_windows; make_archive BO1Zombies_windows zip; }
-wants linux && { package_linux; make_archive BO1Zombies_linux tar; }
+wants windows && { package_windows; make_archive "BO1Zombies_windows$SUFFIX" zip; }
+wants linux && { package_linux; make_archive "BO1Zombies_linux$SUFFIX" tar; }
 wants switch && { package_switch; make_archive BO1Zombies_switch zip; }
 
 step "done: $OUT"
-for p in "${PLATFORMS[@]}"; do du -sh "$OUT/BO1Zombies_$p" | sed 's/\t/  /'; done
-echo "These packages hold your own game files: keep them for your own devices, never publish them."
+for p in "${PLATFORMS[@]}"; do du -sh "$OUT/BO1Zombies_$p$SUFFIX" | sed 's/\t/  /'; done
+if [ "$GAME_DATA" = 1 ]; then
+    echo "These packages hold your own game files: keep them for your own devices, never publish them."
+else
+    echo "These packages hold no game file: the player installs them from their own Black Ops with zmclient."
+fi

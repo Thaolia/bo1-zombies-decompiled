@@ -70,6 +70,12 @@ admin console for it (curses, Python, built with Nuitka into `zmadmin` / `zmadmi
 game, settings saved with a button, rcon console, and the local server's log; in a package folder it also starts
 that folder's server with an rcon password. See `docs/SERVER.md` and `tools/zmadmin/README.md`.
 
+`tools/zmclient` is the same kind of program for players (`zmclient` / `zmclient.exe` in the packages): it plays solo
+with the solo mods of `tools/mod-launcher.hta` (horde, nightmare, mapkit, noperks, zinfo), joins a server (favourites
+and LAN servers with their live status), or starts the folder's server and joins it; it also edits
+`players/config.cfg`, adds free dvars, and installs the game files from the player's own Black Ops (copy, then zone
+conversion with the shipped `ffconv.exe`). See `tools/zmclient/README.md`.
+
 ## Packages
 
 `tools/make_dist.sh` (bash, from WSL) turns a source tree where `setup.ps1` has copied the game into ready-to-copy
@@ -77,12 +83,14 @@ folders and archives in `build/dist`, one per platform:
 
 | Package | Holds | Archive |
 |---|---|---|
-| `BO1Zombies_windows/` | the 64-bit client and dedicated server, `Play.bat` (`Play.bat net <address[:port]> [name]` joins a server), `Server.bat [map] [port]`, `zmadmin.exe`, the 64-bit runtime DLLs | `.zip` |
-| `BO1Zombies_linux/` | the Linux client and dedicated server, `play.sh` (`./play.sh net ...`), `server.sh [map] [port]`, `zmadmin`, `shaders.pack` | `.tar.gz` |
+| `BO1Zombies_windows/` | the 64-bit client and dedicated server, `Play.bat` (`Play.bat net <address[:port]> [name]` joins a server), `Server.bat [map] [port]`, `zmclient.exe`, `zmadmin.exe`, `ffconv.exe`, the 64-bit runtime DLLs | `.zip` |
+| `BO1Zombies_linux/` | the Linux client and dedicated server, `play.sh` (`./play.sh net ...`), `server.sh [map] [port]`, `zmclient`, `zmadmin`, `ffconv.exe`, `shaders.pack` | `.tar.gz` |
 | `BO1Zombies_switch/` | an SD card tree, `switch/bo1zm/` with the `.nro`, `shaders.pack` and `shaders.dksh` | `.zip` |
 
 Each also holds the converted zones, the install's `main/*.iwd` and `localization.txt` (and `main/video` on PC), a
-`LISEZMOI.txt` and a `VERSION.txt` (commit, date, NRO link time).
+`LISEZMOI.txt` and a `VERSION.txt` (commit, date, NRO link time). With `--no-game-data` the windows and linux packages
+go to `BO1Zombies_<platform>_nodata/` and hold no file of the game: the player installs them with ZmClient's
+Installation view, from their own Black Ops.
 
     tools/make_dist.sh                       # all three
     tools/make_dist.sh switch linux          # some
@@ -93,6 +101,6 @@ programs in `--work` (an ext4 folder, `~/.cache/bo1zm-dist`), the converted zone
 the converter's sources (`ffconv --verify`, then `check_shader_pack.py`; the old zones stay until the new ones
 pass), and `shaders.dksh` when its `shaders.pack` changed (it fails if uam rejects a shader). Other options:
 `--out`, `--game`, `--zones`, `--dxsdk`, `--archive auto|zip|tar|none`, `--jobs`; `--help` lists them. The packages
-hold your own game files: keep them for your own devices, never publish them.
+hold your own game files: keep them for your own devices, never publish them (the `_nodata` ones hold none).
 
 French version: `README.fr.md`.
