@@ -19,11 +19,12 @@ void Check(bool ok, const char *what)
     }
 }
 
-XINPUT_GAMEPAD Map(const Uint8 buttons[SDL_CONTROLLER_BUTTON_MAX], const Sint16 axes[SDL_CONTROLLER_AXIS_MAX])
+XINPUT_GAMEPAD Map(const Uint8 buttons[SDL_CONTROLLER_BUTTON_MAX], const Sint16 axes[SDL_CONTROLLER_AXIS_MAX],
+                   const Bo1PadRemap *remap = nullptr)
 {
     XINPUT_GAMEPAD out;
     std::memset(&out, 0, sizeof(out));
-    Bo1_MapGamepadState(buttons, axes, &out);
+    Bo1_MapGamepadState(buttons, axes, &out, remap);
     return out;
 }
 } // namespace
@@ -96,6 +97,66 @@ int main()
         Check(g.sThumbLY == -10000, "left stick Y points up (negated)");
         Check(g.sThumbRX == -4000, "right stick X passes through");
         Check(g.sThumbRY == 32767, "SDL -32768 on Y maps to 32767, not an overflow");
+    }
+
+    // The remap table (gamepad_remap.h): the identity changes nothing.
+    {
+        Bo1PadRemap identity;
+        Bo1_PadRemapIdentity(&identity);
+        bool same = true;
+        for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; ++i)
+        {
+            Uint8 b[SDL_CONTROLLER_BUTTON_MAX] = {};
+            b[i] = 1;
+            Sint16 a[SDL_CONTROLLER_AXIS_MAX] = {};
+            a[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = 20000;
+            const XINPUT_GAMEPAD x = Map(b, a), y = Map(b, a, &identity);
+            same = same && std::memcmp(&x, &y, sizeof(x)) == 0;
+        }
+        Check(same, "the identity remap gives what no remap gives, button by button");
+    }
+
+    // Fire on the A button: the game's right trigger comes from A, and the game's A from the right trigger.
+    {
+        Bo1PadRemap remap;
+        Bo1_PadRemapIdentity(&remap);
+        Bo1_PadRemapAssign(&remap, BO1_PAD_RTRIGGER, BO1_PAD_A);
+        Check(Bo1_PadRemapValid(remap) && remap.source[BO1_PAD_A] == BO1_PAD_RTRIGGER,
+              "assigning swaps: the game's A takes the right trigger");
+        Uint8 b[SDL_CONTROLLER_BUTTON_MAX] = {};
+        b[SDL_CONTROLLER_BUTTON_A] = 1; // the host's physical A (the Switch reads the label, SDL's B)
+        XINPUT_GAMEPAD g = Map(b, zero, &remap);
+        Check(g.bRightTrigger == 255 && g.wButtons == 0, "the A button pulls the game's right trigger fully");
+        Sint16 a[SDL_CONTROLLER_AXIS_MAX] = {};
+        a[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = 32767;
+        g = Map(none, a, &remap);
+        Check(g.wButtons == BO1_XINPUT_A && g.bRightTrigger == 0, "the right trigger presses the game's A");
+        a[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = 29 << 7;
+        Check(Map(none, a, &remap).wButtons == 0, "a trigger below XInput's threshold (30) is not a press");
+        a[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = 30 << 7;
+        Check(Map(none, a, &remap).wButtons == BO1_XINPUT_A, "a trigger at the threshold is a press");
+    }
+
+    // Two triggers swapped keep their analog values.
+    {
+        Bo1PadRemap remap;
+        Bo1_PadRemapIdentity(&remap);
+        Bo1_PadRemapAssign(&remap, BO1_PAD_LTRIGGER, BO1_PAD_RTRIGGER);
+        Sint16 a[SDL_CONTROLLER_AXIS_MAX] = {};
+        a[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = 8192;
+        a[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = 32767;
+        XINPUT_GAMEPAD g = Map(none, a, &remap);
+        Check(g.bLeftTrigger == 255 && g.bRightTrigger == 64, "swapped triggers keep their analog values");
+    }
+
+    // A table that is not a permutation.
+    {
+        Bo1PadRemap remap;
+        Bo1_PadRemapIdentity(&remap);
+        remap.source[BO1_PAD_B] = BO1_PAD_A;
+        Check(!Bo1_PadRemapValid(remap), "two game controls on one button are refused");
+        remap.source[BO1_PAD_B] = BO1_PAD_COUNT;
+        Check(!Bo1_PadRemapValid(remap), "a control past the list is refused");
     }
 
     std::printf("gamepad_test: %s\n", g_failures ? "FAILURES" : "all checks passed");

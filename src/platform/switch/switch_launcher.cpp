@@ -1,9 +1,10 @@
 // The start menu of the Switch build. Map, aim assist, god mode, the Tab zombie counter, graphics and controllers are
 // chosen with the pad on libnx's text console before the engine starts, so a game opens straight on its map without the
 // front end. A second view sets up joining a dedicated server instead (docs/SERVER.md): the game then opens on its own
-// menu and joins by itself. The choices persist in menu.cfg; Start writes launch.cfg and gfx.cfg from them
-// (launcher_config.cpp), which a skip_menu boot (emulator, scripted runs) then reuses as they are. The console font is
-// ASCII only: no accents in the text.
+// menu and joins by itself. A third chooses which button does what in the game (gamepad_remap.h); this menu itself
+// keeps reading the console's buttons as they are, so a layout that went wrong can always be fixed here. The choices
+// persist in menu.cfg; Start writes launch.cfg and gfx.cfg from them (launcher_config.cpp), which a skip_menu boot
+// (emulator, scripted runs) then reuses as they are. The console font is ASCII only: no accents in the text.
 
 // libnx before anything that could pull the Win32 shim (switch_main.cpp explains why).
 #include <switch.h>
@@ -91,6 +92,7 @@ enum View
 {
     VIEW_MAIN,
     VIEW_SERVER,
+    VIEW_PAD,
 };
 
 enum Item
@@ -109,6 +111,7 @@ enum Item
     ITEM_SHADOWS,
     ITEM_TEXFILTER,
     ITEM_FPSCOUNTER,
+    ITEM_PAD,
     ITEM_CONTROLLERS,
     ITEM_START,
     // Server view.
@@ -117,14 +120,24 @@ enum Item
     ITEM_NET_PORT,
     ITEM_NET_NAME,
     ITEM_NET_BACK,
+    // Pad view: one line per game control (Bo1PadControl order), then reset and back.
+    ITEM_PAD_FIRST,
+    ITEM_PAD_LAST = ITEM_PAD_FIRST + BO1_PAD_COUNT - 1,
+    ITEM_PAD_RESET,
+    ITEM_PAD_BACK,
     ITEM_COUNT
 };
+
+bool PadControlItem(int item)
+{
+    return item >= ITEM_PAD_FIRST && item <= ITEM_PAD_LAST;
+}
 
 struct ItemInfo
 {
     View view;
     int row;
-    const char *label;
+    const char *label; // null on a pad control line: Launcher_PadActionLabel names it
     const char *help;
 };
 
@@ -143,17 +156,26 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_MAIN, 21, "Ombres", "Ombres dynamiques. Les couper fait gagner des FPS."},
     {VIEW_MAIN, 22, "Filtre de texture", "Nettete des textures au loin. 16x: le plus net. Bilineaire: le plus leger."},
     {VIEW_MAIN, 23, "Compteur FPS", "Compteur de FPS et de batterie en haut a droite."},
-    {VIEW_MAIN, 25, "Manettes", "A: ecran de la Switch pour connecter ou changer de manette."},
+    {VIEW_MAIN, 25, "Touches manette", "A: choisir le bouton de chaque action du jeu (tirer, viser, sauter...)."},
+    {VIEW_MAIN, 26, "Manettes", "A: ecran de la Switch pour connecter ou changer de manette."},
     {VIEW_MAIN, 35, "DEMARRER", "Lance la partie avec ces reglages (aussi: bouton +)."},
     {VIEW_SERVER, 7, "Connexion", "Activee: la partie rejoint ce serveur au lieu d'une partie solo."},
     {VIEW_SERVER, 9, "Adresse IP", "A: l'adresse IP du PC qui fait tourner le serveur (Server.bat, Server.sh)."},
     {VIEW_SERVER, 10, "Port", "A: le port UDP du serveur, 3074 par defaut."},
     {VIEW_SERVER, 11, "Nom du joueur", "A: votre nom sur le serveur (lettres, chiffres, _ - .), vide: celui du jeu."},
     {VIEW_SERVER, 14, "RETOUR", "Revient au menu (aussi: bouton B)."},
+#define PAD_LINE(row) {VIEW_PAD, row, nullptr, "Gauche/Droite: choisir le bouton. L'action qui l'avait prend l'ancien."}
+    PAD_LINE(6),  PAD_LINE(7),  PAD_LINE(8),  PAD_LINE(9),  PAD_LINE(10), PAD_LINE(11), PAD_LINE(12), PAD_LINE(13),
+    PAD_LINE(14), PAD_LINE(15), PAD_LINE(16), PAD_LINE(17), PAD_LINE(18), PAD_LINE(19), PAD_LINE(20), PAD_LINE(21),
+#undef PAD_LINE
+    {VIEW_PAD, 23, "Reinitialiser", "A: remet les touches du jeu d'origine."},
+    {VIEW_PAD, 25, "RETOUR", "Revient au menu (aussi: bouton B)."},
 };
+static_assert(sizeof(kItems) / sizeof(kItems[0]) == ITEM_COUNT, "one kItems line per Item");
 const int kGraphicsHeaderRow = 18;
-const int kControllerFirstRow = 26;
-const int kControllerMaxRows = 9; // handheld + players 1-8
+const int kControllerFirstRow = 27;
+const int kControllerMaxRows = 8; // handheld + players 1-7: the rows up to DEMARRER
+const int kPadInfoRow = 28;
 const int kNetInfoRow = 17;
 const int kHelpRow = 37;
 const int kStatusRow = 38;
@@ -180,7 +202,13 @@ bool TypedItem(int item)
 // Lines A acts on without a value to change.
 bool ActionItem(int item)
 {
-    return item == ITEM_CONTROLLERS || item == ITEM_START || item == ITEM_NET_BACK;
+    return item == ITEM_CONTROLLERS || item == ITEM_START || item == ITEM_NET_BACK || item == ITEM_PAD ||
+           item == ITEM_PAD_RESET || item == ITEM_PAD_BACK;
+}
+
+const char *ItemLabel(int item)
+{
+    return PadControlItem(item) ? Launcher_PadActionLabel(item - ITEM_PAD_FIRST) : kItems[item].label;
 }
 
 const char *YesNo(bool v)
@@ -228,7 +256,13 @@ std::string ValueText(const LauncherSettings &s, int item)
         return std::to_string(s.serverPort);
     case ITEM_NET_NAME:
         return s.playerName.empty() ? "(celui du jeu)" : s.playerName;
+    case ITEM_PAD:
+        return Bo1_PadRemapIsIdentity(s.pad) ? "Celles du jeu" : "Personnalisees";
+    case ITEM_PAD_RESET:
+        return Bo1_PadRemapIsIdentity(s.pad) ? "deja les touches du jeu" : "touches du jeu d'origine";
     default:
+        if (PadControlItem(item))
+            return Launcher_PadButtonLabel(s.pad.source[item - ITEM_PAD_FIRST]);
         return "";
     }
 }
@@ -279,6 +313,12 @@ void Change(LauncherSettings *s, int item, int dir)
         s->fpsCounter = !s->fpsCounter;
         break;
     default:
+        if (PadControlItem(item))
+        {
+            const int control = item - ITEM_PAD_FIRST;
+            const int physical = (s->pad.source[control] + dir + BO1_PAD_COUNT) % BO1_PAD_COUNT;
+            Bo1_PadRemapAssign(&s->pad, control, physical);
+        }
         break;
     }
 }
@@ -453,18 +493,27 @@ void DrawItem(const LauncherSettings &s, View view, int item, int selected)
     const ItemInfo &info = kItems[item];
     const bool isSelected = item == selected;
     At(info.row, 3);
-    if (item == ITEM_START || item == ITEM_NET_BACK)
+    if (item == ITEM_START || item == ITEM_NET_BACK || item == ITEM_PAD_BACK)
     {
         std::printf("%s%s[ %s ]%s", isSelected ? "> " : "  ", isSelected ? "\x1b[30;43m" : kColorSelected, info.label,
                     kColorNormal);
         return;
     }
     const char *color = isSelected ? kColorSelected : (Selectable(s, view, item) ? kColorNormal : kColorDisabled);
-    std::printf("%s%s %-20s", color, isSelected ? ">" : " ", info.label);
+    std::printf("%s%s %-24s", color, isSelected ? ">" : " ", ItemLabel(item));
     if (item == ITEM_CONTROLLERS)
         std::printf("[A] ecran des manettes%s", kColorNormal);
-    else if (item == ITEM_SERVER || TypedItem(item))
+    else if (item == ITEM_SERVER || item == ITEM_PAD || item == ITEM_PAD_RESET || TypedItem(item))
         std::printf("[A] %s%s", ValueText(s, item).c_str(), kColorNormal);
+    else if (PadControlItem(item))
+    {
+        // The game's own button beside a changed one, so a custom layout reads at a glance.
+        const int control = item - ITEM_PAD_FIRST;
+        std::printf("<  %-7s >", ValueText(s, item).c_str());
+        if (s.pad.source[control] != control)
+            std::printf("   %s(jeu: %s)", kColorDisabled, Launcher_PadButtonLabel(control));
+        std::printf("%s", kColorNormal);
+    }
     else
         std::printf("<  %s  >%s", ValueText(s, item).c_str(), kColorNormal);
 }
@@ -473,8 +522,10 @@ void Draw(const LauncherSettings &s, View view, int selected, const Screen &scre
 {
     std::printf("\x1b[2J");
     At(2, 3);
-    std::printf("%sBLACK OPS ZOMBIES - %s%s", kColorTitle, view == VIEW_MAIN ? "LANCEUR" : "CONNEXION AU SERVEUR",
-                kColorNormal);
+    const char *title = view == VIEW_MAIN     ? "LANCEUR"
+                        : view == VIEW_SERVER ? "CONNEXION AU SERVEUR"
+                                              : "TOUCHES DE LA MANETTE";
+    std::printf("%sBLACK OPS ZOMBIES - %s%s", kColorTitle, title, kColorNormal);
     if (screen.battery >= 0)
     {
         At(2, 64);
@@ -510,6 +561,18 @@ void Draw(const LauncherSettings &s, View view, int selected, const Screen &scre
                 pos = end + 1;
             }
         }
+    }
+    else if (view == VIEW_PAD)
+    {
+        At(kPadInfoRow, 3);
+        std::printf("%sA gauche l'action du jeu, a droite le bouton de la Switch qui la fait.%s", kColorTitle,
+                    kColorNormal);
+        At(kPadInfoRow + 1, 5);
+        std::printf("Les menus du jeu suivent aussi: valider = Sauter, retour = S'accroupir.");
+        At(kPadInfoRow + 2, 5);
+        std::printf("Ce lanceur garde toujours les boutons de la console: une erreur se corrige ici.");
+        At(kPadInfoRow + 3, 5);
+        std::printf("Les sticks (deplacement, camera) ne changent pas.");
     }
     else
     {
@@ -549,6 +612,8 @@ void Draw(const LauncherSettings &s, View view, int selected, const Screen &scre
     At(kFooterRow + 1, 3);
     if (view == VIEW_MAIN)
         std::printf("Haut/Bas: choisir  Gauche/Droite: modifier  A: valider  +: jouer  -: quitter");
+    else if (view == VIEW_PAD)
+        std::printf("Haut/Bas: choisir  Gauche/Droite: bouton  A: valider  B: retour  +: jouer  -: quitter");
     else
         std::printf("Haut/Bas: choisir  A: modifier  B: retour  +: jouer  -: quitter");
     At(kFooterRow + 2, 3);
@@ -667,17 +732,32 @@ LauncherResult Launcher_Run(const char *buildStamp, char *line, size_t lineSize,
                 view = VIEW_MAIN;
                 selected = ITEM_SERVER;
             }
+            else if (selected == ITEM_PAD)
+            {
+                view = VIEW_PAD;
+                selected = ITEM_PAD_FIRST + int(BO1_PAD_RTRIGGER); // Tirer, the line players change first
+            }
+            else if (selected == ITEM_PAD_RESET)
+            {
+                Bo1_PadRemapIdentity(&s.pad);
+                Log("pad layout reset to the game's");
+            }
+            else if (selected == ITEM_PAD_BACK)
+            {
+                view = VIEW_MAIN;
+                selected = ITEM_PAD;
+            }
             else if (TypedItem(selected))
                 screen.status = EditTyped(&s, selected);
             else
                 Change(&s, selected, 1);
             dirty = true;
         }
-        if ((down & HidNpadButton_B) && view == VIEW_SERVER)
+        if ((down & HidNpadButton_B) && view != VIEW_MAIN)
         {
             screen.status.clear();
+            selected = view == VIEW_SERVER ? ITEM_SERVER : ITEM_PAD;
             view = VIEW_MAIN;
-            selected = ITEM_SERVER;
             dirty = true;
         }
         if (down & HidNpadButton_Plus)

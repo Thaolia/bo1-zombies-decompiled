@@ -21,6 +21,10 @@ On the console the game starts in a text menu, where you choose:
 - god mode;
 - the zombie counter beside the scoreboard (mods/zinfo: zombies alive and left this round), on by default;
 - the renderer (deko3d or OpenGL), the frame-rate cap, shadows, texture filtering and the FPS/battery counter;
+- the pad's buttons: one screen lists each game action (fire, aim, jump, reload, grenade, knife, sprint...) with the
+  Switch button that does it; left/right changes the button and the action that had it takes the old one, so no
+  action is left without a button. The game's menus follow; the start menu itself always keeps the console's buttons,
+  so a layout gone wrong is fixed there;
 - the controllers (the list of detected pads, and the system screen to connect them).
 
 **+** starts the game straight on the map, or opens the game's menu, which then joins the server by itself. The choices are kept in `sdmc:/switch/bo1zm/menu.cfg`, and Start writes
