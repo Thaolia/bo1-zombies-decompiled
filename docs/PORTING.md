@@ -9,6 +9,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-21 | Fork with `upstream` remote, work on branch `switch` | Keep merging upstream engine fixes; upstream already has `src/` at the root |
 | 2026-10-21 | v1 scope: solo offline zombies, base maps, no mods, no network | Smallest playable target. Solo already runs over in-memory loopback (`net_chan_mp.cpp:888-899`) |
 | 2026-10-21 | Renderer: OpenGL (SDL2 + mesa/nouveau) now, designed for a later deko3d backend | GL can be debugged on desktop with RenderDoc. deko3d is added only if profiling shows the GL driver is CPU-bound |
+| 2026-11-08 | `tools/zmclient`: a curses launcher for PC players, on ZmAdmin's model and importing its package; packages can ship without game data (`make_dist.sh --no-game-data`) and ZmClient installs it from the player's Black Ops with the shipped `ffconv.exe` | Asked by the user: solo, joining and a local server from one tool with every setting, and a `setup.ps1` for packages. Reusing ZmAdmin's package keeps one widget set, one status parser and one local-server state |
 | 2026-10-21 | Gallium Nine rejected | Removed from Mesa `main` (unmaintained). devkitPro `switch-mesa` is 20.1.0 and has no `ID3DPresent` backend for the Switch |
 | 2026-10-21 | `BO1_OFFLINE` stubs moved from phase 0 to phase 1c | Even the "small" subsystems are referenced across the engine (`monkey/` from 7 files, `mjpeg/` from 8). The exact symbol list comes from a linker, so it is not guessed by hand |
 | 2026-10-21 | `/Ob1` on `src/gfx_d3d/rb_draw3d.cpp`, only when `MSVC_VERSION == 1943` | MSVC 19.43 (VS 17.13) crashes on this file at `/O2 /Ob2`: C1001 in `p2/main.cpp` line 255, at `rb_draw3d.cpp:244`, and `/MP` reports it as `D8040`. `/O2 /Ob1`, `/O1` and `/Od` all compile. MSVC 19.29 (v142) compiles the file but rejects upstream literal→`char*` conversions in 3 other files |
@@ -2209,6 +2210,55 @@ setting by double click, `[ Sauvegarder ]` and `[ Oui ]` (read back applied), a 
 wheel in the Log (9 lines up) and its buttons, the Players legend (`zm_god all` sent), `[ Quitter ]` with the box
 ticked (server stopped, no process left). Not tried by hand: the mouse with PDCurses on Windows (not drivable from
 WSL; its constants and zones load, see below); a console with QuickEdit on may keep clicks for text selection.
+
+**ZmClient, the players' launcher (2026-11-08, asked by the user).** `tools/zmclient` (`tools/zmclient/README.md`):
+views Jouer, Serveurs, Solo, Lancement, Config du jeu, Dvars libres, Installation, Journal; modes solo, join, and
+local server + join. No engine change.
+
+- It imports ZmAdmin's package instead of copying it: widgets, `parse_status`, `LocalServer` (so the server it starts
+  is the one ZmAdmin finds, with the rcon password kept in ZmAdmin's `servers.json`; a first version generated the
+  password without saving it, found by the local-server test).
+- Read in the engine and enforced: `Com_ParseCommandLine` splits the command line at every `+`, quotes included, and
+  keeps 64 lines (the first is the program's path): a value or a folder path with a `+` is refused, and a line of
+  more than 63 commands (with `launch.cfg`'s, which `win_main.cpp` puts first) is refused instead of being cut. The
+  posix `GetCommandLineA` quotes an argument with blanks, so an argv list gives the same text as the `.bat`.
+- `getstatus` replies carry no password flag (`pswrd` is only in `getinfo`): a favourite stores the player password,
+  a LAN server joins without one. The server answers one query every 50 ms: a round broadcasts first, then asks only
+  the favourites that did not answer.
+- `config.cfg`: `r_picmip` is read-only while `r_picmip_manual` is 0, so "texture quality" writes the family;
+  `bo1_mod_fov` also goes to `players/bo1_shared.cfg`, read after `config.cfg`. The client logs to
+  `<fs_h>/<fs_game or main>/console_mp.log` on Windows; a Linux package showed it at `fs_h`'s root, so the Journal
+  follows the newest of the candidates.
+- `make_dist.sh`: ships `zmclient` and `ffconv.exe` (built from the same sources as the program, its zones match);
+  `--no-game-data` writes `BO1Zombies_<platform>_nodata/` without `localization.txt`, iwds, videos, zones or
+  `shaders.pack`, in a separate folder so a package that held them cannot keep them.
+- **ffconv fix found by the setup test.** The user's Steam install is now Russian and names its common folder
+  `zone/Common`, as the engine spells it (`DB_BuildZoneFilePath`); `ConvertInstall` compared the name with `"common"`
+  case-sensitively, so it took `Common` for a language folder, stripped a prefix from every name and skipped most
+  zones. `build/Release` (the copy every earlier conversion read) has `common`, which hid it. The comparison is now
+  case-insensitive. The same install also lacks the DLC maps (only their `_patch` zones): ffconv converts what is
+  there (Kino, Five, Dead Ops), and ZmClient marks the other maps "non installée" and refuses to launch them.
+- Found by the tests and fixed: a relative install path given to `--setup` reached ffconv unchanged while ffconv runs
+  from the package folder ("has no zone directory"; the failure kept the old zones, as designed); `--setup` lost
+  output lines once the job's 200-line buffer was trimmed (now a running total under a lock); the local server
+  started before the command line was checked (a refused line would leave a server); `--play` named an older
+  `main/console_mp.log` instead of the run's `mods/horde/` one.
+- Verified (2026-11-08): 26 unit tests on Linux (Python 3.14) and on Windows (3.13, 5 skipped there: node and posix
+  only); the solo flags against the `.hta`'s own `args()` under node on its 15 maps x 6 mod combinations, the test
+  failing on a deliberate change; the curses views in tmux (edit and save `config.cfg`: only the edited line changed,
+  line ends kept; solo, and local server + client with a stand-in program; a LAN server found by broadcast and added
+  to the favourites); `make_dist.sh --no-game-data linux` (36 MB, no game file); `zmclient --setup` from the Steam
+  install into it on ext4: 43 files (5244 MB) copied, ffconv through WSL's interop `--verify`: 57 zones, 0 failed,
+  8296 shaders, 0 left out, and `check_shader_pack.py` on that pack: 8296 shaders (303 vertex, 7993 pixel), 0 rejected; a dedicated server of that package loaded
+  Kino from those zones (`getstatus` answered `zombie_theater`). On Windows, `zmclient.exe --setup` (Nuitka, MSVC):
+  57 zones, 0 failed; the local-server mode through ZmClient's modules: the server and a client started, the server
+  listed the client `active` on Kino, both stopped, none left; `zmclient.exe --play` solo with horde loaded Kino.
+- Mistake of this session: the Windows client runs used `bo1_headless_client` started directly, which opens the game
+  window on the user's desktop (only `tools/headless.ps1 -Client` keeps it on its private desktop). Two windows
+  appeared; client runs on Windows go through `headless.ps1` from now on.
+- Not ours, seen once: the `--play` horde run (Kino with `bo1_mod_zones zombie_temple`) ended at `bo1_autoquit` with
+  `Com_ERROR: free does not match allocation` while unloading `zombie_theater` after `zombie_temple`. Same flags as
+  the `.hta`; not investigated.
 
 **Head icons over other players crashed the client (2026-10-29, console crash report).** A Switch client in a server
 game (Shi No Numa, after ~10 min) died with a data abort at address 0xb0: `Material_GetTechniqueSet(NULL)` on an FX

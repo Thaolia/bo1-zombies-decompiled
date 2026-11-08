@@ -14,6 +14,7 @@
 // GLSL 4.60 translations (ff_glsl.h), for glslangValidator.
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -390,7 +391,11 @@ int ConvertInstall(const std::filesystem::path &game, const std::filesystem::pat
     {
         if (!dir.is_directory())
             continue;
-        const bool languageDir = dir.path().filename() != "common";
+        // Steam's install names it "Common", as DB_BuildZoneFilePath spells it; a copied tree may have "common"
+        std::string dirName = dir.path().filename().string();
+        std::transform(dirName.begin(), dirName.end(), dirName.begin(),
+                       [](unsigned char c) { return (char)std::tolower(c); });
+        const bool languageDir = dirName != "common";
         for (const fs::directory_entry &zone : fs::directory_iterator(dir.path(), ec))
             if (zone.path().extension() == ".ff" && IsZombieZone(zone.path().stem().string(), languageDir))
                 zones.push_back(zone.path());

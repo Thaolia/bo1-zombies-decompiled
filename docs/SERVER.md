@@ -117,6 +117,11 @@ Load the map either from `server.cfg` or from the command line, not from both (e
 
 ## Joining from a client (PC)
 
+`zmclient` / `zmclient.exe` in the package (`tools/zmclient/README.md`) does all of this from menus: its Servers view
+lists favourites and the LAN's servers (a broadcast `getstatus` on ports 3074-3083) and joins one with
+`cl_autoConnect`, the server's password and `cl_allowWanConnect 1`; its "local server" mode starts the folder's server
+as ZmAdmin does, then a client that joins it. By hand:
+
 On Windows, `Play.bat net <address[:port]> [name]` (or `Launch.bat net ...`, the same script) starts the 64-bit
 client (`Play.bat x64`) with `cl_autoConnect <address>` and `name <name>` (the player's name on the server, no
 spaces):

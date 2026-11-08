@@ -343,6 +343,18 @@ the folder's `server.sh` / `Server.bat` command line) and follows that server's 
 the mod's `admin:` replies: rcon returns a command's immediate output only. Built into one executable per platform by
 Nuitka (`tools/zmadmin/build.sh`, run by `tools/make_dist.sh`).
 
+### Client launcher
+
+`tools/zmclient` is the players' counterpart (`tools/zmclient/README.md`), also outside the engine: it builds the
+client's command line and starts the program, and imports ZmAdmin's package for the widgets, the `getstatus` parser and
+the local server (one state file and one rcon password for both tools). The command line is plain data
+(`profile.py`, unit-tested): the solo mod flags are a Python copy of `tools/horde_flags.js` / `nightmare_flags.js`
+and of `mod-launcher.hta`'s rules, checked against them under node. A browser thread (`browser.py`) broadcasts
+`getstatus` on the LAN and asks the favourites the broadcast did not reach, one query per server per round (the
+server answers one every 50 ms). `gamecfg.py` rewrites `players/config.cfg` line by line; `gamesetup.py` copies the
+player's game files and runs the package's `ffconv.exe` into a temporary folder that replaces `zone/` only on
+success. Built by Nuitka with ZmAdmin's package inside (`tools/zmclient/build.sh`).
+
 ### Client logs (phase 8)
 
 `src/platform/netlog.cpp` (every client, Windows, Linux and Switch) copies the console log into a 1 MiB buffer from

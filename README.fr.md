@@ -123,20 +123,32 @@ passe rcon qu'elle garde, et suit son log en direct. Le serveur n'accepte qu'une
 ne renvoie pas son log en rcon : à distance, les réponses `admin:` du mod ne s'affichent pas. Détails :
 `tools/zmadmin/README.md`.
 
+Lanceur du client : `tools/zmclient` (même famille de programme, `zmclient` / `zmclient.exe` dans les paquets). Vues
+Jouer, Serveurs (favoris et serveurs du réseau local, avec leur état en direct), Solo (map, horde, nightmare/hell,
+noperks, maps mapkit, zinfo, relance rapide : les drapeaux du lanceur `tools/mod-launcher.hta`, à l'identique),
+Lancement (nom, fenêtre, aide à la visée, serveur local), Config du jeu (`players/config.cfg` : souris, manette, FOV,
+résolution, graphismes, touches), Dvars libres, Installation et Journal. Trois façons de jouer : en solo, en
+rejoignant un serveur, ou en lançant le serveur du dossier puis en le rejoignant (ZmAdmin l'administre ensuite avec
+le même mot de passe rcon). La vue Installation fait ce que fait `setup.ps1` : depuis votre Black Ops (Steam), elle
+copie `localization.txt`, les `.iwd` et les vidéos, puis convertit les zones avec le `ffconv.exe` du paquet (wine
+sous Linux). Détails : `tools/zmclient/README.md`.
+
 
 ## Paquets prêts à copier
 `tools/make_dist.sh` (bash, depuis WSL) part d'un arbre de sources où `setup.ps1` a copié le jeu. Il produit dans
 `build/dist` un dossier prêt à copier et une archive par plateforme :
-- `BO1Zombies_windows/` (`.zip`) : le client et le serveur 64 bits, et `zmadmin.exe`. `Play.bat` lance le jeu, `Play.bat net
+- `BO1Zombies_windows/` (`.zip`) : le client et le serveur 64 bits, `zmclient.exe`, `zmadmin.exe` et `ffconv.exe`. `Play.bat` lance le jeu, `Play.bat net
   <adresse[:port]> [nom]` rejoint un serveur, `Server.bat [map] [port]` lance un serveur. Les DLL d'exécution 64 bits
   sont incluses ;
-- `BO1Zombies_linux/` (`.tar.gz`) : le client et le serveur Linux, `zmadmin`, avec `play.sh` (`./play.sh net ...`),
+- `BO1Zombies_linux/` (`.tar.gz`) : le client et le serveur Linux, `zmclient`, `zmadmin`, `ffconv.exe`, avec `play.sh` (`./play.sh net ...`),
   `server.sh [map] [port]` et `shaders.pack` ;
 - `BO1Zombies_switch/` (`.zip`) : une arborescence de carte SD, `switch/bo1zm/` avec le `.nro`, `shaders.pack` et
   `shaders.dksh`.
 
 Chaque paquet contient aussi les zones converties, les `main/*.iwd` et le `localization.txt` de l'install (plus
-`main/video` sur PC), un `LISEZMOI.txt` et un `VERSION.txt` (commit, date, heure du lien du NRO).
+`main/video` sur PC), un `LISEZMOI.txt` et un `VERSION.txt` (commit, date, heure du lien du NRO). Avec
+`--no-game-data`, les paquets windows et linux vont dans `BO1Zombies_<plateforme>_nodata/` sans aucun fichier du jeu :
+le joueur les installe avec la vue Installation de ZmClient, depuis son propre Black Ops.
 
     tools/make_dist.sh                       # les trois
     tools/make_dist.sh switch linux          # une partie
