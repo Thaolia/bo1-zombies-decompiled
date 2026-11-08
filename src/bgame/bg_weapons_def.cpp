@@ -84,19 +84,27 @@ unsigned int __cdecl BG_GetWeaponIndex(const WeaponVariantDef *weapVariantDef)
 // weapons/mp files that zombies do not have.
 static bool bg_weaponDefsSpRules; // zombies: the last weapon load followed SP's rule (BG_ShutdownWeaponDefFiles)
 
+// MP's "a mod is active" term. 64-bit builds keep the fastfile weapons: the raw-file parser's weaponDefFields hold the
+// retail 32-bit offsets, so a weapon parsed there leaves its string fields null (the frontend crashed in
+// BG_LoadWeaponVariantDefInternal under the packages' default fs_mods zinfo). No mod ships weapons/mp files.
+static bool BG_ModWeaponDefsFromRawFiles()
+{
+    return sizeof(void *) == 4 && FS_ModsActive(); // mod: FS_ModsActive was 'fs_game set' (fs_mods too)
+}
+
 bool __cdecl BG_WeaponDefsFromRawFiles()
 {
     bg_weaponDefsSpRules = zombiemode && zombiemode->current.enabled;
     if ( bg_weaponDefsSpRules )
         return !useFastFile->current.enabled;
-    return FS_ModsActive() || !useFastFile->current.enabled; // mod: FS_ModsActive was 'fs_game set' (fs_mods too)
+    return BG_ModWeaponDefsFromRawFiles() || !useFastFile->current.enabled;
 }
 
 void __cdecl BG_ShutdownWeaponDefFiles()
 {
     // zombies: MP frees the raw-file weapon strings when fs_game is set; weapons loaded under SP's rule came from
     // the fastfiles and are not freed
-    if ( FS_ModsActive() && !bg_weaponDefsSpRules ) // mod: FS_ModsActive was 'fs_game set'
+    if ( BG_ModWeaponDefsFromRawFiles() && !bg_weaponDefsSpRules )
     {
         BG_ClearWeaponDefInternal();
         BG_FreeWeaponDefStrings();

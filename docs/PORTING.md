@@ -119,6 +119,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-27 | The message Huffman tree is built with a total order: equal weights fall back to node creation order (`huffman.cpp`, `nodeCmp`) | `qsort` leaves the order of equal elements to each C library, so MSVC, glibc and newlib built different trees and a client decoded garbage from a server of another platform (a win64 client of the Linux server misread a script mover's origin, then crashed on a dynent id). It changes the compressed bits on every build, `win32-msvc` included; both ends run the same code, nothing else reads them |
 | 2026-10-27 | `tools/make_dist.sh` packages each platform (windows, linux, switch) as a ready-to-copy folder plus an archive, building what it needs first: win64-msvc, the Linux and Switch programs on an ext4 copy of the tree, the zones when a converter source is newer than their `shaders.pack`, and `shaders.dksh` when the pack's md5 changed | The user asked for all-in-one archives like the SD card hand-off. A stale `shaders.pack`/`.dksh` pair on the SD caused the Switch-only foliage and wall bugs (2026-10-27), so the script ties the pack to the converter's sources, the DKSH to the pack, and refuses a DKSH uam rejected shaders from |
 | 2026-10-27 | `make_dksh_pack.py` runs uam with address randomisation off (`setarch -R`) | uam's output depends on where its heap lands: on one shader 7 of 64 runs gave other code with randomisation on, 0 of 64 with it off, and two packs from the same `shaders.pack` (md5 `175c7065`) differed in 1790 of 13 704 shaders. With it off, two full builds gave the same pack (md5 `a44c919b`). The v4 pack the console validated (`7fa71b32`) was built with it on, so it is one random mix of those variants and differs from the reproducible pack in 1480 shaders: judge the first reproducible pack on the console once |
+| 2026-11-03 | 64-bit builds load MP weapon defs from the fastfiles even when a mod is active (`BG_ModWeaponDefsFromRawFiles`, `bg_weapons_def.cpp`); 32-bit builds keep the raw `weapons/mp` files under `fs_game`/`fs_mods` | The raw-file parser's `weaponDefFields` hold the retail 32-bit offsets: under the packages' default `fs_mods zinfo` the frontend (MP rules, not zombie mode) parsed `defaultweapon_mp` into the wrong fields and crashed on a null `flameTableFirstPerson` in `BG_LoadWeaponVariantDefInternal`. No mod ships weapon files, zombie maps already follow SP's fastfile rule |
 | 2026-11-08 | `tools/zmclient`: a curses launcher for PC players, on ZmAdmin's model and importing its package; packages can ship without game data (`make_dist.sh --no-game-data`) and ZmClient installs it from the player's Black Ops with the shipped `ffconv.exe` | Asked by the user: solo, joining and a local server from one tool with every setting, and a `setup.ps1` for packages. Reusing ZmAdmin's package keeps one widget set, one status parser and one local-server state |
 | 2026-11-08 | Switch start menu: a pad view where the player picks the button of each game control; remapped in the posix controller layer (`gamepad_remap.h`), as a permutation | Asked by the user. Remapping physical buttons onto XInput controls (not rewriting the engine's binds) keeps the menus, the Switch layout of `Switch_ApplyPadLayout` and every config file as they are, and a permutation never leaves the menus' A or B without a button |
 
@@ -491,7 +492,8 @@ Base: upstream commit `102f699` (2026-10-03).
       it grow: measure its high-water mark on a map before phase 5;
     - `dvar->current.integer` null tests on string dvars only test the low 32 bits on 64-bit;
     - load_obj paths only (not used with fastfiles): `cspField_t` tables with 32-bit offsets, `PhysPreset` filled as
-      a float array, `CG_DestructibleRadiusDamage`'s mistyped `point`;
+      a float array, `CG_DestructibleRadiusDamage`'s mistyped `point`. An active mod used to route the frontend's
+      weapons there (fixed 2026-11-03, see the "Tab zombie counter" entry of phase 8);
     - the 64-bit save format (saves are skipped on 64-bit for now);
     - MSVC x64 warnings were not reviewed yet (the builds above print errors only): a `/W4` pass for C4311/C4312
       pointer truncations is the next cheap check.
@@ -2145,6 +2147,13 @@ with `cl_autoConnect` and `name`. Usage in `docs/SERVER.md` ("Start scripts", "J
   `fs_mods: hooks of mods/zinfo` then `mods/admin`, and 13 `zinfo: alive` lines once a headless client joined.
   Not seen yet: the counter drawn on a remote client's screen (the test's `+scores` was split off by the command
   line's `+`) and on the console.
+- Fix (2026-11-03): `./play.sh` crashed on Linux while loading the frontend (`BO1Zombies+0x13E141`,
+  `BG_LoadWeaponVariantDefInternal`, null `flameTableFirstPerson`), and `Play.bat` takes the same path on win64. The
+  Kino checks above used `+devmap` and never loaded the frontend, whose MP rules read weapons from raw files when a mod
+  is active, through 32-bit `weaponDefFields` offsets. 64-bit builds now keep the fastfile weapons there
+  (`BG_ModWeaponDefsFromRawFiles`); 32-bit builds are unchanged. Verified on linux64-clang headless (dist binary, `fs_mods
+  zinfo`, no map): before, SIGSEGV in `G_InitGame` → `G_SetupWeaponDef` → `BG_LoadWeaponVariantDef`; after, the main
+  menu opens (`bo1_menu: openmainmenu 0 'main'`) with the same error lines as a run without mods.
 
 **Step 8, admin console (2026-10-29).** `tools/zmadmin` (`tools/zmadmin/README.md`; operator's view in
 `docs/SERVER.md`, "Admin tool (zmadmin)").
