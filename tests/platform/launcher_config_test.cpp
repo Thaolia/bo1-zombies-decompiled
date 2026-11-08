@@ -5,6 +5,7 @@
 #include <platform/switch/launcher_config.h>
 
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 namespace
@@ -31,7 +32,8 @@ bool SameSettings(const LauncherSettings &a, const LauncherSettings &b)
 {
     return a.join == b.join && a.serverHost == b.serverHost && a.serverPort == b.serverPort && a.playerName == b.playerName && a.map == b.map && a.aimAssist == b.aimAssist && a.aimSlowdown == b.aimSlowdown &&
            a.aimLockon == b.aimLockon && a.aimAutoaim == b.aimAutoaim && a.god == b.god && a.tabInfo == b.tabInfo && a.backend == b.backend &&
-           a.maxFps == b.maxFps && a.shadows == b.shadows && a.fpsCounter == b.fpsCounter && a.texFilter == b.texFilter;
+           a.maxFps == b.maxFps && a.shadows == b.shadows && a.fpsCounter == b.fpsCounter &&
+           a.texFilter == b.texFilter && std::memcmp(&a.pad, &b.pad, sizeof(a.pad)) == 0;
 }
 } // namespace
 
@@ -146,6 +148,45 @@ int main()
     Check(Launcher_ValidPlayerName("Player_2") && !Launcher_ValidPlayerName("") &&
               !Launcher_ValidPlayerName("sixteen_letters_") && !Launcher_ValidPlayerName("a\"b"),
           "player names: 1-15 safe characters");
+
+    // The pad layout in menu.cfg.
+    {
+        Check(Bo1_PadRemapIsIdentity(defaults.pad), "the default pad layout is the game's");
+        LauncherSettings custom;
+        Bo1_PadRemapAssign(&custom.pad, BO1_PAD_RTRIGGER, BO1_PAD_RSHOULDER); // fire on R, grenade on ZR
+        Bo1_PadRemapAssign(&custom.pad, BO1_PAD_A, BO1_PAD_B);                // jump on B, crouch on A
+        const std::string text = Launcher_FormatSettings(custom);
+        Check(text.find("pad_zr=r\n") != std::string::npos && text.find("pad_r=zr\n") != std::string::npos &&
+                  text.find("pad_a=b\n") != std::string::npos && text.find("pad_x=x\n") != std::string::npos,
+              "menu.cfg lists every pad control with its button");
+        Check(SameSettings(Launcher_ParseSettings(text), custom), "a custom pad layout round-trips through menu.cfg");
+        const LauncherSettings dup = Launcher_ParseSettings("map=zombie_moon\npad_a=b\n");
+        Check(Bo1_PadRemapIsIdentity(dup.pad) && dup.map == 5,
+              "a layout with two controls on one button falls back to the game's, the other settings kept");
+        const LauncherSettings swap = Launcher_ParseSettings("pad_a=b\npad_b=a\npad_nope=x\npad_x=nope\n");
+        Check(swap.pad.source[BO1_PAD_A] == BO1_PAD_B && swap.pad.source[BO1_PAD_B] == BO1_PAD_A &&
+                  swap.pad.source[BO1_PAD_X] == BO1_PAD_X,
+              "a swap in two lines loads; unknown pad names are skipped");
+        Check(std::string(Launcher_PadButtonLabel(BO1_PAD_RTRIGGER)) == "ZR" &&
+                  std::string(Launcher_PadActionLabel(BO1_PAD_RTRIGGER)) == "Tirer" &&
+                  std::string(Launcher_PadButtonLabel(BO1_PAD_COUNT)) == "?",
+              "pad labels: ZR fires; past the list is \"?\"");
+        bool ascii = true;
+        for (int i = 0; i < BO1_PAD_COUNT; ++i)
+            for (const char *t : {Launcher_PadButtonLabel(i), Launcher_PadActionLabel(i)})
+                for (; *t; ++t)
+                    ascii = ascii && (unsigned char)*t < 128;
+        Check(ascii, "pad labels are ASCII (the console font has no accents)");
+        // Cycling one line through every button keeps a permutation at each step.
+        LauncherSettings cycle;
+        bool perm = true;
+        for (int step = 0; step < 40; ++step)
+        {
+            Bo1_PadRemapAssign(&cycle.pad, BO1_PAD_Y, (cycle.pad.source[BO1_PAD_Y] + 1) % BO1_PAD_COUNT);
+            perm = perm && Bo1_PadRemapValid(cycle.pad);
+        }
+        Check(perm, "changing one line again and again keeps every control on its own button");
+    }
 
     char cfg[64] = "\r\n  +set a 1\r\n+set\tb 2\n\n  ";
     const size_t cfgLen = LaunchCfg_Normalize(cfg, std::char_traits<char>::length(cfg));

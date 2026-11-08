@@ -25,6 +25,8 @@ unsigned int s_packet = 0;
 XINPUT_GAMEPAD s_state = {};
 bool s_rumbleWanted = false;
 Uint16 s_rumbleLow = 0, s_rumbleHigh = 0;
+static_assert(BO1_PAD_COUNT == 16, "s_remap's initialiser lists every control");
+Bo1PadRemap s_remap = {{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}}; // identity
 bool s_triedInit = false;
 bool s_reportedNone = false;
 constexpr int kConsoleChannel = 16;
@@ -93,7 +95,12 @@ void Bo1_GamepadPump()
     for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; ++i)
         axes[i] = SDL_GameControllerGetAxis(s_controller, SDL_GameControllerAxis(i));
     XINPUT_GAMEPAD mapped;
-    Bo1_MapGamepadState(buttons, axes, &mapped);
+    Bo1PadRemap remap;
+    {
+        std::lock_guard<std::mutex> lock(s_lock);
+        remap = s_remap;
+    }
+    Bo1_MapGamepadState(buttons, axes, &mapped, &remap);
 
     bool rumble;
     Uint16 low, high;
@@ -110,6 +117,16 @@ void Bo1_GamepadPump()
     }
     if (rumble)
         SDL_GameControllerRumble(s_controller, low, high, 0); // 0: until the next request, as XInput holds it
+}
+
+// Called before the engine starts (switch_main.cpp): no Com_Printf here, the caller logs.
+bool Bo1_SetGamepadRemap(const Bo1PadRemap &remap)
+{
+    if (!Bo1_PadRemapValid(remap))
+        return false;
+    std::lock_guard<std::mutex> lock(s_lock);
+    s_remap = remap;
+    return true;
 }
 
 extern "C" {

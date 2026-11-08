@@ -38,6 +38,43 @@ const TexFilterInfo kTexFilters[LAUNCHER_TEXFILTER_COUNT] = {
     {"trilinear", "Trilineaire", 1, 1},   {"bilinear", "Bilineaire", 1, 2},
 };
 
+struct PadInfo
+{
+    const char *key;    // menu.cfg: pad_<key>=<key>
+    const char *label;  // the button as printed on the Switch's pads
+    const char *action; // what the game control does (ASCII: the console font has no accents)
+};
+
+// Bo1PadControl order. The actions are the Switch build's binds: retail buttons_default.cfg, then
+// Switch_ApplyPadLayout (qcommon/cmd.cpp: Y reloads, L switches weapon, d-pad down throws the special grenade).
+static_assert(BO1_PAD_COUNT == 16, "kPads lists every control");
+const PadInfo kPads[BO1_PAD_COUNT] = {
+    {"a", "A", "Sauter / valider"},
+    {"b", "B", "S'accroupir / retour"},
+    {"x", "X", "Utiliser / recharger"},
+    {"y", "Y", "Recharger"},
+    {"l", "L", "Changer d'arme"},
+    {"r", "R", "Grenade"},
+    {"zl", "ZL", "Viser"},
+    {"zr", "ZR", "Tirer"},
+    {"plus", "+", "Pause (menu du jeu)"},
+    {"minus", "-", "Tableau des scores"},
+    {"lstick", "Stick G", "Sprint"},
+    {"rstick", "Stick D", "Couteau"},
+    {"up", "Haut", "Emplacement 1"},
+    {"down", "Bas", "Grenade speciale"},
+    {"left", "Gauche", "Emplacement 3"},
+    {"right", "Droite", "Emplacement 4"},
+};
+
+int PadIndex(const std::string &key)
+{
+    for (int i = 0; i < BO1_PAD_COUNT; ++i)
+        if (key == kPads[i].key)
+            return i;
+    return -1;
+}
+
 bool ParseBool(const std::string &value, bool *out)
 {
     if (value == "1")
@@ -116,6 +153,14 @@ void Apply(LauncherSettings *s, const std::string &key, const std::string &value
         ParseBool(value, &s->shadows);
     else if (key == "fpscounter")
         ParseBool(value, &s->fpsCounter);
+    else if (key.compare(0, 4, "pad_") == 0)
+    {
+        // checked as a whole once every line is read (Launcher_ParseSettings)
+        const int control = PadIndex(key.substr(4));
+        const int physical = PadIndex(value);
+        if (control >= 0 && physical >= 0)
+            s->pad.source[control] = (unsigned char)physical;
+    }
     else if (key == "texfilter")
     {
         for (int i = 0; i < LAUNCHER_TEXFILTER_COUNT; ++i)
@@ -140,6 +185,9 @@ LauncherSettings Launcher_ParseSettings(const std::string &text)
         if (eq != std::string::npos)
             Apply(&s, Trim(line.substr(0, eq)), Trim(line.substr(eq + 1)));
     }
+    // A layout that gives two game controls one button would leave another without any (perhaps the menus' A).
+    if (!Bo1_PadRemapValid(s.pad))
+        Bo1_PadRemapIdentity(&s.pad);
     return s;
 }
 
@@ -162,6 +210,8 @@ std::string Launcher_FormatSettings(const LauncherSettings &s)
     out += std::string("shadows=") + (s.shadows ? "1" : "0") + "\n";
     out += std::string("fpscounter=") + (s.fpsCounter ? "1" : "0") + "\n";
     out += std::string("texfilter=") + kTexFilters[s.texFilter].key + "\n";
+    for (int i = 0; i < BO1_PAD_COUNT; ++i)
+        out += std::string("pad_") + kPads[i].key + "=" + kPads[s.pad.source[i]].key + "\n";
     return out;
 }
 
@@ -251,4 +301,14 @@ const char *Launcher_BackendName(LauncherBackend backend)
 const char *Launcher_TexFilterLabel(LauncherTexFilter filter)
 {
     return kTexFilters[filter].label;
+}
+
+const char *Launcher_PadButtonLabel(int control)
+{
+    return control >= 0 && control < BO1_PAD_COUNT ? kPads[control].label : "?";
+}
+
+const char *Launcher_PadActionLabel(int control)
+{
+    return control >= 0 && control < BO1_PAD_COUNT ? kPads[control].action : "?";
 }

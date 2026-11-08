@@ -489,6 +489,7 @@ LANCEMENT (mode application obligatoire)
 
 MENU DE DÉPART
   Map, aim assist, god mode, compteur de zombies, rendu, limite de FPS, ombres, filtre de texture, manettes.
+  « Touches manette » : le bouton de la Switch de chaque action du jeu (tirer, viser, sauter...), au choix.
   + lance la partie. Le compteur de zombies (activé par défaut) affiche les zombies en vie et ceux qui restent
   dans la manche à côté du tableau des scores ; sur un serveur, c'est le serveur qui le décide.
   « Serveur » ouvre l'écran de connexion : activez-la, entrez l'adresse IP et le port du PC qui fait tourner le

@@ -9,6 +9,7 @@ Base: upstream commit `102f699` (2026-10-03).
 | 2026-10-21 | Fork with `upstream` remote, work on branch `switch` | Keep merging upstream engine fixes; upstream already has `src/` at the root |
 | 2026-10-21 | v1 scope: solo offline zombies, base maps, no mods, no network | Smallest playable target. Solo already runs over in-memory loopback (`net_chan_mp.cpp:888-899`) |
 | 2026-10-21 | Renderer: OpenGL (SDL2 + mesa/nouveau) now, designed for a later deko3d backend | GL can be debugged on desktop with RenderDoc. deko3d is added only if profiling shows the GL driver is CPU-bound |
+| 2026-11-08 | Switch start menu: a pad view where the player picks the button of each game control; remapped in the posix controller layer (`gamepad_remap.h`), as a permutation | Asked by the user. Remapping physical buttons onto XInput controls (not rewriting the engine's binds) keeps the menus, the Switch layout of `Switch_ApplyPadLayout` and every config file as they are, and a permutation never leaves the menus' A or B without a button |
 | 2026-10-21 | Gallium Nine rejected | Removed from Mesa `main` (unmaintained). devkitPro `switch-mesa` is 20.1.0 and has no `ID3DPresent` backend for the Switch |
 | 2026-10-21 | `BO1_OFFLINE` stubs moved from phase 0 to phase 1c | Even the "small" subsystems are referenced across the engine (`monkey/` from 7 files, `mjpeg/` from 8). The exact symbol list comes from a linker, so it is not guessed by hand |
 | 2026-10-21 | `/Ob1` on `src/gfx_d3d/rb_draw3d.cpp`, only when `MSVC_VERSION == 1943` | MSVC 19.43 (VS 17.13) crashes on this file at `/O2 /Ob2`: C1001 in `p2/main.cpp` line 255, at `rb_draw3d.cpp:244`, and `/MP` reports it as `D8040`. `/O2 /Ob1`, `/O1` and `/Od` all compile. MSVC 19.29 (v142) compiles the file but rejects upstream literal→`char*` conversions in 3 other files |
@@ -2326,3 +2327,28 @@ The same report said the PC dedicated server "keeps restarting". Its log (one `S
 `map_restart`) shows no restart: the invisible player was killed every 12-15 s (`bo1_death`, 3 lives), and the
 server logged 22 `Hitch warning` frames of 0.6-20 s while the client played on the same PC. The same test here
 (server at normal priority, one client, 160 s) logged one hitch, at load.
+
+## Switch start menu: the pad's buttons (2026-11-08, asked by the user)
+
+A third view of the start menu, "Touches manette": one line per game control, named by what the Switch build binds
+to it (retail `buttons_default.cfg`, then `Switch_ApplyPadLayout` in `qcommon/cmd.cpp`: ZR fires, ZL aims, A jumps, B
+crouches, X uses/reloads, Y reloads, L switches weapon, R throws a grenade, the sticks' clicks sprint and knife, d-pad
+down throws the special grenade, + pauses, - shows the scores), with the Switch button that drives it.
+
+- Where: `src/platform/gamepad_remap.h` (no SDL, no libnx) holds the list and the table, `source[game control] =
+  physical control`; `Bo1_MapGamepadState` (`posix/win32_gamepad.h`) reads the physical controls by their printed
+  labels (the Switch's SDL A/B and X/Y swap moved into that read) and fills each XInput control from its source. A
+  trigger read as a button is down from 30/255 (XInput's `XINPUT_GAMEPAD_TRIGGER_THRESHOLD`), a button read as a
+  trigger is 0 or 255, two triggers keep their analog values. The identity table gives what the code gave before,
+  button by button (`gamepad_test`).
+- Always a permutation: changing a line swaps with the line that had the button (`Bo1_PadRemapAssign`), so no control
+  is lost, the menus' A and B included; a `menu.cfg` whose `pad_*` lines are not a permutation loads as the game's
+  layout, the other settings kept. The start menu reads libnx's buttons directly, so it never follows the layout: a
+  bad layout is always fixable there.
+- Applied in every boot: `switch_main.cpp` parses `menu.cfg` after the menu (or on a `skip_menu` boot) and calls
+  `Bo1_SetGamepadRemap` before `WinMain`, logging `pad layout: ...` (the changed controls) in `boot.log`.
+- Verified: `gamepad_test` and `launcher_config_test` on the host (identity = no remap for every SDL button; A firing,
+  the right trigger jumping, the 29/30 threshold, swapped triggers keep their values, refused tables; `menu.cfg`
+  round trip, a duplicate falling back, unknown names skipped, 40 changes of one line keep a permutation, ASCII
+  labels); `win32_gamepad.cpp` compiles for Linux; the NRO builds with devkitA64 without a new warning. Not yet run:
+  the view on the console (the user's test).

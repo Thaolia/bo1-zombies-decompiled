@@ -4,6 +4,8 @@
 // here: tests/platform/launcher_config_test.cpp builds this part alone on the host. The menu itself is
 // switch_launcher.cpp.
 
+#include "../gamepad_remap.h"
+
 #include <string>
 
 struct LauncherMap
@@ -52,10 +54,13 @@ struct LauncherSettings
     bool shadows = true;
     bool fpsCounter = true;
     LauncherTexFilter texFilter = LAUNCHER_TEXFILTER_ANISO16;
+    // Which physical button drives each game control (gamepad_remap.h); the identity is the game's own layout.
+    Bo1PadRemap pad = {{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}};
 };
 
 // menu.cfg: one `key=value` per line. Unknown keys are skipped and an invalid value keeps the default, so a file from
-// an older or newer build still loads.
+// an older or newer build still loads. The pad lines (`pad_zr=zl`: the game's ZR comes from the ZL button) must make a
+// permutation together, or the whole layout falls back to the game's own.
 LauncherSettings Launcher_ParseSettings(const std::string &text);
 std::string Launcher_FormatSettings(const LauncherSettings &s);
 
@@ -77,4 +82,10 @@ std::string Launcher_ServerAddress(const LauncherSettings &s);
 
 // The gfx.cfg value switch_main.cpp turns into BO1_GFX_BACKEND.
 const char *Launcher_BackendName(LauncherBackend backend);
+
+// The Switch's label of a pad control (Bo1PadControl): "A", "ZR", "+", "Haut"...
+const char *Launcher_PadButtonLabel(int control);
+// What a game control does with the Switch build's binds (buttons_default.cfg, then Switch_ApplyPadLayout in
+// qcommon/cmd.cpp): "Tirer", "Viser"...
+const char *Launcher_PadActionLabel(int control);
 const char *Launcher_TexFilterLabel(LauncherTexFilter filter);

@@ -10,6 +10,7 @@
 
 #include <win32/win_main.h>
 
+#include "launcher_config.h"
 #include "switch_launcher.h"
 #include "switch_net.h"
 
@@ -24,6 +25,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <string>
 
 extern "C" void Switch_BootLogWrite(const char *text);
 
@@ -60,6 +62,7 @@ const char *const kAllowAppletPath = "sdmc:/switch/bo1zm/allow_applet";
 // An emulator or a scripted run has no one to press Start.
 const char *const kSkipMenuPath = "sdmc:/switch/bo1zm/skip_menu";
 const char *const kGfxConfigPath = "sdmc:/switch/bo1zm/gfx.cfg";
+const char *const kMenuConfigPath = "sdmc:/switch/bo1zm/menu.cfg";
 const char *const kDefaultArgs = "+set bo1_zombies 1";
 char s_commandLine[1024];
 
@@ -138,6 +141,36 @@ void LoadBackendConfig(char *backend, size_t size)
             if (backend[i] == '\r' || backend[i] == '\n' || backend[i] == ' ')
                 backend[i] = '\0';
     }
+}
+
+// The start menu's pad layout (menu.cfg, launcher_config.h) for the controller layer, in every boot: the menu wrote it
+// as it closed, and a skip_menu boot keeps the last one chosen. No file, or one without pad lines: the game's own.
+void ApplyPadLayout()
+{
+    std::string text;
+    if (FILE *f = std::fopen(kMenuConfigPath, "rb"))
+    {
+        char buf[4096];
+        text.assign(buf, std::fread(buf, 1, sizeof(buf), f));
+        std::fclose(f);
+    }
+    const LauncherSettings settings = Launcher_ParseSettings(text);
+    if (!Bo1_SetGamepadRemap(settings.pad))
+    {
+        BootLog("pad layout refused (not a permutation) -> the game's own");
+        return;
+    }
+    if (Bo1_PadRemapIsIdentity(settings.pad))
+    {
+        BootLog("pad layout: the game's own");
+        return;
+    }
+    std::string changed;
+    for (int i = 0; i < BO1_PAD_COUNT; ++i)
+        if (settings.pad.source[i] != i)
+            changed += std::string(changed.empty() ? "" : ", ") + Launcher_PadButtonLabel(i) + " <- " +
+                       Launcher_PadButtonLabel(settings.pad.source[i]);
+    BootLog("pad layout: %s", changed.c_str());
 }
 
 // The dispatcher reads BO1_GFX_BACKEND; without it the default applies (GL when it gets a context).
@@ -339,6 +372,7 @@ int main(int, char **)
         return 0;
     }
     ApplyBackend(backend);
+    ApplyPadLayout();
     BootLog("launch args = \"%s\"", args);
     BootLog("entering WinMain");
     const int rc = WinMain(GetModuleHandleA(nullptr), nullptr, args, 10 /* SW_SHOWDEFAULT */);
