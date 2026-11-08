@@ -23,7 +23,7 @@ TOOLS = os.path.join(HERE, "..", "..", "tools")
 sys.path.insert(0, os.path.join(TOOLS, "zmclient"))
 sys.path.insert(0, os.path.join(TOOLS, "zmadmin"))
 
-from zmclient import gamesetup, profile as P  # noqa: E402
+from zmclient import dirbrowser, gamesetup, profile as P  # noqa: E402
 from zmclient.browser import Browser  # noqa: E402
 from zmclient.cli import main as cli_main  # noqa: E402
 from zmclient.client import Client  # noqa: E402
@@ -393,10 +393,10 @@ class GameSetup(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         t = self.tmp.name
         self.install = os.path.join(t, "Call of Duty Black Ops")
-        for d in ("zone/common", "main/video", "players"):
+        for d in ("zone/Common", "main/video", "players"):      # Steam's case
             os.makedirs(os.path.join(self.install, d))
         for f, text in (("localization.txt", "loc"), ("main/iw_00.iwd", "x" * 1000), ("main/iw_01.iwd", "y"),
-                        ("main/video/intro.bik", "v"), ("zone/common/a.ff", "retail"), ("BlackOps.exe", "")):
+                        ("main/video/intro.bik", "v"), ("zone/Common/a.ff", "retail"), ("BlackOps.exe", "")):
             with open(os.path.join(self.install, f), "w") as fh:
                 fh.write(text)
         self.dist = make_dist(os.path.join(t, "pkg"))
@@ -499,6 +499,73 @@ class GameSetup(unittest.TestCase):
         self.assertEqual(libs[0], steam)
         self.assertIn(os.path.normpath("D:\\Games\\Steam"), libs)
         self.assertIn(os.path.normpath("/mnt/games"), libs)
+
+
+class FolderBrowser(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        t = self.tmp.name
+        self.game = os.path.join(t, "Steam", "steamapps", "common", "Call of Duty Black Ops")
+        for d in ("zone/Common", "main"):
+            os.makedirs(os.path.join(self.game, d))
+        for f in ("localization.txt", "main/iw_00.iwd"):
+            open(os.path.join(self.game, f), "w").close()
+        for d in ("Steam/steamapps/common/Another Game", "Steam/steamapps/common/aardvark", "Steam/.hidden",
+                  "Steam/$Recycle.Bin", "Steam/steamapps/common/Zebra"):
+            os.makedirs(os.path.join(t, d))
+        open(os.path.join(t, "Steam", "steamapps", "common", "a_file.txt"), "w").close()
+        self.common = os.path.dirname(self.game)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_listing(self):
+        entries, error = dirbrowser.listing(self.common)
+        self.assertEqual(error, "")
+        self.assertEqual([e.name for e in entries],
+                         ["..", "aardvark", "Another Game", "Call of Duty Black Ops", "Zebra"])
+        self.assertTrue(entries[0].up and entries[0].path == os.path.dirname(self.common))
+        self.assertEqual([e.name for e in entries if e.install], ["Call of Duty Black Ops"])
+        names = [e.name for e in dirbrowser.listing(os.path.join(self.tmp.name, "Steam"))[0]]
+        self.assertEqual(names, ["..", "steamapps"])          # hidden and system folders left out
+        self.assertIn("illisible", dirbrowser.listing(os.path.join(self.tmp.name, "nope"))[1])
+
+    def test_parent_at_the_top(self):
+        if os.name == "nt":
+            self.assertEqual(dirbrowser.parent("C:\\"), dirbrowser.COMPUTER)
+        else:
+            self.assertEqual(dirbrowser.parent("/"), "/")
+            self.assertNotEqual(dirbrowser.listing("/")[0][:1] and dirbrowser.listing("/")[0][0].name, "..")
+        self.assertEqual(dirbrowser.parent(os.path.join(self.common, "Zebra")), self.common)
+
+    def test_dialog_walk_and_pick(self):
+        picked = []
+
+        def on_pick(path):
+            if not gamesetup.is_install(path):
+                return "pas une installation"
+            picked.append(path)
+            return None
+        d = dirbrowser.FolderDialog("t", self.common, on_pick)
+        self.assertFalse(d.here_install)
+        self.assertFalse(d.key(" "))                          # not an install: stays open with the reason
+        self.assertIn("pas une installation", d.error)
+        d.key("c")                                            # type-ahead to "Call of Duty Black Ops"
+        self.assertEqual(d.entries[d.sel].name, "Call of Duty Black Ops")
+        d.key("ENTER")
+        self.assertEqual(d.path, self.game)
+        self.assertTrue(d.here_install)
+        self.assertTrue(d.key(" "))                           # picked: the dialog closes
+        self.assertEqual(picked, [self.game])
+        d.key("BACKSPACE")                                    # back up: the folder we came from is selected
+        self.assertEqual(d.path, self.common)
+        self.assertEqual(d.entries[d.sel].name, "Call of Duty Black Ops")
+        self.assertTrue(d.key("ESC"))
+
+    def test_start_folder(self):
+        self.assertEqual(dirbrowser.start_folder(self.game, []), self.game)
+        self.assertEqual(dirbrowser.start_folder("", [self.game]), self.common)
+        self.assertTrue(os.path.isdir(dirbrowser.start_folder(os.path.join(self.common, "gone"), [])))
 
 
 @unittest.skipIf(os.name == "nt" or not shutil.which("sleep"), "posix only: a copy of sleep plays the game")
