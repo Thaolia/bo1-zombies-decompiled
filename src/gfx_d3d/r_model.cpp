@@ -1,4 +1,5 @@
 #include "r_model.h"
+#include "r_mapkit_mesh.h"
 #include <xanim/xmodel.h>
 #include <universal/com_memory.h>
 #include <qcommon/common.h>
@@ -166,6 +167,7 @@ unsigned __int8 *__cdecl Hunk_AllocXModelPrecacheColl(unsigned int size)
 void __cdecl R_FinishLoadingModels()
 {
     R_OptimizeAllModels();
+    R_Mapkit_LoadMesh(); // mod: mapkit "mesh" edit
 }
 
 void __cdecl R_XModelDebug(const DObj *obj, int *partBits)
@@ -457,6 +459,7 @@ int __cdecl R_SkinAndBoundSceneEnt(GfxSceneEntity *sceneEnt)
 void __cdecl R_ShutdownModels()
 {
     R_ReleaseAllModels();
+    R_Mapkit_FreeMesh(); // mod: mapkit "mesh" edit
 }
 
 void __cdecl R_ReleaseAllModels()

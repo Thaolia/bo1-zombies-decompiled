@@ -1,4 +1,5 @@
 #include <qcommon/cm_mapkit.h>
+#include "r_mapkit_mesh.h"
 #include <cgame/cg_sp_client_ext.h>
 #include "r_scene.h"
 
@@ -3793,6 +3794,7 @@ void __cdecl R_GenerateSortedDrawSurfs(
     
     if (!CM_Mapkit_Empty()) // mod: mapkit empty base has no retail skybox
         R_AddSkyboxModel(viewParmsDraw->origin);
+    R_Mapkit_AddMesh(viewParmsDraw->origin); // mod: mapkit "mesh" edit (no-op without one)
 
     {
         PROF_SCOPED("bsp surfaces"); 

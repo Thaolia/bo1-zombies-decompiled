@@ -156,6 +156,10 @@ void colgeom_visitor_t::intersect_box(float *mn, float *mx, int mask)
             && mkBrush->maxs[1] >= mn[1] && mkBrush->mins[2] <= mx[2] && mkBrush->maxs[2] >= mn[2])
             this->visit(mkBrush);
     }
+    // the brushes of a "collision" edit (another game's map) too
+    CM_MapkitImport_VisitBox(mn, mx, mask, [](const cbrush_t *brush, void *self) {
+        ((colgeom_visitor_t *)self)->visit(brush);
+    }, this);
     if (CM_Mapkit_Empty()) // mod: mapkit empty base - the layout boxes are the whole world
         return;
 

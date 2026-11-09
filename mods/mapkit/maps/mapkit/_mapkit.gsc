@@ -797,22 +797,41 @@ mapkit_check_pap( player )
 		}
 		up = level.zombie_weapons[ gun ].upgrade_name;
 		score = player.score;
-		mapkit_test_visit( rec.origin + rec.out * 40, rec.origin + rec.out * 12 + ( 0, 0, 44 ) );
+		// retail vending_weapon_upgrade sets UseTriggerRequireLookAt: the view must point within ~40 degrees of the
+		// trigger's bounds centre (player_use_mp.cpp, 0.76), which for a trigger_radius_use is its origin
+		mapkit_test_visit( rec.origin + rec.out * 40, rec.trig.origin );
+		rec.trig.mapkit_uses = 0;
+		rec.trig thread mapkit_count_uses();
 		start = GetTime();
-		while ( !player HasWeapon( up ) && GetTime() - start < 40000 )
+		limit = mapkit_test_wait( 40000 );
+		while ( !player HasWeapon( up ) && GetTime() - start < limit )
 		{
 			wait( 0.5 );
 		}
 		SetDvar( "bo1_testclient_press", "" );
+		rec.trig notify( "mapkit_count_end" );
 		if ( player HasWeapon( up ) )
 		{
 			LogPrint( "mapkit: check pap " + rec.name + " PASS " + gun + " -> " + up + " after " + ( GetTime() - start ) + " ms, paid " + ( score - player.score ) + "\n" );
 		}
 		else
 		{
-			LogPrint( "mapkit: check pap " + rec.name + " FAIL no " + up + " within 40 s (holding " + player GetCurrentWeapon() + ", score " + player.score + " of " + score
-				+ ", machine in use " + flag( "pack_machine_in_use" ) + ")\n" );
+			LogPrint( "mapkit: check pap " + rec.name + " FAIL no " + up + " within " + ( limit / 1000 ) + " s (holding " + player GetCurrentWeapon() + ", score " + player.score + " of " + score
+				+ ", machine in use " + flag( "pack_machine_in_use" ) + ", trigger used " + rec.trig.mapkit_uses + " times; player at " + player.origin + ", touching the trigger "
+				+ player IsTouching( rec.trig ) + ", eye to trigger in sight " + SightTracePassed( player GetEye(), rec.trig.origin,
+				false, undefined ) + ", can buy " + player maps\_zombiemode_weapons::can_buy_weapon() + ")\n" );
 		}
+	}
+}
+
+// counts the use presses that reach a trigger (refused by its script, or never selected by the engine's use search)
+mapkit_count_uses()
+{
+	self endon( "mapkit_count_end" );
+	for ( ;; )
+	{
+		self waittill( "trigger" );
+		self.mapkit_uses++;
 	}
 }
 
@@ -838,6 +857,12 @@ mapkit_selftest()
 		}
 	}
 	bo1_mapkit_dump( "mapkit_dump.json" );
+	// another game's map: its zombie links include some no player walks (traversals, props that block players only),
+	// and the harness may carry the test client across them (logged); a MapKit layout's walk must make it on its own
+	if ( mapkit_imported() )
+	{
+		SetDvar( "bo1_testclient_carry", "1" );
+	}
 	players = get_players();
 	for ( n = 0; n < 60; n++ )
 	{
@@ -1019,11 +1044,13 @@ mapkit_check()
 		mapkit_test_funds( player );
 		stand = rec.origin + rec.out * 40;
 		look = rec.origin + rec.out * 12 + ( 0, 0, 44 );
+		mapkit_test_place( stand );
 		SetDvar( "bo1_testclient_goto", stand[0] + "," + stand[1] + "," + stand[2] );
 		SetDvar( "bo1_testclient_look", look[0] + "," + look[1] + "," + look[2] );
 		SetDvar( "bo1_testclient_press", "3," + GetTime() + ",1500,200" );
 		start = GetTime();
-		while ( !player HasPerk( rec.perk ) && GetTime() - start < 25000 )
+		limit = mapkit_test_wait( 25000 );
+		while ( !player HasPerk( rec.perk ) && GetTime() - start < limit )
 		{
 			wait( 0.5 );
 		}
@@ -1250,11 +1277,21 @@ mapkit_check_wallbuys( player )
 		}
 		f = AnglesToForward( ( 0, yaw, 0 ) );
 		stand = o + f * 40;
-		SetDvar( "bo1_testclient_goto", stand[0] + "," + stand[1] + "," + player.origin[2] );
+		// the floor under the stand spot, not the player's own height: a wall buy upstairs (an imported map) is
+		// reached by the stairs, not from under it; with no floor in reach, the player's height as before
+		floor_trace = BulletTrace( stand, stand - ( 0, 0, 256 ), false, undefined );
+		stand_z = player.origin[2];
+		if ( floor_trace["fraction"] < 1 )
+		{
+			stand_z = floor_trace["position"][2];
+		}
+		mapkit_test_place( ( stand[0], stand[1], stand_z ) );
+		SetDvar( "bo1_testclient_goto", stand[0] + "," + stand[1] + "," + stand_z );
 		SetDvar( "bo1_testclient_look", o[0] + "," + o[1] + "," + o[2] );
 		SetDvar( "bo1_testclient_press", "3," + GetTime() + ",1500,200" );
 		start = GetTime();
-		while ( !player HasWeapon( weapon ) && GetTime() - start < 25000 )
+		limit = mapkit_test_wait( 25000 );
+		while ( !player HasWeapon( weapon ) && GetTime() - start < limit )
 		{
 			wait( 0.5 );
 		}
@@ -1264,7 +1301,7 @@ mapkit_check_wallbuys( player )
 		}
 		else
 		{
-			LogPrint( "mapkit: check wallbuy " + weapon + " FAIL not bought in 25 s (player at " + player.origin + ", stand " + stand + ", score " + player.score + ")\n" );
+			LogPrint( "mapkit: check wallbuy " + weapon + " FAIL not bought in " + ( limit / 1000 ) + " s (player at " + player.origin + ", stand " + stand + ", score " + player.score + ")\n" );
 		}
 		SetDvar( "bo1_testclient_press", "" );
 	}
@@ -2020,8 +2057,61 @@ mapkit_test_kill( zombie, player, reason )
 	zombie DoDamage( zombie.health + 100, zombie.origin, player );
 }
 
+// An imported map (a "collision" edit: another game's map, docs/BO2_MAPS.md) has props a player collides with but its
+// node graph does not know: the test client, which walks straight from node to node, climbs a ramp onto a deck and
+// stays there. On such a map it is put on the floor at its goal first; the checks then test purchases and zombies
+// reaching the player, not the walk (MapKit's own layouts keep walking).
+mapkit_imported()
+{
+	if ( !IsDefined( level.mapkit_imported ) )
+	{
+		level.mapkit_imported = false;
+		for ( i = 0; i < bo1_mapkit_editcount(); i++ )
+		{
+			if ( bo1_mapkit_get( i, "kind" ) == "collision" )
+			{
+				level.mapkit_imported = true;
+			}
+		}
+	}
+	return level.mapkit_imported;
+}
+
+// +set mapkit_test_walk 1 keeps the walk on an imported map too (to test the test client's own navigation)
+mapkit_test_place( stand )
+{
+	if ( !mapkit_imported() || GetDvar( "mapkit_test_walk" ) == "1" )
+	{
+		return;
+	}
+	players = get_players();
+	if ( !players.size )
+	{
+		return;
+	}
+	floor_trace = BulletTrace( stand + ( 0, 0, 64 ), stand - ( 0, 0, 256 ), false, undefined );
+	spot = stand;
+	if ( floor_trace["fraction"] < 1 )
+	{
+		spot = floor_trace["position"];
+	}
+	players[0] SetOrigin( spot );
+}
+
+// A purchase's wait: a walk across an imported map (Nuketown: 3 500 units from the box to Juggernog, about 20 s at
+// a run) takes longer than the few steps the default mode leaves the client
+mapkit_test_wait( base )
+{
+	if ( mapkit_imported() && GetDvar( "mapkit_test_walk" ) == "1" )
+	{
+		return base + 35000;
+	}
+	return base;
+}
+
 mapkit_test_visit( stand, look )
 {
+	mapkit_test_place( stand );
 	SetDvar( "bo1_testclient_goto", stand[0] + "," + stand[1] + "," + stand[2] );
 	SetDvar( "bo1_testclient_look", look[0] + "," + look[1] + "," + look[2] );
 	SetDvar( "bo1_testclient_press", "3," + GetTime() + ",1500,200" );
@@ -2343,10 +2433,105 @@ mapkit_riser_state( name )
 	return level.mapkit_riser_state[ name ];
 }
 
-// self-test: stand 192 in front of each riser (its zone active by occupancy) and wait for a zombie that climbed out
-// of it to reach the player. Zombies from windows and other risers are culled after 5 s so the round keeps spawning.
+mapkit_zone_box_has( z, p )
+{
+	lo = bo1_mapkit_get( z, "mins" );
+	hi = bo1_mapkit_get( z, "maxs" );
+	return IsDefined( lo ) && IsDefined( hi ) && p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1]
+		&& p[2] >= lo[2] && p[2] <= hi[2];
+}
+
+// A riser only rises while its zone is active (zone_init: the zone's spawners pick from its own rise_locations), and
+// with no adjacent zones that means occupied. 192 in front of the riser is inside its zone on a MapKit-built layout.
+// On an imported map the client stands on a pathnode of the riser's zone instead: BO2 scatters each zone's risers round
+// the map edge, outside every volume (Nuketown: 30 of 36), and the spot 192 in front, at the riser's height, can be
+// under a slope. It takes the nearest node (height counts 4x: a zone box, the union of BO2's volumes, also holds
+// rooftop and upstairs nodes) that a zombie can path to from the riser (FindPath, traversals included); nearer nodes
+// with no path are logged, they are pockets of the node graph.
+mapkit_riser_stand( i, ro, yaw, tried )
+{
+	stand = ro + AnglesToForward( ( 0, yaw, 0 ) ) * 192;
+	zone = bo1_mapkit_get( i, "zone" );
+	z = -1;
+	for ( e = 0; e < bo1_mapkit_editcount() && IsDefined( zone ); e++ )
+	{
+		if ( bo1_mapkit_get( e, "kind" ) == "zone" && mapkit_name( e ) == zone )
+		{
+			z = e;
+		}
+	}
+	if ( z < 0 || ( !mapkit_imported() && mapkit_zone_box_has( z, stand + ( 0, 0, 32 ) ) ) )
+	{
+		return stand;
+	}
+	// plain "Path" nodes only: a traversal's ends sit on ledges, and a bad node is in a wall
+	nodes = GetAllNodes();
+	cand = [];
+	dist = [];
+	for ( n = 0; n < nodes.size; n++ )
+	{
+		o = nodes[n].origin;
+		if ( nodes[n].type == "Path" && mapkit_zone_box_has( z, o + ( 0, 0, 32 ) ) && !mapkit_tried( tried, o ) )
+		{
+			cand[ cand.size ] = o;
+			dist[ dist.size ] = ( o[0] - ro[0] ) * ( o[0] - ro[0] ) + ( o[1] - ro[1] ) * ( o[1] - ro[1] ) + 16 * ( o[2] - ro[2] ) * ( o[2] - ro[2] );
+		}
+	}
+	if ( !cand.size )
+	{
+		LogPrint( "mapkit: riser " + mapkit_name( i ) + " zone " + zone + " has no pathnode: client stands in front\n" );
+		return stand;
+	}
+	nearest = undefined;
+	for ( k = 0; k < 32 && k < cand.size; k++ )
+	{
+		b = k;
+		for ( c = k + 1; c < cand.size; c++ )
+		{
+			if ( dist[c] < dist[b] )
+			{
+				b = c;
+			}
+		}
+		o = cand[b];
+		cand[b] = cand[k];
+		dist[b] = dist[k];
+		cand[k] = o;
+		if ( !IsDefined( nearest ) )
+		{
+			nearest = o;
+		}
+		if ( FindPath( ro, o ) )
+		{
+			if ( k > 0 )
+			{
+				LogPrint( "mapkit: riser " + mapkit_name( i ) + ": no path from it to the " + k + " nearer node(s) of " + zone + " (nearest " + nearest + "); client at " + o + "\n" );
+			}
+			return o;
+		}
+	}
+	LogPrint( "mapkit: riser " + mapkit_name( i ) + ": no path from it to the 32 nearest nodes of " + zone + "; client at the nearest, " + nearest + "\n" );
+	return nearest;
+}
+
+mapkit_tried( tried, o )
+{
+	for ( k = 0; k < tried.size; k++ )
+	{
+		if ( DistanceSquared( tried[k], o ) < 96 * 96 )
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+// self-test: stand where each riser's zone is active (mapkit_riser_stand) and wait for a zombie that climbed out of it
+// to reach the player. Zombies from windows and other risers are culled after 5 s so the round keeps spawning.
 mapkit_check_risers( player )
 {
+	// +set mapkit_test_risers "riser7,riser10": check only those (empty: all)
+	only = GetDvar( "mapkit_test_risers" );
 	for ( i = 0; i < bo1_mapkit_editcount(); i++ )
 	{
 		if ( bo1_mapkit_get( i, "kind" ) != "riser" || !IsDefined( level.mapkit_empty ) )
@@ -2354,14 +2539,76 @@ mapkit_check_risers( player )
 			continue;
 		}
 		name = mapkit_name( i );
+		if ( only != "" && !IsSubStr( "," + only + ",", "," + name + "," ) )
+		{
+			continue;
+		}
 		ro = bo1_mapkit_get( i, "origin" );
 		yaw = bo1_mapkit_get( i, "yaw" );
 		if ( !IsDefined( yaw ) )
 		{
 			yaw = 0;
 		}
-		mapkit_test_visit( ro + AnglesToForward( ( 0, yaw, 0 ) ) * 192, ro + ( 0, 0, 32 ) );
-		SetDvar( "bo1_testclient_press", "" );
+		// a rise seen before this check (another check's zone) says nothing about this one
+		if ( IsDefined( level.mapkit_riser_state ) )
+		{
+			level.mapkit_riser_state[ name ] = undefined;
+		}
+		// do_zombie_rise picks a random spot of the spawner's zone (BO2 Nuketown: 4 to 6 a zone), so within 90 s a
+		// riser could go unpicked: for its check the zone offers only this one, restored after
+		zone = bo1_mapkit_get( i, "zone" );
+		spots = undefined;
+		if ( IsDefined( zone ) && IsDefined( level.zones ) && IsDefined( level.zones[ zone ] ) && IsDefined( level.zones[ zone ].rise_locations ) )
+		{
+			spots = level.zones[ zone ].rise_locations;
+			kept = [];
+			for ( s = 0; s < spots.size; s++ )
+			{
+				if ( DistanceSquared( spots[s].origin, ro ) < 1 )
+				{
+					kept[ kept.size ] = spots[s];
+				}
+			}
+			if ( kept.size )
+			{
+				level.zones[ zone ].rise_locations = kept;
+			}
+		}
+		// a node on a stair top or by a drop does not hold the client (house 1's stairs: it fell to the ground floor,
+		// out of the upper floor's zone): once put down it must still be in the zone, or a node 96 units from every
+		// spot tried is
+		vol = undefined;
+		if ( IsDefined( zone ) )
+		{
+			vol = GetEnt( zone, "targetname" );
+		}
+		tried = [];
+		for ( t = 0; t < 6; t++ )
+		{
+			stand = mapkit_riser_stand( i, ro, yaw, tried );
+			mapkit_test_visit( stand, ro + ( 0, 0, 32 ) );
+			SetDvar( "bo1_testclient_press", "" );
+			if ( !IsDefined( vol ) || !mapkit_imported() )
+			{
+				break;
+			}
+			// walking (mapkit_test_walk 1), the 90 s start once the client stands there: the zone's risers rise only
+			// while it is in the zone, and a walk across Nuketown takes up to a minute
+			arrive = GetTime();
+			while ( GetDvar( "mapkit_test_walk" ) == "1" && GetTime() - arrive < 60000
+				&& Distance2D( player.origin, stand ) > 48 )
+			{
+				wait( 0.5 );
+			}
+			wait( 1.5 );
+			if ( player IsTouching( vol ) )
+			{
+				break;
+			}
+			LogPrint( "mapkit: riser " + name + " client put at " + stand + " is at " + player.origin + ", out of " + zone + ": next node\n" );
+			tried[ tried.size ] = stand;
+		}
+		LogPrint( "mapkit: riser " + name + " client at " + player.origin + " for zone " + zone + "\n" );
 		level.mapkit_riser_checking = i;
 		start = GetTime();
 		while ( GetTime() - start < 90000 && mapkit_riser_state( name ) != "reached" )
@@ -2379,6 +2626,10 @@ mapkit_check_risers( player )
 			}
 			wait( 1 );
 		}
+		if ( IsDefined( spots ) )
+		{
+			level.zones[ zone ].rise_locations = spots;
+		}
 		if ( mapkit_riser_state( name ) == "reached" )
 		{
 			LogPrint( "mapkit: check riser " + name + " PASS a zombie climbed out of it and reached the player\n" );
@@ -2386,6 +2637,19 @@ mapkit_check_risers( player )
 		else if ( mapkit_riser_state( name ) != "" )
 		{
 			LogPrint( "mapkit: check riser " + name + " FAIL within 90 s: zombies rose there but none reached the player\n" );
+			zombies = GetAiSpeciesArray( "axis", "all" );
+			for ( z = 0; z < zombies.size; z++ )
+			{
+				if ( IsDefined( zombies[z].mapkit_source_riser ) && zombies[z].mapkit_source_riser == i )
+				{
+					traversing = "";
+					if ( IsDefined( zombies[z].is_traversing ) && zombies[z].is_traversing && IsDefined( zombies[z].traverseStartNode ) && IsDefined( zombies[z].traverseEndNode ) )
+					{
+						traversing = " (traversing " + zombies[z].traverseStartNode.origin + " -> " + zombies[z].traverseEndNode.origin + ")";
+					}
+					LogPrint( "mapkit: riser " + name + " zombie #" + zombies[z] GetEntityNumber() + " is at " + zombies[z].origin + traversing + ", client at " + player.origin + "\n" );
+				}
+			}
 		}
 		else
 		{

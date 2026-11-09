@@ -80,6 +80,14 @@ and LAN servers with their live status), or starts the folder's server and joins
 `players/config.cfg`, adds free dvars, and installs the game files from the player's own Black Ops (copy, then zone
 conversion with the shipped `ffconv.exe`). See `tools/zmclient/README.md`.
 
+Black Ops II zombies maps (experimental, branch `bo2`): `tools/bo2` extracts a map from the player's own Black Ops II
+(with a world and collision dumper added to OpenAssetTools, GPL v3, built separately) and writes it as a MapKit layout
+on an empty Five base: BO2's own collision, zones, spawns, risers, pathnodes, traversals, the box, wall buys, perks and
+Pack-a-Punch. Nuketown Zombies runs headless (the self-test buys the box, every perk, every wall buy and Pack-a-Punch there, and a
+zombie climbs out of each of its 36 risers and reaches the player along BO2's own node graph, jumping up to the houses'
+upper floors and over its fences and windows) and is drawn textured
+with its props and its sky (no baked lighting yet); its props block players and bullets. See `docs/BO2_MAPS.md`.
+
 ## Packages
 
 `tools/make_dist.sh` (bash, from WSL) turns a source tree where `setup.ps1` has copied the game into ready-to-copy

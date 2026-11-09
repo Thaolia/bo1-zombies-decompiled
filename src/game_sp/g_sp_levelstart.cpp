@@ -293,6 +293,25 @@ struct GScr_SP_SeenNames
     }
 };
 
+// animscripts/traverse/<animscript>::main as hunk data type 1 (see GScr_SP_LoadEntityScripts)
+static void GScr_SP_LoadTraverseScript(scriptInstance_t inst, bool compileOnly, GScr_SP_SeenNames &seen,
+    const char *animscript)
+{
+    char filename[64];
+
+    Com_sprintf(filename, sizeof(filename), "animscripts/traverse/%s", animscript);
+    if ( compileOnly )
+    {
+        if ( seen.FirstSeen(animscript) )
+            GScr_LoadScriptAndLabel(inst, filename, "main", 1);
+        return;
+    }
+    if ( Hunk_FindDataForFile(1, animscript) )
+        return;
+    const int func = GScr_LoadScriptAndLabel(inst, filename, "main", 1);
+    Hunk_SetDataForFile(1, animscript, (void *)(intptr_t)func, GScr_SP_HunkNameAlloc);
+}
+
 static void GScr_SP_LoadEntityScripts(scriptInstance_t inst, bool compileOnly)
 {
     static SpawnVar spawnVar;
@@ -302,7 +321,6 @@ static void GScr_SP_LoadEntityScripts(scriptInstance_t inst, bool compileOnly)
     const char *animscript;
     char filename[64];
     AITypeScript *typeScript;
-    int func;
 
     seenAITypes.count = 0;
     seenAnimscripts.count = 0;
@@ -335,19 +353,8 @@ static void GScr_SP_LoadEntityScripts(scriptInstance_t inst, bool compileOnly)
         else if ( !I_stricmp(classname, "node_negotiation_begin") )
         {
             G_SpawnString(&spawnVar, "animscript", "", &animscript);
-            if ( !*animscript )
-                continue;
-            Com_sprintf(filename, sizeof(filename), "animscripts/traverse/%s", animscript);
-            if ( compileOnly )
-            {
-                if ( seenAnimscripts.FirstSeen(animscript) )
-                    GScr_LoadScriptAndLabel(inst, filename, "main", 1);
-                continue;
-            }
-            if ( Hunk_FindDataForFile(1, animscript) )
-                continue;
-            func = GScr_LoadScriptAndLabel(inst, filename, "main", 1);
-            Hunk_SetDataForFile(1, animscript, (void *)(intptr_t)func, GScr_SP_HunkNameAlloc);
+            if ( *animscript )
+                GScr_SP_LoadTraverseScript(inst, compileOnly, seenAnimscripts, animscript);
         }
         else if ( !I_stricmp(classname, "misc_mg42") || !I_stricmp(classname, "misc_turret") )
         {
@@ -355,6 +362,15 @@ static void GScr_SP_LoadEntityScripts(scriptInstance_t inst, bool compileOnly)
         }
     }
     G_ResetEntityParsePoint();
+    // mod: mapkit - a layout's traverse edits are pathnodes the entity string does not hold
+    for ( int e = 0; e < CM_Mapkit_EditCount(); ++e )
+    {
+        const char *kind = 0;
+        float unused[3];
+        if ( CM_Mapkit_GetField(e, "kind", &kind, unused) == MKF_STRING && !strcmp(kind, "traverse")
+            && CM_Mapkit_GetField(e, "anim", &animscript, unused) == MKF_STRING && *animscript )
+            GScr_SP_LoadTraverseScript(inst, compileOnly, seenAnimscripts, animscript);
+    }
 }
 
 // zombies: GScr_LoadScripts, SP 0x00580370, after codescripts/delete and codescripts/struct.
