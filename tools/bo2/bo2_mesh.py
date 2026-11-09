@@ -12,15 +12,17 @@ MAX_SURFS surfaces of at most MAX_VERTS vertices (16-bit indices). Chunks are CE
 and FAR_CELL beyond it (the distant backdrop), so the view culls them and the light sample at each chunk is local.
 
 <map>.mesh.bin, little-endian:
-  char[8] "BO2MESH3"
+  char[8] "BO2MESH4"
   u32 materialCount, then per material: char[64] BO2 material name, char[64] colour map image name (images/<it>.iwi),
-      u32 flags (1: alpha tested in BO2: drawn with the engine's alpha-tested base material)
+      u32 flags (1: alpha tested in BO2: drawn with the engine's alpha-tested base material; 2: the sky's, a cube map
+      drawn with the engine's skybox base material)
   u32 chunkCount, then per chunk: f32[3] origin, f32 radius, u32 surfaceCount, then per surface:
       u16 material, u16 pad, u32 vertCount, u32 triCount,
       vertCount x (f32[3] position relative to origin, f32[3] normal, f32[2] uv), triCount x u16[3]
   u32 modelCount, then per model: char[64] name, f32 radius, u32 lodCount, then per LOD: f32 distance (0: any),
       u32 surfaceCount, then its surfaces as a chunk's (positions in model space)
   u32 instanceCount, then per instance: u32 model, f32[3] origin, f32[3][3] axes (model x, y, z in the world), f32 scale
+  i32 sky model (the worldspawn's skyboxmodel, one of the models above, drawn around the viewer; -1: none)
 The output is the player's own game data: keep it out of the repository. docs/BO2_MAPS.md has the procedure.
 """
 import argparse
@@ -32,6 +34,9 @@ import os
 import re
 import struct
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from bo2_layout import read_entities  # noqa: E402  (the worldspawn names the sky model)
 
 CELL = 512.0
 FAR_CELL = 8192.0
@@ -90,18 +95,24 @@ def dds_to_iwi(src, dst):
         return False
     fmt, block = DDS_FORMATS[fourcc]
     full = int(math.log2(max(width, height))) + 1
-    levels, at = [], 128
-    for level in range(mips):
-        w, h = max(1, width >> level), max(1, height >> level)
-        size = block * ((w + 3) // 4) * ((h + 3) // 4)
-        levels.append(data[at:at + size])
-        at += size
+    cube = struct.unpack_from("<I", data, 112)[0] & 0xFE00 == 0xFE00  # DDSCAPS2_CUBEMAP with all six faces
+    faces, at = [], 128
+    for _ in range(6 if cube else 1):
+        levels = []
+        for level in range(mips):
+            w, h = max(1, width >> level), max(1, height >> level)
+            size = block * ((w + 3) // 4) * ((h + 3) // 4)
+            levels.append(data[at:at + size])
+            at += size
+        faces.append(levels)
     if at > len(data):
         return False
     flags = 0 if mips == full else 2  # 2: no mipmaps (Image_CountMipmaps), only the top level is uploaded
-    if flags:
-        levels = levels[:1]
-    body = b"".join(reversed(levels))
+    if cube:
+        flags |= 4  # a cube texture (Image_Setup); Image_LoadDxtc reads each mip's six faces in turn
+    count = mips if mips == full else 1
+    # DDS stores face by face, largest mip first; the engine reads mip by mip, smallest first, each mip's faces in order
+    body = b"".join(faces[f][level] for level in reversed(range(count)) for f in range(len(faces)))
     total = 48 + len(body)
     header = b"IWi" + struct.pack("<BBB3hf8i", 13, fmt, flags, width, height, 1, 0.0, *([total] * 8))
     with open(dst, "wb") as f:
@@ -303,6 +314,23 @@ def main(argv=None):
             instances.append((model_index[name], [float(row[k]) for k in ("x", "y", "z")], axes,
                               float(row["scale"])))
 
+    # the sky: the worldspawn's skybox model, one more model (no placement: the engine draws it around the viewer)
+    sky, sky_materials = -1, set()
+    worldspawn = next((e for e in read_entities(base + ".ents") if e.get("classname") == "worldspawn"), {})
+    sky_name = worldspawn.get("skyboxmodel", "")
+    if sky_name:
+        lods = read_lods(args.dump, sky_name)[:1]
+        if lods:
+            for material, dds in read_mtl(os.path.join(exports, sky_name + ".mtl"), images).items():
+                colour.setdefault(material, dds)
+            # seen from inside, and the dump's winding is not the one the engine draws from there: both sides
+            lods[0] = (lods[0][0], {m: tris + [tri[::-1] for tri in tris] for m, tris in lods[0][1].items()})
+            sky_materials = set(lods[0][1])
+            for material in sky_materials:
+                groups.setdefault(material, [])
+            sky = len(models)
+            models.append((sky_name, [(0.0, lods[0][1])]))
+
     os.makedirs(os.path.join(args.out, "images"), exist_ok=True)
     names = sorted(m for m in groups if not skipped(m))
     left_out = sorted(m for m in groups if skipped(m))
@@ -319,7 +347,7 @@ def main(argv=None):
             if not converted[dds]:
                 image = ""
         materials[name] = len(records)
-        records.append((name, image, 1 if alpha_tested(args.dump, name) else 0))
+        records.append((name, image, 2 if name in sky_materials else 1 if alpha_tested(args.dump, name) else 0))
 
     cells = build(groups, materials)
     chunks = []  # (origin, radius, [(material, verts, normals, faces)])
@@ -340,7 +368,7 @@ def main(argv=None):
     tris = verts = surf_count = 0
     model_tris_total = [0]
     with open(out_bin, "wb") as f:
-        f.write(b"BO2MESH3")
+        f.write(b"BO2MESH4")
         f.write(struct.pack("<I", len(records)))
         for name, image, flags in records:
             f.write(name.encode("latin-1")[:63].ljust(64, b"\0"))
@@ -392,6 +420,7 @@ def main(argv=None):
         f.write(struct.pack("<I", len(instances)))
         for model, origin, axes, scale in instances:
             f.write(struct.pack("<I3f9ff", model, *origin, *axes, scale))
+        f.write(struct.pack("<i", sky))
     print(f"{out_bin}: {len(records)} materials, {len(chunks)} chunks, {surf_count} surfaces, {verts} vertices, {tris} triangles; "
           f"{sum(1 for v in converted.values() if v)} images; {len(instances)} props of {len(models)} models "
           f"({model_tris_total[0]} triangles over all their LODs), "

@@ -811,7 +811,9 @@ mapkit_check_pap( player )
 		else
 		{
 			LogPrint( "mapkit: check pap " + rec.name + " FAIL no " + up + " within 40 s (holding " + player GetCurrentWeapon() + ", score " + player.score + " of " + score
-				+ ", machine in use " + flag( "pack_machine_in_use" ) + ")\n" );
+				+ ", machine in use " + flag( "pack_machine_in_use" ) + "; player at " + player.origin + ", touching the trigger "
+				+ player IsTouching( rec.trig ) + ", eye to trigger in sight " + SightTracePassed( player GetEye(), rec.trig.origin
+				+ ( 0, 0, 35 ), false, undefined ) + ")\n" );
 		}
 	}
 }
@@ -1019,6 +1021,7 @@ mapkit_check()
 		mapkit_test_funds( player );
 		stand = rec.origin + rec.out * 40;
 		look = rec.origin + rec.out * 12 + ( 0, 0, 44 );
+		mapkit_test_place( stand );
 		SetDvar( "bo1_testclient_goto", stand[0] + "," + stand[1] + "," + stand[2] );
 		SetDvar( "bo1_testclient_look", look[0] + "," + look[1] + "," + look[2] );
 		SetDvar( "bo1_testclient_press", "3," + GetTime() + ",1500,200" );
@@ -1258,6 +1261,7 @@ mapkit_check_wallbuys( player )
 		{
 			stand_z = floor_trace["position"][2];
 		}
+		mapkit_test_place( ( stand[0], stand[1], stand_z ) );
 		SetDvar( "bo1_testclient_goto", stand[0] + "," + stand[1] + "," + stand_z );
 		SetDvar( "bo1_testclient_look", o[0] + "," + o[1] + "," + o[2] );
 		SetDvar( "bo1_testclient_press", "3," + GetTime() + ",1500,200" );
@@ -2028,8 +2032,49 @@ mapkit_test_kill( zombie, player, reason )
 	zombie DoDamage( zombie.health + 100, zombie.origin, player );
 }
 
+// An imported map (a "collision" edit: another game's map, docs/BO2_MAPS.md) has props a player collides with but its
+// node graph does not know: the test client, which walks straight from node to node, climbs a ramp onto a deck and
+// stays there. On such a map it is put on the floor at its goal first; the checks then test purchases and zombies
+// reaching the player, not the walk (MapKit's own layouts keep walking).
+mapkit_imported()
+{
+	if ( !IsDefined( level.mapkit_imported ) )
+	{
+		level.mapkit_imported = false;
+		for ( i = 0; i < bo1_mapkit_editcount(); i++ )
+		{
+			if ( bo1_mapkit_get( i, "kind" ) == "collision" )
+			{
+				level.mapkit_imported = true;
+			}
+		}
+	}
+	return level.mapkit_imported;
+}
+
+mapkit_test_place( stand )
+{
+	if ( !mapkit_imported() )
+	{
+		return;
+	}
+	players = get_players();
+	if ( !players.size )
+	{
+		return;
+	}
+	floor_trace = BulletTrace( stand + ( 0, 0, 64 ), stand - ( 0, 0, 256 ), false, undefined );
+	spot = stand;
+	if ( floor_trace["fraction"] < 1 )
+	{
+		spot = floor_trace["position"];
+	}
+	players[0] SetOrigin( spot );
+}
+
 mapkit_test_visit( stand, look )
 {
+	mapkit_test_place( stand );
 	SetDvar( "bo1_testclient_goto", stand[0] + "," + stand[1] + "," + stand[2] );
 	SetDvar( "bo1_testclient_look", look[0] + "," + look[1] + "," + look[2] );
 	SetDvar( "bo1_testclient_press", "3," + GetTime() + ",1500,200" );

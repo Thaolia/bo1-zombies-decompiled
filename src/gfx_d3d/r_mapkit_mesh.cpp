@@ -24,19 +24,21 @@
 #include <string.h>
 
 // mod: mapkit "mesh" edit: {"kind":"mesh","file":"imports/<map>/<map>.mesh.bin","images":"imports/<map>/images",
-// "base":"<mc/ material>","alphaBase":"<alpha-tested mc/ material>"}. The file (BO2MESH3, written by
-// tools/bo2/bo2_mesh.py, which documents it) holds chunks of another game's world and its props: each chunk becomes a
-// rigid XModel, one surface per material, and each prop model an XModel with its LODs, drawn once per placement. All
-// are added every frame by R_FilterXModelIntoScene like the skybox model (none of them is in the asset database). Each colour map is an IW image
-// loaded outside the database; the materials are copies of one BO1 model material ("mc/": the 32-byte packed vertex)
-// with that colour map, a flat normal map and no specular, linked into the database so that the material sort (which
-// only walks database materials in fastfile mode) gives them a sorted index. Those copies and their images live for
+// "base":"<mc/ material>","alphaBase":"<alpha-tested mc/ material>","skyBase":"<skybox material>"}. The file
+// (BO2MESH4, written by tools/bo2/bo2_mesh.py, which documents it) holds chunks of another game's world, its props and
+// its sky: each chunk becomes a rigid XModel, one surface per material, each prop model an XModel with its LODs, drawn
+// once per placement, and the sky model is drawn around the viewer (the empty base adds no skybox of its own). All are
+// added every frame by R_FilterXModelIntoScene like the skybox model (none of them is in the asset database). Each
+// colour map is an IW image loaded outside the database; the materials are copies of one BO1 model material ("mc/": the
+// 32-byte packed vertex) with that colour map, a flat normal map and no specular, linked into the database so that the
+// material sort (which only walks database materials in fastfile mode) gives them a sorted index. Those copies and their images live for
 // the whole process: a material linked into the database may outlive the map. The models are rebuilt per map.
 
 namespace
 {
-    const char MESH_MAGIC[8] = { 'B', 'O', '2', 'M', 'E', 'S', 'H', '3' };
+    const char MESH_MAGIC[8] = { 'B', 'O', '2', 'M', 'E', 'S', 'H', '4' };
     const unsigned int MATERIAL_ALPHA = 1;
+    const unsigned int MATERIAL_SKY = 2;
     const int NAME_BYTES = 64;
     const int MAX_SURFS_PER_LOD = 128; // R_SkinXModel's stack array
     const int MAX_LODS = 4;            // XModel::lodInfo
@@ -73,6 +75,7 @@ namespace
         GfxScaledPlacement *instancePlacements;
         unsigned short *instanceLighting;
         float *instanceCullSq; // 0: always added
+        int skyModel;          // -1: none
         char (*modelNames)[NAME_BYTES];
         int surfCount;
         XSurface *surfs;
@@ -192,9 +195,10 @@ namespace
         if (ok)
         {
             memcpy(&header, buf, sizeof(header));
+            // flags: 2 no mipmaps, 4 a cube map (the sky)
             ok = !memcmp(header.tag, "IWi", 3) && (header.format == 0x0B || header.format == 0x0C || header.format == 0x0D)
                 && header.dimensions[0] > 0 && header.dimensions[1] > 0 && header.dimensions[2] == 1
-                && header.fileSizeForPicmip[0] == len && !(header.flags & ~2);
+                && header.fileSizeForPicmip[0] == len && !(header.flags & ~6);
         }
         if (!ok)
         {
@@ -336,9 +340,14 @@ namespace
         const int *lookOf;
         const unsigned int *materialFlags;
         unsigned int materialCount;
-        Material *base, *alphaBase;
+        Material *base, *alphaBase, *skyBase;
         int untextured;
     };
+
+    Material *Mesh_BaseFor(const MeshFill *fill, unsigned int flags)
+    {
+        return (flags & MATERIAL_SKY) ? fill->skyBase : (flags & MATERIAL_ALPHA) ? fill->alphaBase : fill->base;
+    }
 
     void Mesh_ReadSurfaces(Reader &r, unsigned int count, MeshFill *fill)
     {
@@ -354,7 +363,7 @@ namespace
             Material *material = look >= 0 ? s_looks[look]->material : 0;
             if (!material)
             {
-                material = known && (fill->materialFlags[materialIndex] & MATERIAL_ALPHA) ? fill->alphaBase : fill->base;
+                material = Mesh_BaseFor(fill, known ? fill->materialFlags[materialIndex] : 0);
                 ++fill->untextured;
             }
             s_mesh.materials[fill->surfUsed] = material;
@@ -445,6 +454,23 @@ void __cdecl R_Mapkit_LoadMesh()
     Material *alphaBase = Mesh_BaseMaterial(edit, "alphaBase", "mc/t5_foliage_tree_sorbus_leaf01_static");
     if (!alphaBase)
         alphaBase = base;
+    // MEASURED on the Five base: the frontend skybox's material (technique skycubemaphdr: a cube map by view direction)
+    Material *skyBase = Mesh_BaseMaterial(edit, "skyBase", "mc/mtl_skybox_sp_frontend");
+    if (skyBase)
+    {
+        // what the sky's copy inherits: its camera region (3 is never drawn) and its samplers (the cube map's name)
+        const unsigned int colorMap = R_HashString("colorMap");
+        int colorMaps = 0;
+        for (int t = 0; t < skyBase->textureCount; ++t)
+            colorMaps += skyBase->textureTable[t].nameHash == colorMap;
+        Com_Printf(8, "mapkit: mesh sky base %s: camera region %d, sort key %d, %d textures (%d named colorMap, first "
+            "hash 0x%x)\n", skyBase->info.name, skyBase->cameraRegion, skyBase->info.sortKey, skyBase->textureCount,
+            colorMaps, skyBase->textureCount ? skyBase->textureTable[0].nameHash : 0);
+    }
+    MeshFill fill = {};
+    fill.base = base;
+    fill.alphaBase = alphaBase;
+    fill.skyBase = skyBase ? skyBase : base;
 
     void *buf = 0;
     const int len = FS_ReadFile(file, &buf);
@@ -457,7 +483,7 @@ void __cdecl R_Mapkit_LoadMesh()
     const unsigned char *magic = r.Take(8);
     if (!magic || memcmp(magic, MESH_MAGIC, 8))
     {
-        Com_PrintWarning(8, "mapkit: mesh edit %d: %s is not a BO2MESH3 file (rerun tools/bo2/bo2_mesh.py)\n", edit, file);
+        Com_PrintWarning(8, "mapkit: mesh edit %d: %s is not a BO2MESH4 file (rerun tools/bo2/bo2_mesh.py)\n", edit, file);
         FS_FreeFile(buf);
         return;
     }
@@ -477,8 +503,7 @@ void __cdecl R_Mapkit_LoadMesh()
         lookOf[m] = -1;
         if (!image[0])
             continue;
-        const bool alpha = (materialFlags[m] & MATERIAL_ALPHA) != 0;
-        const char *baseName = (alpha ? alphaBase : base)->info.name;
+        const char *baseName = Mesh_BaseFor(&fill, materialFlags[m])->info.name;
         int look = Mesh_FindLook(image, baseName);
         if (look < 0)
         {
@@ -496,8 +521,11 @@ void __cdecl R_Mapkit_LoadMesh()
                 break;
             I_strncpyz(l->image, image, sizeof(l->image));
             I_strncpyz(l->base, baseName, sizeof(l->base));
-            // two bases, two names: the database keys a material by name
-            Com_sprintf(l->materialName, sizeof(l->materialName), alpha ? "mapkit_alpha/%s" : "mapkit/%s", image);
+            // one name per base: the database keys a material by name
+            Com_sprintf(l->materialName, sizeof(l->materialName), "%s/%s",
+                (materialFlags[m] & MATERIAL_SKY) ? "mapkit_sky" : (materialFlags[m] & MATERIAL_ALPHA) ? "mapkit_alpha"
+                                                                                                       : "mapkit",
+                image);
             l->gfx.name = l->image;
             l->gfx.semantic = 2;
             if (!Mesh_ReadImage(l, imageDir))
@@ -519,7 +547,8 @@ void __cdecl R_Mapkit_LoadMesh()
     {
         MkMeshLook *look = s_looks[i];
         Material *lookBase = !strcmp(look->base, base->info.name) ? base
-            : !strcmp(look->base, alphaBase->info.name) ? alphaBase : 0;
+            : !strcmp(look->base, alphaBase->info.name) ? alphaBase
+            : !strcmp(look->base, fill.skyBase->info.name) ? fill.skyBase : 0;
         if (look->uploaded && lookBase && Mesh_LinkMaterial(look, lookBase))
             ++linked;
     }
@@ -557,6 +586,9 @@ void __cdecl R_Mapkit_LoadMesh()
     }
     const unsigned int instanceCount = r.Count(56);
     r.Take(instanceCount * 56);
+    const int skyIndex = (int)r.U32();
+    if (skyIndex < -1 || skyIndex >= (int)modelCount)
+        r.bad = true;
     if (r.bad || tooManySurfs || !lookOf || !materialFlags)
     {
         Com_PrintWarning(8, "mapkit: mesh edit %d: %s is truncated, corrupt or has a model of too many surfaces\n", edit,
@@ -596,12 +628,9 @@ void __cdecl R_Mapkit_LoadMesh()
         return;
     }
 
-    MeshFill fill = {};
     fill.lookOf = lookOf;
     fill.materialFlags = materialFlags;
     fill.materialCount = materialCount;
-    fill.base = base;
-    fill.alphaBase = alphaBase;
     r.at = chunkStart;
     r.U32();
     for (unsigned int c = 0; c < chunkCount; ++c)
@@ -678,6 +707,7 @@ void __cdecl R_Mapkit_LoadMesh()
         const float cull = lastLodDist ? lastLodDist[model] * data[12] * CULL_MARGIN : 0.0f;
         s_mesh.instanceCullSq[i] = cull * cull;
     }
+    s_mesh.skyModel = skyIndex >= 0 && emptyModel && !emptyModel[skyIndex] ? (int)chunkCount + skyIndex : -1;
     free(lastLodDist);
     free(emptyModel);
     free(lookOf);
@@ -692,9 +722,10 @@ void __cdecl R_Mapkit_LoadMesh()
     s_mesh.ready = noBuffers == 0;
     Com_Printf(8, "mapkit: mesh edit %d: %s: %u chunks, %u prop models, %u props (%d bad), %d surfaces, %u vertices, %u "
         "triangles; %d colour maps (%d new, %d missing), %d materials linked on %s and %s, %d surfaces untextured, %d "
-        "without GPU buffers\n", edit, file, chunkCount, modelCount, instanceCount, badInstances, s_mesh.surfCount,
+        "without GPU buffers; sky %s\n", edit, file, chunkCount, modelCount, instanceCount, badInstances, s_mesh.surfCount,
         fill.vertUsed, fill.triUsed, s_lookCount, newImages, missingImages, linked, base->info.name,
-        alphaBase->info.name, fill.untextured, noBuffers);
+        alphaBase->info.name, fill.untextured, noBuffers,
+        s_mesh.skyModel >= 0 ? s_mesh.models[s_mesh.skyModel].name : "none");
 }
 
 void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
@@ -707,6 +738,16 @@ void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
         Com_PrintWarning(8, "mapkit: mesh dropped with the old graphics device (reload the map to draw it)\n");
         s_mesh.ready = false;
         return;
+    }
+    if (s_mesh.skyModel >= 0)
+    {
+        // centred on the viewer, as R_AddSkyboxModel places a map's own skybox
+        static unsigned short skyLighting;
+        GfxScaledPlacement placement = {};
+        placement.base.quat[3] = 1.0f;
+        memcpy(placement.base.origin, viewOrigin, 12);
+        placement.scale = 1.0f;
+        R_FilterXModelIntoScene(&s_mesh.models[s_mesh.skyModel], &placement, 0, &skyLighting, 0.0f);
     }
     for (int c = 0; c < s_mesh.chunkCount; ++c)
         R_FilterXModelIntoScene(&s_mesh.models[c], &s_mesh.placements[c], 0, &s_mesh.lighting[c], 0.0f);

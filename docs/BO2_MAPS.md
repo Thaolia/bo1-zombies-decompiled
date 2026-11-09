@@ -88,18 +88,25 @@ Nuketown has about 195 000 world vertices before its props).
      nearest height that the Five base loads (`zombie_mantle_over_40`, `zombie_jump_down_40/72/127/184`); the level
      loader compiles each one (`g_sp_levelstart.cpp`: a traversal's script is only loaded when a node names it). BO1
      zombies have no jump up under 222 units: BO2's 16 jump-ups and its 2 garage-door traversals are left out.
-3. **Headless self-test** (Linux build, `mapkit_selftest 1`, a test client in god mode, timescale 4):
+3. **Headless self-test** (Linux build, `mapkit_selftest 1`, a test client in god mode, timescale 4; with the prop
+   collision, the client put on the floor at each purchase, see below):
 
    | Check | Result |
    |---|---|
    | Zones | 10/10 PASS |
    | Pathnodes | 692/692 found by the actors' goal lookup; 15 bad nodes (11 against a wall after the drop, 4 traversal ends) |
-   | Mystery box | PASS (Monkey Bomb, Winter's Howl, CZ75 on three runs) |
-   | Perks | 3/4 PASS (Quick Revive, Speed Cola, Double Tap); the test client never reaches Juggernog's spot, in house 2's backyard (not investigated: BO2 has mantles there, which a player walking the node graph does not take) |
-   | Wall buys | 5/7 PASS, one of them upstairs in house 1; the M16 (upstairs in house 2: the client stays on the floor below it) and the AK-74u (not investigated) fail |
-   | Pack-a-Punch | FAIL: its spot is upstairs in house 2 too |
-   | Risers | 10/36 PASS (a zombie climbs out and reaches the player); 17 rose but none reached the player (most stuck in the ditch north of house 2, around (700..1200, 1200..1300, z -250): no way out of it in the node graph yet), 9 not picked in 90 s |
-| Round | PASS; whole run: `mapkit_selftest DONE pass 31 fail 31` |
+   | Mystery box | PASS (RPK; Monkey Bomb, Winter's Howl, CZ75 on earlier runs) |
+   | Perks | 4/4 PASS |
+   | Wall buys | 7/7 PASS, upstairs in both houses included |
+   | Pack-a-Punch | FAIL: the player stands at it, powered, with an upgradable gun and the points, and its trigger never fires (being investigated) |
+   | Risers | 12/36 PASS (a zombie climbs out and reaches the player); 14 rose but none reached the player (most stuck in the ditch north of house 2, around (700..1200, 1200..1300, z -250): no way out of it in the node graph yet), 10 not picked in 90 s |
+   | Round | PASS; whole run: `mapkit_selftest DONE pass 36 fail 26` |
+
+   The test client walks straight from node to node along `Path_FindPath`'s route. BO2's node graph goes round the
+   props, but not by much: with the props solid for players, the client caught on house 2's back ramp
+   (`p6_zm_nuked_zombie_ramp`) and its handrail posts and stayed on the deck, and every check after it failed. On a layout with a `collision` edit the self-test therefore puts the client on the floor at each machine
+   and wall buy (`mapkit_test_place`) and lets it walk only the last step: the checks test the purchases and the
+   zombies, not the walk. MapKit's own layouts keep walking.
 
    BO2's zombies reach both houses' upper floors from outside with `zm_jump_up_127` (12 pairs), which BO1 has no
    animation for. In house 1 the node graph has another way up (the MP5K passes); in house 2 it finds none, so the
@@ -123,11 +130,26 @@ Nuketown has about 195 000 world vertices before its props).
   - The colour map is the base layer's: a BO2 material can hold several colour-map samplers (embers, thermal,
     reveal, specular), so OAT's dumper takes the sampler named `colorMap`, `Diffuse_Map`, `Color_Map` or
     `radiantDiffuseMap` first (the first version took the first one: red ember maps on the walls).
-  - Not done yet: a sky (the empty base has none), BO2's baked lighting (the light is the empty base's flat grey and
-    the sun), standalone decals (left out with caulk and shadow casters), blending (glass is alpha tested), and a
-    `vid_restart` (the mesh is not drawn again until the next map load: its buffers belonged to the old device).
-- The collision of the 1 349 static models (cars, fences: it comes from their xmodels): they are drawn, but a player
-  walks through them.
+  - **Sky.** The worldspawn's `skyboxmodel` (`skybox_dlc0_zm_nuketown`, a 448-triangle dome) is written as one more
+    prop model, its materials flagged as sky; its cube map (`skybox_zm_nuked_ft`, DXT5, 512 pixels, six faces, IWI flag
+    4) gets a copy of Five's `mc/mtl_skybox_sp_frontend` (technique `skycubemaphdr`: the cube map sampled by view
+    direction, the `skyBase` of the edit). The engine draws it centred on the viewer, as `R_AddSkyboxModel` places a
+    map's own skybox. The dump's winding faces outwards, so the dome was culled from inside: the tool writes its
+    triangles both ways round.
+  - Not done yet: BO2's baked lighting (the light is the empty base's flat grey and the sun), standalone decals (left
+    out with caulk and shadow casters), blending (glass is alpha tested), and a `vid_restart` (the mesh is not drawn
+    again until the next map load: its buffers belonged to the old device).
+- **Prop collision (2026-11-09).** BO2's clipMap lists the 1 349 static models that collide (`smodelcoll.csv`, written
+  by the OAT dumper: model, contents, origin, inverse scaled axes; every row matches a drawn placement by name and
+  origin). `tools/bo2/bo2_props_collision.py` adds them to the `BO2COL2` file as world brushes, from each model's
+  collision LOD: a model at most 160 units across becomes an oriented box around it (865), a larger one keeps its
+  triangles as 16-unit prisms (31 465: ramps, roofs, rock piles stay their shape). Only props inside the zones (64
+  units around them) are kept (380 lie past the invisible walls), and lights are left out (27: hanging lamps caught
+  the player's head). Their contents are BO1's player clip plus the shot-stopping bits (`0x10000|0x2000|0x80`): they
+  stop players and bullets but not actors, whose mask (`0x2820011`) leaves the player clip out. Blocking actors too
+  put 43 nodes "in solid" (on rock piles, under lamps), changed the node links and dropped the self-test from 31 to 16
+  passes; with player clip the graph is the clipMap's again (6 722 links, 15 bad nodes), and BO2's own nodes already
+  go round its props.
 - Windows checks (`tools/headless.ps1`), and the Switch.
 - Dog rounds (Five's dogs are not converted), BO2's own mechanics (the bus, buildables, Who's Who...), its characters
   and animations (T6 skeletons and xanims), its sounds and its baked lighting. The game is BO1's zombies on Nuketown's
@@ -138,10 +160,14 @@ Nuketown has about 195 000 world vertices before its props).
 On the session's machine (paths to adapt), with OAT built as `tools/bo2/oat/README.md` says:
 
     Z="/mnt/c/Program Files (x86)/Steam/steamapps/common/Call of Duty Black Ops II/zone/all"
-    Unlinker --include-assets clipmap,mapents -o out/?zone? "$Z/zm_nuked.ff"
-    tools/bo2/bo2_layout.py out/zm_nuked zm_nuked --out <run>/mods/mapkit/layouts/bo2_zm_nuked.json
-    cp out/zm_nuked/maps/mp/zm_nuked.d3dbsp.collision.bin <run>/mods/mapkit/imports/zm_nuked/zm_nuked.collision.bin
+    Unlinker --include-assets gfxworld,clipmap,mapents -o out/?zone? "$Z/zm_nuked.ff"
+    Unlinker --include-assets xmodel,image,material --model-format OBJ --image-format DDS -o out/?zone? "$Z/zm_nuked.ff"
+    I=<run>/mods/mapkit/imports/zm_nuked
+    tools/bo2/bo2_props_collision.py out/zm_nuked zm_nuked --out $I/zm_nuked.collision.bin
+    tools/bo2/bo2_layout.py out/zm_nuked zm_nuked --collision-file $I/zm_nuked.collision.bin \
+        --out <run>/mods/mapkit/layouts/bo2_zm_nuked.json
+    tools/bo2/bo2_mesh.py out/zm_nuked zm_nuked --out $I
     BO1Zombies +set fs_game mods/mapkit +set bo1_mod_mapkit bo2_zm_nuked +devmap zombie_pentagon
 
-The run folder is a normal game folder (the player's converted Five zones); the layout and the collision file are the
-player's own extraction and stay out of the repository.
+The run folder is a normal game folder (the player's converted Five zones); the layout, the collision and mesh files
+and the images are the player's own extraction and stay out of the repository.

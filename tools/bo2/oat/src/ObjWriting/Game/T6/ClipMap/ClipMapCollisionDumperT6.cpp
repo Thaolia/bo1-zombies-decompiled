@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <ostream>
 #include <vector>
@@ -18,6 +19,8 @@ using namespace T6;
 //   u32 triCount, then per triangle: u16[3] vertex indices, u16 material index (0xFFFF: no partition reached it),
 //       u16 owner (0 = world, n = submodel n: in that model's own space)
 //   u32 submodelCount, then per submodel: f32[3] mins, f32[3] maxs
+// <map>.d3dbsp.smodelcoll.csv, the static models that collide (the clipMap's own list): model, contents, origin,
+// invScaledAxis (each model axis divided by the model's scale), one row per model;
 // and <map>.d3dbsp.collision.txt, a summary to read.
 
 namespace
@@ -234,6 +237,24 @@ namespace
         {
             w.Vec3(clip->cmodels[m].mins);
             w.Vec3(clip->cmodels[m].maxs);
+        }
+
+        if (const auto csv = context.OpenAssetFile(name + ".smodelcoll.csv"))
+        {
+            auto& out = *csv;
+            out << "model,contents,x,y,z,i00,i01,i02,i10,i11,i12,i20,i21,i22\n";
+            out << std::setprecision(9);
+            for (auto i = 0u; i < clip->numStaticModels; i++)
+            {
+                const auto& smodel = clip->staticModelList[i];
+                if (!smodel.xmodel || !smodel.xmodel->name)
+                    continue;
+                out << smodel.xmodel->name << "," << smodel.contents << "," << smodel.origin.x << "," << smodel.origin.y
+                    << "," << smodel.origin.z;
+                for (const auto& axis : smodel.invScaledAxis)
+                    out << "," << axis.x << "," << axis.y << "," << axis.z;
+                out << "\n";
+            }
         }
 
         const auto txt = context.OpenAssetFile(name + ".collision.txt");

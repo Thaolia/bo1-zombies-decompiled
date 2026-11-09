@@ -12,7 +12,9 @@ licence, the **GNU GPL v3**, not part of this repository's engine code. See `doc
   `<map>.d3dbsp.collision.bin`, format `BO2COL2` (materials, brushes with their non-axial planes and their owner,
   terrain triangles with their collision material and their owner, submodel bounds; the byte layout is at the top of
   the `.cpp`; "owner" is 0 for the world, n for submodel n, whose geometry is in that model's own space) and
-  `<map>.d3dbsp.collision.txt` (counts and the material list).
+  `<map>.d3dbsp.collision.txt` (counts and the material list), plus `<map>.d3dbsp.smodelcoll.csv` (the static models
+  that collide, from the clipMap's own list: model, contents, origin, inverse scaled axes), which
+  `tools/bo2/bo2_props_collision.py` turns into prop brushes.
 - `ObjWriterT6.patch`: registers both dumpers in `src/ObjWriting/Game/T6/ObjWriterT6.cpp`.
 
 ## Build (Linux / WSL)

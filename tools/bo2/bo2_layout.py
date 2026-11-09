@@ -214,14 +214,9 @@ def inside(point, zone):
     return all(zone["mins"][k] <= point[k] <= zone["maxs"][k] for k in range(3))
 
 
-def build(ents, col, name, collision):
-    submodels = col.submodels
-    folder = os.path.dirname(collision)
-    edits = [{"kind": "collision", "file": collision},
-             {"kind": "mesh", "file": f"{folder}/{name[4:]}.mesh.bin", "images": f"{folder}/images"}]
-
-    # A zone edit is one box and its name must be unique (the script finds its volume by targetname): the volumes of a
-    # zone with several become their union.
+def zone_edits(ents, submodels):
+    """The zone edits: one per info_volume player volume. A zone edit is one box and its name must be unique (the
+    script finds its volume by targetname): the volumes of a zone with several become their union."""
     zones = []
     by_name = {}
     for e in ents:
@@ -238,6 +233,16 @@ def build(ents, col, name, collision):
                 continue
             by_name[e["targetname"]] = {"kind": "zone", "name": e["targetname"], "mins": mins, "maxs": maxs}
             zones.append(by_name[e["targetname"]])
+    return zones
+
+
+def build(ents, col, name, collision):
+    submodels = col.submodels
+    folder = os.path.dirname(collision)
+    edits = [{"kind": "collision", "file": collision},
+             {"kind": "mesh", "file": f"{folder}/{name[4:]}.mesh.bin", "images": f"{folder}/images"}]
+
+    zones = zone_edits(ents, submodels)
     edits += zones
     zone_names = {z["name"] for z in zones}
 
@@ -348,12 +353,15 @@ def main(argv=None):
     parser.add_argument("dump", help="OAT's output folder for the zone")
     parser.add_argument("map", help="the map's name, e.g. zm_nuked")
     parser.add_argument("--out", help="the layout file (default: bo2_<map>.json in the current folder)")
+    parser.add_argument("--collision-file", help="the collision file to read (default: the dump's clipMap file)")
     parser.add_argument("--collision", help="the collision file's path under mods/mapkit "
                                             "(default: imports/<map>/<map>.collision.bin)")
     args = parser.parse_args(argv)
     base = os.path.join(args.dump, "maps", "mp", f"{args.map}.d3dbsp")
     ents = read_entities(base + ".ents")
-    col = Collision(base + ".collision.bin")
+    # the collision the game will load (with the props of tools/bo2/bo2_props_collision.py) places the machines and
+    # drops the nodes best; the clipMap's own file otherwise
+    col = Collision(args.collision_file or base + ".collision.bin")
     name = f"bo2_{args.map}"
     collision = args.collision or f"imports/{args.map}/{args.map}.collision.bin"
     layout, counts, skipped, traverse_skipped = build(ents, col, name, collision)
