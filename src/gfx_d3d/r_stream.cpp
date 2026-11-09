@@ -2082,6 +2082,11 @@ void __cdecl R_StreamUpdate_AddDynamicXModelDistance(
     int modelIndex; // [esp+14h] [ebp-8h]
     float distSq; // [esp+18h] [ebp-4h]
 
+    // mod (mapkit mesh): a model built outside the asset database (r_mapkit_mesh.cpp) has no index here, and its
+    // images are loaded whole, not streamed; its pointer taken as an index wrote far outside these arrays (a crash on
+    // Windows at Nuketown's first frame, silent corruption on Linux)
+    if (!DB_IsXModelInPool(model))
+        return;
     modelIndex = DB_GetXModelIndex(model);
     distSq = Vec3DistanceSq(viewPos, origin) / scale * distanceScale[visible];
     if ((streamFrontendGlob.dynamicModelDistanceBits[modelIndex >> 5] & (1 << (modelIndex & 0x1F))) != 0)
@@ -2178,6 +2183,11 @@ void __cdecl R_StreamUpdate_AddXModelDistance(
     int modelIndex; // [esp+14h] [ebp-8h]
     float distSq; // [esp+18h] [ebp-4h]
 
+    // mod (mapkit mesh): a model built outside the asset database (r_mapkit_mesh.cpp) has no index here, and its
+    // images are loaded whole, not streamed; its pointer taken as an index wrote far outside these arrays (a crash on
+    // Windows at Nuketown's first frame, silent corruption on Linux)
+    if (!DB_IsXModelInPool(model))
+        return;
     modelIndex = DB_GetXModelIndex(model);
     distSq = Vec3DistanceSq(viewPos, origin) / scale * distanceScale[visible];
     if ((streamFrontendGlob.modelDistanceBits[modelIndex >> 5] & (1 << (modelIndex & 0x1F))) != 0)

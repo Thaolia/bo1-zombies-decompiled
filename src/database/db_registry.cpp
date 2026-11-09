@@ -5272,6 +5272,13 @@ XAssetPoolEntry<Material> *__cdecl DB_GetMaterialAtIndex(unsigned int index)
     return &g_MaterialPool.entries[index];
 }
 
+// mod (mapkit mesh): r_mapkit_mesh.cpp builds models outside the asset database, which have no pool index
+bool __cdecl DB_IsXModelInPool(const XModel *model)
+{
+    const uintptr_t offset = (uintptr_t)model - (uintptr_t)g_XModelPool.entries;
+    return (uintptr_t)model >= (uintptr_t)g_XModelPool.entries && offset < sizeof(g_XModelPool.entries);
+}
+
 int __cdecl DB_GetXModelIndex(const XModel *model)
 {
     unsigned int index = ((char *)model - (char *)g_XModelPool.entries) / sizeof(XModel);
