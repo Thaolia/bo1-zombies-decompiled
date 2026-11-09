@@ -107,10 +107,24 @@ Nuketown has about 195 000 world vertices before its props).
 
 ### Not done
 
-- **Drawing.** Nothing of Nuketown is drawn yet: the game runs on its collision only (headless tests do not need the
-  world drawn). Next step: a static mesh path in the renderer (one vertex and index buffer built at load, materials
-  cloned from a lit BO1 world material with the BO2 colour map loaded from its DDS, the neutral lightmap MapKit's
-  brush models use), with the placed props baked into the same mesh from their OBJ and placement.
+- **Drawing: first version done (2026-11-09).** `tools/bo2/bo2_mesh.py` cuts the world OBJ into 258 chunks (512 units in
+  the playable area, 8 192 beyond), one surface per material (2 088 surfaces, 128 847 triangles, 175 259 vertices,
+  normals smoothed over shared vertices) and converts the 92 colour maps it uses to IW images (DXT1/3/5 kept as they
+  are, mips smallest first). The `mesh` edit (`src/gfx_d3d/r_mapkit_mesh.cpp`) builds one rigid XModel per chunk at
+  the end of `R_FinishLoadingModels` (buffers made by `_XModelOptimize` on the render thread) and adds them every frame
+  with `R_FilterXModelIntoScene`, as the skybox model is added; none of them is in the asset database. Each colour map
+  gets one material: a copy of `mc/rus_metal_panel03` (a model material, the 32-byte packed vertex) with that colour
+  map, the flat normal map and a black specular map, linked into the database (`DB_AddXAsset`) so that the material
+  sort gives it a sorted index. Screenshots (GL backend, llvmpipe) show the cul-de-sac, the houses, the garages, the
+  power lines and the backdrop textured. Known defects of this first version:
+  - many walls show a red ember texture: OAT's export picks, for those BO2 materials (`*_embers`, layered ones), a
+    colour map that is not the base layer's;
+  - no sky (the empty base has none) and flat lighting (the empty base's grey and the sun; BO2's lightmaps are not
+    used);
+  - standalone decals, caulk and shadow casters are left out (19 materials, 2 185 triangles); alpha-tested materials
+    (fences, glass) draw opaque;
+  - the 2 082 placed props (`smodels.csv`: cars, fences, furniture) are not drawn yet;
+  - after a `vid_restart` the mesh is not drawn until the next map load (its buffers belonged to the old device).
 - The collision of the 1 349 static models (cars, fences: it comes from their xmodels): today a player walks through
   them.
 - Windows checks (`tools/headless.ps1`), and the Switch.

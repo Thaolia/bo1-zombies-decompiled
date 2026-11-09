@@ -1,4 +1,5 @@
 #include "r_bsp.h"
+#include "r_mapkit_mesh.h"
 #include <universal/com_memory.h>
 #include "r_bsp_load_obj.h"
 #include "r_dvars.h"
@@ -191,6 +192,7 @@ void __cdecl R_LoadWorld(char *name, int *checksum, int savegame, int location)
     R_FlushSun();
     R_ClearSkyboxModel();
     R_RegisterSkyboxModel();
+    R_Mapkit_FreeMesh(); // mod: mapkit "mesh" edit: the next R_FinishLoadingModels builds the new map's
     R_InitDynamicData();
     R_ResetModelLighting();
     RB_ResetCoronas();

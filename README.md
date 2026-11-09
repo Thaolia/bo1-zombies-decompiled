@@ -83,8 +83,8 @@ conversion with the shipped `ffconv.exe`). See `tools/zmclient/README.md`.
 Black Ops II zombies maps (experimental, branch `bo2`): `tools/bo2` extracts a map from the player's own Black Ops II
 (with a world and collision dumper added to OpenAssetTools, GPL v3, built separately) and writes it as a MapKit layout
 on an empty Five base: BO2's own collision, zones, spawns, risers, pathnodes, traversals, the box, wall buys, perks and
-Pack-a-Punch. Nuketown Zombies runs headless (the self-test buys the box, perks and wall buys there); it is not drawn
-yet. See `docs/BO2_MAPS.md`.
+Pack-a-Punch. Nuketown Zombies runs headless (the self-test buys the box, perks and wall buys there) and is drawn textured
+(first version: no props, sky or baked lighting yet). See `docs/BO2_MAPS.md`.
 
 ## Packages
 

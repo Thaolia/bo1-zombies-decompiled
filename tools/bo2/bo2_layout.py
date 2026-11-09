@@ -15,7 +15,8 @@ imports/<map>/<map>.collision.bin: copy the .bin there in the run folder) and it
   - perk / pap: the four Five perks and Pack-a-Punch on the first zm_random_machine landing spots (BO2 drops them
     at random), on the side a player can reach;
   - traverse: the node_negotiation pairs whose BO2 animscript has a BO1 one of about the same height (TRAVERSES);
-  - collision "cut": the BO2 clip at each machine and box spot (MapKit's machine brings its own).
+  - collision "cut": the BO2 clip at each machine and box spot (MapKit's machine brings its own);
+  - mesh: the drawable world, <folder of the collision>/<map>.mesh.bin and images/ (tools/bo2/bo2_mesh.py writes them).
 Not converted: dog spawns, BO1-less traversals (jump ups under 222 units, the garage door), BO2-only mechanics.
 docs/BO2_MAPS.md has the whole procedure.
 """
@@ -215,7 +216,9 @@ def inside(point, zone):
 
 def build(ents, col, name, collision):
     submodels = col.submodels
-    edits = [{"kind": "collision", "file": collision}]
+    folder = os.path.dirname(collision)
+    edits = [{"kind": "collision", "file": collision},
+             {"kind": "mesh", "file": f"{folder}/{name[4:]}.mesh.bin", "images": f"{folder}/images"}]
 
     # A zone edit is one box and its name must be unique (the script finds its volume by targetname): the volumes of a
     # zone with several become their union.
