@@ -133,9 +133,17 @@ Nuketown has about 195 000 world vertices before its props).
    a player hull probed 32 units ahead from step height; when it hits, the nearest clear heading in 20-degree steps,
    keeping the side it found while blocked) and counts a goal it cannot reach exactly as reached once it stands still
    within 48 units. Walking all the way (`mapkit_test_walk 1`, before the wall fix below) it bought the box, 3 of 4
-   perks and 6 of 7 wall buys; Juggernog (house 2's backyard), the M16 and Pack-a-Punch (house 2's upper floor) have
-   no route in the node graph (BO2 reaches them with mantles and `zm_jump_up` traversals; the jump-ups are in since,
-   the walk was not run again).
+   perks and 6 of 7 wall buys; Juggernog (house 2's backyard), the M16 and Pack-a-Punch (house 2's upper floor) had
+   no route in the node graph (BO2 reaches them with mantles and `zm_jump_up` traversals).
+
+   Rerun at 6472db7 (BO2's node graph, jump-ups, barrier clips): `mapkit_selftest DONE pass 36 fail 26`. Passing:
+   the box, Quick Revive, Speed Cola, the CZ75, the AK-74u, Pack-a-Punch (house 2's upper floor, reached this time),
+   17 risers and the round. Juggernog, Double Tap and 5 of 7 wall buys fail with the client stopped on the ground
+   next to house 2 (x 600-850, y 160-280). After Pack-a-Punch it never leaves house 2's upper floor: 2 073
+   `SP_HeadlessAvoid` turns, nearly all at z 80 there. 19 of 36 risers then fail with "no zombie rose there", since
+   zombies rise only in the active zones round the player's. The default mode places the client, so the zombie and
+   purchase checks do not depend on the walk (`pass 62 fail 0` on the same commit). Getting the client round house 2
+   remains open.
 
    Pack-a-Punch took three fixes, each found by logging the engine's use search (`Player_GetUseList`):
    - BO2's machine yaws are rounded to right angles (`bo2_layout.py`, at most 15 degrees on Nuketown). MapKit's
