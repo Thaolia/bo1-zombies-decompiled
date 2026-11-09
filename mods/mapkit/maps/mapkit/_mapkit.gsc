@@ -797,13 +797,18 @@ mapkit_check_pap( player )
 		}
 		up = level.zombie_weapons[ gun ].upgrade_name;
 		score = player.score;
-		mapkit_test_visit( rec.origin + rec.out * 40, rec.origin + rec.out * 12 + ( 0, 0, 44 ) );
+		// retail vending_weapon_upgrade sets UseTriggerRequireLookAt: the view must point within ~40 degrees of the
+		// trigger's bounds centre (player_use_mp.cpp, 0.76), which for a trigger_radius_use is its origin
+		mapkit_test_visit( rec.origin + rec.out * 40, rec.trig.origin );
+		rec.trig.mapkit_uses = 0;
+		rec.trig thread mapkit_count_uses();
 		start = GetTime();
 		while ( !player HasWeapon( up ) && GetTime() - start < 40000 )
 		{
 			wait( 0.5 );
 		}
 		SetDvar( "bo1_testclient_press", "" );
+		rec.trig notify( "mapkit_count_end" );
 		if ( player HasWeapon( up ) )
 		{
 			LogPrint( "mapkit: check pap " + rec.name + " PASS " + gun + " -> " + up + " after " + ( GetTime() - start ) + " ms, paid " + ( score - player.score ) + "\n" );
@@ -811,10 +816,21 @@ mapkit_check_pap( player )
 		else
 		{
 			LogPrint( "mapkit: check pap " + rec.name + " FAIL no " + up + " within 40 s (holding " + player GetCurrentWeapon() + ", score " + player.score + " of " + score
-				+ ", machine in use " + flag( "pack_machine_in_use" ) + "; player at " + player.origin + ", touching the trigger "
-				+ player IsTouching( rec.trig ) + ", eye to trigger in sight " + SightTracePassed( player GetEye(), rec.trig.origin
-				+ ( 0, 0, 35 ), false, undefined ) + ")\n" );
+				+ ", machine in use " + flag( "pack_machine_in_use" ) + ", trigger used " + rec.trig.mapkit_uses + " times; player at " + player.origin + ", touching the trigger "
+				+ player IsTouching( rec.trig ) + ", eye to trigger in sight " + SightTracePassed( player GetEye(), rec.trig.origin,
+				false, undefined ) + ", can buy " + player maps\_zombiemode_weapons::can_buy_weapon() + ")\n" );
 		}
+	}
+}
+
+// counts the use presses that reach a trigger (refused by its script, or never selected by the engine's use search)
+mapkit_count_uses()
+{
+	self endon( "mapkit_count_end" );
+	for ( ;; )
+	{
+		self waittill( "trigger" );
+		self.mapkit_uses++;
 	}
 }
 
@@ -2052,9 +2068,10 @@ mapkit_imported()
 	return level.mapkit_imported;
 }
 
+// +set mapkit_test_walk 1 keeps the walk on an imported map too (to test the test client's own navigation)
 mapkit_test_place( stand )
 {
-	if ( !mapkit_imported() )
+	if ( !mapkit_imported() || GetDvar( "mapkit_test_walk" ) == "1" )
 	{
 		return;
 	}

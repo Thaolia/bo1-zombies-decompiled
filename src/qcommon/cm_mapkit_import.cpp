@@ -180,8 +180,13 @@ namespace
             return false;
         for (int k = 0; k < 3; ++k)
             n[k] /= len;
-        // walkable surfaces face up; a triangle stored the other way round gets its prism on the right side all the same
-        if (n[2] < 0.0f)
+        // BO2 winds its collision triangles clockwise seen from their front (zm_nuked: 10 983 of 13 089 near-horizontal
+        // ones give a downward cross product), so the front faces -n. A steep triangle (a wall) takes that front and gets
+        // its prism behind it, inside the wall: the other way, house 2's walls stood 16 units into its rooms and hid
+        // Pack-a-Punch's trigger from the use search. A near-horizontal one keeps facing up whatever its winding, as
+        // before: a floor stored the other way round still gets its prism under it.
+        const bool steep = n[2] > -0.7f && n[2] < 0.7f;
+        if (steep || n[2] < 0.0f)
             for (int k = 0; k < 3; ++k)
                 n[k] = -n[k];
         const float d = n[0] * v[0][0] + n[1] * v[0][1] + n[2] * v[0][2];

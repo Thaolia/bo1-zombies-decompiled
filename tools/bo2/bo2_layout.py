@@ -306,6 +306,10 @@ def build(ents, col, name, collision):
         spot = [origin[0], origin[1], round(ground, 2) if ground is not None else origin[2]]
         cut = col.footprint(spot)
         cuts.extend({"mins": lo, "maxs": hi, "contents": c} for lo, hi, c in cut)
+        # MapKit's machine clip is the axial box around the turned model (cm_mapkit.cpp CM_Mapkit_AddMachineClips): at
+        # a yaw off the right angles it reaches out in front of the machine (37 units at Pack-a-Punch's 105) and a
+        # player standing to use it is caught inside. A right angle keeps the clip on the model, BO2's yaw within 45.
+        angle = round(angle / 90.0) * 90
         return spot, round(col.free_side(spot, [angle + d for d in yaws], cut), 1)
 
     # BO2's box (a zbarrier) is oriented along its length; BO1's chest faces its yaw

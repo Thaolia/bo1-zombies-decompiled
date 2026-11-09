@@ -191,7 +191,9 @@ and set up the run folder once using the commands below. The doctor launches onl
 waits for a free slot, and uses a computed maximum budget. The existing self-test walks the test client to
 purchases/windows and opens doors at **4x**. On a layout with a `collision` edit (another game's map) it first puts the
 client on the floor at each machine and wall buy, then walks the last step: such a map has props the player collides
-with that its node graph does not know, and the straight walk from node to node gets stuck on them. After DONE it changes to **1x**, places the camera on each window's
+with that its node graph does not know, and the straight walk from node to node gets stuck on them
+(`+set mapkit_test_walk 1` keeps the walk). The client steers round an obstacle its hull meets 32 units ahead, and a
+goal it cannot reach exactly counts as reached once it stands still within 48 units. After DONE it changes to **1x**, places the camera on each window's
 player side and takes back-buffer screenshots, then quits; camera placement never contributes to reach tests.
 The run is a functional test with funds/power and round cleanup. During purchases it kills attackers within 96 units
 of the passive client, so crowds cannot prevent use-button tests. Window trials keep the selected entrance's actors alive.

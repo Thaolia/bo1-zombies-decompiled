@@ -94,19 +94,38 @@ Nuketown has about 195 000 world vertices before its props).
    | Check | Result |
    |---|---|
    | Zones | 10/10 PASS |
-   | Pathnodes | 692/692 found by the actors' goal lookup; 15 bad nodes (11 against a wall after the drop, 4 traversal ends) |
-   | Mystery box | PASS (RPK; Monkey Bomb, Winter's Howl, CZ75 on earlier runs) |
+   | Pathnodes | 694/694 found by the actors' goal lookup; 9 bad nodes (against a wall after the drop, traversal ends) |
+   | Mystery box | PASS (FN FAL; RPK, Monkey Bomb, Winter's Howl, CZ75 on earlier runs) |
    | Perks | 4/4 PASS |
    | Wall buys | 7/7 PASS, upstairs in both houses included |
-   | Pack-a-Punch | FAIL: the player stands at it, powered, with an upgradable gun and the points, and its trigger never fires (being investigated) |
-   | Risers | 12/36 PASS (a zombie climbs out and reaches the player); 14 rose but none reached the player (most stuck in the ditch north of house 2, around (700..1200, 1200..1300, z -250): no way out of it in the node graph yet), 10 not picked in 90 s |
-   | Round | PASS; whole run: `mapkit_selftest DONE pass 36 fail 26` |
+   | Pack-a-Punch | PASS (AK-74u upgraded, 5 000 points), upstairs in house 2 |
+   | Risers | 12/36 PASS (a zombie climbs out and reaches the player); 15 rose but none reached the player (most stuck in the ditch north of house 2, around (700..1200, 1200..1300, z -250): no way out of it in the node graph yet), 9 not picked in 90 s |
+   | Round | PASS; whole run: `mapkit_selftest DONE pass 37 fail 25` |
 
    The test client walks straight from node to node along `Path_FindPath`'s route. BO2's node graph goes round the
    props, but not by much: with the props solid for players, the client caught on house 2's back ramp
    (`p6_zm_nuked_zombie_ramp`) and its handrail posts and stayed on the deck, and every check after it failed. On a layout with a `collision` edit the self-test therefore puts the client on the floor at each machine
    and wall buy (`mapkit_test_place`) and lets it walk only the last step: the checks test the purchases and the
-   zombies, not the walk. MapKit's own layouts keep walking.
+   zombies, not the walk. MapKit's own layouts keep walking, and `+set mapkit_test_walk 1` keeps it on an imported
+   map. The test client also steers round what the node graph does not know (`SP_HeadlessAvoid`, `g_sp_client.cpp`:
+   a player hull probed 32 units ahead from step height; when it hits, the nearest clear heading in 20-degree steps,
+   keeping the side it found while blocked) and counts a goal it cannot reach exactly as reached once it stands still
+   within 48 units. Walking all the way (`mapkit_test_walk 1`, before the wall fix below) it bought the box, 3 of 4
+   perks and 6 of 7 wall buys; Juggernog (house 2's backyard), the M16 and Pack-a-Punch (house 2's upper floor) have
+   no route in the node graph (BO2 reaches them with mantles and `zm_jump_up` traversals BO1 has no animation for).
+
+   Pack-a-Punch took three fixes, each found by logging the engine's use search (`Player_GetUseList`):
+   - BO2's machine yaws are rounded to right angles (`bo2_layout.py`, at most 15 degrees on Nuketown). MapKit's
+     machine clip is the axial box around the turned model; at Pack-a-Punch's 105 degrees it reached 37 units in
+     front, over the spot a player stands to use it, and the client put there was stuck in it.
+   - Wall prisms go behind the wall (`cm_mapkit_import.cpp`). BO2 winds its triangles clockwise (10 983 of 13 089
+     near-horizontal ones give a downward cross product); the loader turned only near-horizontal ones up, so a wall's
+     16-unit prism came out of its visible face: house 2's walls stood 16 units into its rooms, and the use search's
+     sight trace (mask `0x11`) from the player's eye to the trigger hit the wall behind Pack-a-Punch. Steep triangles
+     now take BO2's front; the bad nodes went from 15 to 9 and the goal lookup from 692 to 694 nodes.
+   - The check looks at the trigger's origin: Pack-a-Punch's trigger requires the look-at
+     (`UseTriggerRequireLookAt`, a dot of 0.76 with the bounds centre, which for a `trigger_radius_use` is its
+     origin).
 
    BO2's zombies reach both houses' upper floors from outside with `zm_jump_up_127` (12 pairs), which BO1 has no
    animation for. In house 1 the node graph has another way up (the MP5K passes); in house 2 it finds none, so the

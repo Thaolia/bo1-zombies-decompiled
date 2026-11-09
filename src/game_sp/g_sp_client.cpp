@@ -240,6 +240,58 @@ static gentity_s *SP_HeadlessPurchaseGoal(gentity_s *player)
     return nullptr;
 }
 
+// A standing player hull moved dist units along dir (2D, unit) from step height hits nothing. A hull already in solid
+// up there (a low ceiling) counts as clear: the probe cannot judge it, and the walk stays the straight one.
+static bool SP_HeadlessClearAhead(gentity_s *player, const float *dir, float dist)
+{
+    const float *o = player->r.currentOrigin;
+    const float from[3] = { o[0], o[1], o[2] + 18.0f }; // a step the player climbs is not an obstacle
+    const float to[3] = { from[0] + dir[0] * dist, from[1] + dir[1] * dist, from[2] };
+    const float mins[3] = { -15.0f, -15.0f, 0.0f }; // bg_local.h playerMins / playerMaxs
+    const float maxs[3] = { 15.0f, 15.0f, 70.0f };
+    trace_t trace;
+    col_context_t context;
+    G_TraceCapsule(&trace, from, mins, maxs, to, player->s.number, player->clipmask, &context);
+    return trace.startsolid || trace.fraction == 1.0f;
+}
+
+// mod (bo2 maps): the pathnode graph routes round the world but not round what it never saw: another game's props,
+// which collide as player clip only (tools/bo2/bo2_props_collision.py), sit on or beside its node-to-node lines, and a
+// client walking those lines straight caught on handrail posts and a ramp and stayed there. When the hull probe ahead
+// hits something, take the nearest clear heading, both sides in 20-degree steps up to 120; the side found first is
+// kept while blocked, so the client follows an obstacle instead of swinging from one side to the other. With the way
+// ahead clear the walk is the straight one it always was.
+static void SP_HeadlessAvoid(gentity_s *player, float *dir, float length)
+{
+    static int side = 1;
+    static int lastLog = -100000;
+    const float dist = length < 32.0f ? length : 32.0f;
+    if (dist < 16.0f || SP_HeadlessClearAhead(player, dir, dist))
+        return;
+    for (int step = 1; step <= 6; ++step)
+    {
+        for (int k = 0; k < 2; ++k)
+        {
+            const int s = k ? -side : side;
+            const float a = (float)(s * step) * (20.0f * 3.14159265f / 180.0f);
+            const float turned[2] = { dir[0] * cosf(a) - dir[1] * sinf(a), dir[0] * sinf(a) + dir[1] * cosf(a) };
+            if (!SP_HeadlessClearAhead(player, turned, dist))
+                continue;
+            side = s;
+            dir[0] = turned[0];
+            dir[1] = turned[1];
+            if (level.time - lastLog >= 1000)
+            {
+                lastLog = level.time;
+                const float *o = player->r.currentOrigin;
+                Com_Printf(16, "bo1_testclient: time %d avoid at (%.0f, %.0f, %.0f): turned %d degrees\n", level.time,
+                    o[0], o[1], o[2], s * step * 20);
+            }
+            return;
+        }
+    }
+}
+
 // Walk toward goal along the pathnode graph (Path_FindPath, the actors' own planner), re-planned
 // every two seconds. Produces forward/right moves relative to the command's view yaw.
 static bool SP_HeadlessWalk(gentity_s *player, const float *goal, int goalNum, usercmd_s *cmd, float viewYaw)
@@ -274,6 +326,7 @@ static bool SP_HeadlessWalk(gentity_s *player, const float *goal, int goalNum, u
         return false;
     dir[0] /= length;
     dir[1] /= length;
+    SP_HeadlessAvoid(player, dir, length);
     const float yaw = viewYaw * (3.14159265f / 180.0f);
     const float forward = dir[0] * cosf(yaw) + dir[1] * sinf(yaw);
     const float right = dir[0] * sinf(yaw) - dir[1] * cosf(yaw);
@@ -301,7 +354,21 @@ static void SP_HeadlessPassiveMove(gentity_s *player, playerState_s *ps, usercmd
     if (SP_ParseVec3(g_headlessGoto, point))
     {
         const float dx = point[0] - player->r.currentOrigin[0], dy = point[1] - player->r.currentOrigin[1];
-        if (dx * dx + dy * dy > 12.0f * 12.0f && SP_HeadlessWalk(player, point, -2, cmd, viewYaw))
+        // mod (bo2 maps): a goal the hull cannot reach (inside a turned machine's axial clip: Nuketown's Pack-a-Punch stand
+        // point) counts as reached once the client is within 48 units and has not moved for a second; otherwise it kept
+        // walking on the spot and never pressed use.
+        static float stillAt[2];
+        static int stillSince;
+        const float *o = player->r.currentOrigin;
+        if (fabsf(o[0] - stillAt[0]) > 2.0f || fabsf(o[1] - stillAt[1]) > 2.0f)
+        {
+            stillAt[0] = o[0];
+            stillAt[1] = o[1];
+            stillSince = level.time;
+        }
+        const float distSq = dx * dx + dy * dy;
+        const bool stuckNear = distSq <= 48.0f * 48.0f && level.time - stillSince >= 1000;
+        if (distSq > 12.0f * 12.0f && !stuckNear && SP_HeadlessWalk(player, point, -2, cmd, viewYaw))
             return;
     }
     if (SP_ParseVec3(g_headlessLook, point))
