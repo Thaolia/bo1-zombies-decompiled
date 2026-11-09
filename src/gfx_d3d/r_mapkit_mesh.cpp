@@ -14,6 +14,7 @@
 #include <qcommon/common.h>
 #include <qcommon/threads.h>
 #include <universal/com_files.h>
+#include <universal/com_math.h>
 #include <universal/com_pack.h>
 #include <xanim/dobj.h>
 #include <xanim/xmodel.h>
@@ -23,9 +24,10 @@
 #include <string.h>
 
 // mod: mapkit "mesh" edit: {"kind":"mesh","file":"imports/<map>/<map>.mesh.bin","images":"imports/<map>/images",
-// "base":"<mc/ material>"}. The file (BO2MESH1, written by tools/bo2/bo2_mesh.py, which documents it) holds chunks of
-// another game's world; each becomes a rigid XModel, one surface per material, added every frame by
-// R_FilterXModelIntoScene like the skybox model (none of it is in the asset database). Each colour map is an IW image
+// "base":"<mc/ material>","alphaBase":"<alpha-tested mc/ material>"}. The file (BO2MESH3, written by
+// tools/bo2/bo2_mesh.py, which documents it) holds chunks of another game's world and its props: each chunk becomes a
+// rigid XModel, one surface per material, and each prop model an XModel with its LODs, drawn once per placement. All
+// are added every frame by R_FilterXModelIntoScene like the skybox model (none of them is in the asset database). Each colour map is an IW image
 // loaded outside the database; the materials are copies of one BO1 model material ("mc/": the 32-byte packed vertex)
 // with that colour map, a flat normal map and no specular, linked into the database so that the material sort (which
 // only walks database materials in fastfile mode) gives them a sorted index. Those copies and their images live for
@@ -33,9 +35,13 @@
 
 namespace
 {
-    const char MESH_MAGIC[8] = { 'B', 'O', '2', 'M', 'E', 'S', 'H', '1' };
+    const char MESH_MAGIC[8] = { 'B', 'O', '2', 'M', 'E', 'S', 'H', '3' };
+    const unsigned int MATERIAL_ALPHA = 1;
     const int NAME_BYTES = 64;
-    const int MAX_SURFS_PER_MODEL = 128; // R_SkinXModel's stack array
+    const int MAX_SURFS_PER_LOD = 128; // R_SkinXModel's stack array
+    const int MAX_LODS = 4;            // XModel::lodInfo
+    const int MAX_SURFS_PER_MODEL = 255; // XModel::numsurfs
+    const float CULL_MARGIN = 1.5f;    // past its last LOD's distance (times this, for the LOD scale dvars) a prop is not added
 
     // one colour map: its image and the material made with it (both for the process' lifetime)
     struct MkMeshLook
@@ -57,17 +63,23 @@ namespace
 
     struct MkMesh
     {
-        int chunkCount;
+        int chunkCount; // models[0, chunkCount) are the world's chunks, drawn at placements[] with lighting[]
+        int modelCount; // models[chunkCount, modelCount) are the props' models
         XModel *models;
         GfxScaledPlacement *placements;
         unsigned short *lighting;
+        int instanceCount;
+        int *instanceModel;
+        GfxScaledPlacement *instancePlacements;
+        unsigned short *instanceLighting;
+        float *instanceCullSq; // 0: always added
+        char (*modelNames)[NAME_BYTES];
         int surfCount;
         XSurface *surfs;
         XRigidVertList *vertLists;
         Material **materials;
         GfxPackedVertex *verts;
         unsigned short *indices;
-        char (*names)[24];
         IDirect3DDevice9 *device;
         bool ready;
     } s_mesh;
@@ -142,8 +154,8 @@ namespace
     // render thread: vertex and index buffers of every chunk
     void Mesh_CreateBuffers(void *)
     {
-        for (int c = 0; c < s_mesh.chunkCount; ++c)
-            _XModelOptimize(&s_mesh.models[c]);
+        for (int m = 0; m < s_mesh.modelCount; ++m)
+            _XModelOptimize(&s_mesh.models[m]);
     }
 
     void Mesh_ReleaseBuffers(void *)
@@ -273,7 +285,11 @@ namespace
         free(s_mesh.materials);
         free(s_mesh.verts);
         free(s_mesh.indices);
-        free(s_mesh.names);
+        free(s_mesh.instanceModel);
+        free(s_mesh.instancePlacements);
+        free(s_mesh.instanceLighting);
+        free(s_mesh.instanceCullSq);
+        free(s_mesh.modelNames);
         memset(&s_mesh, 0, sizeof(s_mesh));
     }
 }
@@ -289,12 +305,123 @@ void __cdecl R_Mapkit_FreeMesh()
     Mesh_FreeModels();
 }
 
+
+namespace
+{
+    struct MeshTotals
+    {
+        unsigned int surfs, verts, tris;
+    };
+
+    // surfaces as the tool writes them (u16 material, u16 pad, u32 verts, u32 tris, data): sizes only
+    bool Mesh_ScanSurfaces(Reader &r, unsigned int count, MeshTotals *totals)
+    {
+        for (unsigned int s = 0; s < count && !r.bad; ++s)
+        {
+            r.Take(4);
+            const unsigned int verts = r.U32(), tris = r.U32();
+            if (verts > 65535 || tris > 65535)
+                r.bad = true;
+            r.Take(verts * 32 + tris * 6);
+            totals->verts += verts;
+            totals->tris += tris;
+        }
+        totals->surfs += count;
+        return !r.bad;
+    }
+
+    struct MeshFill
+    {
+        unsigned int surfUsed, vertUsed, triUsed;
+        const int *lookOf;
+        const unsigned int *materialFlags;
+        unsigned int materialCount;
+        Material *base, *alphaBase;
+        int untextured;
+    };
+
+    void Mesh_ReadSurfaces(Reader &r, unsigned int count, MeshFill *fill)
+    {
+        for (unsigned int s = 0; s < count; ++s)
+        {
+            unsigned short materialIndex = 0;
+            memcpy(&materialIndex, r.Take(4), 2);
+            const unsigned int verts = r.U32(), tris = r.U32();
+            XSurface *surf = &s_mesh.surfs[fill->surfUsed];
+            XRigidVertList *list = &s_mesh.vertLists[fill->surfUsed];
+            const bool known = materialIndex < fill->materialCount;
+            const int look = known ? fill->lookOf[materialIndex] : -1;
+            Material *material = look >= 0 ? s_looks[look]->material : 0;
+            if (!material)
+            {
+                material = known && (fill->materialFlags[materialIndex] & MATERIAL_ALPHA) ? fill->alphaBase : fill->base;
+                ++fill->untextured;
+            }
+            s_mesh.materials[fill->surfUsed] = material;
+            const float *src = (const float *)r.Take(verts * 32);
+            for (unsigned int v = 0; v < verts; ++v)
+            {
+                float p[8];
+                memcpy(p, src + v * 8, sizeof(p)); // the file is not aligned for floats
+                Mesh_PackVert(&s_mesh.verts[fill->vertUsed + v], p);
+            }
+            memcpy(&s_mesh.indices[fill->triUsed * 3], r.Take(tris * 6), tris * 6);
+            surf->vertCount = (unsigned short)verts;
+            surf->triCount = (unsigned short)tris;
+            surf->triIndices = &s_mesh.indices[fill->triUsed * 3];
+            surf->verts0 = &s_mesh.verts[fill->vertUsed];
+            surf->vertListCount = 1;
+            surf->vertList = list;
+            list->vertCount = (unsigned short)verts;
+            list->triCount = (unsigned short)tris;
+            ++fill->surfUsed;
+            fill->vertUsed += verts;
+            fill->triUsed += tris;
+        }
+    }
+
+    // a rigid one-bone model whose surfaces start at the next free surface
+    void Mesh_InitModel(XModel *model, const char *name, unsigned int firstSurf, float radius)
+    {
+        model->name = name;
+        model->numBones = 1;
+        model->numRootBones = 1;
+        model->boneNames = &s_boneName;
+        model->parentList = &s_parentList;
+        model->baseMat = &s_identityBone;
+        model->boneInfo = &s_boneInfo;
+        model->surfs = &s_mesh.surfs[firstSurf];
+        model->materialHandles = &s_mesh.materials[firstSurf];
+        model->radius = radius;
+        for (int k = 0; k < 3; ++k)
+        {
+            model->mins[k] = -radius;
+            model->maxs[k] = radius;
+        }
+    }
+
+    Material *Mesh_BaseMaterial(int edit, const char *key, const char *fallback)
+    {
+        const char *name = 0;
+        float unused[3];
+        if (CM_Mapkit_GetField(edit, key, &name, unused) != MKF_STRING)
+            name = fallback;
+        Material *material = Material_RegisterHandle(name, 0);
+        if (!material || material == rgp.defaultMaterial || !material->textureTable)
+        {
+            Com_PrintWarning(8, "mapkit: mesh edit %d: %s material '%s' is not loaded\n", edit, key, name);
+            return 0;
+        }
+        return material;
+    }
+}
+
 void __cdecl R_Mapkit_LoadMesh()
 {
     R_Mapkit_FreeMesh();
     if (!r_loadForRenderer->current.enabled)
         return;
-    const char *file = 0, *imageDir = 0, *baseName = 0;
+    const char *file = 0, *imageDir = 0;
     float unused[3];
     int edit = -1;
     for (int e = 0; e < CM_Mapkit_EditCount() && edit < 0; ++e)
@@ -311,14 +438,13 @@ void __cdecl R_Mapkit_LoadMesh()
         Com_PrintWarning(8, "mapkit: mesh edit %d needs \"file\" and \"images\"\n", edit);
         return;
     }
-    if (CM_Mapkit_GetField(edit, "base", &baseName, unused) != MKF_STRING)
-        baseName = "mc/rus_metal_panel03";
-    Material *base = Material_RegisterHandle(baseName, 0);
-    if (!base || base == rgp.defaultMaterial || !base->textureTable)
-    {
-        Com_PrintWarning(8, "mapkit: mesh edit %d: base material '%s' is not loaded\n", edit, baseName);
+    Material *base = Mesh_BaseMaterial(edit, "base", "mc/rus_metal_panel03");
+    if (!base)
         return;
-    }
+    // MEASURED on the Five base: a static (not wind-animated) leaf, alpha tested
+    Material *alphaBase = Mesh_BaseMaterial(edit, "alphaBase", "mc/t5_foliage_tree_sorbus_leaf01_static");
+    if (!alphaBase)
+        alphaBase = base;
 
     void *buf = 0;
     const int len = FS_ReadFile(file, &buf);
@@ -331,24 +457,28 @@ void __cdecl R_Mapkit_LoadMesh()
     const unsigned char *magic = r.Take(8);
     if (!magic || memcmp(magic, MESH_MAGIC, 8))
     {
-        Com_PrintWarning(8, "mapkit: mesh edit %d: %s is not a BO2MESH1 file\n", edit, file);
+        Com_PrintWarning(8, "mapkit: mesh edit %d: %s is not a BO2MESH3 file (rerun tools/bo2/bo2_mesh.py)\n", edit, file);
         FS_FreeFile(buf);
         return;
     }
 
-    // materials -> looks (one per colour map); a material without an image draws with the base's own colour map
-    const unsigned int materialCount = r.Count(2 * NAME_BYTES);
+    // materials -> looks (one per colour map and base); a material without an image draws with its base's own map
+    const unsigned int materialCount = r.Count(2 * NAME_BYTES + 4);
     int *lookOf = (int *)calloc(materialCount ? materialCount : 1, sizeof(int));
+    unsigned int *materialFlags = (unsigned int *)calloc(materialCount ? materialCount : 1, sizeof(unsigned int));
     int newImages = 0, missingImages = 0;
-    for (unsigned int m = 0; m < materialCount && lookOf; ++m)
+    for (unsigned int m = 0; m < materialCount && lookOf && materialFlags; ++m)
     {
         r.Take(NAME_BYTES); // the source material's name: for the tool's report only
         char image[NAME_BYTES];
         memcpy(image, r.Take(NAME_BYTES), NAME_BYTES);
         image[NAME_BYTES - 1] = 0;
+        materialFlags[m] = r.U32();
         lookOf[m] = -1;
         if (!image[0])
             continue;
+        const bool alpha = (materialFlags[m] & MATERIAL_ALPHA) != 0;
+        const char *baseName = (alpha ? alphaBase : base)->info.name;
         int look = Mesh_FindLook(image, baseName);
         if (look < 0)
         {
@@ -366,7 +496,8 @@ void __cdecl R_Mapkit_LoadMesh()
                 break;
             I_strncpyz(l->image, image, sizeof(l->image));
             I_strncpyz(l->base, baseName, sizeof(l->base));
-            Com_sprintf(l->materialName, sizeof(l->materialName), "mapkit/%s", image);
+            // two bases, two names: the database keys a material by name
+            Com_sprintf(l->materialName, sizeof(l->materialName), alpha ? "mapkit_alpha/%s" : "mapkit/%s", image);
             l->gfx.name = l->image;
             l->gfx.semantic = 2;
             if (!Mesh_ReadImage(l, imageDir))
@@ -386,136 +517,171 @@ void __cdecl R_Mapkit_LoadMesh()
     int linked = 0;
     for (int i = 0; i < s_lookCount; ++i)
     {
-        if (s_looks[i]->uploaded && !strcmp(s_looks[i]->base, baseName) && Mesh_LinkMaterial(s_looks[i], base))
+        MkMeshLook *look = s_looks[i];
+        Material *lookBase = !strcmp(look->base, base->info.name) ? base
+            : !strcmp(look->base, alphaBase->info.name) ? alphaBase : 0;
+        if (look->uploaded && lookBase && Mesh_LinkMaterial(look, lookBase))
             ++linked;
     }
     Material_DirtySort();
 
-    // chunks: sizes first (one pass over the file), then the arrays, then the data
+    // sizes first (one pass over the file), then the arrays, then the data
     const int chunkStart = r.at;
+    MeshTotals totals = {};
     const unsigned int chunkCount = r.Count(20);
-    unsigned int surfTotal = 0, vertTotal = 0, triTotal = 0;
     bool tooManySurfs = false;
     for (unsigned int c = 0; c < chunkCount && !r.bad; ++c)
     {
         r.Take(16);
         const unsigned int surfs = r.Count(12);
-        tooManySurfs |= surfs > MAX_SURFS_PER_MODEL;
-        for (unsigned int s = 0; s < surfs && !r.bad; ++s)
+        tooManySurfs |= surfs > MAX_SURFS_PER_LOD;
+        Mesh_ScanSurfaces(r, surfs, &totals);
+    }
+    const unsigned int modelCount = r.Count(NAME_BYTES + 8);
+    for (unsigned int m = 0; m < modelCount && !r.bad; ++m)
+    {
+        r.Take(NAME_BYTES + 4);
+        const unsigned int lods = r.U32();
+        if (lods < 1 || lods > MAX_LODS)
+            r.bad = true;
+        unsigned int modelSurfs = 0;
+        for (unsigned int l = 0; l < lods && !r.bad; ++l)
         {
             r.Take(4);
-            const unsigned int verts = r.U32(), tris = r.U32();
-            if (verts > 65535 || tris > 65535)
-                r.bad = true;
-            r.Take(verts * 32 + tris * 6);
-            vertTotal += verts;
-            triTotal += tris;
+            const unsigned int surfs = r.Count(12);
+            tooManySurfs |= surfs > MAX_SURFS_PER_LOD;
+            modelSurfs += surfs;
+            Mesh_ScanSurfaces(r, surfs, &totals);
         }
-        surfTotal += surfs;
+        tooManySurfs |= modelSurfs > MAX_SURFS_PER_MODEL;
     }
-    if (r.bad || tooManySurfs || !lookOf)
+    const unsigned int instanceCount = r.Count(56);
+    r.Take(instanceCount * 56);
+    if (r.bad || tooManySurfs || !lookOf || !materialFlags)
     {
-        Com_PrintWarning(8, "mapkit: mesh edit %d: %s is truncated, corrupt or has a chunk of more than %d surfaces\n",
-            edit, file, MAX_SURFS_PER_MODEL);
+        Com_PrintWarning(8, "mapkit: mesh edit %d: %s is truncated, corrupt or has a model of too many surfaces\n", edit,
+            file);
         free(lookOf);
+        free(materialFlags);
         FS_FreeFile(buf);
         return;
     }
+    const unsigned int models = chunkCount + modelCount;
     s_mesh.chunkCount = (int)chunkCount;
-    s_mesh.surfCount = (int)surfTotal;
-    s_mesh.models = (XModel *)calloc(chunkCount ? chunkCount : 1, sizeof(XModel));
+    s_mesh.modelCount = (int)models;
+    s_mesh.instanceCount = (int)instanceCount;
+    s_mesh.surfCount = (int)totals.surfs;
+    s_mesh.models = (XModel *)calloc(models ? models : 1, sizeof(XModel));
+    s_mesh.modelNames = (char (*)[NAME_BYTES])calloc(models ? models : 1, NAME_BYTES);
     s_mesh.placements = (GfxScaledPlacement *)calloc(chunkCount ? chunkCount : 1, sizeof(GfxScaledPlacement));
     s_mesh.lighting = (unsigned short *)calloc(chunkCount ? chunkCount : 1, sizeof(unsigned short));
-    s_mesh.names = (char (*)[24])calloc(chunkCount ? chunkCount : 1, 24);
-    s_mesh.surfs = (XSurface *)calloc(surfTotal ? surfTotal : 1, sizeof(XSurface));
-    s_mesh.vertLists = (XRigidVertList *)calloc(surfTotal ? surfTotal : 1, sizeof(XRigidVertList));
-    s_mesh.materials = (Material **)calloc(surfTotal ? surfTotal : 1, sizeof(Material *));
-    s_mesh.verts = (GfxPackedVertex *)malloc(sizeof(GfxPackedVertex) * (vertTotal ? vertTotal : 1));
-    s_mesh.indices = (unsigned short *)malloc(sizeof(unsigned short) * 3 * (triTotal ? triTotal : 1));
-    if (!s_mesh.models || !s_mesh.placements || !s_mesh.lighting || !s_mesh.names || !s_mesh.surfs || !s_mesh.vertLists
-        || !s_mesh.materials || !s_mesh.verts || !s_mesh.indices)
+    s_mesh.instanceModel = (int *)calloc(instanceCount ? instanceCount : 1, sizeof(int));
+    s_mesh.instancePlacements = (GfxScaledPlacement *)calloc(instanceCount ? instanceCount : 1, sizeof(GfxScaledPlacement));
+    s_mesh.instanceLighting = (unsigned short *)calloc(instanceCount ? instanceCount : 1, sizeof(unsigned short));
+    s_mesh.instanceCullSq = (float *)calloc(instanceCount ? instanceCount : 1, sizeof(float));
+    s_mesh.surfs = (XSurface *)calloc(totals.surfs ? totals.surfs : 1, sizeof(XSurface));
+    s_mesh.vertLists = (XRigidVertList *)calloc(totals.surfs ? totals.surfs : 1, sizeof(XRigidVertList));
+    s_mesh.materials = (Material **)calloc(totals.surfs ? totals.surfs : 1, sizeof(Material *));
+    s_mesh.verts = (GfxPackedVertex *)malloc(sizeof(GfxPackedVertex) * (totals.verts ? totals.verts : 1));
+    s_mesh.indices = (unsigned short *)malloc(sizeof(unsigned short) * 3 * (totals.tris ? totals.tris : 1));
+    if (!s_mesh.models || !s_mesh.modelNames || !s_mesh.placements || !s_mesh.lighting || !s_mesh.instanceModel
+        || !s_mesh.instancePlacements || !s_mesh.instanceLighting || !s_mesh.instanceCullSq || !s_mesh.surfs
+        || !s_mesh.vertLists || !s_mesh.materials || !s_mesh.verts || !s_mesh.indices)
     {
-        Com_PrintWarning(8, "mapkit: mesh edit %d: out of memory for %u vertices\n", edit, vertTotal);
+        Com_PrintWarning(8, "mapkit: mesh edit %d: out of memory for %u vertices\n", edit, totals.verts);
         Mesh_FreeModels();
         free(lookOf);
+        free(materialFlags);
         FS_FreeFile(buf);
         return;
     }
 
+    MeshFill fill = {};
+    fill.lookOf = lookOf;
+    fill.materialFlags = materialFlags;
+    fill.materialCount = materialCount;
+    fill.base = base;
+    fill.alphaBase = alphaBase;
     r.at = chunkStart;
     r.U32();
-    unsigned int surfUsed = 0, vertUsed = 0, triUsed = 0;
-    int untextured = 0;
     for (unsigned int c = 0; c < chunkCount; ++c)
     {
         float head[4];
         memcpy(head, r.Take(16), 16);
         const unsigned int surfs = r.U32();
         XModel *model = &s_mesh.models[c];
-        Com_sprintf(s_mesh.names[c], 24, "mapkit_mesh_%u", c);
-        model->name = s_mesh.names[c];
-        model->numBones = 1;
-        model->numRootBones = 1;
-        model->boneNames = &s_boneName;
-        model->parentList = &s_parentList;
-        model->baseMat = &s_identityBone;
-        model->boneInfo = &s_boneInfo;
+        Com_sprintf(s_mesh.modelNames[c], NAME_BYTES, "mapkit_mesh_%u", c);
+        Mesh_InitModel(model, s_mesh.modelNames[c], fill.surfUsed, head[3]);
         model->numsurfs = (unsigned char)surfs;
-        model->surfs = &s_mesh.surfs[surfUsed];
-        model->materialHandles = &s_mesh.materials[surfUsed];
         model->lodInfo[0].dist = 0.0f; // 0: this LOD at every distance (XModelGetLodForDist_Internal)
         model->lodInfo[0].numsurfs = (unsigned short)surfs;
-        model->lodInfo[0].surfIndex = 0;
         model->numLods = 1;
-        model->radius = head[3];
-        for (int k = 0; k < 3; ++k)
-        {
-            model->mins[k] = -head[3];
-            model->maxs[k] = head[3];
-        }
         GfxScaledPlacement *placement = &s_mesh.placements[c];
         placement->base.quat[3] = 1.0f;
-        placement->base.origin[0] = head[0];
-        placement->base.origin[1] = head[1];
-        placement->base.origin[2] = head[2];
+        memcpy(placement->base.origin, head, 12);
         placement->scale = 1.0f;
-        for (unsigned int s = 0; s < surfs; ++s)
-        {
-            unsigned short materialIndex = 0;
-            memcpy(&materialIndex, r.Take(4), 2);
-            const unsigned int verts = r.U32(), tris = r.U32();
-            XSurface *surf = &s_mesh.surfs[surfUsed];
-            XRigidVertList *list = &s_mesh.vertLists[surfUsed];
-            const int look = materialIndex < materialCount ? lookOf[materialIndex] : -1;
-            Material *material = look >= 0 ? s_looks[look]->material : 0;
-            if (!material)
-            {
-                material = base;
-                ++untextured;
-            }
-            s_mesh.materials[surfUsed] = material;
-            const float *src = (const float *)r.Take(verts * 32);
-            for (unsigned int v = 0; v < verts; ++v)
-            {
-                float p[8];
-                memcpy(p, src + v * 8, sizeof(p)); // the file is not aligned for floats
-                Mesh_PackVert(&s_mesh.verts[vertUsed + v], p);
-            }
-            memcpy(&s_mesh.indices[triUsed * 3], r.Take(tris * 6), tris * 6);
-            surf->vertCount = (unsigned short)verts;
-            surf->triCount = (unsigned short)tris;
-            surf->triIndices = &s_mesh.indices[triUsed * 3];
-            surf->verts0 = &s_mesh.verts[vertUsed];
-            surf->vertListCount = 1;
-            surf->vertList = list;
-            list->vertCount = (unsigned short)verts;
-            list->triCount = (unsigned short)tris;
-            ++surfUsed;
-            vertUsed += verts;
-            triUsed += tris;
-        }
+        Mesh_ReadSurfaces(r, surfs, &fill);
     }
+    r.U32();
+    float *lastLodDist = (float *)calloc(modelCount ? modelCount : 1, sizeof(float));
+    bool *emptyModel = (bool *)calloc(modelCount ? modelCount : 1, sizeof(bool));
+    for (unsigned int m = 0; m < modelCount; ++m)
+    {
+        XModel *model = &s_mesh.models[chunkCount + m];
+        memcpy(s_mesh.modelNames[chunkCount + m], r.Take(NAME_BYTES), NAME_BYTES);
+        s_mesh.modelNames[chunkCount + m][NAME_BYTES - 1] = 0;
+        float radius = 0.0f;
+        memcpy(&radius, r.Take(4), 4);
+        const unsigned int lods = r.U32();
+        const unsigned int firstSurf = fill.surfUsed;
+        Mesh_InitModel(model, s_mesh.modelNames[chunkCount + m], firstSurf, radius);
+        model->numLods = (short)lods;
+        for (unsigned int l = 0; l < lods; ++l)
+        {
+            float dist = 0.0f;
+            memcpy(&dist, r.Take(4), 4);
+            const unsigned int surfs = r.U32();
+            model->lodInfo[l].dist = dist;
+            model->lodInfo[l].numsurfs = (unsigned short)surfs;
+            model->lodInfo[l].surfIndex = (unsigned short)(fill.surfUsed - firstSurf);
+            model->lodInfo[l].lod = (unsigned char)l;
+            Mesh_ReadSurfaces(r, surfs, &fill);
+            if (lastLodDist)
+                lastLodDist[m] = dist;
+            // a LOD without surfaces asserts in XModelGetSurfaces: such a model is never added
+            if (!surfs && emptyModel)
+                emptyModel[m] = true;
+        }
+        model->numsurfs = (unsigned char)(fill.surfUsed - firstSurf);
+    }
+    r.U32();
+    int badInstances = 0;
+    for (unsigned int i = 0; i < instanceCount; ++i)
+    {
+        unsigned int model = 0;
+        float data[13];
+        memcpy(&model, r.Take(4), 4);
+        memcpy(data, r.Take(52), 52);
+        if (model >= modelCount || data[12] <= 0.0f || !emptyModel || emptyModel[model])
+        {
+            s_mesh.instanceModel[i] = -1;
+            ++badInstances;
+            continue;
+        }
+        s_mesh.instanceModel[i] = (int)(chunkCount + model);
+        GfxScaledPlacement *placement = &s_mesh.instancePlacements[i];
+        memcpy(placement->base.origin, data, 12);
+        const float axes[3][3] = { { data[3], data[4], data[5] }, { data[6], data[7], data[8] },
+            { data[9], data[10], data[11] } };
+        AxisToQuat(axes, placement->base.quat);
+        placement->scale = data[12];
+        const float cull = lastLodDist ? lastLodDist[model] * data[12] * CULL_MARGIN : 0.0f;
+        s_mesh.instanceCullSq[i] = cull * cull;
+    }
+    free(lastLodDist);
+    free(emptyModel);
     free(lookOf);
+    free(materialFlags);
     FS_FreeFile(buf);
 
     s_mesh.device = dx.device;
@@ -524,13 +690,14 @@ void __cdecl R_Mapkit_LoadMesh()
     for (int s = 0; s < s_mesh.surfCount; ++s)
         noBuffers += !s_mesh.surfs[s].vb0 || !s_mesh.surfs[s].indexBuffer;
     s_mesh.ready = noBuffers == 0;
-    Com_Printf(8, "mapkit: mesh edit %d: %s: %d chunks, %d surfaces, %u vertices, %u triangles; %d colour maps (%d new, "
-        "%d missing), %d materials linked on %s, %d surfaces untextured, %d without GPU buffers\n", edit, file,
-        s_mesh.chunkCount, s_mesh.surfCount, vertUsed, triUsed, s_lookCount, newImages, missingImages, linked, baseName,
-        untextured, noBuffers);
+    Com_Printf(8, "mapkit: mesh edit %d: %s: %u chunks, %u prop models, %u props (%d bad), %d surfaces, %u vertices, %u "
+        "triangles; %d colour maps (%d new, %d missing), %d materials linked on %s and %s, %d surfaces untextured, %d "
+        "without GPU buffers\n", edit, file, chunkCount, modelCount, instanceCount, badInstances, s_mesh.surfCount,
+        fill.vertUsed, fill.triUsed, s_lookCount, newImages, missingImages, linked, base->info.name,
+        alphaBase->info.name, fill.untextured, noBuffers);
 }
 
-void __cdecl R_Mapkit_AddMesh()
+void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
 {
     if (!s_mesh.ready)
         return;
@@ -543,4 +710,16 @@ void __cdecl R_Mapkit_AddMesh()
     }
     for (int c = 0; c < s_mesh.chunkCount; ++c)
         R_FilterXModelIntoScene(&s_mesh.models[c], &s_mesh.placements[c], 0, &s_mesh.lighting[c], 0.0f);
+    for (int i = 0; i < s_mesh.instanceCount; ++i)
+    {
+        const int model = s_mesh.instanceModel[i];
+        if (model < 0)
+            continue;
+        const float *o = s_mesh.instancePlacements[i].base.origin;
+        const float d[3] = { o[0] - viewOrigin[0], o[1] - viewOrigin[1], o[2] - viewOrigin[2] };
+        if (s_mesh.instanceCullSq[i] > 0.0f && d[0] * d[0] + d[1] * d[1] + d[2] * d[2] > s_mesh.instanceCullSq[i])
+            continue;
+        R_FilterXModelIntoScene(&s_mesh.models[model], &s_mesh.instancePlacements[i], 0, &s_mesh.instanceLighting[i],
+            0.0f);
+    }
 }

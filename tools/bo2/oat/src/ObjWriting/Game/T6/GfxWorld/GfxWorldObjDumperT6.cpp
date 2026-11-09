@@ -1,5 +1,7 @@
 #include "GfxWorldObjDumperT6.h"
 
+#include "Game/T6/CommonT6.h"
+
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -33,14 +35,35 @@ namespace
         return sign ? -value : value;
     }
 
+    // A material can hold several colour-map samplers: its base colour and effect layers (embers, thermal vision,
+    // reveal, specular), in no fixed order. The base is the first of these names; failing that, the first colour map
+    // that is not one of the effect samplers.
+    constexpr const char* BASE_COLOR_NAMES[]{"colorMap", "Diffuse_Map", "Color_Map", "radiantDiffuseMap"};
+    constexpr const char* EFFECT_NAMES[]{"Ember_Map", "Embers_Super_Map", "Thermal_Gradient", "ThermalMapMask",
+                                         "Thermal_Map", "Reveal_Map", "Heat_Map", "SpecularAndGloss",
+                                         "Specular_Gloss_Map", "Macro_AO_Mix_Map"};
+
     const char* ColorMapName(const Material* material)
     {
         if (!material || !material->textureTable)
             return nullptr;
+        for (const auto* name : BASE_COLOR_NAMES)
+        {
+            const auto hash = Common::R_HashString(name);
+            for (auto i = 0u; i < material->textureCount; i++)
+            {
+                const auto& texture = material->textureTable[i];
+                if (texture.nameHash == hash && texture.image && texture.image->name)
+                    return texture.image->name;
+            }
+        }
         for (auto i = 0u; i < material->textureCount; i++)
         {
             const auto& texture = material->textureTable[i];
-            if (texture.semantic == TS_COLOR_MAP && texture.image && texture.image->name)
+            bool effect = false;
+            for (const auto* name : EFFECT_NAMES)
+                effect = effect || texture.nameHash == Common::R_HashString(name);
+            if (texture.semantic == TS_COLOR_MAP && !effect && texture.image && texture.image->name)
                 return texture.image->name;
         }
         return nullptr;

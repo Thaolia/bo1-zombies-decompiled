@@ -3794,7 +3794,7 @@ void __cdecl R_GenerateSortedDrawSurfs(
     
     if (!CM_Mapkit_Empty()) // mod: mapkit empty base has no retail skybox
         R_AddSkyboxModel(viewParmsDraw->origin);
-    R_Mapkit_AddMesh(); // mod: mapkit "mesh" edit (no-op without one)
+    R_Mapkit_AddMesh(viewParmsDraw->origin); // mod: mapkit "mesh" edit (no-op without one)
 
     {
         PROF_SCOPED("bsp surfaces"); 
