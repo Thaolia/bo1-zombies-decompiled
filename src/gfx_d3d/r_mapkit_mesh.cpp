@@ -751,16 +751,25 @@ void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
     }
     for (int c = 0; c < s_mesh.chunkCount; ++c)
         R_FilterXModelIntoScene(&s_mesh.models[c], &s_mesh.placements[c], 0, &s_mesh.lighting[c], 0.0f);
-    for (int i = 0; i < s_mesh.instanceCount; ++i)
+    // The scene holds 1024 models a frame (GfxScene::sceneModel, r_modelLimit) and Nuketown has 2081 props: past the
+    // limit R_AllocSceneModel drops the rest. Props within NEAR_PROPS units go first, so the dropped ones are far.
+    const float NEAR_PROPS = 1024.0f;
+    for (int pass = 0; pass < 2; ++pass)
     {
-        const int model = s_mesh.instanceModel[i];
-        if (model < 0)
-            continue;
-        const float *o = s_mesh.instancePlacements[i].base.origin;
-        const float d[3] = { o[0] - viewOrigin[0], o[1] - viewOrigin[1], o[2] - viewOrigin[2] };
-        if (s_mesh.instanceCullSq[i] > 0.0f && d[0] * d[0] + d[1] * d[1] + d[2] * d[2] > s_mesh.instanceCullSq[i])
-            continue;
-        R_FilterXModelIntoScene(&s_mesh.models[model], &s_mesh.instancePlacements[i], 0, &s_mesh.instanceLighting[i],
-            0.0f);
+        for (int i = 0; i < s_mesh.instanceCount; ++i)
+        {
+            const int model = s_mesh.instanceModel[i];
+            if (model < 0)
+                continue;
+            const float *o = s_mesh.instancePlacements[i].base.origin;
+            const float d[3] = { o[0] - viewOrigin[0], o[1] - viewOrigin[1], o[2] - viewOrigin[2] };
+            const float distSq = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+            if (s_mesh.instanceCullSq[i] > 0.0f && distSq > s_mesh.instanceCullSq[i])
+                continue;
+            if ((distSq <= NEAR_PROPS * NEAR_PROPS) != (pass == 0))
+                continue;
+            R_FilterXModelIntoScene(&s_mesh.models[model], &s_mesh.instancePlacements[i], 0,
+                &s_mesh.instanceLighting[i], 0.0f);
+        }
     }
 }

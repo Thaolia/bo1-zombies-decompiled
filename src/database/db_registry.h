@@ -355,6 +355,7 @@ XAssetPoolEntry<GfxImage> *__cdecl DB_GetImageAtIndex(unsigned int index);
 int __cdecl DB_GetMaterialIndex(const Material *material);
 XAssetPoolEntry<Material> *__cdecl DB_GetMaterialAtIndex(unsigned int index);
 int __cdecl DB_GetXModelIndex(const XModel *model);
+bool __cdecl DB_IsXModelInPool(const XModel *model);
 XAssetPoolEntry<XModel> *__cdecl DB_GetXModelAtIndex(unsigned int index);
 char *__cdecl DB_ReferencedFFChecksums();
 char *__cdecl DB_ReferencedFFNameList();

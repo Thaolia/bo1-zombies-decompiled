@@ -241,6 +241,16 @@ Nuketown has about 195 000 world vertices before its props).
     direction, the `skyBase` of the edit). The engine draws it centred on the viewer, as `R_AddSkyboxModel` places a
     map's own skybox. The dump's winding faces outwards, so the dome was culled from inside: the tool writes its
     triangles both ways round.
+  - **Windows (2026-11-10).** The first Windows client crashed at Nuketown's first frame
+    (`R_StreamUpdate_AddDynamicXModelDistance`). The image streamer indexes each scene model by its place in the
+    asset database's XModel pool (`DB_GetXModelIndex`), and these models are outside it: the pointer difference was
+    taken as an index, which wrote far outside the streamer's arrays. Linux had shown nothing, because its runs were
+    headless with no renderer. The streamer now skips a model outside the pool (`DB_IsXModelInPool`), since their
+    images are loaded whole, not streamed. A Windows client (`tools/headless.ps1 -Client`, D3D9) then draws the map and
+    plays on to its scheduled quit (219 s with the load), with a normal exit.
+  - The scene takes 1 024 models a frame (`GfxScene::sceneModel`). The chunks and the visible props go past it, and
+    `R_AllocSceneModel` drops the rest ("too many existing models (more than 1024)"). Props within 1 024 units are
+    added first, so the dropped ones are far.
   - Not done yet: BO2's baked lighting (the light is the empty base's flat grey and the sun), standalone decals (left
     out with caulk and shadow casters), blending (glass is alpha tested), and a `vid_restart` (the mesh is not drawn
     again until the next map load: its buffers belonged to the old device).
