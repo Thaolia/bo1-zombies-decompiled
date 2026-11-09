@@ -90,10 +90,14 @@ Nuketown has about 195 000 world vertices before its props).
      loader compiles each one (`g_sp_levelstart.cpp`: a traversal's script is only loaded when a node names it). BO1
      zombies have one jump up, 222 units (`ai_zombie_jump_up_222`); BO2's 16 jump-ups (72 to 154 units: from the
      yards to both houses' upper floors) take MapKit's own `mapkit_jump_up` (`mods/mapkit/animscripts/traverse`),
-     which plays it and takes the rise beyond the end node off during its first half (`teleportThreadEx`, as retail
-     corrects a traverse's height): in one run, 17 of 19 jumps ended on the upper floor (z 45 to 82, the end nodes'
-     floors), not 222 units up; the other 2, at house 1's 96-unit pair (-945, 894), were back near the ground a second
-     later. BO2's mantles cross obstacles up to 84 units deep, where Five's wall hop (`zombie_mantle_over_40`'s
+     which plays it and moves the zombie each frame so that it follows the animation's own path. The rise is scaled
+     to the end node's height, and the gap to the end node's spot is spread over the first 80% of the animation. The
+     animation goes 32 units forward and 186 up, so the zombie lands on the end node, not in the ceiling. A first
+     version corrected only the height, linearly over the first half (`teleportThreadEx`, as retail corrects a
+     traverse's height). The jump into house 1's attic, `(-828, 398, 88) -> (-870, 301, 160)`, is 105 units long:
+     its zombies landed 70 units short, in the attic's edge, and stayed there. The same correction also sank them
+     under the floor while the animation crouched before its jump. Logged on that jump, every zombie now ends on the
+     end node to a thousandth of a unit. BO2's mantles cross obstacles up to 84 units deep, where Five's wall hop (`zombie_mantle_over_40`'s
      animations) carries a zombie 63 to 70 units: `mapkit_mantle` plays the same hop and spreads the gap between where
      it ends and the end node over its frames (the actor is noclip while it traverses). BO1 has no crawl under a
      garage door: BO2's 2 garage-door pairs (flat) take the mantle.
@@ -156,15 +160,14 @@ Nuketown has about 195 000 world vertices before its props).
    The carries need `bo1_testclient_carry 1`, which the self-test sets on another game's map only: a MapKit layout's
    walk must make it on its own. Every carry is logged (`bo1_testclient: ... carried over traversal`,
    `... carried past a link it could not walk`, `... carried to the goal with no path`), and a blocked client every 2
-   seconds (`... stuck N ms at`). The last full walking run gave `mapkit_selftest DONE pass 60 fail 2`. Every purchase,
-   34 of 36 risers and the round passed. The client was carried 24 times over traversals, 49 times past links and 7
-   times to a goal.
+   seconds (`... stuck N ms at`).
 
-   riser10 and riser11 failed: their stand point is a node in house 1's attic, reached only by the jump up at
-   `(-828, 398, 88) -> (-870, 301, 160)`. The zombies stayed in that traversal, and none reached the client. Earlier
-   runs of the same fixes failed other risers, Pack-a-Punch (bought too late) or two wall buys: the walk reaches
-   everything, but not every time. The default mode places the client and stays the reference: `pass 62 fail 0` on
-   the same binary, with no carry, and `entrances_example` `pass 6 fail 0`, no carry.
+   With these fixes and the jump-up fix (Traversals, above: house 1's attic), a full walking run gives
+   `mapkit_selftest DONE pass 62 fail 0`. The client was carried 31 times over traversals, 50 times past links and 9
+   times to a goal. Before the attic fix the walk gave `pass 58` to `pass 60`, with fails that changed from run to
+   run: risers, Pack-a-Punch (bought too late) or two wall buys. The default mode places the client and stays the
+   reference: `pass 62 fail 0` on the same build with no carry, and `entrances_example` `pass 6 fail 0` with no
+   carry.
 
    Pack-a-Punch took three fixes, each found by logging the engine's use search (`Player_GetUseList`):
    - BO2's machine yaws are rounded to right angles (`bo2_layout.py`, at most 15 degrees on Nuketown). MapKit's
