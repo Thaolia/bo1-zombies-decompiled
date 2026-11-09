@@ -7,7 +7,11 @@
 //     refers to nodes by index), the new nodes go into the kd tree leaves, pathVis rows are re-strided.
 //   G_Mapkit_LinkPathnodes: after G_UpdateTrackExtraNodes, before Path_InitPaths (which validates every node).
 // Node sources: "room" edits get a grid ("nodeSpacing", default 56; 0 = none) 24 units inside the walls; "node" edits
-// give one node at "origin".
+// give one node at "origin". A "links" edit names a text file (under the mod folder) of links, one "a b" pair per
+// line, a and b counting the layout's "node" edits from 0: another game's own node graph (docs/BO2_MAPS.md). Between two
+// "node" edits the file's links are the graph, Path_CanLinkNodes is not asked: BO1 actors walk no facet steeper than
+// 45.6 degrees, BO2's do (Nuketown's ditch), and BO1's test walked up debris onto the clip of a window sill, where
+// the zombies then stuck; links to the other nodes (traversals, rooms) come from the test as usual.
 #include "pathnode.h"
 #include "pathnode_load_obj.h"
 #include "g_bsp.h"
@@ -19,6 +23,7 @@
 #include <math.h>
 #include <clientscript/cscr_stringlist.h>
 #include <universal/com_memory.h>
+#include <universal/com_files.h>
 
 static pathnode_t s_mkNodes[0x2000];
 static pathbasenode_t s_mkBaseNodes[0x2000];
@@ -27,6 +32,7 @@ static unsigned __int16 s_mkLeafNodes[0x4000];
 static unsigned char *s_mkVis;
 static int s_mkLinkUsed, s_mkLeafUsed;
 static int s_mkFirstAdded = -1, s_mkAddedCount;
+static unsigned __int16 s_mkIndirect[0x2000]; // the empty base's node kd tree leaves point into it
 
 int G_Mapkit_FirstAddedNode() { return s_mkFirstAdded; }
 int G_Mapkit_AddedNodeCount() { return s_mkAddedCount; }
@@ -43,6 +49,12 @@ struct MkNodeSrc
 };
 static MkNodeSrc s_mkSrc[0x2000];
 static int s_mkGridOmitted;
+// the "links" edit: s_mkNodeEdit maps the n-th "node" edit to its s_mkSrc index; the pairs are s_mkSrc indices
+static int s_mkNodeEdit[0x2000], s_mkNodeEditCount;
+static unsigned __int16 s_mkExtraLinks[0x8000][2];
+static int s_mkExtraLinkCount;
+static bool s_mkFileNode[0x2000]; // s_mkSrc index: a "node" edit whose links come from the links file
+static const char *s_mkLinksFile;
 
 // Automatic room grids avoid static geometry with the standing actor hull. Explicit nodes
 // still go through the engine's bad-node checks, as do candidates over missing floors.
@@ -86,6 +98,8 @@ static int Mapkit_CollectNodes(MkNodeSrc *out, int max)
 {
     int n = 0;
     s_mkGridOmitted = 0;
+    s_mkNodeEditCount = 0;
+    s_mkLinksFile = 0;
     for (int e = 0; e < CM_Mapkit_EditCount(); ++e)
     {
         const char *kind = 0;
@@ -95,8 +109,13 @@ static int Mapkit_CollectNodes(MkNodeSrc *out, int max)
         if (!strcmp(kind, "node") && CM_Mapkit_GetField(e, "origin", 0, v) == MKF_VECTOR && n < max)
         {
             v[2] += 16.0f;
+            if (s_mkNodeEditCount < (int)(sizeof(s_mkNodeEdit) / sizeof(s_mkNodeEdit[0])))
+                s_mkNodeEdit[s_mkNodeEditCount++] = n;
             Mapkit_SetNode(&out[n++], v, NODE_PATHNODE);
         }
+        const char *file = 0;
+        if (!strcmp(kind, "links") && CM_Mapkit_GetField(e, "file", &file, v) == MKF_STRING)
+            s_mkLinksFile = file;
         // stairs treads and "walkable" box tops: surface nodes, handled like explicit node edits
         float walk[64][3];
         for (int w = 0, count = CM_Mapkit_WalkNodes(e, walk, 64); w < count && n < max; ++w)
@@ -175,6 +194,55 @@ static int Mapkit_CollectNodes(MkNodeSrc *out, int max)
     return n;
 }
 
+// the "links" edit's file into s_mkExtraLinks; a pair naming a node edit the layout does not have is left out
+static void Mapkit_ReadExtraLinks()
+{
+    s_mkExtraLinkCount = 0;
+    memset(s_mkFileNode, 0, sizeof(s_mkFileNode));
+    if (!s_mkLinksFile)
+        return;
+    void *buf = 0;
+    const int len = FS_ReadFile(s_mkLinksFile, &buf);
+    if (len <= 0 || !buf)
+    {
+        Com_PrintWarning(18, "mapkit: cannot read the links file %s\n", s_mkLinksFile);
+        return;
+    }
+    char *text = (char *)malloc(len + 1);
+    memcpy(text, buf, len);
+    text[len] = 0;
+    FS_FreeFile(buf);
+    int skipped = 0;
+    const int maxLinks = (int)(sizeof(s_mkExtraLinks) / sizeof(s_mkExtraLinks[0]));
+    for (char *p = text; *p;)
+    {
+        char *end;
+        const long a = strtol(p, &end, 10);
+        if (end == p)
+        {
+            ++p;
+            continue;
+        }
+        p = end;
+        const long b = strtol(p, &end, 10);
+        if (end == p)
+            break;
+        p = end;
+        if (a < 0 || b < 0 || a >= s_mkNodeEditCount || b >= s_mkNodeEditCount || a == b || s_mkExtraLinkCount >= maxLinks)
+            ++skipped;
+        else
+        {
+            s_mkExtraLinks[s_mkExtraLinkCount][0] = (unsigned __int16)s_mkNodeEdit[a];
+            s_mkExtraLinks[s_mkExtraLinkCount][1] = (unsigned __int16)s_mkNodeEdit[b];
+            ++s_mkExtraLinkCount;
+        }
+    }
+    free(text);
+    for (int k = 0; k < s_mkNodeEditCount; ++k)
+        s_mkFileNode[s_mkNodeEdit[k]] = true;
+    Com_Printf(18, "mapkit: %d node links read from %s (%d left out)\n", s_mkExtraLinkCount, s_mkLinksFile, skipped);
+}
+
 // the kd tree leaves hold node indices; a new node joins the leaf its origin falls in (leaf lists move to s_mkLeafNodes)
 static void Mapkit_TreeInsert(pathnode_tree_t *tree, unsigned __int16 nodeIndex, const float *origin)
 {
@@ -200,6 +268,7 @@ void G_Mapkit_AppendPathnodes()
         return;
     PathData *path = &gameWorldCurrent->path;
     int n = Mapkit_CollectNodes(s_mkSrc, 0x2000);
+    Mapkit_ReadExtraLinks();
     // empty base: the retail nodes are dropped (their world is off); the layout's nodes are the whole graph
     const bool empty = CM_Mapkit_Empty();
     const unsigned int oldCount = empty ? 0 : path->nodeCount;
@@ -279,7 +348,6 @@ void G_Mapkit_AppendPathnodes()
     if (empty)
     {
         // the node kd tree from zero (retail non-fastfile path, Path_MakePathDataPermanent); leaves point into s_mkIndirect
-        static unsigned __int16 s_mkIndirect[0x2000];
         for (int i = 0; i < n; ++i)
             s_mkIndirect[i] = (unsigned __int16)i;
         path->nodeTreeCount = 0;
@@ -359,7 +427,44 @@ void G_Mapkit_LinkPathnodes()
         if (g_entities[i].r.inuse && Path_IsDynamicBlockingEntity(&g_entities[i]))
             g_entities[i].r.contents = 0;
     }
-    int cut = 0, linked = 0, bad = 0;
+    // a layout node the drop found in solid (an actor capsule touching a crease of imported terrain or a wall, by a
+    // fraction of a unit: zm_nuked had 10) tries the spots 8 and 16 units around it, as a designer would nudge it
+    int moved = 0;
+    for (unsigned int i = first; i < path->nodeCount; ++i)
+    {
+        pathnode_t *node = &path->nodes[i];
+        const MkNodeSrc *src = &s_mkSrc[i - first];
+        if (node->constant.type != NODE_BADNODE || src->type == NODE_BADNODE || (src->animscript && !node->constant.animscriptfunc))
+            continue;
+        for (int attempt = 0; attempt < 16 && node->constant.type == NODE_BADNODE; ++attempt)
+        {
+            const float r = attempt < 8 ? 8.0f : 16.0f, a = (float)(attempt & 7) * 0.78539816f;
+            node->constant.vOrigin[0] = src->origin[0] + r * cosf(a);
+            node->constant.vOrigin[1] = src->origin[1] + r * sinf(a);
+            node->constant.vOrigin[2] = src->origin[2];
+            node->constant.type = src->type;
+            G_DropPathNodeToFloor(i);
+        }
+        if (node->constant.type == NODE_BADNODE)
+        {
+            node->constant.vOrigin[0] = src->origin[0];
+            node->constant.vOrigin[1] = src->origin[1];
+            node->constant.vOrigin[2] = src->origin[2];
+            continue;
+        }
+        ++moved;
+        Com_Printf(18, "mapkit: node %u in solid at (%g %g %g), moved to (%g %g %g)\n", i, src->origin[0], src->origin[1],
+            src->origin[2], node->constant.vOrigin[0], node->constant.vOrigin[1], node->constant.vOrigin[2]);
+    }
+    if (moved && first == 0)
+    {
+        // the tree split the nodes by their old origins
+        for (unsigned int i = 0; i < path->nodeCount; ++i)
+            s_mkIndirect[i] = (unsigned __int16)i;
+        path->nodeTreeCount = 0;
+        path->nodeTree = Path_BuildNodeBsp_r(s_mkIndirect, (int)path->nodeCount);
+    }
+    int cut = 0, linked = 0, bad = 0, extra = 0;
     float dist;
     int negotiation;
     // 1. cut retail links that a mapkit box now blocks (the game's own link test fails); traversal links are kept
@@ -418,6 +523,8 @@ void G_Mapkit_LinkPathnodes()
             const float dz = other->constant.vOrigin[2] - node->constant.vOrigin[2];
             if (dx * dx + dy * dy > 256.0f * 256.0f || fabsf(dz) > 128.0f)
                 continue;
+            if (j >= first && s_mkFileNode[i - first] && s_mkFileNode[j - first])
+                continue;
             if (Path_CanLinkNodes(node, other, &dist, &negotiation))
             {
                 if (first == 0 && found < 256)
@@ -439,6 +546,39 @@ void G_Mapkit_LinkPathnodes()
                 ++linked;
             }
         }
+        // the links file's links from this node (the target must not be bad)
+        for (int l = 0; l < s_mkExtraLinkCount; ++l)
+        {
+            if (first + s_mkExtraLinks[l][0] != i)
+                continue;
+            const unsigned int j = first + s_mkExtraLinks[l][1];
+            if (j >= path->nodeCount || path->nodes[j].constant.type == NODE_BADNODE)
+                continue;
+            const pathnode_t *other = &path->nodes[j];
+            const float dx = other->constant.vOrigin[0] - node->constant.vOrigin[0];
+            const float dy = other->constant.vOrigin[1] - node->constant.vOrigin[1];
+            dist = sqrtf(dx * dx + dy * dy);
+            if (first == 0)
+            {
+                int k = 0;
+                while (k < found && tmp[k].nodeNum != j)
+                    ++k;
+                if (k < found || found >= 256)
+                    continue;
+                memset(&tmp[found], 0, sizeof(tmp[found]));
+                tmp[found].fDist = dist;
+                tmp[found].nodeNum = (unsigned __int16)j;
+                ++found;
+            }
+            else
+            {
+                const int before = node->constant.totalLinkCount;
+                Mapkit_AddLink(node, j, dist, 0);
+                if (node->constant.totalLinkCount == before)
+                    continue;
+            }
+            ++extra;
+        }
         if (found)
         {
             pathlink_s *links = Mapkit_AllocLinks(found);
@@ -459,10 +599,13 @@ void G_Mapkit_LinkPathnodes()
     }
     for (int i = 0; i < level.num_entities; ++i)
         g_entities[i].r.contents = oldContents[i];
-    G_LogPrintf("mapkit: check node_clearance %s %d bad nodes; %d automatic candidates omitted at solids\n",
-        bad ? "FAIL" : "PASS", bad, s_mkGridOmitted);
+    G_LogPrintf("mapkit: check node_clearance %s %d bad nodes; %d automatic candidates omitted at solids; %d nodes moved "
+        "out of solid\n", bad ? "FAIL" : "PASS", bad, s_mkGridOmitted, moved);
     Com_Printf(18, "mapkit: pathnodes %u..%u: %d links added, %d retail links cut, %d new nodes bad (in solid / no floor)\n",
         first, path->nodeCount - 1, linked, cut, bad);
+    if (s_mkLinksFile)
+        Com_Printf(18, "mapkit: %d of the links file's %d links added (the others reach a bad node)\n", extra,
+            s_mkExtraLinkCount);
     // self-test: every layout node must be found by the goal-node lookup an actor uses (Path_FindPathFrom: radius 192,
     // 64 candidates, height check) at its own spot; a node the lookup misses is a spot no zombie can path to
     int found = 0, missed = 0, firstMiss = -1;

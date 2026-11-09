@@ -288,6 +288,8 @@ namespace
     {
         if (!strcmp(name, "none"))
             return 0;
+        if (!strcmp(name, "monsterclip"))
+            return 0x20000; // stops actors and their link tests, not players or shots; never drawn
         return 1; // CONTENTS_SOLID
     }
 
@@ -308,6 +310,7 @@ namespace
             box->maxs[i] = maxs[i];
         }
         box->contents = contents;
+        box->hidden = contents == 0x20000;
         box->editIndex = edit;
         box->texScale = texScale > 1.0f ? texScale : 128.0f;
         for (int i = 0; i < 3; ++i)

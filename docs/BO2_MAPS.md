@@ -73,7 +73,8 @@ Nuketown has about 195 000 world vertices before its props).
    own space (BO2's 128-triangle `nodraw` sheet at z 0.2 over the whole map is one, which the player stood on until the
    owner was exported).
 2. **Layout generator** (`tools/bo2/bo2_layout.py <dump> zm_nuked`): 10 zones (a zone's several volumes become one
-   box), 8 spawns, 36 risers, 703 nodes, 93 traversals, the box, 7 wall buys, 4 perks and Pack-a-Punch. Findings it
+   box), 8 spawns, 36 risers, 703 nodes and BO2's 5 254 links between them, 93 traversals, 102 barrier clips, the
+   box, 7 wall buys, 4 perks and Pack-a-Punch. Findings it
    encodes:
    - BO2's entities are **not on the floor**: its compiler drops pathnodes into its own path data, and the entities
      keep them where the designer put them, 0 to 175 units above it. BO1 links nodes on the floor (`Path_CanLinkNodes`
@@ -84,29 +85,44 @@ Nuketown has about 195 000 world vertices before its props).
      `collision` edit takes `cut` boxes (each with the brush's exact contents) and MapKit's machine brings its own clip.
      The machine and box face the first side with room in front of them.
    - BO2 lays a wall weapon along the wall: a BO1 wall buy faces BO2's yaw + 90 (true for all 7).
-   - Traversals (`traverse` edit, `g_mapkit_path.cpp`): mantles and jump-downs map to the BO1 zombie animscript of the
-     nearest height that the Five base loads (`zombie_mantle_over_40`, `zombie_jump_down_40/72/127/184`); the level
+   - Traversals (`traverse` edit, `g_mapkit_path.cpp`): jump-downs map to the BO1 zombie animscript of the nearest
+     height that the Five base loads (`zombie_jump_down_40/72/127/184`), mantles to MapKit's `mapkit_mantle` (below); the level
      loader compiles each one (`g_sp_levelstart.cpp`: a traversal's script is only loaded when a node names it). BO1
      zombies have one jump up, 222 units (`ai_zombie_jump_up_222`); BO2's 16 jump-ups (72 to 154 units: from the
      yards to both houses' upper floors) take MapKit's own `mapkit_jump_up` (`mods/mapkit/animscripts/traverse`),
      which plays it and takes the rise beyond the end node off during its first half (`teleportThreadEx`, as retail
      corrects a traverse's height): in one run, 17 of 19 jumps ended on the upper floor (z 45 to 82, the end nodes'
      floors), not 222 units up; the other 2, at house 1's 96-unit pair (-945, 894), were back near the ground a second
-     later. BO1 has no crawl under a garage door: BO2's 2 garage-door pairs (flat)
-     take the mantle.
+     later. BO2's mantles cross obstacles up to 84 units deep, where Five's wall hop (`zombie_mantle_over_40`'s
+     animations) carries a zombie 63 to 70 units: `mapkit_mantle` plays the same hop and spreads the gap between where
+     it ends and the end node over its frames (the actor is noclip while it traverses). BO1 has no crawl under a
+     garage door: BO2's 2 garage-door pairs (flat) take the mantle.
+   - **BO2's node graph** (`links` edit). The dump's `gameworldmp` asset holds the links BO2's compiler made
+     (`GameWorldPathDumperT6`, `<map>.d3dbsp.paths.csv`: the 703 pathnodes in their entity order, at their placed
+     origins, 5 254 links between them). The generator writes them as node pairs (`zm_nuked.links.txt`), and between
+     two layout `node`s they are the graph instead of BO1's link test (which made 7 422 links and refused 624 of BO2's).
+     BO1's test refused the terrain behind the houses: an actor walks no facet steeper than 45.6 degrees (normal z
+     0.7, hard-coded for players and actors alike), and the north ditch and the slope behind house 1 have many at 46
+     to 49. It also linked over a window: house 1's front window has a 37-unit sill of monster clip with debris in
+     front, which BO1's test climbs as steps; zombies then walked onto the sill without the mantle and stuck in the
+     opening.
+   - **Barrier clips** (`box` edits, `"contents":"monsterclip"`: hidden, they stop actors only). Each thin monster
+     clip that a mantle pair crosses (30 to 80 units tall, at most 48 deep: the fences and that sill) gets a clip
+     72 units over its top, so that no zombie stands on it; a slanted one becomes 8-unit strips along its shape, and
+     a strip within an actor's radius of a node is left out (102 boxes over 19 barriers, 3 strips left out).
 3. **Headless self-test** (Linux build, `mapkit_selftest 1`, a test client in god mode, timescale 4; with the prop
    collision, the client put on the floor at each purchase, see below):
 
    | Check | Result |
    |---|---|
    | Zones | 10/10 PASS |
-   | Pathnodes | 694/694 found by the actors' goal lookup; 10 bad nodes (against a wall after the drop, traversal ends) |
+   | Pathnodes | 703/703 found by the actors' goal lookup; 0 bad nodes (10 moved 8 to 16 units out of solid, see below) |
    | Mystery box | PASS (FN FAL; RPK, Monkey Bomb, Winter's Howl, CZ75 on earlier runs) |
    | Perks | 4/4 PASS |
    | Wall buys | 7/7 PASS, upstairs in both houses included |
    | Pack-a-Punch | PASS (AK-74u upgraded, 5 000 points), upstairs in house 2 |
-   | Risers | 36/36 PASS (a zombie climbs out and reaches the player); the two in the north ditch pass only when a zombie climbs its slope without the node graph (see below) |
-   | Round | PASS; whole run: `mapkit_selftest DONE pass 61 fail 1` (the bad nodes) |
+   | Risers | 36/36 PASS (a zombie climbs out and reaches the player), the north ditch's included |
+   | Round | PASS; whole run: `mapkit_selftest DONE pass 62 fail 0` |
 
    The test client walks straight from node to node along `Path_FindPath`'s route. BO2's node graph goes round the
    props, but not by much: with the props solid for players, the client caught on house 2's back ramp
@@ -155,12 +171,19 @@ Nuketown has about 195 000 world vertices before its props).
      east yard (`riser8`), 272 nodes could not be reached, the upper floors among them; with the jump-ups 226, the
      rest lying behind mantles that BO2 crosses one way only, inwards.
 
-   The north ditch (around (700..1500, 1150..1450), 30 to 40 degrees, `riser28` and `riser29`) has no node graph:
-   `Path_CanLinkNodes` walks an actor capsule from each node, and on its slopes every step hits the terrain (hit entity
-   1022, the world, at the first 4-unit step, downhill too: BO2's terrain there has facets steeper than an actor walks).
-   The nodes there stay alone, and the zombies that climb out sometimes walk up the slope towards the player without a
-   path: those two checks passed on the last run and failed on the one before. Raising the nodes in the layout changes
-   nothing, since `G_DropPathNodeToFloor` drops every node with the actor's capsule at load.
+   The north ditch (around (700..1500, 1150..1450), `riser28` and `riser29`) had no node graph: `Path_CanLinkNodes`
+   walks an actor capsule from each node, and every step hit a terrain facet steeper than an actor walks (hit entity
+   1022, the world). Those two checks passed only when a zombie happened to climb the slope without a path. With
+   BO2's graph (above) the ditch is linked, and in the last run 4 zombies of `riser28` and the one of `riser29` walked
+   up it to the player. With BO2's graph `riser7` failed instead: its zombies stood on house 1's window sill (the
+   barrier clips fixed it).
+
+   **Nodes in solid.** 10 layout nodes failed the engine's drop (`node_droptofloor`): the actor capsule, put down on
+   the floor, overlapped the world by a fraction of a unit (the GJK trace reports a negative distance) at terrain
+   creases, slopes and walls whose 16-unit prisms stand out of a thin wall's far side; an offline box test found
+   nothing at 6 of them. `G_Mapkit_LinkPathnodes` now tries a bad layout node again 8 then 16 units around (8
+   directions each), as a designer would nudge it, and rebuilds the empty base's node tree if one moved: all 10 found
+   a spot (`mapkit: node N in solid at (...), moved to (...)`).
 
 ### Not done
 
@@ -210,14 +233,14 @@ Nuketown has about 195 000 world vertices before its props).
 On the session's machine (paths to adapt), with OAT built as `tools/bo2/oat/README.md` says:
 
     Z="/mnt/c/Program Files (x86)/Steam/steamapps/common/Call of Duty Black Ops II/zone/all"
-    Unlinker --include-assets gfxworld,clipmap,mapents -o out/?zone? "$Z/zm_nuked.ff"
+    Unlinker --include-assets gfxworld,clipmap,gameworldmp,mapents -o out/?zone? "$Z/zm_nuked.ff"
     Unlinker --include-assets xmodel,image,material --model-format OBJ --image-format DDS -o out/?zone? "$Z/zm_nuked.ff"
     I=<run>/mods/mapkit/imports/zm_nuked
     tools/bo2/bo2_props_collision.py out/zm_nuked zm_nuked --out $I/zm_nuked.collision.bin
     tools/bo2/bo2_layout.py out/zm_nuked zm_nuked --collision-file $I/zm_nuked.collision.bin \
-        --out <run>/mods/mapkit/layouts/bo2_zm_nuked.json
+        --out <run>/mods/mapkit/layouts/bo2_zm_nuked.json --links-out $I/zm_nuked.links.txt
     tools/bo2/bo2_mesh.py out/zm_nuked zm_nuked --out $I
     BO1Zombies +set fs_game mods/mapkit +set bo1_mod_mapkit bo2_zm_nuked +devmap zombie_pentagon
 
-The run folder is a normal game folder (the player's converted Five zones); the layout, the collision and mesh files
+The run folder is a normal game folder (the player's converted Five zones); the layout, the collision, links and mesh files
 and the images are the player's own extraction and stay out of the repository.

@@ -15,7 +15,11 @@ licence, the **GNU GPL v3**, not part of this repository's engine code. See `doc
   `<map>.d3dbsp.collision.txt` (counts and the material list), plus `<map>.d3dbsp.smodelcoll.csv` (the static models
   that collide, from the clipMap's own list: model, contents, origin, inverse scaled axes), which
   `tools/bo2/bo2_props_collision.py` turns into prop brushes.
-- `ObjWriterT6.patch`: registers both dumpers in `src/ObjWriting/Game/T6/ObjWriterT6.cpp`.
+- `src/ObjWriting/Game/T6/GameWorld/GameWorldPathDumperT6.{h,cpp}`: dumps the `gameworldmp` asset's path data as
+  `<map>.d3dbsp.paths.csv`, one row per node (index, node type, origin, its links `to:dist:negotiation`), the graph
+  BO2's map compiler made; `tools/bo2/bo2_layout.py` turns its links between plain pathnodes into the layout's
+  `links` file.
+- `ObjWriterT6.patch`: registers the three dumpers in `src/ObjWriting/Game/T6/ObjWriterT6.cpp`.
 
 ## Build (Linux / WSL)
 
@@ -31,7 +35,7 @@ premake gathers the source files when it generates the makefiles: a file added l
 ## Use
 
     Z="/mnt/c/Program Files (x86)/Steam/steamapps/common/Call of Duty Black Ops II/zone/all"
-    oat-src/build/bin/Release_x64/Unlinker --include-assets gfxworld,clipmap -o out/?zone? "$Z/zm_nuked.ff"
+    oat-src/build/bin/Release_x64/Unlinker --include-assets gfxworld,clipmap,gameworldmp -o out/?zone? "$Z/zm_nuked.ff"
     oat-src/build/bin/Release_x64/Unlinker --include-assets mapents,xmodel,image,material \
         --model-format OBJ --image-format DDS -o out/?zone? "$Z/zm_nuked.ff"
 

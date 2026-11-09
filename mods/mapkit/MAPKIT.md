@@ -22,11 +22,12 @@ that geometry, visual quality, or arbitrary entity behavior has been validated. 
 | Kind | Status: empty / retail overlay | JSON example | Self-test line or coverage |
 |---|---|---|---|
 | `room` | Supported / supported | `{"kind":"room","name":"hall","mins":[-1000,2300,16],"maxs":[-600,2720,176],"wall":8,"nodeSpacing":64,"open":["+x"]}` | `pathnodes PASS goal lookup finds N/N layout nodes`; also `mapkit: selftest room hall dir ... hit ... frac ...` trace diagnostics |
-| `box` | Supported / supported | `{"kind":"box","name":"panel","mins":[-1000,2380,16],"maxs":[-994,2460,60],"material":"mc/pent_art_wall_wood10"}` | Indirect: collision probes/topdown; no per-box PASS |
+| `box` | Supported / supported | `{"kind":"box","name":"panel","mins":[-1000,2380,16],"maxs":[-994,2460,60],"material":"mc/pent_art_wall_wood10"}` (`"contents":"monsterclip"`: hidden, stops zombies and their node links only, not players or shots) | Indirect: collision probes/topdown; no per-box PASS |
+| `links` | Supported (meant for `empty`) | `{"kind":"links","file":"imports/zm_nuked/zm_nuked.links.txt"}` (`file` under `mods/mapkit`: one `a b` pair per line, `a` and `b` counting the layout's `node` edits from 0; another game's own node graph, written by `tools/bo2/bo2_layout.py`, never committed) | The console's `mapkit: N node links read from ...` and `mapkit: N of the links file's N links added` lines. Between two `node` edits the file's links replace BO1's link test |
 | `node` | Supported / supported | `{"kind":"node","origin":[-900,2500,16]}` (Z = walking surface, feet height) | Included in `pathnodes PASS ...` aggregate |
 | `stairs` | Supported / supported | `{"kind":"stairs","name":"steps","mins":[-700,2560,16],"maxs":[-540,2712,64],"up":"+x","rise":12}` | Indirect: builds step boxes + a node per tread; a purchase on top PASSes only if reached (`layouts/raised_example.json`) |
 | `collision` | Supported / supported (meant for `empty`) | `{"kind":"collision","file":"imports/zm_nuked/zm_nuked.collision.bin","cut":[{"mins":[1995,122,-73],"maxs":[2099,195,185],"contents":134414848}]}` (`file` under `mods/mapkit`: another game's map collision, `BO2COL2`, made by `tools/bo2`, never committed; `cut`: world brushes inside a box, with exactly `contents` when given, are left out) | `collision editN SKIP (no runtime check for this kind yet)`; the console's `mapkit: collision edit N: ... world brushes ..., terrain prisms ...` load line. Player, actor and physics movement, traces and pathnode links all see it (`docs/BO2_MAPS.md`) |
-| `traverse` | Supported / supported (meant for `empty`) | `{"kind":"traverse","begin":[1993,64,-64],"end":[1971,146,-64],"yaw":105,"anim":"zombie_mantle_over_40"}` (Z = walking surface; `anim` a loaded BO1 traverse animscript, default `zombie_mantle_over_40`, or MapKit's `mapkit_jump_up`: BO1's 222-unit zombie jump up brought down to the end's height, for any jump up) | Indirect: zombies reach the player through it (`riser ... PASS`); `mapkit: traverse node N: animscript '...' is not loaded` warns of a missing script |
+| `traverse` | Supported / supported (meant for `empty`) | `{"kind":"traverse","begin":[1993,64,-64],"end":[1971,146,-64],"yaw":105,"anim":"zombie_mantle_over_40"}` (Z = walking surface; `anim` a loaded BO1 traverse animscript, default `zombie_mantle_over_40`, or MapKit's `mapkit_jump_up`: BO1's 222-unit zombie jump up brought down to the end's height, for any jump up, or `mapkit_mantle`: Five's wall hop carried on to the end node, for an obstacle of any depth) | Indirect: zombies reach the player through it (`riser ... PASS`); `mapkit: traverse node N: animscript '...' is not loaded` warns of a missing script |
 | `mesh` | Supported / supported (meant for `empty`) | `{"kind":"mesh","file":"imports/zm_nuked/zm_nuked.mesh.bin","images":"imports/zm_nuked/images","base":"mc/rus_metal_panel03"}` (`BO2MESH4` and IW images written by `tools/bo2/bo2_mesh.py`: world chunks, prop models with LODs and their placements, the sky model; `base`, default `mc/rus_metal_panel03`, `alphaBase`, default `mc/t5_foliage_tree_sorbus_leaf01_static`, and `skyBase`, default `mc/mtl_skybox_sp_frontend` (a cube map by view direction), the materials each colour map's material is copied from; the sky is drawn centred on the viewer) | The console's `mapkit: mesh edit N: ... chunks, ... surfaces ...; ... materials linked ..., 0 without GPU buffers` load line; screenshots |
 | `spawn` | Supported / empty only | `{"kind":"spawn","origin":[-920,2510,16],"yaw":0,"zone":"reception_zone"}` | Indirect: spawned test client completes purchases/reach/round checks |
 | `ent` | Supported raw entity / empty only | `{"kind":"ent","keys":{"classname":"script_model","model":"t5_weapon_m14_world","origin":[-990,2510,60]}}` | `ent editN SKIP (no runtime check for this kind yet)`; inspect model and console |
@@ -56,7 +57,9 @@ spots at random, as retail. Doctor: `riser-zone` (origin outside its zone), `ris
 The self-test checks one riser at a time: its zone offers only that spot during the check, and the client stands 192
 units in front of it; on an imported map (a `collision` edit), whose risers can lie outside every zone, it stands
 instead on the pathnode of the riser's zone nearest the riser that `FindPath` reaches from it, and moves to another
-node if, once put down, it is no longer in the zone (`docs/BO2_MAPS.md`).
+node if, once put down, it is no longer in the zone (`docs/BO2_MAPS.md`). Each check logs where the client stands and,
+on a FAIL, where that riser's zombies are (and the traversal they are in); `+set mapkit_test_risers "riser7,riser10"`
+checks only the risers named.
 
 Room `mins/maxs` enclose the usable interior; walls extend outward by `wall` (default 8). `open` accepts `+x,-x,+y,-y`.
 `gaps` cut openings: `{"side":"-y","along":[-930,-830],"z":[52,120]}`. `along` uses world Y for X walls and world X
@@ -90,7 +93,9 @@ top tread. The kit builds round(height/rise) solid steps (`rise` default 12, max
 every tread (`nodeSpacing` across, default 56); treads must be 32+ deep (use 40+), the load prints a warning otherwise. A `box`
 with `"walkable":1` gets a node grid on its top, so a platform/catwalk needs no hand-placed nodes. Hand-placed `node` edits
 use the walking-surface Z (the kit adds 16 and drops them to the floor). The doctor's offline walk steps up/down 18 like the engine.
-Leave usable routes around furniture and inspect `node_clearance` and topdown after a load. Thin wall panels in Relay
+Leave usable routes around furniture and inspect `node_clearance` and topdown after a load. A layout node the engine's
+drop finds in solid is tried again 8 then 16 units around (`mapkit: node N in solid at (...), moved to (...)`); only a
+node with no free spot there counts as bad. Thin wall panels in Relay
 are 6 units deep. A node-lookup PASS alone does not prove all paths are traversable.
 
 For an empty-base window, `origin` is the wall centre at floor height; `yaw` points INTO the play room. Leave an

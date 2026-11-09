@@ -2510,6 +2510,8 @@ mapkit_tried( tried, o )
 // to reach the player. Zombies from windows and other risers are culled after 5 s so the round keeps spawning.
 mapkit_check_risers( player )
 {
+	// +set mapkit_test_risers "riser7,riser10": check only those (empty: all)
+	only = GetDvar( "mapkit_test_risers" );
 	for ( i = 0; i < bo1_mapkit_editcount(); i++ )
 	{
 		if ( bo1_mapkit_get( i, "kind" ) != "riser" || !IsDefined( level.mapkit_empty ) )
@@ -2517,6 +2519,10 @@ mapkit_check_risers( player )
 			continue;
 		}
 		name = mapkit_name( i );
+		if ( only != "" && !IsSubStr( "," + only + ",", "," + name + "," ) )
+		{
+			continue;
+		}
 		ro = bo1_mapkit_get( i, "origin" );
 		yaw = bo1_mapkit_get( i, "yaw" );
 		if ( !IsDefined( yaw ) )
@@ -2574,6 +2580,7 @@ mapkit_check_risers( player )
 			LogPrint( "mapkit: riser " + name + " client put at " + stand + " is at " + player.origin + ", out of " + zone + ": next node\n" );
 			tried[ tried.size ] = stand;
 		}
+		LogPrint( "mapkit: riser " + name + " client at " + player.origin + " for zone " + zone + "\n" );
 		level.mapkit_riser_checking = i;
 		start = GetTime();
 		while ( GetTime() - start < 90000 && mapkit_riser_state( name ) != "reached" )
@@ -2602,6 +2609,19 @@ mapkit_check_risers( player )
 		else if ( mapkit_riser_state( name ) != "" )
 		{
 			LogPrint( "mapkit: check riser " + name + " FAIL within 90 s: zombies rose there but none reached the player\n" );
+			zombies = GetAiSpeciesArray( "axis", "all" );
+			for ( z = 0; z < zombies.size; z++ )
+			{
+				if ( IsDefined( zombies[z].mapkit_source_riser ) && zombies[z].mapkit_source_riser == i )
+				{
+					traversing = "";
+					if ( IsDefined( zombies[z].is_traversing ) && zombies[z].is_traversing && IsDefined( zombies[z].traverseStartNode ) && IsDefined( zombies[z].traverseEndNode ) )
+					{
+						traversing = " (traversing " + zombies[z].traverseStartNode.origin + " -> " + zombies[z].traverseEndNode.origin + ")";
+					}
+					LogPrint( "mapkit: riser " + name + " zombie #" + zombies[z] GetEntityNumber() + " is at " + zombies[z].origin + traversing + ", client at " + player.origin + "\n" );
+				}
+			}
 		}
 		else
 		{

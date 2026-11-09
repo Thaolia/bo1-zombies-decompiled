@@ -143,7 +143,8 @@ Maps zombies de Black Ops II (expérimental, branche `bo2`) : `tools/bo2` extrai
 MapKit sur une base Five vide : la collision d'origine de BO2, les zones, les départs, les zombies qui sortent du sol,
 les pathnodes, les traversées, la boîte, les armes au mur, les atouts et le Pack-a-Punch. Nuketown Zombies tourne en
 headless (l'auto-test y achète la boîte, tous les atouts, toutes les armes au mur et le Pack-a-Punch, et un zombie sort
-de chacun de ses 36 points de sortie du sol pour rejoindre le joueur, en sautant jusqu'aux étages des maisons) et s'affiche texturée avec
+de chacun de ses 36 points de sortie du sol pour rejoindre le joueur en suivant le graphe de nodes d'origine de BO2, en sautant
+jusqu'aux étages des maisons et par-dessus ses clôtures et ses fenêtres) et s'affiche texturée avec
 ses props et son ciel (pas encore l'éclairage d'origine) ; ses props arrêtent les joueurs et les balles. Détails :
 `docs/BO2_MAPS.md`.
 

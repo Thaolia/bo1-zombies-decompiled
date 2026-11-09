@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A MapKit layout (mods/mapkit/layouts/<name>.json) from a BO2 zombies map dumped by tools/bo2/oat.
 
-    tools/bo2/bo2_layout.py <dump folder of the zone> <map name> [--out FILE] [--collision PATH]
+    tools/bo2/bo2_layout.py <dump folder of the zone> <map name> [--out FILE] [--collision PATH] [--links-out FILE]
 
 The dump folder is OAT's output for the zone (it holds maps/mp/<map>.d3dbsp.ents and .collision.bin). The layout is
 an "empty" Five base with the BO2 map's collision (a "collision" edit, PATH under mods/mapkit, default
@@ -10,6 +10,10 @@ imports/<map>/<map>.collision.bin: copy the .bin there in the run folder) and it
   - spawn: the initial_spawn_points structs;
   - riser: the riser_location structs (BO2 zombies climb out of the ground), in the zone their targetname names;
   - node: every node_pathnode, dropped onto the floor under it (BO2 keeps them where the designer placed them);
+  - links: BO2's own links between those nodes (the dump's <map>.d3dbsp.paths.csv, from the gameworldmp asset), as a
+    text file of node pairs (--links-out, default <map>.links.txt; copy it to imports/<map>/ in the run folder). They
+    are the graph between these nodes, instead of BO1's link test (g_mapkit_path.cpp: BO1 actors walk no facet steeper
+    than 45.6 degrees, BO2's walk Nuketown's north ditch; and BO1's test crossed the sill clip of a window);
   - mysterybox: the start chest;
   - wallbuy: the weapon_upgrade structs whose weapon has a BO1 equivalent loaded on the Five base (WEAPONS);
   - perk / pap: the four Five perks and Pack-a-Punch on the first zm_random_machine landing spots (BO2 drops them
@@ -17,7 +21,7 @@ imports/<map>/<map>.collision.bin: copy the .bin there in the run folder) and it
   - traverse: the node_negotiation pairs whose BO2 animscript has a BO1 one of about the same height (TRAVERSES);
   - collision "cut": the BO2 clip at each machine and box spot (MapKit's machine brings its own);
   - mesh: the drawable world, <folder of the collision>/<map>.mesh.bin and images/ (tools/bo2/bo2_mesh.py writes them).
-Not converted: dog spawns, BO1-less traversals (jump ups under 222 units, the garage door), BO2-only mechanics.
+Not converted: dog spawns, BO2-only mechanics (the garage-door crawl becomes a mantle).
 docs/BO2_MAPS.md has the whole procedure.
 """
 import argparse
@@ -40,11 +44,12 @@ WEAPONS = {
 }
 # BO2 traversal animscript -> the BO1 zombie animscript of the nearest height that the Five base loads
 # (zombie_pentagon.ff, common_zombie.ff). BO1 zombies have no jump up below 222 units: the jump-ups take MapKit's
-# mapkit_jump_up (mods/mapkit/animscripts/traverse), the 222 one brought down to the end node's height. BO1 has no
-# crawl under a garage door: that flat pair takes the mantle.
+# mapkit_jump_up (mods/mapkit/animscripts/traverse), the 222 one brought down to the end node's height. The mantles
+# take mapkit_mantle, Five's wall hop carried on to the end node (BO2's obstacles are deeper than a window sill). BO1
+# has no crawl under a garage door: that flat pair takes the mantle too.
 TRAVERSES = {
-    "zm_mantle_over_40": "zombie_mantle_over_40",
-    "zm_traverse_garage_door": "zombie_mantle_over_40",
+    "zm_mantle_over_40": "mapkit_mantle",
+    "zm_traverse_garage_door": "mapkit_mantle",
     "zm_jump_down_fast_40": "zombie_jump_down_40",
     "zm_jump_down_72": "zombie_jump_down_72",
     "zm_jump_down_96": "zombie_jump_down_72",
@@ -68,6 +73,8 @@ ACTOR_MASK = 0x2820011  # BO1's actor trace mask (actor_mp.cpp): what a zombie s
 SOLID = 0x1
 FOOTPRINT_REACH = 64.0
 CLIP_KEEP = 0x1 | 0x2000  # solid or stopping shots: real geometry, never a machine's placeholder clip
+MONSTER_CLIP = 0x20000
+BARRIER_RAISE = 72.0  # a mantled barrier's clip goes this far over its top: an actor cannot stand on it
 NODE_REACH = 8.0  # a node may sit this far under the surface it belongs to
 CELL = 256.0
 
@@ -89,6 +96,7 @@ class Collision:
         (count,) = struct.unpack_from("<I", data, at)
         at += 4
         self.grid = {}
+        self.barriers = []  # (mins, maxs, planes): thin world monster clips, 30 to 80 units tall (fences, sills)
         for _ in range(count):
             mins = struct.unpack_from("<3f", data, at)
             maxs = struct.unpack_from("<3f", data, at + 12)
@@ -99,6 +107,9 @@ class Collision:
             at += 4 + sides * 24
             if owner == 0 and contents & ACTOR_MASK:
                 self._file(mins, maxs, ("brush", contents, mins, maxs, planes))
+            if (owner == 0 and contents & MONSTER_CLIP and not contents & 1 and 30 <= maxs[2] - mins[2] < 80
+                    and min(maxs[0] - mins[0], maxs[1] - mins[1]) <= 48):
+                self.barriers.append((mins, maxs, planes))
         (count,) = struct.unpack_from("<I", data, at)
         verts = [struct.unpack_from("<3f", data, at + 4 + 12 * i) for i in range(count)]
         at += 4 + count * 12
@@ -243,11 +254,122 @@ def zone_edits(ents, submodels):
     return zones
 
 
-def build(ents, col, name, collision):
+def segment_crosses_box(a, b, lo, hi):
+    """Whether the segment a-b crosses the box [lo, hi] seen from above."""
+    t0, t1 = 0.0, 1.0
+    for k in range(2):
+        d = b[k] - a[k]
+        if abs(d) < 1e-6:
+            if not lo[k] <= a[k] <= hi[k]:
+                return False
+            continue
+        u, v = (lo[k] - a[k]) / d, (hi[k] - a[k]) / d
+        t0, t1 = max(t0, min(u, v)), min(t1, max(u, v))
+    return t0 <= t1
+
+
+def barrier_clips(edits, col):
+    """Hidden monster clip boxes over each thin BO2 barrier (fence, window sill: a monster clip 30 to 80 units tall)
+    that a mantle pair crosses, BARRIER_RAISE units over its top. BO2 bars a window of house 1 with a 37-unit sill clip
+    over debris: BO1 zombies walked up the debris onto it, without the traversal, and stuck in the opening. The mantle
+    is noclip and goes through. A barrier with slanted sides becomes strips 8 units deep along its shape; a strip that
+    would come within an actor's radius of a node is left out."""
+    nodes = [e["origin"] for e in edits if e["kind"] == "node"]
+    nodes += [e[k] for e in edits if e["kind"] == "traverse" for k in ("begin", "end")]
+    done, boxes, left_out = set(), [], 0
+    for e in edits:
+        if e["kind"] != "traverse" or e["anim"] != "mapkit_mantle":
+            continue
+        a, b = e["begin"], e["end"]
+        floor = min(a[2], b[2])
+        for lo, hi, planes in col.barriers:
+            key = (tuple(lo), tuple(hi))
+            if key in done or not (lo[2] < floor + 8 and hi[2] > floor) or not segment_crosses_box(a, b, lo, hi):
+                continue
+            done.add(key)
+            top = hi[2] + BARRIER_RAISE
+            mid = (lo[2] + hi[2]) / 2
+
+            def inside(x, y):
+                return all(nx * x + ny * y + nz * mid <= d + 0.01 for nx, ny, nz, d in planes)
+
+            strips = []
+            if not planes:
+                strips.append((lo[0], lo[1], hi[0], hi[1]))
+            else:
+                y = lo[1]
+                while y < hi[1]:
+                    y1 = min(y + 8, hi[1])
+                    # the row's edges as well as its middle, so that the strips of a slanted barrier overlap
+                    xs = [x for x in frange(lo[0], hi[0], 4) if any(inside(x + 2, v) for v in (y, (y + y1) / 2, y1))]
+                    if xs:
+                        strips.append((xs[0], y, min(xs[-1] + 4, hi[0]), y1))
+                    y = y1
+            for x0, y0, x1, y1 in strips:
+                if any(x0 - 15 < n[0] < x1 + 15 and y0 - 15 < n[1] < y1 + 15 and lo[2] - 72 < n[2] < top for n in nodes):
+                    left_out += 1
+                    continue
+                boxes.append({"kind": "box", "name": f"barrier{len(boxes) + 1}", "contents": "monsterclip",
+                              "mins": [round(x0, 1), round(y0, 1), round(lo[2], 1)],
+                              "maxs": [round(x1, 1), round(y1, 1), round(top, 1)]})
+    print(f"barrier clips: {len(boxes)} boxes over {len(done)} mantled barriers, {left_out} strips left out by nodes")
+    return boxes
+
+
+def frange(start, stop, step):
+    x = start
+    while x < stop:
+        yield x
+        x += step
+
+
+def read_paths(path):
+    """BO2's compiled path data (GameWorldPathDumperT6): [(type, (x, y, z), [(to, negotiation)])] by node index."""
+    nodes = []
+    with open(path, encoding="utf-8") as f:
+        next(f)
+        for line in f:
+            index, kind, x, y, z, links = line.rstrip("\n").split(",")
+            if int(index) != len(nodes):
+                sys.exit(f"{path}: node {index} out of order")
+            out = []
+            for link in filter(None, links.split(";")):
+                to, _, negotiation = link.split(":")
+                out.append((int(to), int(negotiation)))
+            nodes.append((int(kind), (float(x), float(y), float(z)), out))
+    return nodes
+
+
+def node_links(ents, paths):
+    """BO2's links between plain pathnodes as pairs of layout node numbers (the n-th "node" edit), each direction on
+    its own; traversal links come from the traverse edits. The compiled pathnodes are the node_pathnode entities in
+    their order, at their placed origins (zm_nuked: all 703; the compiler does not drop them)."""
+    placed = [vec(e["origin"]) for e in ents if e.get("classname") == "node_pathnode"]
+    number = {}
+    for index, (kind, origin, _) in enumerate(paths):
+        if kind != 1:  # NODE_PATHNODE
+            continue
+        n = len(number)
+        if n >= len(placed) or max(abs(origin[k] - placed[n][k]) for k in range(3)) > 0.1:
+            sys.exit(f"compiled pathnode {index} at {origin} is not node_pathnode {n}: redump the paths")
+        number[index] = n
+    if len(number) != len(placed):
+        sys.exit(f"{len(number)} compiled pathnodes for {len(placed)} node_pathnode entities: redump the paths")
+    pairs = []
+    for index, (_, _, links) in enumerate(paths):
+        for to, negotiation in links:
+            if not negotiation and index in number and to in number:
+                pairs.append((number[index], number[to]))
+    return pairs
+
+
+def build(ents, col, name, collision, links_file=None):
     submodels = col.submodels
     folder = os.path.dirname(collision)
     edits = [{"kind": "collision", "file": collision},
              {"kind": "mesh", "file": f"{folder}/{name[4:]}.mesh.bin", "images": f"{folder}/images"}]
+    if links_file:
+        edits.append({"kind": "links", "file": f"{folder}/{links_file}"})
 
     zones = zone_edits(ents, submodels)
     edits += zones
@@ -351,6 +473,7 @@ def build(ents, col, name, collision):
         edits.append({"kind": "pap", "name": "pap", "origin": origin, "yaw": angle})
     if cuts:
         edits[0]["cut"] = cuts
+    edits += barrier_clips(edits, col)
 
     layout = {"name": name, "base": "zombie_pentagon", "empty": True, "edits": edits}
     counts = {}
@@ -367,6 +490,8 @@ def main(argv=None):
     parser.add_argument("--collision-file", help="the collision file to read (default: the dump's clipMap file)")
     parser.add_argument("--collision", help="the collision file's path under mods/mapkit "
                                             "(default: imports/<map>/<map>.collision.bin)")
+    parser.add_argument("--links-out", help="the node links file to write (default: <map>.links.txt in the current "
+                                            "folder; none when the dump has no .paths.csv)")
     args = parser.parse_args(argv)
     base = os.path.join(args.dump, "maps", "mp", f"{args.map}.d3dbsp")
     ents = read_entities(base + ".ents")
@@ -375,7 +500,17 @@ def main(argv=None):
     col = Collision(args.collision_file or base + ".collision.bin")
     name = f"bo2_{args.map}"
     collision = args.collision or f"imports/{args.map}/{args.map}.collision.bin"
-    layout, counts, skipped, traverse_skipped = build(ents, col, name, collision)
+    links_out = None
+    if os.path.exists(base + ".paths.csv"):
+        pairs = node_links(ents, read_paths(base + ".paths.csv"))
+        links_out = args.links_out or f"{args.map}.links.txt"
+        with open(links_out, "w", encoding="utf-8") as f:
+            f.write("".join(f"{a} {b}\n" for a, b in pairs))
+        print(f"{links_out}: {len(pairs)} links between pathnodes")
+    else:
+        print(f"{base}.paths.csv not found (dump the gameworldmp asset): no node links file")
+    layout, counts, skipped, traverse_skipped = build(ents, col, name, collision,
+                                                      links_out and os.path.basename(links_out))
     out = args.out or f"{name}.json"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(layout, f, indent=1)
