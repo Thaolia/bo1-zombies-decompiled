@@ -33,6 +33,7 @@
 #include <server_mp/sv_bot_mp.h>
 #include <game/g_weapon.h>
 #include <game_mp/g_client_script_cmd_mp.h>
+#include <game_mp/g_misc_mp.h>
 #include "g_sp_headless_labs.h"
 #include "g_sp_headless_throw.h"
 #include "g_sp_playtrace.h"
@@ -85,6 +86,7 @@ static const dvar_s *g_headlessFightWeapons;
 static const dvar_s *g_headlessSelfBlast;
 static const dvar_s *g_headlessSpareCrawlers;
 static const dvar_s *g_headlessKnife;
+static const dvar_s *g_headlessCarry;
 static int g_fightReportTime;
 static int g_fightReportHealth;
 static bool g_testClientAttempted;
@@ -118,6 +120,15 @@ static path_t g_fightPath;
 static int g_fightPathGoal = -1;
 static int g_fightPathTime;
 static int g_fightPathPoint;
+static int g_fightTraverseEnd = -1; // the negotiation end node the walk is crossing to, -1 off a traversal
+static int g_fightTraverseSince;
+static int g_fightTraverseLast;
+static int g_fightLastNode = -1; // the last path node the walk reached
+static int g_fightTargetNode = -1; // the node the walk heads for, and since when
+static int g_fightTargetSince;
+static float g_fightStuckAt[2]; // where the walk last made progress, and when
+static int g_fightStuckSince;
+static int g_fightStuckLast; // the last frame the walk ran: a walk resumed later starts its timers afresh
 static int g_fightAdsStart;
 static int g_fightWeaponsStart;
 static unsigned int g_fightWeaponsCurrent;
@@ -152,6 +163,15 @@ void G_SP_ResetClientConnects()
     g_fightPathGoal = -1;
     g_fightPathTime = 0;
     g_fightPathPoint = -1;
+    g_fightTraverseEnd = -1;
+    g_fightTraverseSince = 0;
+    g_fightTraverseLast = 0;
+    g_fightLastNode = -1;
+    g_fightTargetNode = -1;
+    g_fightTargetSince = 0;
+    g_fightStuckAt[0] = g_fightStuckAt[1] = 0.0f;
+    g_fightStuckSince = 0;
+    g_fightStuckLast = 0;
     g_fightAdsStart = 0;
     g_fightWeaponsStart = 0;
     g_fightWeaponsCurrent = 0;
@@ -196,6 +216,8 @@ void G_SP_ResetClientConnects()
             "TEST SWITCH (with bo1_testclient_fight): never target a crawler (script has_legs false), so one can be the round's last zombie");
         g_headlessSelfBlast = _Dvar_RegisterBool("bo1_testclient_selfblast", false, 0,
             "TEST SWITCH (with bo1_testclient_fight): fire an explosive gun at a target inside its own blast radius (splash damage to the player)");
+        g_headlessCarry = _Dvar_RegisterBool("bo1_testclient_carry", false, 0,
+            "TEST SWITCH (MapKit self-test on another game's map): the harness carries the walking test client over a traversal and past a link it cannot walk");
         g_headlessKnife = _Dvar_RegisterString("bo1_testclient_knife", "", 0,
             "TEST SWITCH (with bo1_testclient_fight): knife every target in melee reach whatever the ammo; a melee weapon name (bowie_knife_zm) is given first as the bowie script does (give, take knife_zm)");
         g_headlessWatchKill = _Dvar_RegisterInt("bo1_testclient_watchkill", 0, 0, 100, 0,
@@ -292,41 +314,197 @@ static void SP_HeadlessAvoid(gentity_s *player, float *dir, float length)
     }
 }
 
+// The path's points p + 1 -> p cross a traversal's obstacle: its negotiation begin -> its end, or the plain link the
+// node graph may also hold back from the end to the begin (Nuketown: over the fence by Juggernog, where the client
+// stood against the fence for minutes). The node the crossing ends on, else -1.
+static int SP_HeadlessTraverseEnd(const path_t *path, int p)
+{
+    if (p < 0 || p + 1 >= path->wPathLen || path->pts[p].iNodeNum < 0 || path->pts[p + 1].iNodeNum < 0)
+        return -1;
+    const pathnode_t *from = Path_ConvertIndexToNode(path->pts[p + 1].iNodeNum);
+    const pathnode_t *to = Path_ConvertIndexToNode(path->pts[p].iNodeNum);
+    const bool forward = from->constant.type == NODE_NEGOTIATION_BEGIN && to->constant.type == NODE_NEGOTIATION_END
+        && from->constant.target == to->constant.targetname;
+    const bool back = from->constant.type == NODE_NEGOTIATION_END && to->constant.type == NODE_NEGOTIATION_BEGIN
+        && to->constant.target == from->constant.targetname;
+    return forward || back ? path->pts[p].iNodeNum : -1;
+}
+
 // Walk toward goal along the pathnode graph (Path_FindPath, the actors' own planner), re-planned
 // every two seconds. Produces forward/right moves relative to the command's view yaw.
 static bool SP_HeadlessWalk(gentity_s *player, const float *goal, int goalNum, usercmd_s *cmd, float viewYaw)
 {
     const float *origin = player->r.currentOrigin;
+    const bool resumed = level.time - g_fightStuckLast > 500; // a walk resumed later starts afresh
+    g_fightStuckLast = level.time;
     if (g_fightPathGoal != goalNum || level.time - g_fightPathTime >= 2000)
     {
         g_fightPathGoal = goalNum;
         g_fightPathTime = level.time;
         g_fightPath.wPathLen = 0;
-        if (!Path_FindPath(&g_fightPath, player->sentient->eTeam, origin, goal, 0))
+        // mod (bo2 maps): Path_FindPath without negotiation links fails whenever its best route has one; it does not
+        // look for another. On Nuketown that is every route over a fence or to an upper floor, and the client then
+        // walked straight at the goal into a wall. Only then take the route with its traversals, and leave the
+        // traversal's user count alone: it is the actors' crowding cost, not the harness's.
+        // A client no node can see within 192 units (Nuketown's Pack-a-Punch corner, behind the machine's clip) gets no
+        // path at all, and walked straight at the goal: it then starts from the last node it reached instead.
+        team_t team = player->sentient->eTeam;
+        pathnode_t *last = g_fightLastNode >= 0 ? Path_ConvertIndexToNode(g_fightLastNode) : nullptr;
+        if (!Path_FindPath(&g_fightPath, team, origin, goal, 0) && !Path_FindPath(&g_fightPath, team, origin, goal, 1)
+            && (!last || (!Path_FindPathFrom(&g_fightPath, team, last, origin, goal, 0, 0)
+                && !Path_FindPathFrom(&g_fightPath, team, last, origin, goal, 1, 0))))
             g_fightPath.wPathLen = 0;
+        if (g_fightPath.wNegotiationStartNode > 0)
+        {
+            Path_DecrementNodeUserCount(&g_fightPath);
+            g_fightPath.wNegotiationStartNode = 0;
+        }
         g_fightPathPoint = g_fightPath.wPathLen - 1;
     }
     float point[3];
-    // Path points run from the goal (index 0) back to the start.
+    // Path points run from the goal (index 0) back to the start. A point counts as reached on the same floor only:
+    // a traversal's end above or below the client is not.
     while (g_fightPathPoint >= 0)
     {
         const float *p = g_fightPath.pts[g_fightPathPoint].vOrigPoint;
         const float dx = p[0] - origin[0], dy = p[1] - origin[1];
-        if (dx * dx + dy * dy > 24.0f * 24.0f)
+        if (dx * dx + dy * dy > 24.0f * 24.0f || fabsf(p[2] - origin[2]) > 48.0f)
             break;
+        if (g_fightPath.pts[g_fightPathPoint].iNodeNum >= 0)
+            g_fightLastNode = g_fightPath.pts[g_fightPathPoint].iNodeNum;
         --g_fightPathPoint;
     }
+    // mod (bo2 maps): across a traversal the client walks at its end node and jumps, which takes it over a fence (a
+    // mantle) or off a ledge (a jump down). A zombie's jump up (to a house's upper floor) is out of a player's reach:
+    // after 3 seconds short of the end node the harness carries the client there, and says so (bo1_testclient_carry,
+    // which the MapKit self-test sets on another game's map only). The 3 seconds run on
+    // while the target flickers back to the begin node (each re-plan, or a jump that lands the client back on it).
+    const int traverseEnd = SP_HeadlessTraverseEnd(&g_fightPath, g_fightPathPoint);
+    if (traverseEnd >= 0)
+    {
+        if (traverseEnd != g_fightTraverseEnd || level.time - g_fightTraverseLast > 2500)
+        {
+            g_fightTraverseEnd = traverseEnd;
+            g_fightTraverseSince = level.time;
+        }
+        g_fightTraverseLast = level.time;
+        if (g_headlessCarry && g_headlessCarry->current.enabled && level.time - g_fightTraverseSince >= 3000)
+        {
+            float end[3];
+            Vec3Copy(g_fightPath.pts[g_fightPathPoint].vOrigPoint, end);
+            float angles[3] = { 0.0f, player->client->ps.viewangles[1], 0.0f };
+            Com_Printf(16, "bo1_testclient: time %d carried over traversal node %d -> %d, from (%.0f, %.0f, %.0f) to (%.0f, %.0f, %.0f)\n",
+                level.time, g_fightPath.pts[g_fightPathPoint + 1].iNodeNum, traverseEnd, origin[0], origin[1], origin[2],
+                end[0], end[1], end[2]);
+            TeleportPlayer(player, end, angles);
+            g_fightTraverseEnd = -1;
+            g_fightLastNode = traverseEnd;
+            --g_fightPathPoint;
+            return true;
+        }
+        if ((level.time / 250) % 2)
+            cmd->button_bits.setBit(10); // CL_CmdButtons: +gostand (kb 10), the jump
+    }
+    // mod (bo2 maps): with no path at all, even from the last node (Nuketown's truck: a traversal's jump can leave the
+    // client on it, where no node sees it), the walk heads back to that node rather than straight at the goal.
+    int targetNode = -1;
+    const float *lastAt = !g_fightPath.wPathLen && g_fightLastNode >= 0
+        ? Path_ConvertIndexToNode(g_fightLastNode)->constant.vOrigin : nullptr;
+    const float lastX = lastAt ? lastAt[0] - origin[0] : 0.0f, lastY = lastAt ? lastAt[1] - origin[1] : 0.0f;
     if (g_fightPathPoint >= 0)
+    {
         Vec3Copy(g_fightPath.pts[g_fightPathPoint].vOrigPoint, point);
+        targetNode = g_fightPath.pts[g_fightPathPoint].iNodeNum;
+    }
+    else if (lastAt && lastX * lastX + lastY * lastY > 24.0f * 24.0f)
+    {
+        Vec3Copy(lastAt, point);
+        targetNode = g_fightLastNode;
+    }
     else
+    {
         Vec3Copy(goal, point);
+        if (!g_fightPath.wPathLen)
+            targetNode = -2; // no path, and back on the last node or none: the goal itself
+    }
+    // mod (bo2 maps): a link the zombies walk that a player cannot (props collide with players only, so BO2's links
+    // climb debris piles: house 1's upper floor, where the client set down on the node at the top slid back): after 10
+    // seconds heading for the same node without reaching it, the harness carries the client on to the node after it,
+    // past the obstacle, and says so (bo1_testclient_carry only). With no path, once back on the last node (or with
+    // none), it is carried to the goal after 10 seconds (a carry over a zombie's jump up left it in house 1's attic,
+    // from where no path leads).
+    if (targetNode != g_fightTargetNode || resumed)
+    {
+        g_fightTargetNode = targetNode;
+        g_fightTargetSince = level.time;
+    }
+    if (g_headlessCarry && g_headlessCarry->current.enabled && targetNode == -2 && level.time - g_fightTargetSince >= 10000)
+    {
+        float angles[3] = { 0.0f, player->client->ps.viewangles[1], 0.0f };
+        Com_Printf(16, "bo1_testclient: time %d carried to the goal with no path, from (%.0f, %.0f, %.0f) to (%.0f, %.0f, %.0f)\n",
+            level.time, origin[0], origin[1], origin[2], point[0], point[1], point[2]);
+        TeleportPlayer(player, point, angles);
+        g_fightTargetSince = level.time;
+        return true;
+    }
+    if (g_headlessCarry && g_headlessCarry->current.enabled && targetNode >= 0 && level.time - g_fightTargetSince >= 10000)
+    {
+        if (g_fightPathPoint > 0 && g_fightPath.pts[g_fightPathPoint - 1].iNodeNum >= 0)
+        {
+            --g_fightPathPoint;
+            targetNode = g_fightPath.pts[g_fightPathPoint].iNodeNum;
+            Vec3Copy(g_fightPath.pts[g_fightPathPoint].vOrigPoint, point);
+        }
+        float angles[3] = { 0.0f, player->client->ps.viewangles[1], 0.0f };
+        Com_Printf(16, "bo1_testclient: time %d carried past a link it could not walk, from (%.0f, %.0f, %.0f) to node %d (%.0f, %.0f, %.0f)\n",
+            level.time, origin[0], origin[1], origin[2], targetNode, point[0], point[1], point[2]);
+        TeleportPlayer(player, point, angles);
+        g_fightTargetSince = level.time;
+        if (g_fightPathPoint >= 0)
+        {
+            g_fightLastNode = targetNode;
+            --g_fightPathPoint;
+        }
+        return true;
+    }
     float dir[2] = { point[0] - origin[0], point[1] - origin[1] };
     const float length = sqrtf(dir[0] * dir[0] + dir[1] * dir[1]);
     if (length < 1.0f)
         return false;
     dir[0] /= length;
     dir[1] /= length;
-    SP_HeadlessAvoid(player, dir, length);
+    if (traverseEnd < 0) // across a traversal the client goes at the obstacle and jumps, it does not go round it
+        SP_HeadlessAvoid(player, dir, length);
+    // mod (bo2 maps): the hull probe starts at step height, so it misses what holds the client below that (Nuketown's
+    // truck, where a node sits on a 27-unit ledge: the client stood still on it with the way ahead "clear"), and the
+    // turns it makes can rock it to and fro in a pocket (by Juggernog: 11 units either way for minutes). A walk that
+    // has not got 32 units from where it was 3 seconds ago sidesteps, a second to each side in turn, and after 7
+    // seconds it starts over with the straight walk. It does not jump: jumps put it on the truck and on porch roofs,
+    // where no node sees it.
+    const float movedX = origin[0] - g_fightStuckAt[0], movedY = origin[1] - g_fightStuckAt[1];
+    if (movedX * movedX + movedY * movedY > 32.0f * 32.0f
+        || level.time - g_fightStuckSince > 7000 || resumed)
+    {
+        g_fightStuckAt[0] = origin[0];
+        g_fightStuckAt[1] = origin[1];
+        g_fightStuckSince = level.time;
+    }
+    const int stuck = level.time - g_fightStuckSince;
+    static int stuckLog = -100000;
+    if (stuck >= 1000 && level.time - stuckLog >= 2000)
+    {
+        stuckLog = level.time;
+        Com_Printf(16, "bo1_testclient: time %d stuck %d ms at (%.0f, %.0f, %.0f) walking to (%.0f, %.0f, %.0f), node %d, path point %d of %d\n",
+            level.time, stuck, origin[0], origin[1], origin[2], point[0], point[1], point[2],
+            g_fightPathPoint >= 0 ? g_fightPath.pts[g_fightPathPoint].iNodeNum : -1, g_fightPathPoint, (int)g_fightPath.wPathLen);
+    }
+    if (stuck >= 3000)
+    {
+        const float s = ((stuck / 1000) % 2) ? 1.0f : -1.0f;
+        const float side[2] = { -dir[1] * s, dir[0] * s };
+        dir[0] = side[0];
+        dir[1] = side[1];
+    }
     const float yaw = viewYaw * (3.14159265f / 180.0f);
     const float forward = dir[0] * cosf(yaw) + dir[1] * sinf(yaw);
     const float right = dir[0] * sinf(yaw) - dir[1] * cosf(yaw);

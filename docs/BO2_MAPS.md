@@ -136,14 +136,35 @@ Nuketown has about 195 000 world vertices before its props).
    perks and 6 of 7 wall buys; Juggernog (house 2's backyard), the M16 and Pack-a-Punch (house 2's upper floor) had
    no route in the node graph (BO2 reaches them with mantles and `zm_jump_up` traversals).
 
-   Rerun at 6472db7 (BO2's node graph, jump-ups, barrier clips): `mapkit_selftest DONE pass 36 fail 26`. Passing:
-   the box, Quick Revive, Speed Cola, the CZ75, the AK-74u, Pack-a-Punch (house 2's upper floor, reached this time),
-   17 risers and the round. Juggernog, Double Tap and 5 of 7 wall buys fail with the client stopped on the ground
-   next to house 2 (x 600-850, y 160-280). After Pack-a-Punch it never leaves house 2's upper floor: 2 073
-   `SP_HeadlessAvoid` turns, nearly all at z 80 there. 19 of 36 risers then fail with "no zombie rose there", since
-   zombies rise only in the active zones round the player's. The default mode places the client, so the zombie and
-   purchase checks do not depend on the walk (`pass 62 fail 0` on the same commit). Getting the client round house 2
-   remains open.
+   Rerun at 6472db7: `pass 36 fail 26`, the client stuck by and on house 2. The test client's walk
+   (`SP_HeadlessWalk`, `g_sp_client.cpp`) then took these fixes:
+   - `Path_FindPath` without negotiation links fails as soon as its best route has one; it does not look for another.
+     The client then walked straight at the goal into a wall. It now plans with the traversals when it must.
+   - Across a traversal (or the plain link the graph also holds back from its end to its begin, the fence by
+     Juggernog) the client walks at the end node and jumps, which takes it over low fences and off ledges. After 3
+     seconds short of the end (a zombie's jump up to an upper floor) the harness carries it there.
+   - A client no node sees within 192 units gets no path. It plans from the last node it reached instead, or heads
+     back to that node. Back there with still no path (a carry over a jump up left it in house 1's attic), it is
+     carried to the goal after 10 seconds.
+   - A walk that has not covered 32 units in 3 seconds sidesteps. After 10 seconds heading for one node, the harness
+     carries the client to the node after it. Zombies climb debris piles a player cannot, since props collide with
+     players only.
+   - A point counts as reached only within 48 units of height, and purchases wait 35 seconds longer when walking
+     (`mapkit_test_wait`): the box to Juggernog is about 3 500 units.
+   - A riser check starts its 90 seconds once the walking client reaches its stand point (60 seconds at most).
+
+   The carries need `bo1_testclient_carry 1`, which the self-test sets on another game's map only: a MapKit layout's
+   walk must make it on its own. Every carry is logged (`bo1_testclient: ... carried over traversal`,
+   `... carried past a link it could not walk`, `... carried to the goal with no path`), and a blocked client every 2
+   seconds (`... stuck N ms at`). The last full walking run gave `mapkit_selftest DONE pass 60 fail 2`. Every purchase,
+   34 of 36 risers and the round passed. The client was carried 24 times over traversals, 49 times past links and 7
+   times to a goal.
+
+   riser10 and riser11 failed: their stand point is a node in house 1's attic, reached only by the jump up at
+   `(-828, 398, 88) -> (-870, 301, 160)`. The zombies stayed in that traversal, and none reached the client. Earlier
+   runs of the same fixes failed other risers, Pack-a-Punch (bought too late) or two wall buys: the walk reaches
+   everything, but not every time. The default mode places the client and stays the reference: `pass 62 fail 0` on
+   the same binary, with no carry, and `entrances_example` `pass 6 fail 0`, no carry.
 
    Pack-a-Punch took three fixes, each found by logging the engine's use search (`Player_GetUseList`):
    - BO2's machine yaws are rounded to right angles (`bo2_layout.py`, at most 15 degrees on Nuketown). MapKit's

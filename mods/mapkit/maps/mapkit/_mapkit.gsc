@@ -803,7 +803,8 @@ mapkit_check_pap( player )
 		rec.trig.mapkit_uses = 0;
 		rec.trig thread mapkit_count_uses();
 		start = GetTime();
-		while ( !player HasWeapon( up ) && GetTime() - start < 40000 )
+		limit = mapkit_test_wait( 40000 );
+		while ( !player HasWeapon( up ) && GetTime() - start < limit )
 		{
 			wait( 0.5 );
 		}
@@ -815,7 +816,7 @@ mapkit_check_pap( player )
 		}
 		else
 		{
-			LogPrint( "mapkit: check pap " + rec.name + " FAIL no " + up + " within 40 s (holding " + player GetCurrentWeapon() + ", score " + player.score + " of " + score
+			LogPrint( "mapkit: check pap " + rec.name + " FAIL no " + up + " within " + ( limit / 1000 ) + " s (holding " + player GetCurrentWeapon() + ", score " + player.score + " of " + score
 				+ ", machine in use " + flag( "pack_machine_in_use" ) + ", trigger used " + rec.trig.mapkit_uses + " times; player at " + player.origin + ", touching the trigger "
 				+ player IsTouching( rec.trig ) + ", eye to trigger in sight " + SightTracePassed( player GetEye(), rec.trig.origin,
 				false, undefined ) + ", can buy " + player maps\_zombiemode_weapons::can_buy_weapon() + ")\n" );
@@ -856,6 +857,12 @@ mapkit_selftest()
 		}
 	}
 	bo1_mapkit_dump( "mapkit_dump.json" );
+	// another game's map: its zombie links include some no player walks (traversals, props that block players only),
+	// and the harness may carry the test client across them (logged); a MapKit layout's walk must make it on its own
+	if ( mapkit_imported() )
+	{
+		SetDvar( "bo1_testclient_carry", "1" );
+	}
 	players = get_players();
 	for ( n = 0; n < 60; n++ )
 	{
@@ -1042,7 +1049,8 @@ mapkit_check()
 		SetDvar( "bo1_testclient_look", look[0] + "," + look[1] + "," + look[2] );
 		SetDvar( "bo1_testclient_press", "3," + GetTime() + ",1500,200" );
 		start = GetTime();
-		while ( !player HasPerk( rec.perk ) && GetTime() - start < 25000 )
+		limit = mapkit_test_wait( 25000 );
+		while ( !player HasPerk( rec.perk ) && GetTime() - start < limit )
 		{
 			wait( 0.5 );
 		}
@@ -1282,7 +1290,8 @@ mapkit_check_wallbuys( player )
 		SetDvar( "bo1_testclient_look", o[0] + "," + o[1] + "," + o[2] );
 		SetDvar( "bo1_testclient_press", "3," + GetTime() + ",1500,200" );
 		start = GetTime();
-		while ( !player HasWeapon( weapon ) && GetTime() - start < 25000 )
+		limit = mapkit_test_wait( 25000 );
+		while ( !player HasWeapon( weapon ) && GetTime() - start < limit )
 		{
 			wait( 0.5 );
 		}
@@ -1292,7 +1301,7 @@ mapkit_check_wallbuys( player )
 		}
 		else
 		{
-			LogPrint( "mapkit: check wallbuy " + weapon + " FAIL not bought in 25 s (player at " + player.origin + ", stand " + stand + ", score " + player.score + ")\n" );
+			LogPrint( "mapkit: check wallbuy " + weapon + " FAIL not bought in " + ( limit / 1000 ) + " s (player at " + player.origin + ", stand " + stand + ", score " + player.score + ")\n" );
 		}
 		SetDvar( "bo1_testclient_press", "" );
 	}
@@ -2089,6 +2098,17 @@ mapkit_test_place( stand )
 	players[0] SetOrigin( spot );
 }
 
+// A purchase's wait: a walk across an imported map (Nuketown: 3 500 units from the box to Juggernog, about 20 s at
+// a run) takes longer than the few steps the default mode leaves the client
+mapkit_test_wait( base )
+{
+	if ( mapkit_imported() && GetDvar( "mapkit_test_walk" ) == "1" )
+	{
+		return base + 35000;
+	}
+	return base;
+}
+
 mapkit_test_visit( stand, look )
 {
 	mapkit_test_place( stand );
@@ -2568,9 +2588,17 @@ mapkit_check_risers( player )
 			stand = mapkit_riser_stand( i, ro, yaw, tried );
 			mapkit_test_visit( stand, ro + ( 0, 0, 32 ) );
 			SetDvar( "bo1_testclient_press", "" );
-			if ( !IsDefined( vol ) || !mapkit_imported() || GetDvar( "mapkit_test_walk" ) == "1" )
+			if ( !IsDefined( vol ) || !mapkit_imported() )
 			{
 				break;
+			}
+			// walking (mapkit_test_walk 1), the 90 s start once the client stands there: the zone's risers rise only
+			// while it is in the zone, and a walk across Nuketown takes up to a minute
+			arrive = GetTime();
+			while ( GetDvar( "mapkit_test_walk" ) == "1" && GetTime() - arrive < 60000
+				&& Distance2D( player.origin, stand ) > 48 )
+			{
+				wait( 0.5 );
 			}
 			wait( 1.5 );
 			if ( player IsTouching( vol ) )
