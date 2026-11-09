@@ -55,6 +55,28 @@ void CM_Mapkit_SetVisible(int edit, bool visible);
 const cbrush_t *CM_Mapkit_GetBrush(int index);
 bool CM_Mapkit_IsBrush(const void *brush);
 
+// "collision" edit (cm_mapkit_import.cpp): another game's map collision, dumped by tools/bo2/oat (docs/BO2_MAPS.md);
+// the CM_Mapkit_* trace hooks below test it after the layout's boxes
+const int CM_MAPKIT_IMPORT_MAX_CUTS = 64;
+// a world brush whose bounds lie inside [mins, maxs] is left out, when it has exactly these contents (0: any)
+struct CM_MapkitImportCut
+{
+    float mins[3];
+    float maxs[3];
+    int contents;
+};
+bool CM_MapkitImport_Load(const char *path, int edit, const CM_MapkitImportCut *cuts, int cutCount);
+void CM_MapkitImport_Clear();
+int CM_MapkitImport_BrushCount();
+bool CM_MapkitImport_IsBrush(const void *brush);
+// calls visit for each imported brush whose contents meet mask and whose bounds touch [mins, maxs], once each
+void CM_MapkitImport_VisitBox(const float *mins, const float *maxs, int mask, void (*visit)(const cbrush_t *, void *),
+    void *context);
+void CM_MapkitImport_TraceThrough(const traceWork_t *tw, trace_t *trace);
+void CM_MapkitImport_TestIn(const traceWork_t *tw, trace_t *trace);
+int CM_MapkitImport_PointContents(const float *p);
+int CM_MapkitImport_SightTrace(const traceWork_t *tw, trace_t *trace);
+
 void CM_Mapkit_TraceThrough(const traceWork_t *tw, trace_t *trace);
 void CM_Mapkit_TestIn(const traceWork_t *tw, trace_t *trace);
 int CM_Mapkit_PointContents(const float *p);

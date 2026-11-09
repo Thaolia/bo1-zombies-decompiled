@@ -1,0 +1,44 @@
+# OpenAssetTools addition: export a T6 (Black Ops II) world
+
+These files are an addition to [OpenAssetTools](https://github.com/Laupetin/OpenAssetTools) (OAT) v0.34.0, which reads
+Black Ops II fastfiles but has no dumper for the world geometry. They are compiled into OAT, so they are under OAT's
+licence, the **GNU GPL v3**, not part of this repository's engine code. See `docs/BO2_MAPS.md` for what they are for.
+
+- `src/ObjWriting/Game/T6/GfxWorld/GfxWorldObjDumperT6.{h,cpp}`: dumps a `gfxworld` asset as
+  `<map>.d3dbsp.obj` + `.mtl` (every static surface, UVs, one material per world material with its colour map) and
+  `<map>.d3dbsp.smodels.csv` (each placed static model: name, origin, three axes, scale).
+- `src/ObjWriting/Game/T6/ClipMap/ClipMapCollisionDumperT6.{h,cpp}`: dumps the `clipmap` asset (OAT's
+  `ASSET_TYPE_CLIPMAP_PVS`; the type OAT names `clipmap_unused` is not the one in the zones) as
+  `<map>.d3dbsp.collision.bin`, format `BO2COL2` (materials, brushes with their non-axial planes and their owner,
+  terrain triangles with their collision material and their owner, submodel bounds; the byte layout is at the top of
+  the `.cpp`; "owner" is 0 for the world, n for submodel n, whose geometry is in that model's own space) and
+  `<map>.d3dbsp.collision.txt` (counts and the material list).
+- `ObjWriterT6.patch`: registers both dumpers in `src/ObjWriting/Game/T6/ObjWriterT6.cpp`.
+
+## Build (Linux / WSL)
+
+    git clone --branch v0.34.0 https://github.com/Laupetin/OpenAssetTools.git oat-src
+    cp -r tools/bo2/oat/src/. oat-src/src/
+    git -C oat-src apply "$PWD/tools/bo2/oat/ObjWriterT6.patch"
+    cd oat-src && PREMAKE_NO_PROMPT=1 ./generate.sh        # downloads premake (SHA-256 checked) and the submodules
+    make -C build config=release_x64 UnlinkerCli -j8        # build/bin/Release_x64/Unlinker
+
+premake gathers the source files when it generates the makefiles: a file added later needs `./premake5
+--file=../premake5.lua gmake` again from `build/`, or the link misses it (`undefined reference to vtable`).
+
+## Use
+
+    Z="/mnt/c/Program Files (x86)/Steam/steamapps/common/Call of Duty Black Ops II/zone/all"
+    oat-src/build/bin/Release_x64/Unlinker --include-assets gfxworld,clipmap -o out/?zone? "$Z/zm_nuked.ff"
+    oat-src/build/bin/Release_x64/Unlinker --include-assets mapents,xmodel,image,material \
+        --model-format OBJ --image-format DDS -o out/?zone? "$Z/zm_nuked.ff"
+
+The output is the player's own game data: keep it outside the repository (`build/` or another folder), never commit it.
+
+## The vertex format it relies on
+
+OAT keeps `GfxWorldDraw::vd0` as raw bytes. Read from `zm_nuked`'s buffer (2026-11-09): 36 bytes per vertex, xyz (3
+floats), binormal sign (float), colour (4 bytes), texCoord (2 half floats), lightmap coord (2 half floats), normal and
+tangent (packed). A surface's vertices start at `srfTriangles_t::vertexDataOffset0` and its indices count from there;
+`vertexDataSize0` holds a few more vertices than `vertexCount` says, so only the stride is checked. The dumper refuses
+a buffer whose size is not a multiple of 36.

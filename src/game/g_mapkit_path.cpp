@@ -123,6 +123,29 @@ static int Mapkit_CollectNodes(MkNodeSrc *out, int max)
             Com_sprintf(en->targetname, sizeof(en->targetname), "mkwin%d_end", e);
             b->animscript = "zombie_mantle_over_40"; // MEASURED: 30 of Five's 38 begin nodes (pf82 E:165-171)
         }
+        // a "traverse" edit: one negotiation pair (another game's mantle or jump, docs/BO2_MAPS.md): begin -> end, the
+        // actor plays the animscript `anim` between them; Z = walking surface, as a node edit
+        float tb[3], te[3];
+        if (!strcmp(kind, "traverse") && n + 2 <= max && CM_Mapkit_GetField(e, "begin", 0, tb) == MKF_VECTOR
+            && CM_Mapkit_GetField(e, "end", 0, te) == MKF_VECTOR)
+        {
+            const char *anim = 0;
+            if (CM_Mapkit_GetField(e, "anim", &anim, v) != MKF_STRING || !anim[0])
+                anim = "zombie_mantle_over_40";
+            float angle = 0.0f;
+            if (CM_Mapkit_GetField(e, "yaw", 0, v) == MKF_NUMBER)
+                angle = v[0];
+            tb[2] += 16.0f;
+            te[2] += 16.0f;
+            MkNodeSrc *b = &out[n++];
+            MkNodeSrc *en = &out[n++];
+            Mapkit_SetNode(b, tb, NODE_NEGOTIATION_BEGIN);
+            Mapkit_SetNode(en, te, NODE_NEGOTIATION_END);
+            b->yaw = en->yaw = angle;
+            Com_sprintf(b->target, sizeof(b->target), "mktr%d_end", e);
+            Com_sprintf(en->targetname, sizeof(en->targetname), "mktr%d_end", e);
+            b->animscript = anim;
+        }
         if (strcmp(kind, "room") || CM_Mapkit_GetField(e, "mins", 0, mins) != MKF_VECTOR || CM_Mapkit_GetField(e, "maxs", 0, maxs) != MKF_VECTOR)
             continue;
         float spacing = 56.0f;

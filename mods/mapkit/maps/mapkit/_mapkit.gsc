@@ -1250,7 +1250,15 @@ mapkit_check_wallbuys( player )
 		}
 		f = AnglesToForward( ( 0, yaw, 0 ) );
 		stand = o + f * 40;
-		SetDvar( "bo1_testclient_goto", stand[0] + "," + stand[1] + "," + player.origin[2] );
+		// the floor under the stand spot, not the player's own height: a wall buy upstairs (an imported map) is
+		// reached by the stairs, not from under it; with no floor in reach, the player's height as before
+		floor_trace = BulletTrace( stand, stand - ( 0, 0, 256 ), false, undefined );
+		stand_z = player.origin[2];
+		if ( floor_trace["fraction"] < 1 )
+		{
+			stand_z = floor_trace["position"][2];
+		}
+		SetDvar( "bo1_testclient_goto", stand[0] + "," + stand[1] + "," + stand_z );
 		SetDvar( "bo1_testclient_look", o[0] + "," + o[1] + "," + o[2] );
 		SetDvar( "bo1_testclient_press", "3," + GetTime() + ",1500,200" );
 		start = GetTime();

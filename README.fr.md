@@ -138,6 +138,13 @@ le même mot de passe rcon). La vue Installation fait ce que fait `setup.ps1` : 
 copie `localization.txt`, les `.iwd` et les vidéos, puis convertit les zones avec le `ffconv.exe` du paquet (wine
 sous Linux). Détails : `tools/zmclient/README.md`.
 
+Maps zombies de Black Ops II (expérimental, branche `bo2`) : `tools/bo2` extrait une map du Black Ops II du joueur
+(avec un exporteur de monde et de collision ajouté à OpenAssetTools, GPL v3, compilé à part) et l'écrit en layout
+MapKit sur une base Five vide : la collision d'origine de BO2, les zones, les départs, les zombies qui sortent du sol,
+les pathnodes, les traversées, la boîte, les armes au mur, les atouts et le Pack-a-Punch. Nuketown Zombies tourne en
+headless (l'auto-test y achète la boîte, des atouts et des armes au mur) ; la map n'est pas encore affichée. Détails :
+`docs/BO2_MAPS.md`.
+
 
 ## Paquets prêts à copier
 `tools/make_dist.sh` (bash, depuis WSL) part d'un arbre de sources où `setup.ps1` a copié le jeu. Il produit dans

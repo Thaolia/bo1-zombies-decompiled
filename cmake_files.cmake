@@ -2483,6 +2483,7 @@ set(SRC_QCOMMON
 	"${SRC_DIR}/qcommon/cm_tracebox.h"
 	"${SRC_DIR}/qcommon/cm_mapkit.cpp"
 	"${SRC_DIR}/qcommon/cm_mapkit.h"
+	"${SRC_DIR}/qcommon/cm_mapkit_import.cpp"
 	"${SRC_DIR}/qcommon/cm_noperks.cpp"
 	"${SRC_DIR}/qcommon/cm_world.cpp"
 	"${SRC_DIR}/qcommon/cm_world.h"

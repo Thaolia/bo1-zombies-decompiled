@@ -1756,6 +1756,7 @@ void CM_Mapkit_Load(const char *mapName)
     s_layoutName[0] = 0;
     s_empty = false;
     s_mkEntsBuilt = false;
+    CM_MapkitImport_Clear();
 
     const dvar_s *layout = _Dvar_RegisterString("bo1_mod_mapkit", (char *)"", 0,
         "mod: mapkit layout name (mods/mapkit/layouts/<name>.json: a base map + edits); read when a map loads, empty = off");
@@ -1817,6 +1818,30 @@ void CM_Mapkit_Load(const char *mapName)
         else if (!strcmp(kind, "room"))
         {
             Mapkit_AddRoom(e, c);
+        }
+        else if (!strcmp(kind, "collision"))
+        {
+            // a path under the layout's fs_game (mods/mapkit): the player's own extracted data, never in the repository;
+            // "cut": boxes whose world brushes are left out (a machine's footprint the layout replaces with its own),
+            // only those with exactly the cut's "contents" when it has some
+            CM_MapkitImportCut cuts[CM_MAPKIT_IMPORT_MAX_CUTS];
+            int cutCount = 0;
+            const int cutNode = MkJ_Child(c, "cut");
+            for (int k = cutNode >= 0 ? s_json[cutNode].first : -1; k >= 0; k = s_json[k].next)
+            {
+                if (cutCount == CM_MAPKIT_IMPORT_MAX_CUTS)
+                {
+                    Com_PrintWarning(1, "mapkit: collision edit %d: more than %d cut boxes, the rest ignored\n", e,
+                        CM_MAPKIT_IMPORT_MAX_CUTS);
+                    break;
+                }
+                cuts[cutCount].contents = (int)MkJ_Num(k, "contents", 0.0f);
+                if (MkJ_Vec3(MkJ_Child(k, "mins"), cuts[cutCount].mins) && MkJ_Vec3(MkJ_Child(k, "maxs"), cuts[cutCount].maxs))
+                    ++cutCount;
+                else
+                    Com_PrintWarning(1, "mapkit: collision edit %d: a cut box without mins and maxs, ignored\n", e);
+            }
+            CM_MapkitImport_Load(MkJ_Str(c, "file", ""), e, cuts, cutCount);
         }
         else if (!strcmp(kind, "stairs"))
         {
@@ -1884,6 +1909,8 @@ void CM_Mapkit_TraceThrough(const traceWork_t *tw, trace_t *trace)
         if ((tw->contents & b->contents) != 0 && CM_Mapkit_BoxTouches(tw, b))
             CM_TraceThroughBrush(tw, b, trace);
     }
+    if (trace->fraction != 0.0f)
+        CM_MapkitImport_TraceThrough(tw, trace);
 }
 
 void CM_Mapkit_TestIn(const traceWork_t *tw, trace_t *trace)
@@ -1894,6 +1921,8 @@ void CM_Mapkit_TestIn(const traceWork_t *tw, trace_t *trace)
         if ((tw->contents & b->contents) != 0 && CM_Mapkit_BoxTouches(tw, b))
             CM_TestBoxInBrush(tw, b, trace);
     }
+    if (!trace->allsolid)
+        CM_MapkitImport_TestIn(tw, trace);
 }
 
 int CM_Mapkit_PointContents(const float *p)
@@ -1906,7 +1935,7 @@ int CM_Mapkit_PointContents(const float *p)
             && p[2] > b->mins[2] && p[2] < b->maxs[2])
             contents |= b->contents;
     }
-    return contents;
+    return contents | CM_MapkitImport_PointContents(p);
 }
 
 const cbrush_t *CM_Mapkit_GetBrush(int index)
@@ -1916,7 +1945,8 @@ const cbrush_t *CM_Mapkit_GetBrush(int index)
 
 bool CM_Mapkit_IsBrush(const void *brush)
 {
-    return brush >= (const void *)s_brushes && brush < (const void *)(s_brushes + s_boxCount);
+    return (brush >= (const void *)s_brushes && brush < (const void *)(s_brushes + s_boxCount))
+        || CM_MapkitImport_IsBrush(brush);
 }
 
 // returns a hit number past cm.numBrushes (the sight-trace caches only reuse hits below it)
@@ -1929,7 +1959,7 @@ int CM_Mapkit_SightTrace(const traceWork_t *tw, trace_t *trace)
             && CM_SightTraceThroughBrush(tw, b, cm.numBrushes, trace))
             return cm.numBrushes + 1;
     }
-    return 0;
+    return CM_MapkitImport_SightTrace(tw, trace);
 }
 
 int CM_Mapkit_EditCount()
