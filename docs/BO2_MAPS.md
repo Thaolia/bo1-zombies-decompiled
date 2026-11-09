@@ -276,3 +276,7 @@ On the session's machine (paths to adapt), with OAT built as `tools/bo2/oat/READ
 
 The run folder is a normal game folder (the player's converted Five zones); the layout, the collision, links and mesh files
 and the images are the player's own extraction and stay out of the repository.
+
+`tools/make_dist.sh --bo2 <run> windows` puts that extraction into a package, the layout under `mods/mapkit/layouts/`
+and the files under `mods/mapkit/imports/`. ZmClient's Solo view then offers "Mapkit : Nuketown (Black Ops II)", which
+starts `+set fs_game mods/mapkit +set bo1_mod_mapkit bo2_zm_nuked +devmap zombie_pentagon`.

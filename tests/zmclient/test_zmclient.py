@@ -191,6 +191,23 @@ class CommandLine(unittest.TestCase):
         with self.assertRaises(ValueError):
             P.build_command(p, "x", "/g")
 
+    def test_bo2_nuketown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            layouts = os.path.join(tmp, "mods", "mapkit", "layouts")
+            os.makedirs(layouts)
+            for name, base in (("bo2_zm_nuked", "zombie_pentagon"), ("aldric_sanatorium", "zombie_pentagon"),
+                               ("other", "zombie_pentagon")):
+                with open(os.path.join(layouts, name + ".json"), "w") as f:
+                    json.dump({"name": name, "base": base, "edits": []}, f)
+            maps = [m for m in P.solo_maps(tmp) if m[3]]
+            self.assertEqual([m[3] for m in maps], ["aldric_sanatorium", "bo2_zm_nuked", "other"])
+            self.assertEqual(maps[1][1], "Mapkit : Nuketown (Black Ops II)")
+            p = P.Profile()
+            p["map"] = "mapkit:bo2_zm_nuked"
+            line = " ".join(P.build_command(p, "x", tmp))
+            self.assertIn("+set fs_game mods/mapkit +set bo1_mod_mapkit bo2_zm_nuked", line)
+            self.assertTrue(line.endswith("+devmap zombie_pentagon"), line)
+
     def test_missing_dlc_map(self):
         with tempfile.TemporaryDirectory() as tmp:
             for f in ("Common/zombie_theater.ff", "Common/zombie_coast_patch.ff", "Russian/ru_patch.ff"):
