@@ -39,6 +39,8 @@ MAPKIT_LABELS = {
     "relay_station": "Relay Station (trois salles, quatre fenêtres)",
     "sluice_works": "Sluice Works (boucle de quatre zones)",
     "aldric_sanatorium": "Aldric Sanatorium (deux étages, power, Pack-a-Punch)",
+    # docs/BO2_MAPS.md: the player's own extraction of Black Ops II's Nuketown, which make_dist.sh --bo2 packages
+    "bo2_zm_nuked": "Nuketown (Black Ops II)",
 }
 NIGHTMARE_MAPS = ("zombie_pentagon", "zombie_theater")
 AIM_DVARS = (("aim_assist", "bo1_aimassist"), ("aim_slowdown", "aim_slowdown_enabled"),

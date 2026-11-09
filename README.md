@@ -115,4 +115,9 @@ pass), and `shaders.dksh` when its `shaders.pack` changed (it fails if uam rejec
 `--out`, `--game`, `--zones`, `--dxsdk`, `--archive auto|zip|tar|none`, `--jobs`; `--help` lists them. The packages
 hold your own game files: keep them for your own devices, never publish them (the `_nodata` ones hold none).
 
+`--bo2 DIR` also puts your own Black Ops II map extraction (`docs/BO2_MAPS.md`, "Running it") into the windows and linux
+packages. It takes `DIR/mods/mapkit/layouts/bo2_*.json` and `DIR/mods/mapkit/imports/`, and ZmClient's Solo view then
+offers "Mapkit : Nuketown (Black Ops II)". The extraction is game data, so `--bo2` cannot be combined with
+`--no-game-data`.
+
 French version: `README.fr.md`.

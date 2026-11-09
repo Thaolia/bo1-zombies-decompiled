@@ -18,6 +18,9 @@
 #   --no-build       package what is built; fail if anything is missing or out of date
 #   --no-game-data   windows and linux packages without any file of the game, in BO1Zombies_<platform>_nodata/:
 #                    the player installs them from their own Black Ops with ZmClient (Installation view)
+#   --bo2 DIR        your own Black Ops II map extraction (docs/BO2_MAPS.md, "Running it"): DIR/mods/mapkit/layouts/
+#                    bo2_*.json and DIR/mods/mapkit/imports/ go into the windows and linux packages, where ZmClient's
+#                    Solo view offers them ("Mapkit : Nuketown (Black Ops II)"); game data, so not with --no-game-data
 #   --jobs N         parallel jobs                                   default: the CPU count
 #
 # What it builds when needed (unless --no-build): the win64-msvc preset (Visual Studio, from WSL), the Linux and
@@ -40,6 +43,7 @@ DXSDK="/mnt/c/SDKs/DXSDK_Jun10/DXSDK"
 ARCHIVE=auto
 BUILD=1
 GAME_DATA=1
+BO2=""
 JOBS="$(nproc)"
 PLATFORMS=()
 CMAKE_EXE="${CMAKE_EXE:-/mnt/c/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe}"
@@ -62,6 +66,7 @@ while [ $# -gt 0 ]; do
     --archive) ARCHIVE="$2"; shift ;;
     --no-build) BUILD=0 ;;
     --no-game-data) GAME_DATA=0 ;;
+    --bo2) BO2="$2"; shift ;;
     --jobs) JOBS="$2"; shift ;;
     -h | --help) usage ;;
     *) echo "make_dist: unknown argument: $1" >&2; usage 2 ;;
@@ -77,6 +82,12 @@ SUFFIX=""
 if [ "$GAME_DATA" = 0 ]; then
     wants switch && die "--no-game-data is for windows and linux: the Switch has no installer (ZmClient runs on a PC)"
     SUFFIX="_nodata"
+fi
+if [ -n "$BO2" ]; then
+    [ "$GAME_DATA" = 1 ] || die "--bo2 is game data (Black Ops II's map, extracted): not with --no-game-data"
+    BO2="$(cd "$BO2" && pwd)" || die "--bo2: no folder $BO2"
+    ls "$BO2"/mods/mapkit/layouts/bo2_*.json > /dev/null 2>&1 && [ -d "$BO2/mods/mapkit/imports" ] ||
+        die "--bo2: no mods/mapkit/layouts/bo2_*.json and mods/mapkit/imports/ in $BO2 (docs/BO2_MAPS.md)"
 fi
 
 OUT="$(abspath "$OUT")"
@@ -304,6 +315,21 @@ game_data() { # <dest> [video]: the game files every platform reads, from the in
     rsync -a --delete "$ZONES/zone/" "$1/zone/"
 }
 
+# The player's Black Ops II map extraction beside the repository's MapKit layouts: the layouts name their collision,
+# links, mesh and images under imports/ (docs/BO2_MAPS.md).
+bo2_data() { # <dest>
+    [ -n "$BO2" ] || return 0
+    rsync -a --include='bo2_*.json' --exclude='*' "$BO2/mods/mapkit/layouts/" "$1/mods/mapkit/layouts/"
+    rsync -a "$BO2/mods/mapkit/imports/" "$1/mods/mapkit/imports/"
+}
+
+# The LISEZMOI.txt line of a package with the player's Black Ops II maps.
+bo2_note() {
+    [ -n "$BO2" ] || return 0
+    echo "NUKETOWN    zmclient, vue Solo : « Mapkit : Nuketown (Black Ops II) », tirée de votre propre Black Ops II."
+    echo
+}
+
 check_space() { # <dest dir>: each package is about the game data's size, and as much again when archived
     local per need avail have factor=2
     [ "$GAME_DATA" = 1 ] || return 0
@@ -370,7 +396,7 @@ package_windows() {
     copy_windows_runtimes "$d"
     rsync -a --delete "$ROOT/mods/" "$d/mods/"
     rsync -a "$ROOT/data/main/" "$d/main/"
-    if [ "$GAME_DATA" = 1 ]; then game_data "$d" video; fi
+    if [ "$GAME_DATA" = 1 ]; then game_data "$d" video; bo2_data "$d"; fi
     cat > "$d/Play.bat" << 'EOF'
 @echo off
 rem Black Ops 1 Zombies, 64-bit. "Play.bat" opens the game's menu (Zombies, Solo, a map).
@@ -445,6 +471,7 @@ Prérequis : Windows 10 ou 11 en 64 bits. Si le jeu ne démarre pas faute de DLL
 Redistributable 2015-2022 (x64) » et le « DirectX End-User Runtime » (juin 2010) de Microsoft.
 
 EOF
+    bo2_note >> "$d/LISEZMOI.txt"
     data_note machines >> "$d/LISEZMOI.txt"
     write_version "$d" windows "zmadmin: $ZMADMIN_VERSION, zmclient: $ZMCLIENT_VERSION"
 }
@@ -459,6 +486,7 @@ package_linux() {
     rsync -a "$ROOT/data/main/" "$d/main/"
     if [ "$GAME_DATA" = 1 ]; then
         game_data "$d" video
+        bo2_data "$d"
         cp "$ZONES/shaders.pack" "$d/"
     fi
     cat > "$d/play.sh" << 'EOF'
@@ -528,6 +556,7 @@ Gardez ce dossier sur un système de fichiers Linux (ext4) : depuis /mnt/c sous 
 Le client n'a pas encore de son ni de manette.
 
 EOF
+    bo2_note >> "$d/LISEZMOI.txt"
     data_note machines >> "$d/LISEZMOI.txt"
     write_version "$d" linux "zmadmin: $ZMADMIN_VERSION, zmclient: $ZMCLIENT_VERSION"
 }

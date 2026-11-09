@@ -179,3 +179,8 @@ Sans `--no-build`, le script compile ce qu'il faut, en incrémental :
 
 Autres options : `--out`, `--game`, `--zones`, `--dxsdk`, `--archive auto|zip|tar|none`, `--jobs` ; `--help` les
 décrit. Les paquets contiennent vos propres fichiers de jeu : gardez-les pour vos appareils, ne les publiez pas.
+
+`--bo2 DIR` ajoute aussi aux paquets windows et linux votre propre extraction d'une map de Black Ops II
+(`docs/BO2_MAPS.md`, « Running it »). Le script prend `DIR/mods/mapkit/layouts/bo2_*.json` et
+`DIR/mods/mapkit/imports/`, et la vue Solo de ZmClient propose alors « Mapkit : Nuketown (Black Ops II) ». Cette
+extraction est une donnée du jeu : `--bo2` ne se combine pas avec `--no-game-data`.
