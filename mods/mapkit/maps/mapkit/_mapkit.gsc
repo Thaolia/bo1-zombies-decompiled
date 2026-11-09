@@ -2413,8 +2413,101 @@ mapkit_riser_state( name )
 	return level.mapkit_riser_state[ name ];
 }
 
-// self-test: stand 192 in front of each riser (its zone active by occupancy) and wait for a zombie that climbed out
-// of it to reach the player. Zombies from windows and other risers are culled after 5 s so the round keeps spawning.
+mapkit_zone_box_has( z, p )
+{
+	lo = bo1_mapkit_get( z, "mins" );
+	hi = bo1_mapkit_get( z, "maxs" );
+	return IsDefined( lo ) && IsDefined( hi ) && p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1]
+		&& p[2] >= lo[2] && p[2] <= hi[2];
+}
+
+// A riser only rises while its zone is active (zone_init: the zone's spawners pick from its own rise_locations), and
+// with no adjacent zones that means occupied. 192 in front of the riser is inside its zone on a MapKit-built layout.
+// On an imported map the client stands on a pathnode of the riser's zone instead: BO2 scatters each zone's risers round
+// the map edge, outside every volume (Nuketown: 30 of 36), and the spot 192 in front, at the riser's height, can be
+// under a slope. It takes the nearest node (height counts 4x: a zone box, the union of BO2's volumes, also holds
+// rooftop and upstairs nodes) that a zombie can path to from the riser (FindPath, traversals included); nearer nodes
+// with no path are logged, they are pockets of the node graph.
+mapkit_riser_stand( i, ro, yaw, tried )
+{
+	stand = ro + AnglesToForward( ( 0, yaw, 0 ) ) * 192;
+	zone = bo1_mapkit_get( i, "zone" );
+	z = -1;
+	for ( e = 0; e < bo1_mapkit_editcount() && IsDefined( zone ); e++ )
+	{
+		if ( bo1_mapkit_get( e, "kind" ) == "zone" && mapkit_name( e ) == zone )
+		{
+			z = e;
+		}
+	}
+	if ( z < 0 || ( !mapkit_imported() && mapkit_zone_box_has( z, stand + ( 0, 0, 32 ) ) ) )
+	{
+		return stand;
+	}
+	// plain "Path" nodes only: a traversal's ends sit on ledges, and a bad node is in a wall
+	nodes = GetAllNodes();
+	cand = [];
+	dist = [];
+	for ( n = 0; n < nodes.size; n++ )
+	{
+		o = nodes[n].origin;
+		if ( nodes[n].type == "Path" && mapkit_zone_box_has( z, o + ( 0, 0, 32 ) ) && !mapkit_tried( tried, o ) )
+		{
+			cand[ cand.size ] = o;
+			dist[ dist.size ] = ( o[0] - ro[0] ) * ( o[0] - ro[0] ) + ( o[1] - ro[1] ) * ( o[1] - ro[1] ) + 16 * ( o[2] - ro[2] ) * ( o[2] - ro[2] );
+		}
+	}
+	if ( !cand.size )
+	{
+		LogPrint( "mapkit: riser " + mapkit_name( i ) + " zone " + zone + " has no pathnode: client stands in front\n" );
+		return stand;
+	}
+	nearest = undefined;
+	for ( k = 0; k < 32 && k < cand.size; k++ )
+	{
+		b = k;
+		for ( c = k + 1; c < cand.size; c++ )
+		{
+			if ( dist[c] < dist[b] )
+			{
+				b = c;
+			}
+		}
+		o = cand[b];
+		cand[b] = cand[k];
+		dist[b] = dist[k];
+		cand[k] = o;
+		if ( !IsDefined( nearest ) )
+		{
+			nearest = o;
+		}
+		if ( FindPath( ro, o ) )
+		{
+			if ( k > 0 )
+			{
+				LogPrint( "mapkit: riser " + mapkit_name( i ) + ": no path from it to the " + k + " nearer node(s) of " + zone + " (nearest " + nearest + "); client at " + o + "\n" );
+			}
+			return o;
+		}
+	}
+	LogPrint( "mapkit: riser " + mapkit_name( i ) + ": no path from it to the 32 nearest nodes of " + zone + "; client at the nearest, " + nearest + "\n" );
+	return nearest;
+}
+
+mapkit_tried( tried, o )
+{
+	for ( k = 0; k < tried.size; k++ )
+	{
+		if ( DistanceSquared( tried[k], o ) < 96 * 96 )
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+// self-test: stand where each riser's zone is active (mapkit_riser_stand) and wait for a zombie that climbed out of it
+// to reach the player. Zombies from windows and other risers are culled after 5 s so the round keeps spawning.
 mapkit_check_risers( player )
 {
 	for ( i = 0; i < bo1_mapkit_editcount(); i++ )
@@ -2430,8 +2523,57 @@ mapkit_check_risers( player )
 		{
 			yaw = 0;
 		}
-		mapkit_test_visit( ro + AnglesToForward( ( 0, yaw, 0 ) ) * 192, ro + ( 0, 0, 32 ) );
-		SetDvar( "bo1_testclient_press", "" );
+		// a rise seen before this check (another check's zone) says nothing about this one
+		if ( IsDefined( level.mapkit_riser_state ) )
+		{
+			level.mapkit_riser_state[ name ] = undefined;
+		}
+		// do_zombie_rise picks a random spot of the spawner's zone (BO2 Nuketown: 4 to 6 a zone), so within 90 s a
+		// riser could go unpicked: for its check the zone offers only this one, restored after
+		zone = bo1_mapkit_get( i, "zone" );
+		spots = undefined;
+		if ( IsDefined( zone ) && IsDefined( level.zones ) && IsDefined( level.zones[ zone ] ) && IsDefined( level.zones[ zone ].rise_locations ) )
+		{
+			spots = level.zones[ zone ].rise_locations;
+			kept = [];
+			for ( s = 0; s < spots.size; s++ )
+			{
+				if ( DistanceSquared( spots[s].origin, ro ) < 1 )
+				{
+					kept[ kept.size ] = spots[s];
+				}
+			}
+			if ( kept.size )
+			{
+				level.zones[ zone ].rise_locations = kept;
+			}
+		}
+		// a node on a stair top or by a drop does not hold the client (house 1's stairs: it fell to the ground floor,
+		// out of the upper floor's zone): once put down it must still be in the zone, or a node 96 units from every
+		// spot tried is
+		vol = undefined;
+		if ( IsDefined( zone ) )
+		{
+			vol = GetEnt( zone, "targetname" );
+		}
+		tried = [];
+		for ( t = 0; t < 6; t++ )
+		{
+			stand = mapkit_riser_stand( i, ro, yaw, tried );
+			mapkit_test_visit( stand, ro + ( 0, 0, 32 ) );
+			SetDvar( "bo1_testclient_press", "" );
+			if ( !IsDefined( vol ) || !mapkit_imported() || GetDvar( "mapkit_test_walk" ) == "1" )
+			{
+				break;
+			}
+			wait( 1.5 );
+			if ( player IsTouching( vol ) )
+			{
+				break;
+			}
+			LogPrint( "mapkit: riser " + name + " client put at " + stand + " is at " + player.origin + ", out of " + zone + ": next node\n" );
+			tried[ tried.size ] = stand;
+		}
 		level.mapkit_riser_checking = i;
 		start = GetTime();
 		while ( GetTime() - start < 90000 && mapkit_riser_state( name ) != "reached" )
@@ -2448,6 +2590,10 @@ mapkit_check_risers( player )
 				}
 			}
 			wait( 1 );
+		}
+		if ( IsDefined( spots ) )
+		{
+			level.zones[ zone ].rise_locations = spots;
 		}
 		if ( mapkit_riser_state( name ) == "reached" )
 		{

@@ -39,14 +39,21 @@ WEAPONS = {
     "beretta93r_zm": ("cz75_zm", "t5_weapon_cz75_world"),
 }
 # BO2 traversal animscript -> the BO1 zombie animscript of the nearest height that the Five base loads
-# (zombie_pentagon.ff, common_zombie.ff). BO1 zombies have no jump up below 222 units: those pairs are left out.
+# (zombie_pentagon.ff, common_zombie.ff). BO1 zombies have no jump up below 222 units: the jump-ups take MapKit's
+# mapkit_jump_up (mods/mapkit/animscripts/traverse), the 222 one brought down to the end node's height. BO1 has no
+# crawl under a garage door: that flat pair takes the mantle.
 TRAVERSES = {
     "zm_mantle_over_40": "zombie_mantle_over_40",
+    "zm_traverse_garage_door": "zombie_mantle_over_40",
     "zm_jump_down_fast_40": "zombie_jump_down_40",
     "zm_jump_down_72": "zombie_jump_down_72",
     "zm_jump_down_96": "zombie_jump_down_72",
     "zm_jump_down_127": "zombie_jump_down_127",
     "zm_jump_down_176": "zombie_jump_down_184",
+    "zm_jump_up_72": "mapkit_jump_up",
+    "zm_jump_up_96": "mapkit_jump_up",
+    "zm_jump_up_127": "mapkit_jump_up",
+    "zm_jump_up_154": "mapkit_jump_up",
 }
 PERKS = ["specialty_armorvest", "specialty_quickrevive", "specialty_fastreload", "specialty_rof"]
 

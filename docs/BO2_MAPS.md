@@ -73,7 +73,7 @@ Nuketown has about 195 000 world vertices before its props).
    own space (BO2's 128-triangle `nodraw` sheet at z 0.2 over the whole map is one, which the player stood on until the
    owner was exported).
 2. **Layout generator** (`tools/bo2/bo2_layout.py <dump> zm_nuked`): 10 zones (a zone's several volumes become one
-   box), 8 spawns, 36 risers, 703 nodes, 75 traversals, the box, 7 wall buys, 4 perks and Pack-a-Punch. Findings it
+   box), 8 spawns, 36 risers, 703 nodes, 93 traversals, the box, 7 wall buys, 4 perks and Pack-a-Punch. Findings it
    encodes:
    - BO2's entities are **not on the floor**: its compiler drops pathnodes into its own path data, and the entities
      keep them where the designer put them, 0 to 175 units above it. BO1 links nodes on the floor (`Path_CanLinkNodes`
@@ -87,20 +87,26 @@ Nuketown has about 195 000 world vertices before its props).
    - Traversals (`traverse` edit, `g_mapkit_path.cpp`): mantles and jump-downs map to the BO1 zombie animscript of the
      nearest height that the Five base loads (`zombie_mantle_over_40`, `zombie_jump_down_40/72/127/184`); the level
      loader compiles each one (`g_sp_levelstart.cpp`: a traversal's script is only loaded when a node names it). BO1
-     zombies have no jump up under 222 units: BO2's 16 jump-ups and its 2 garage-door traversals are left out.
+     zombies have one jump up, 222 units (`ai_zombie_jump_up_222`); BO2's 16 jump-ups (72 to 154 units: from the
+     yards to both houses' upper floors) take MapKit's own `mapkit_jump_up` (`mods/mapkit/animscripts/traverse`),
+     which plays it and takes the rise beyond the end node off during its first half (`teleportThreadEx`, as retail
+     corrects a traverse's height): in one run, 17 of 19 jumps ended on the upper floor (z 45 to 82, the end nodes'
+     floors), not 222 units up; the other 2, at house 1's 96-unit pair (-945, 894), were back near the ground a second
+     later. BO1 has no crawl under a garage door: BO2's 2 garage-door pairs (flat)
+     take the mantle.
 3. **Headless self-test** (Linux build, `mapkit_selftest 1`, a test client in god mode, timescale 4; with the prop
    collision, the client put on the floor at each purchase, see below):
 
    | Check | Result |
    |---|---|
    | Zones | 10/10 PASS |
-   | Pathnodes | 694/694 found by the actors' goal lookup; 9 bad nodes (against a wall after the drop, traversal ends) |
+   | Pathnodes | 694/694 found by the actors' goal lookup; 10 bad nodes (against a wall after the drop, traversal ends) |
    | Mystery box | PASS (FN FAL; RPK, Monkey Bomb, Winter's Howl, CZ75 on earlier runs) |
    | Perks | 4/4 PASS |
    | Wall buys | 7/7 PASS, upstairs in both houses included |
    | Pack-a-Punch | PASS (AK-74u upgraded, 5 000 points), upstairs in house 2 |
-   | Risers | 12/36 PASS (a zombie climbs out and reaches the player); 15 rose but none reached the player (most stuck in the ditch north of house 2, around (700..1200, 1200..1300, z -250): no way out of it in the node graph yet), 9 not picked in 90 s |
-   | Round | PASS; whole run: `mapkit_selftest DONE pass 37 fail 25` |
+   | Risers | 36/36 PASS (a zombie climbs out and reaches the player); the two in the north ditch pass only when a zombie climbs its slope without the node graph (see below) |
+   | Round | PASS; whole run: `mapkit_selftest DONE pass 61 fail 1` (the bad nodes) |
 
    The test client walks straight from node to node along `Path_FindPath`'s route. BO2's node graph goes round the
    props, but not by much: with the props solid for players, the client caught on house 2's back ramp
@@ -112,7 +118,8 @@ Nuketown has about 195 000 world vertices before its props).
    keeping the side it found while blocked) and counts a goal it cannot reach exactly as reached once it stands still
    within 48 units. Walking all the way (`mapkit_test_walk 1`, before the wall fix below) it bought the box, 3 of 4
    perks and 6 of 7 wall buys; Juggernog (house 2's backyard), the M16 and Pack-a-Punch (house 2's upper floor) have
-   no route in the node graph (BO2 reaches them with mantles and `zm_jump_up` traversals BO1 has no animation for).
+   no route in the node graph (BO2 reaches them with mantles and `zm_jump_up` traversals; the jump-ups are in since,
+   the walk was not run again).
 
    Pack-a-Punch took three fixes, each found by logging the engine's use search (`Player_GetUseList`):
    - BO2's machine yaws are rounded to right angles (`bo2_layout.py`, at most 15 degrees on Nuketown). MapKit's
@@ -127,9 +134,33 @@ Nuketown has about 195 000 world vertices before its props).
      (`UseTriggerRequireLookAt`, a dot of 0.76 with the bounds centre, which for a `trigger_radius_use` is its
      origin).
 
-   BO2's zombies reach both houses' upper floors from outside with `zm_jump_up_127` (12 pairs), which BO1 has no
-   animation for. In house 1 the node graph has another way up (the MP5K passes); in house 2 it finds none, so the
-   zombies cannot go up there either until it gets one (a jump up for BO1's zombies, or nodes on the stairs).
+   Risers went from 12 to 36 of 36, in four steps:
+   - **Where the client stands.** A riser rises only while its zone is active, and with no adjacent zones (Nuketown
+     has no doors, the layout none) that means occupied: `do_zombie_rise` takes a random spot of the spawner's own
+     zone (`zone_init`: `rise_locations`). BO2 scatters each zone's risers round the map edge: 30 of the 36 lie in no
+     zone volume (`riser17` belongs to house 1's backyard and stands in the cul-de-sac). The check stood 192 units in
+     front of the riser, mostly outside every volume, where the zone manager falls back to the first zone; and at the
+     riser's height, under a slope, `riser1`'s zombie reached the client's spot 74 units above it. On an imported map
+     the client now stands on a plain pathnode of the riser's zone: the nearest one (height counted 4 times: a zone
+     box, the union of BO2's volumes, also holds the upper floors) that `FindPath` reaches from the riser; nearer
+     nodes without a path are logged (house 1's backyard pocket at (-921, 1024), house 2's upper floor from
+     `riser8`).
+   - **One riser at a time.** With 4 to 6 risers a zone, one could go unpicked for 90 s (`riser10`: its zone's 5
+     zombies came out of `riser11` 4 times, `riser3` once). For its check the zone offers only that riser, restored
+     afterwards.
+   - **Spots that hold the client.** House 1's stairs carry actors but not players: the client put on their nodes
+     (z 107 to 131) fell to the ground floor, out of the upper floor's zone. Once put down it must still be in the
+     zone, or a node 96 units from every spot tried is taken (6 tries).
+   - **Jump-ups** (above): the node graph led from the upper floors to the yards only (one-way jump-downs): from the
+     east yard (`riser8`), 272 nodes could not be reached, the upper floors among them; with the jump-ups 226, the
+     rest lying behind mantles that BO2 crosses one way only, inwards.
+
+   The north ditch (around (700..1500, 1150..1450), 30 to 40 degrees, `riser28` and `riser29`) has no node graph:
+   `Path_CanLinkNodes` walks an actor capsule from each node, and on its slopes every step hits the terrain (hit entity
+   1022, the world, at the first 4-unit step, downhill too: BO2's terrain there has facets steeper than an actor walks).
+   The nodes there stay alone, and the zombies that climb out sometimes walk up the slope towards the player without a
+   path: those two checks passed on the last run and failed on the one before. Raising the nodes in the layout changes
+   nothing, since `G_DropPathNodeToFloor` drops every node with the actor's capsule at load.
 
 ### Not done
 
