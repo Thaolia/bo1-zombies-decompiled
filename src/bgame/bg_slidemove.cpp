@@ -959,7 +959,13 @@ void __cdecl add_hit_info(
                 phys_static_array<geom_plane,128> *list_geom_plane,
                 phys_link_list<gjk_geom_info_t> *geom_skip_list)
 {
-    set_hit_info(list_geom_plane->add(0, "phys array add overflow."), gto);
+    // zombies: a full array (128 planes: a player among BO2 TranZit's dense terrain prisms) returned NULL here and the
+    // write through it crashed in gjk_push_out; the extra contacts are left out, as the retail fatal error would have
+    // left none
+    geom_plane *gp = list_geom_plane->add(1, "phys array add overflow.");
+    if (!gp)
+        return;
+    set_hit_info(gp, gto);
     geom_skip_list->add(gto->m_gi);
 }
 
