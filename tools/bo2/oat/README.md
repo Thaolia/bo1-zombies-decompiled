@@ -8,7 +8,10 @@ licence, the **GNU GPL v3**, not part of this repository's engine code. See `doc
   `<map>.d3dbsp.obj` + `.mtl` (every static surface, UVs, one material per world material with its colour map) and
   `<map>.d3dbsp.smodels.csv` (each placed static model: name, origin, three axes, scale), plus
   `<map>.d3dbsp.smodellight.bin` (`BO2SMLT1`: each placement's baked vertex colours per LOD, and each model's LOD
-  vertex positions in the same order, which `tools/bo2/bo2_mesh.py` matches to the OBJ export's vertices).
+  vertex positions in the same order, which `tools/bo2/bo2_mesh.py` matches to the OBJ export's vertices), and
+  `<map>.d3dbsp.worldlight.bin` / `.txt` (`BO2WLT1`: per OBJ vertex, its lightmap coordinate, colour, packed vectors,
+  its surface's lightmap and primary light; the lightmap images and the sun), which `tools/bo2/bo2_worldlight.py`
+  turns into the world's vertex colours.
 - `src/ObjWriting/Game/T6/ClipMap/ClipMapCollisionDumperT6.{h,cpp}`: dumps the `clipmap` asset (OAT's
   `ASSET_TYPE_CLIPMAP_PVS`; the type OAT names `clipmap_unused` is not the one in the zones) as
   `<map>.d3dbsp.collision.bin`, format `BO2COL2` (materials, brushes with their non-axial planes and their owner,

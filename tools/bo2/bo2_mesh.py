@@ -5,7 +5,8 @@ chunks, and their colour maps as IW images.
     tools/bo2/bo2_mesh.py <dump folder of the zone> <map name> --out <run>/mods/mapkit/imports/<map>
 
 The props are the static models of <map>.d3dbsp.smodels.csv: one model per BO2 xmodel, with its LODs (model_export/
-OBJs, distances from xmodel/<name>.json), drawn once per placement. Writes <out>/<map>.mesh.bin (format below) and <out>/images/<name>.iwi (one
+OBJs, distances from xmodel/<name>.json), drawn once per placement (a placement BO2 lit gets its own copy with the
+baked colours). The world's vertices take BO2's lightmaps (bo2_worldlight.py). Writes <out>/<map>.mesh.bin (format below) and <out>/images/<name>.iwi (one
 per colour map). The engine
 (src/gfx_d3d/r_mapkit_mesh.cpp) turns each chunk into an XModel: one surface per material, so a chunk holds at most
 MAX_SURFS surfaces of at most MAX_VERTS vertices (16-bit indices). Chunks are CELL units across in the playable area
@@ -40,6 +41,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bo2_layout import read_entities  # noqa: E402  (the worldspawn names the sky model)
+from bo2_worldlight import WorldLight, light_triangles, read_world_light  # noqa: E402
 
 CELL = 512.0
 FAR_CELL = 8192.0
@@ -391,9 +393,31 @@ def main(argv=None):
     colour = read_mtl(base + ".mtl", images)
     positions, uvs, world = read_obj(base + ".obj")
     groups = {}
-    for material, faces in world:
-        groups.setdefault(material, []).extend(
-            [[(positions[c[0]], uvs[c[1]] if c[1] >= 0 else (0.0, 0.0)) for c in face] for face in faces])
+    # BO2's lightmaps as the world's vertex colours (bo2_worldlight.py); without the dump's worldlight files, white
+    world_light = read_world_light(base)
+    if world_light:
+        corners, info = world_light
+        if len(corners) != len(positions):
+            sys.exit(f"{base}.worldlight.bin: {len(corners)} records for {len(positions)} OBJ vertices (rerun the "
+                     "Unlinker: both come from the same dump)")
+        world_light = WorldLight(args.dump, info)
+        lit_tris = {}
+        for material, faces in world:
+            lit_tris.setdefault(material, []).extend(
+                [[(positions[c[0]], uvs[c[1]] if c[1] >= 0 else (0.0, 0.0), corners[c[0]][:2], corners[c[0]][2],
+                   corners[c[0]][3]) for c in face] for face in faces])
+        world_light.calibrate_corners([t for tris in lit_tris.values() for t in tris])
+        stats = {"splits": 0, "unlit": 0}
+        for material, tris in lit_tris.items():
+            groups[material] = light_triangles(world_light, tris, stats)
+        print(f"world light: reference {', '.join(f'{r:.2f}' for r in world_light.reference)}; {stats['splits']} "
+              f"triangle splits, {stats['unlit']} triangles without a lightmap; "
+              f"{sum(len(t) for t in groups.values())} triangles")
+    else:
+        print("world light: no worldlight.bin in the dump (rerun tools/bo2/oat's Unlinker): world unlit")
+        for material, faces in world:
+            groups.setdefault(material, []).extend(
+                [[(positions[c[0]], uvs[c[1]] if c[1] >= 0 else (0.0, 0.0)) for c in face] for face in faces])
 
     # props: one model per BO2 xmodel, with its LODs (distances from OAT's xmodel JSON), and one instance per placement
     exports = os.path.join(args.dump, "model_export")

@@ -34,7 +34,7 @@ With [OpenAssetTools](https://github.com/Laupetin/OpenAssetTools) 0.34.0 (GPL v3
 | World (`gfxworld`) | 195 091 vertices, 9 865 static surfaces, **131 032 triangles**, 464 materials, all 464 with their colour map extracted; 2 082 placed static models (name, origin, axes, scale) |
 | Models and textures | 1 801 OBJ (all LODs) with `.mtl`, 1 419 DDS images; one HUD icon missing (`hud_mp_firerate_auto`) |
 | Collision (`clipmap`) | 7 620 brushes (7 357 world, 263 of 140 submodels: doors, debris), 33 971 non-axial sides, 24 502 terrain triangles (128 of a submodel, 15 without a collision material), 766 collision materials |
-| Not yet extracted | the collision of the 1 349 static models with collision (cars, fences: it comes from their xmodels), the world's lightmaps (three `*_secondary` images whose pixels are in the `.ipak`, not the fastfile), `comworld` lights, the T6 pathnode graph (`gameworldmp`; the nodes are also in the entities) |
+| Not yet extracted | the collision of the 1 349 static models with collision (cars, fences: it comes from their xmodels), `comworld` lights (the primary spot lights: the houses' lamps), the T6 pathnode graph (`gameworldmp`; the nodes are also in the entities) |
 
 The exported world and the entities share one frame: in a top-down plot the spawns, spawners, magic boxes and
 pathnodes fall on the geometry (the two houses, the cul-de-sac, the garages). The world's bounding box (about 85 000
@@ -306,8 +306,29 @@ Nuketown has about 195 000 world vertices before its props).
     - Cost: 333 prop models become 898 (a model whose placements are all lit copies is left out), the mesh's vertices
       go from 0.93 M to 1.84 M (+29 MB at 32 bytes each) and the file from 35 to 78 MB. The number of props drawn, and
       so the 1 024-model scene budget, does not change.
-  - Not done yet: the world's lightmaps (the light on the BO2 world surfaces is still the empty base's flat grey and
-    the sun), the alpha of the props' colours, standalone decals (left
+  - **The world's lightmaps (2026-11-10, asked by the user).** The world surfaces get BO2's own light as vertex
+    colours (`tools/bo2/bo2_worldlight.py`, called by `bo2_mesh.py`).
+    - The pixels are in the fastfile after all: three uncompressed RGBA images (`*lightmap0..2_secondary`, 2048, 1024
+      and 512 wide, 3072 high), each three slices of 1 024 rows stacked. A world vertex is 36 bytes: xyz, binormal
+      sign, colour, texCoord (2 halves), two packed 10:10:10 vectors, then lmapCoord as two 16-bit unorms (u low,
+      v high), over one slice. The OAT dumper writes them per OBJ vertex (`worldlight.bin`) with each surface's
+      lightmap and primary light, and the sun (`worldlight.txt`).
+    - The decoding is BO2's own: its `lmap` pixel shaders, disassembled with `fxc /dumpbin`, light a pixel with
+      `A + B * saturate(dot(dir, N)) + vis * sunDiffuse * saturate(dot(sunDir, N))`, where `A` and `B` are slices 0
+      and 1 as `rgb / a`, `dir` is slice 2's `rgb * 2 - 1` and `vis` its alpha (the sun's baked visibility, the shadow
+      map taking over near the viewer), then output `sqrt(albedo^2 * light * exposure)`. On Nuketown the sun is
+      `(4.78, 11.64, 15)` from `(-0.41, -0.35, 0.84)`, and sunlit ground gets about `(8.9, 15.5, 18.8)`.
+    - BO1's model shaders multiply the colour map by the vertex colour, so the colour is `sqrt(light / reference)`,
+      the reference being the 75th percentile of the sunlit corners: sunlit ground looks as before, the shade
+      darkens and takes BO2's bounce (green in the green house's kitchen). `LIGHT_FLOOR` (0.12) keeps the darkest
+      surfaces from black, since the lamps of the houses, BO2's dynamic primary lights, are not baked in.
+    - A vertex colour only follows the lightmap at the vertices, so a triangle is split where the light at its edge
+      midpoints or centre differs from the corners' by more than 0.06, down to 16 units (about one texel): 123 099
+      splits, 131 032 triangles become 252 000 (175 000 vertices become 303 000).
+    - Checked on D3D9 client screenshots before and after, same views: shaded façades, eaves, sidewalks and rocks,
+      the houses' interiors darker and tinted; no crack along the split edges.
+  - Not done yet: the houses' lamps (BO2's primary spot lights, in `comworld`), the alpha of the props' colours,
+    standalone decals (left
     out with caulk and shadow casters), blending (glass is alpha tested), and a `vid_restart` (the mesh is not drawn
     again until the next map load: its buffers belonged to the old device).
 - **Prop collision (2026-11-09).** BO2's clipMap lists the 1 349 static models that collide (`smodelcoll.csv`, written
@@ -323,7 +344,7 @@ Nuketown has about 195 000 world vertices before its props).
   go round its props.
 - Windows checks (`tools/headless.ps1`), and the Switch.
 - Dog rounds (Five's dogs are not converted), BO2's own mechanics (the bus, buildables, Who's Who...), its characters
-  and animations (T6 skeletons and xanims), its sounds and the world's lightmaps. The game is BO1's zombies on Nuketown's
+  and animations (T6 skeletons and xanims), its sounds and its dynamic lights. The game is BO1's zombies on Nuketown's
   geometry.
 
 ### Running it
