@@ -1,4 +1,5 @@
 #include "r_mapkit_mesh.h"
+#include <algorithm>
 #include "r_dpvs.h"
 #include "r_dvars.h"
 #include "r_image.h"
@@ -63,6 +64,12 @@ namespace
     int s_lookCount;
     int s_lookCapacity;
 
+    struct MkMeshOrder
+    {
+        float gap; // distance from the viewer to the prop's bounding sphere
+        int index;
+    };
+
     struct MkMesh
     {
         int chunkCount; // models[0, chunkCount) are the world's chunks, drawn at placements[] with lighting[]
@@ -75,6 +82,8 @@ namespace
         GfxScaledPlacement *instancePlacements;
         unsigned short *instanceLighting;
         float *instanceCullSq; // 0: always added
+        int *instanceEdit;     // the door or debris edit whose purchase removes this prop, -1: none
+        MkMeshOrder *instanceOrder; // R_Mapkit_AddMesh's per-frame sort
         int skyModel;          // -1: none
         char (*modelNames)[NAME_BYTES];
         int surfCount;
@@ -293,6 +302,8 @@ namespace
         free(s_mesh.instancePlacements);
         free(s_mesh.instanceLighting);
         free(s_mesh.instanceCullSq);
+        free(s_mesh.instanceEdit);
+        free(s_mesh.instanceOrder);
         free(s_mesh.modelNames);
         memset(&s_mesh, 0, sizeof(s_mesh));
     }
@@ -611,13 +622,15 @@ void __cdecl R_Mapkit_LoadMesh()
     s_mesh.instancePlacements = (GfxScaledPlacement *)calloc(instanceCount ? instanceCount : 1, sizeof(GfxScaledPlacement));
     s_mesh.instanceLighting = (unsigned short *)calloc(instanceCount ? instanceCount : 1, sizeof(unsigned short));
     s_mesh.instanceCullSq = (float *)calloc(instanceCount ? instanceCount : 1, sizeof(float));
+    s_mesh.instanceEdit = (int *)malloc(sizeof(int) * (instanceCount ? instanceCount : 1));
+    s_mesh.instanceOrder = (MkMeshOrder *)malloc(sizeof(MkMeshOrder) * (instanceCount ? instanceCount : 1));
     s_mesh.surfs = (XSurface *)calloc(totals.surfs ? totals.surfs : 1, sizeof(XSurface));
     s_mesh.vertLists = (XRigidVertList *)calloc(totals.surfs ? totals.surfs : 1, sizeof(XRigidVertList));
     s_mesh.materials = (Material **)calloc(totals.surfs ? totals.surfs : 1, sizeof(Material *));
     s_mesh.verts = (GfxPackedVertex *)malloc(sizeof(GfxPackedVertex) * (totals.verts ? totals.verts : 1));
     s_mesh.indices = (unsigned short *)malloc(sizeof(unsigned short) * 3 * (totals.tris ? totals.tris : 1));
     if (!s_mesh.models || !s_mesh.modelNames || !s_mesh.placements || !s_mesh.lighting || !s_mesh.instanceModel
-        || !s_mesh.instancePlacements || !s_mesh.instanceLighting || !s_mesh.instanceCullSq || !s_mesh.surfs
+        || !s_mesh.instancePlacements || !s_mesh.instanceLighting || !s_mesh.instanceCullSq || !s_mesh.instanceEdit || !s_mesh.instanceOrder || !s_mesh.surfs
         || !s_mesh.vertLists || !s_mesh.materials || !s_mesh.verts || !s_mesh.indices)
     {
         Com_PrintWarning(8, "mapkit: mesh edit %d: out of memory for %u vertices\n", edit, totals.verts);
@@ -708,6 +721,45 @@ void __cdecl R_Mapkit_LoadMesh()
         s_mesh.instanceCullSq[i] = cull * cull;
     }
     s_mesh.skyModel = skyIndex >= 0 && emptyModel && !emptyModel[skyIndex] ? (int)chunkCount + skyIndex : -1;
+    // Optional after the sky index: named groups of props that a door or debris edit removes when bought (another
+    // game's doors and furniture: BO2's blockers are script models, which bo2_mesh.py writes as props). A group
+    // binds to the edit whose "meshGroup" names it.
+    for (unsigned int i = 0; i < instanceCount; ++i)
+        s_mesh.instanceEdit[i] = -1;
+    r.U32();
+    int grouped = 0;
+    if (!r.bad && r.at < r.size)
+    {
+        const unsigned int groupCount = r.Count(NAME_BYTES + 4);
+        for (unsigned int g = 0; g < groupCount && !r.bad; ++g)
+        {
+            const unsigned char *raw = r.Take(NAME_BYTES);
+            if (!raw)
+                break;
+            char name[NAME_BYTES];
+            memcpy(name, raw, NAME_BYTES);
+            name[NAME_BYTES - 1] = 0;
+            const unsigned int count = r.Count(4);
+            int owner = -1;
+            for (int e = 0; e < CM_Mapkit_EditCount() && owner < 0; ++e)
+            {
+                const char *group = 0;
+                if (CM_Mapkit_GetField(e, "meshGroup", &group, unused) == MKF_STRING && !strcmp(group, name))
+                    owner = e;
+            }
+            for (unsigned int k = 0; k < count && !r.bad; ++k)
+            {
+                const unsigned int index = r.U32();
+                if (index < instanceCount && owner >= 0)
+                {
+                    s_mesh.instanceEdit[index] = owner;
+                    ++grouped;
+                }
+            }
+            if (owner < 0)
+                Com_PrintWarning(8, "mapkit: mesh edit %d: group %s has no door or debris edit\n", edit, name);
+        }
+    }
     free(lastLodDist);
     free(emptyModel);
     free(lookOf);
@@ -722,10 +774,10 @@ void __cdecl R_Mapkit_LoadMesh()
     s_mesh.ready = noBuffers == 0;
     Com_Printf(8, "mapkit: mesh edit %d: %s: %u chunks, %u prop models, %u props (%d bad), %d surfaces, %u vertices, %u "
         "triangles; %d colour maps (%d new, %d missing), %d materials linked on %s and %s, %d surfaces untextured, %d "
-        "without GPU buffers; sky %s\n", edit, file, chunkCount, modelCount, instanceCount, badInstances, s_mesh.surfCount,
-        fill.vertUsed, fill.triUsed, s_lookCount, newImages, missingImages, linked, base->info.name,
-        alphaBase->info.name, fill.untextured, noBuffers,
-        s_mesh.skyModel >= 0 ? s_mesh.models[s_mesh.skyModel].name : "none");
+        "without GPU buffers; sky %s; %d props removed by a door or debris\n", edit, file, chunkCount, modelCount,
+        instanceCount, badInstances, s_mesh.surfCount, fill.vertUsed, fill.triUsed, s_lookCount, newImages, missingImages,
+        linked, base->info.name, alphaBase->info.name, fill.untextured, noBuffers,
+        s_mesh.skyModel >= 0 ? s_mesh.models[s_mesh.skyModel].name : "none", grouped);
 }
 
 void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
@@ -751,29 +803,33 @@ void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
     }
     for (int c = 0; c < s_mesh.chunkCount; ++c)
         R_FilterXModelIntoScene(&s_mesh.models[c], &s_mesh.placements[c], 0, &s_mesh.lighting[c], 0.0f);
-    // The scene holds 1024 models a frame (GfxScene::sceneModel, r_modelLimit) and Nuketown has 2081 props: past the
-    // limit R_AllocSceneModel drops the rest. Props whose bounding sphere comes within NEAR_PROPS units go first, so
-    // the dropped ones are far. The sphere, not the origin: a prop's origin can lie far from its geometry (Nuketown's
-    // clock tower: origin 1 000 units off, radius 1 378), and such a prop was dropped while in front of the viewer,
-    // leaving its clock hanging in the sky.
-    const float NEAR_PROPS = 1024.0f;
-    for (int pass = 0; pass < 2; ++pass)
+    // The scene holds 1024 models a frame (GfxScene::sceneModel, r_modelLimit) and Nuketown has 2096 props: past the
+    // limit R_AllocSceneModel drops the rest. The props go nearest first, by the distance to their bounding sphere, so
+    // the dropped ones are the farthest. The sphere, not the origin: a prop's origin can lie far from its geometry
+    // (Nuketown's clock tower: origin 1 000 units off, radius 1 378). A first version only put the props within 1 024
+    // units first, in file order: in front of a house the budget ran out before the doors, written last.
+    int candidates = 0;
+    for (int i = 0; i < s_mesh.instanceCount; ++i)
     {
-        for (int i = 0; i < s_mesh.instanceCount; ++i)
-        {
-            const int model = s_mesh.instanceModel[i];
-            if (model < 0)
-                continue;
-            const float *o = s_mesh.instancePlacements[i].base.origin;
-            const float d[3] = { o[0] - viewOrigin[0], o[1] - viewOrigin[1], o[2] - viewOrigin[2] };
-            const float distSq = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-            if (s_mesh.instanceCullSq[i] > 0.0f && distSq > s_mesh.instanceCullSq[i])
-                continue;
-            const float reach = NEAR_PROPS + s_mesh.models[model].radius * s_mesh.instancePlacements[i].scale;
-            if ((distSq <= reach * reach) != (pass == 0))
-                continue;
-            R_FilterXModelIntoScene(&s_mesh.models[model], &s_mesh.instancePlacements[i], 0,
-                &s_mesh.instanceLighting[i], 0.0f);
-        }
+        const int model = s_mesh.instanceModel[i];
+        if (model < 0 || !CM_Mapkit_EditShown(s_mesh.instanceEdit[i]))
+            continue;
+        const float *o = s_mesh.instancePlacements[i].base.origin;
+        const float d[3] = { o[0] - viewOrigin[0], o[1] - viewOrigin[1], o[2] - viewOrigin[2] };
+        const float distSq = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+        if (s_mesh.instanceCullSq[i] > 0.0f && distSq > s_mesh.instanceCullSq[i])
+            continue;
+        const float gap = sqrtf(distSq) - s_mesh.models[model].radius * s_mesh.instancePlacements[i].scale;
+        s_mesh.instanceOrder[candidates].gap = gap > 0.0f ? gap : 0.0f;
+        s_mesh.instanceOrder[candidates].index = i;
+        ++candidates;
+    }
+    std::sort(s_mesh.instanceOrder, s_mesh.instanceOrder + candidates,
+        [](const MkMeshOrder &a, const MkMeshOrder &b) { return a.gap < b.gap; });
+    for (int c = 0; c < candidates; ++c)
+    {
+        const int i = s_mesh.instanceOrder[c].index;
+        R_FilterXModelIntoScene(&s_mesh.models[s_mesh.instanceModel[i]], &s_mesh.instancePlacements[i], 0,
+            &s_mesh.instanceLighting[i], 0.0f);
     }
 }

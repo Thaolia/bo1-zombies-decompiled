@@ -13,6 +13,7 @@
 #include <xanim/xmodel_utils.h>
 
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 #include <string>
 
@@ -54,6 +55,34 @@ static bool G_Mapkit_InLoopArea(const float *p, const float lo[2][3], const floa
     return G_Mapkit_InBox(p, lo[0], hi[0]) || G_Mapkit_InBox(p, lo[1], hi[1]) || G_Mapkit_InBox(p, blo, bhi);
 }
 
+// mod (bo2 maps): an active link whose segment, 16 units above its nodes, passes through the blocker's box
+static bool G_Mapkit_LinkCrosses(const float *a, const float *b, const float *lo, const float *hi)
+{
+    float t0 = 0.0f, t1 = 1.0f;
+    for (int k = 0; k < 3; ++k)
+    {
+        const float pa = a[k] + (k == 2 ? 16.0f : 0.0f), d = b[k] - a[k];
+        if (fabsf(d) < 1e-6f)
+        {
+            if (pa < lo[k] || pa > hi[k])
+                return false;
+            continue;
+        }
+        float e0 = (lo[k] - pa) / d, e1 = (hi[k] - pa) / d;
+        if (e0 > e1)
+        {
+            const float swap = e0;
+            e0 = e1;
+            e1 = swap;
+        }
+        t0 = e0 > t0 ? e0 : t0;
+        t1 = e1 < t1 ? e1 : t1;
+        if (t0 > t1)
+            return false;
+    }
+    return true;
+}
+
 // Test active links, not totalLinkCount (which includes links disabled by closed doors).
 // Optional 3rd arg "loop": the blocker closes a loop (its `to` zone is already reachable another way), so the
 // search is limited to nodes inside the from/to zones or within 96 units of the blocker bounds - the path
@@ -89,6 +118,37 @@ void G_Mapkit_f_graphcheck()
                     && CM_Mapkit_GetField(i, "maxs", 0, hi[k]) == MKF_VECTOR;
     }
     PathData *path = gameWorldCurrent ? &gameWorldCurrent->path : 0;
+    // mod (bo2 maps): on another game's map (a "collision" edit) zones also join through windows and traversals (BO2's
+    // zombies climb into Nuketown's houses through their windows), so the zones stay connected whatever the door does.
+    // What the blocker must do is cut the links through its own doorway: none crosses its box while it is closed, and
+    // its purchase gives them back.
+    bool imported = false;
+    for (int i = 0; i < CM_Mapkit_EditCount() && !imported; ++i)
+    {
+        const char *kind = "";
+        CM_Mapkit_GetField(i, "kind", &kind, v);
+        imported = !strcmp(kind, "collision");
+    }
+    float box[2][3];
+    if (imported && path && CM_Mapkit_GetField(edit, "mins", 0, box[0]) == MKF_VECTOR
+        && CM_Mapkit_GetField(edit, "maxs", 0, box[1]) == MKF_VECTOR)
+    {
+        int crossing = 0;
+        for (unsigned int i = 0; i < path->nodeCount; ++i)
+        {
+            const pathnode_t *node = &path->nodes[i];
+            for (int l = 0; l < node->dynamic.wLinkCount; ++l)
+            {
+                const unsigned int next = node->constant.Links[l].nodeNum;
+                if (next < path->nodeCount
+                    && G_Mapkit_LinkCrosses(node->constant.vOrigin, path->nodes[next].constant.vOrigin, box[0], box[1]))
+                    ++crossing;
+            }
+        }
+        G_LogPrintf("mapkit: check door_graph %s %s edit %d %s purchase: %d active links through its doorway (%s -> %s)\n",
+            name, (crossing > 0) == expected ? "PASS" : "FAIL", edit, expected ? "after" : "before", crossing, from, to);
+        return;
+    }
     bool seen[0x2000] = {};
     unsigned short queue[0x2000];
     int head = 0, tail = 0, destinations = 0;

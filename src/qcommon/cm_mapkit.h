@@ -51,6 +51,7 @@ int CM_Mapkit_LightUses(int edit); // renderer samples that took the edit's tint
 int CM_Mapkit_BoxCount();
 const MapkitBox *CM_Mapkit_GetBox(int index);
 void CM_Mapkit_SetVisible(int edit, bool visible);
+bool CM_Mapkit_EditShown(int edit);
 // the box as an axial cbrush_t outside cm.brushes (a world prim for the GJK / prim traces: phys_traverse.cpp intersect_box)
 const cbrush_t *CM_Mapkit_GetBrush(int index);
 bool CM_Mapkit_IsBrush(const void *brush);
