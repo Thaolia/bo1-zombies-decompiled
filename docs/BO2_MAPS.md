@@ -300,6 +300,10 @@ Nuketown has about 195 000 world vertices before its props).
     same effect, two on the chest and two every 1 000 units up to 5 000, deleted with the retail light when the box
     moves. Checked on D3D9 client screenshots: the beam stands over the box from across the map (about 2 900 units
     away).
+  - **Machine clips (2026-11-10, reported by the user: "I walk through the mystery box").** MapKit puts a hidden
+    player and monster clip around each box, perk machine and Pack-a-Punch (`CM_Mapkit_AddMachineClips`), but its
+    table held 256 edits: on Nuketown (about 980 edits) the boxes, perks and Pack-a-Punch come past edit 850 and had
+    none. It now holds one per edit (`MK_MAX_SPOTS` = `MK_MAX_EDITS`, 1 024).
   - **Baked light on the props (2026-11-10).** BO2 bakes the light of a static model placement into one colour per
     vertex (`GfxStaticModelDrawInst::lmapVertexInfo`, per LOD). The OAT dumper writes them to
     `<map>.d3dbsp.smodellight.bin` (`BO2SMLT1`: per placement, its LODs' colours; per model, its LODs' vertex
