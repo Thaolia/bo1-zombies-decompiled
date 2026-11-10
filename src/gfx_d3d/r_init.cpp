@@ -14,6 +14,7 @@
 #include <database/db_registry.h>
 #include "rb_logfile.h"
 #include "r_buffers.h"
+#include "r_mapkit_mesh.h" // mod: mapkit "mesh" edit
 #include "r_rendertarget.h"
 #include "r_model_lighting.h"
 #include "r_staticmodelcache.h"
@@ -2136,6 +2137,7 @@ char __cdecl R_ReleaseLostDeviceAssets2()
     R_ResetModelLighting();
     Com_Printf(8, "R_ReleaseAllModels()...\n");
     R_ReleaseAllModels();
+    R_Mapkit_ReleaseMeshBuffers(); // mod: mapkit "mesh" edit (its models are outside the database)
     Com_Printf(8, "R_ReleaseLostImages()...\n");
     R_ReleaseLostImages();
     Com_Printf(8, "R_ReleaseWorld()...\n");
@@ -2161,6 +2163,7 @@ char __cdecl R_RecoverLostDevice()
     R_ReloadLostImages();
     Com_Printf(8, "R_OptimizeAllModels()...\n");
     R_OptimizeAllModels();
+    R_Mapkit_RestoreMeshBuffers(); // mod: mapkit "mesh" edit
     Com_Printf(8, "DB_EndRecoverLostDevice()...\n");
     DB_EndRecoverLostDevice();
     Com_Printf(8, "R_Cinematic_EndLostDevice()...\n");

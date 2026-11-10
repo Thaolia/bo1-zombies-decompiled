@@ -8,5 +8,8 @@
 void __cdecl R_Mapkit_LoadMesh();
 // drops the models and their GPU buffers (the images and material clones stay for the next load)
 void __cdecl R_Mapkit_FreeMesh();
+// lost device: releases the GPU buffers before the device Reset, rebuilds them after it (r_init.cpp)
+void __cdecl R_Mapkit_ReleaseMeshBuffers();
+void __cdecl R_Mapkit_RestoreMeshBuffers();
 // adds the visible chunks and props to the scene, as the skybox model is added
 void __cdecl R_Mapkit_AddMesh(const float *viewOrigin);
