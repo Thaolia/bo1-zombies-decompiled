@@ -144,8 +144,9 @@ def read_obj(path):
 
 def model_tris(path):
     """An OAT model OBJ (XModel/Obj/ObjWriter.cpp: game (x, y, z) written as (x, z, -y), v as 1 - v) as
-    material -> triangles of (position, uv) in model space, wound like the world's (checked against the OBJ's normals:
-    a model whose faces mostly turn away from its normals is reversed)."""
+    material -> triangles of (position, uv) in model space, each wound so that its right-hand normal points out of the
+    surface, as the OBJ's normals do (a model whose faces mostly turn away from them is reversed). That is the
+    collision's winding (bo2_props_collision.py puts each prism behind it); drawing takes the other one (read_lods)."""
     positions, uvs, normals, out = [], [], [], {}
     current, faces = None, []
     with open(path, encoding="latin-1") as f:
@@ -192,10 +193,13 @@ def read_lods(dump, name):
     if not listed:
         listed = [(0.0, f"model_export/{name}_lod{i}.obj") for i in range(4)
                   if os.path.exists(os.path.join(dump, "model_export", f"{name}_lod{i}.obj"))]
+    # The engine draws a triangle whose right-hand normal points away from the viewer, BO2's own (clockwise) winding,
+    # which the world OBJ keeps: a prop wound as model_tris returns it was drawn inside out, its back faces showing
+    # (Nuketown's clock face turned to the tower, its numbers mirrored, signs and doors missing).
     for dist, rel in listed:
         path = os.path.join(dump, rel)
         if os.path.exists(path):
-            lods.append((dist, model_tris(path)))
+            lods.append((dist, {m: [tri[::-1] for tri in tris] for m, tris in model_tris(path).items()}))
     return lods
 
 

@@ -752,7 +752,10 @@ void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
     for (int c = 0; c < s_mesh.chunkCount; ++c)
         R_FilterXModelIntoScene(&s_mesh.models[c], &s_mesh.placements[c], 0, &s_mesh.lighting[c], 0.0f);
     // The scene holds 1024 models a frame (GfxScene::sceneModel, r_modelLimit) and Nuketown has 2081 props: past the
-    // limit R_AllocSceneModel drops the rest. Props within NEAR_PROPS units go first, so the dropped ones are far.
+    // limit R_AllocSceneModel drops the rest. Props whose bounding sphere comes within NEAR_PROPS units go first, so
+    // the dropped ones are far. The sphere, not the origin: a prop's origin can lie far from its geometry (Nuketown's
+    // clock tower: origin 1 000 units off, radius 1 378), and such a prop was dropped while in front of the viewer,
+    // leaving its clock hanging in the sky.
     const float NEAR_PROPS = 1024.0f;
     for (int pass = 0; pass < 2; ++pass)
     {
@@ -766,7 +769,8 @@ void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
             const float distSq = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
             if (s_mesh.instanceCullSq[i] > 0.0f && distSq > s_mesh.instanceCullSq[i])
                 continue;
-            if ((distSq <= NEAR_PROPS * NEAR_PROPS) != (pass == 0))
+            const float reach = NEAR_PROPS + s_mesh.models[model].radius * s_mesh.instancePlacements[i].scale;
+            if ((distSq <= reach * reach) != (pass == 0))
                 continue;
             R_FilterXModelIntoScene(&s_mesh.models[model], &s_mesh.instancePlacements[i], 0,
                 &s_mesh.instanceLighting[i], 0.0f);

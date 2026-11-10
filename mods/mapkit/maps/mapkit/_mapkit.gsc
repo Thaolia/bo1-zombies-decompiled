@@ -126,6 +126,7 @@ main_end()
 		level thread mapkit_pap_power();
 	}
 	level thread mapkit_round_log();
+	level thread mapkit_show_wallbuys();
 	// asset catalog (node tools/mapkit/catalog.mjs --refresh): +set mapkit_catalog 1 prints every loaded weapon/xmodel/material
 	if ( GetDvar( "mapkit_catalog" ) == "1" )
 	{
@@ -2075,6 +2076,31 @@ mapkit_imported()
 		}
 	}
 	return level.mapkit_imported;
+}
+
+// Retail init_weapon_upgrade hides a wall buy's weapon model until its first purchase: a BO1 map shows the weapon
+// with a chalk drawing on the wall. Another game's map has none (Nuketown's are BO2 script effects), so there the
+// models are shown from the start; a purchase shows them again, as retail does.
+mapkit_show_wallbuys()
+{
+	if ( !mapkit_imported() )
+	{
+		return;
+	}
+	flag_wait( "all_players_connected" );
+	wait( 1 );
+	for ( i = 0; i < bo1_mapkit_editcount(); i++ )
+	{
+		if ( bo1_mapkit_get( i, "kind" ) != "wallbuy" )
+		{
+			continue;
+		}
+		model = GetEnt( "mkbuy" + i, "targetname" );
+		if ( IsDefined( model ) )
+		{
+			model Show();
+		}
+	}
 }
 
 // +set mapkit_test_walk 1 keeps the walk on an imported map too (to test the test client's own navigation)
