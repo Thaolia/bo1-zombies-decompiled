@@ -993,6 +993,8 @@ namespace
         { "specialty_armorvest", { -16.0f, -18.0f, -4.0f }, { 16.0f, 19.0f, 101.0f }, 90.0f },
         { "specialty_fastreload", { -27.5f, -18.0f, -4.0f }, { 28.5f, 19.0f, 105.5f }, 90.0f },
         { "specialty_rof", { -28.0f, -18.0f, -4.0f }, { 27.0f, 13.5f, 83.5f }, 90.0f },
+        // approximated from Speed Cola's (zombie_vending_marathon comes with another map's zone, bo1_mod_zones)
+        { "specialty_longersprint", { -27.5f, -18.0f, -4.0f }, { 28.5f, 19.0f, 105.5f }, 90.0f },
         { "specialty_quickrevive", { -25.0f, -24.0f, -4.0f }, { 25.0f, 12.0f, 86.0f }, 90.0f },
         { "pap", { -43.0f, -27.0f, -4.0f }, { 43.0f, 23.0f, 87.0f }, 90.0f },
         // MEASURED/approximated: the panel is wall-flat at spot+48 (4 off the wall); a 32-wide slab from the wall out 12
@@ -1534,9 +1536,15 @@ bool CM_Mapkit_Active()
 // mod: "empty": true - the base map's fastfile supplies assets only; its world (draw surfaces, sky, collision,
 // static models, pathnodes) is gated off everywhere CM_Mapkit_Empty() is tested, and the layout is the whole map
 static bool s_empty;
+static float s_nodeVisRange; // layout "nodeVisRange": node pairs farther apart get no visibility (0: all pairs)
 bool CM_Mapkit_Empty()
 {
     return s_empty && s_editsNode >= 0;
+}
+
+float CM_Mapkit_NodeVisRange()
+{
+    return CM_Mapkit_Empty() && s_nodeVisRange > 0.0f ? s_nodeVisRange : 0.0f;
 }
 
 const char *CM_Mapkit_LayoutName()
@@ -1764,6 +1772,7 @@ void CM_Mapkit_Load(const char *mapName)
     s_editsNode = -1;
     s_layoutName[0] = 0;
     s_empty = false;
+    s_nodeVisRange = 0.0f;
     s_mkEntsBuilt = false;
     CM_MapkitImport_Clear();
 
@@ -1803,6 +1812,7 @@ void CM_Mapkit_Load(const char *mapName)
     }
     strncpy(s_layoutName, layout->current.string, sizeof(s_layoutName) - 1);
     s_empty = MkJ_Num(root, "empty", 0.0f) != 0.0f;
+    s_nodeVisRange = MkJ_Num(root, "nodeVisRange", 0.0f);
     s_editsNode = MkJ_Child(root, "edits");
     if (s_editsNode >= 0 && s_json[s_editsNode].type != MKJ_ARR)
         s_editsNode = -1;
@@ -1988,6 +1998,20 @@ int CM_Mapkit_SightTrace(const traceWork_t *tw, trace_t *trace)
             return cm.numBrushes + 1;
     }
     return CM_MapkitImport_SightTrace(tw, trace);
+}
+
+int CM_Mapkit_EntBModel(const char *targetname)
+{
+    for (int e = 0; e < CM_Mapkit_EditCount() && e < MK_MAX_EDITS; ++e)
+    {
+        const int c = MkE_EditNode(e);
+        if (c < 0 || strcmp(MkJ_Str(c, "kind", ""), "ent"))
+            continue;
+        const int keys = MkJ_Child(c, "keys");
+        if (keys >= 0 && !strcmp(MkJ_Str(keys, "targetname", ""), targetname))
+            return s_editBModel[e];
+    }
+    return -1;
 }
 
 int CM_Mapkit_EditCount()

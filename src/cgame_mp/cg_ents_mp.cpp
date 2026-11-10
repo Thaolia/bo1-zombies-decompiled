@@ -8,6 +8,7 @@
 #include <cgame/cg_sound.h>
 #include <cgame/cg_event.h>
 #include <gfx_d3d/r_scene.h>
+#include <gfx_d3d/r_mapkit_mesh.h> // mod: mapkit mesh movers
 #include <universal/com_math_anglevectors.h>
 #include <bgame/bg_local.h>
 #include <xanim/xmodel.h>
@@ -1951,7 +1952,11 @@ void __cdecl CG_ScriptMover(int localClientNum, centity_s *cent)
         // mod: mapkit layout blockers (*690.. on Sluice Works) are collision-only submodels with no GfxBrushModel;
         // R_Mapkit_GenerateVerts draws them. a crash 2026-09-27: "699 not in [0, 690)" on the pump_door clip.
         if (CM_Mapkit_IsSubmodel(cent->nextState.index.brushmodel))
+        {
+            // a moving layout brush model may carry a mesh model (BO2's TranZit bus, r_mapkit_mesh.cpp)
+            R_Mapkit_SetMoverPose(cent->nextState.index.brushmodel, cent->pose.origin, cent->pose.angles);
             return;
+        }
         lightingOriginToleranceSq = s1->number;
         BrushModel = R_GetBrushModel(cent->nextState.index.brushmodel);
         R_AddBrushModelToSceneFromAngles(BrushModel, cent->pose.origin, cent->pose.angles, lightingOriginToleranceSq, 0);

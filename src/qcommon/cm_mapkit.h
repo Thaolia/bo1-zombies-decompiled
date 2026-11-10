@@ -30,6 +30,8 @@ bool CM_NoPerks_NearMachine(const float *origin, float radius);
 bool CM_Mapkit_Active();
 // layout "empty": true = the retail world (draw, sky, collision, static models, pathnodes) is off; the layout is the map
 bool CM_Mapkit_Empty();
+// the layout's "nodeVisRange" on an empty base (0: every node pair gets its sight trace, as retail)
+float CM_Mapkit_NodeVisRange();
 // empty base: the level entity string = retail worldspawn + the layout's spawn/ent edits (CM_EntityString)
 const char *CM_Mapkit_EntityString(const char *retail);
 // empty base: cm.cmodels/brushes/leafbrushNodes grown by one box brush model per zone / wallbuy / "bmodel" ent (CM_LoadMap)
@@ -40,6 +42,8 @@ void CM_Mapkit_AddMachineClips();
 bool CM_Mapkit_ResolvedSpot(int edit, float *origin, float *yaw);
 bool CM_Mapkit_MachineClip(int edit, float *mins, float *maxs); // fields "_clipmins" / "_clipmaxs"
 bool CM_Mapkit_IsSubmodel(unsigned int index); // generated collision only; no retail GfxBrushModel
+// the brush model ("*N" index) of the layout's "ent" edit with this targetname and a "bmodel" box, -1 if none
+int CM_Mapkit_EntBModel(const char *targetname);
 // a "window" edit's traverse pair in world space (begin outside, end inside) and its yaw; false for other edits
 bool CM_Mapkit_WindowNodes(int edit, float *begin, float *end, float *yaw);
 bool CM_Mapkit_StairsStep(int edit, int step, float *mins, float *maxs);
