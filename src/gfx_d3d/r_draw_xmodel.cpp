@@ -97,7 +97,7 @@ unsigned int __cdecl R_DrawXModelSurfLitInternal(
     eyeOffset.v[1] = eyeOffset.v[1] - 0.0;
     eyeOffset.v[2] = eyeOffset.v[2] - 0.0;
     eyeOffset.v[3] = 0.0 - 1.0;
-    modelSurf = (const GfxModelRigidSurface *)((char *)data + 4 * LOWORD(drawSurf.packed));
+    modelSurf = (const GfxModelRigidSurface *)((char *)data + R_SURF_UNIT * LOWORD(drawSurf.packed)); // mod: retail 4 *
     baseGfxEntIndex = modelSurf->surf.info.gfxEntIndex;
     depthHackFlags = context.source->depthHackFlags;
     materialTime = context.source->materialTime;
@@ -120,7 +120,7 @@ unsigned int __cdecl R_DrawXModelSurfLitInternal(
         drawSurf.fields = drawSurfList[drawSurfIndex].fields;
         if ((drawSurfMask.packed & drawSurf.packed) != drawSurfKey)
             break;
-        v5 = 4 * LOWORD(drawSurf.packed);
+        v5 = R_SURF_UNIT * LOWORD(drawSurf.packed); // mod: retail 4 *
         modelSurf = (const GfxModelRigidSurface *)&data->surfsBuffer[v5];
         if (*(unsigned __int16 *)&data->surfsBuffer[v5 + offsetof(GfxModelRigidSurface, surf.info.gfxEntIndex)] != baseGfxEntIndex)
         {
@@ -298,7 +298,7 @@ unsigned int __cdecl R_DrawXModelSurfCameraInternal(
     eyeOffset.v[1] = eyeOffset.v[1] - 0.0;
     eyeOffset.v[2] = eyeOffset.v[2] - 0.0;
     eyeOffset.v[3] = 0.0 - 1.0;
-    modelSurf = (const GfxModelRigidSurface *)((char *)data + 4 * LOWORD(drawSurf.packed));
+    modelSurf = (const GfxModelRigidSurface *)((char *)data + R_SURF_UNIT * LOWORD(drawSurf.packed)); // mod: retail 4 *
     baseGfxEntIndex = modelSurf->surf.info.gfxEntIndex;
     depthHackFlags = context.source->depthHackFlags;
     materialTime = context.source->materialTime;
@@ -330,7 +330,7 @@ unsigned int __cdecl R_DrawXModelSurfCameraInternal(
         drawSurf.fields = drawSurfList[drawSurfIndex].fields;
         if ((drawSurfMask.packed & drawSurf.packed) != drawSurfKey)
             break;
-        v4 = 4 * LOWORD(drawSurf.packed);
+        v4 = R_SURF_UNIT * LOWORD(drawSurf.packed); // mod: retail 4 *
         modelSurf = (const GfxModelRigidSurface *)&data->surfsBuffer[v4];
         if (*(unsigned __int16 *)&data->surfsBuffer[v4 + offsetof(GfxModelRigidSurface, surf.info.gfxEntIndex)] != baseGfxEntIndex)
         {
@@ -392,7 +392,7 @@ unsigned int __cdecl R_DrawXModelSurfInternal(
     eyeOffset.v[3] = 0.0 - 1.0;
     do
     {
-        modelSurf = (const GfxModelRigidSurface *)((char *)data + 4 * LOWORD(drawSurf.packed));
+        modelSurf = (const GfxModelRigidSurface *)((char *)data + R_SURF_UNIT * LOWORD(drawSurf.packed)); // mod: retail 4 *
         xsurf = modelSurf->surf.xsurf;
         R_GetWorldMatrixForModelSurf(modelSurf, eyeOffset, &worldMat);
         ActiveWorldMatrix = R_GetActiveWorldMatrix(commonSource);

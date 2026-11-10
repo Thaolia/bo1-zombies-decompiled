@@ -237,6 +237,30 @@ class CommandLine(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "63"):
             P.build_command(p, "x", "/g", launch_cfg="+set a 1 " * 40)
 
+    def test_scene_models(self):
+        def dvar(argv, name):
+            values = [argv[i + 2] for i in range(len(argv) - 2) if argv[i] == "+set" and argv[i + 1] == name]
+            self.assertLessEqual(len(values), 1, name)
+            return values[0] if values else None
+        p = P.Profile()
+        argv = P.build_command(p, "x", "/g")
+        self.assertIsNone(dvar(argv, "r_mod_sceneModels"))
+        self.assertIsNone(dvar(argv, "r_mod_modelLightingEntries"))
+        p["scene_models"] = 4096
+        argv = P.build_command(p, "x", "/g")
+        self.assertEqual(dvar(argv, "r_mod_sceneModels"), "4096")
+        self.assertEqual(dvar(argv, "r_mod_modelLightingEntries"), "5120")
+        p["scene_models"] = 2048
+        self.assertEqual(dvar(P.build_command(p, "x", "/g"), "r_mod_modelLightingEntries"), "3072")
+        # the horde's own pool (3392 at 1000 zombies) is larger: kept, and set once
+        p["horde"], p["horde_max"] = True, 1000
+        argv = P.build_command(p, "x", "/g")
+        self.assertEqual(dvar(argv, "r_mod_modelLightingEntries"), "3392")
+        self.assertEqual(dvar(argv, "r_mod_sceneModels"), "2048")
+        # the client draws too: a join line carries it
+        p["mode"], p["join_host"] = "join", "10.0.0.1"
+        self.assertEqual(dvar(P.build_command(p, "x", "/g"), "r_mod_sceneModels"), "2048")
+
     def test_profile_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "sub", "profile.json")
@@ -246,13 +270,14 @@ class CommandLine(unittest.TestCase):
             if os.name != "nt":
                 self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
             with open(path, "w") as f:
-                json.dump({"mode": "nope", "horde_max": "300", "god": True, "window": 3,
+                json.dump({"mode": "nope", "horde_max": "300", "god": True, "window": 3, "scene_models": 3000,
                            "favorites": [{"host": "a"}, {"name": "no host"}, 5]}, f)
             q = P.Profile(path)
             self.assertEqual(q["mode"], "solo")
             self.assertEqual(q["horde_max"], 128)
             self.assertTrue(q["god"])
             self.assertEqual(q["window"], "borderless")
+            self.assertEqual(q["scene_models"], 1024)
             self.assertEqual(q["favorites"], [{"host": "a"}])
 
     def test_cli_print_cmd(self):

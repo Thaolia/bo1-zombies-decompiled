@@ -183,4 +183,6 @@ décrit. Les paquets contiennent vos propres fichiers de jeu : gardez-les pour v
 `--bo2 DIR` ajoute aussi aux paquets windows et linux votre propre extraction d'une map de Black Ops II
 (`docs/BO2_MAPS.md`, « Running it »). Le script prend `DIR/mods/mapkit/layouts/bo2_*.json` et
 `DIR/mods/mapkit/imports/`, et la vue Solo de ZmClient propose alors « Mapkit : Nuketown (Black Ops II) ». Cette
-extraction est une donnée du jeu : `--bo2` ne se combine pas avec `--no-game-data`.
+extraction est une donnée du jeu : `--bo2` ne se combine pas avec `--no-game-data`. Nuketown a plus de 2 000 props :
+dans la vue Lancement de ZmClient, « Modèles affichés par image » à 4096 (`r_mod_sceneModels`) les dessine tous,
+1024 (le jeu d'origine) laisse tomber les plus lointains.

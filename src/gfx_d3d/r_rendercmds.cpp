@@ -839,8 +839,8 @@ void R_ToggleSmpFrame()
         {
             __debugbreak();
         }
-        if (frontEndDataOut->surfPos > 0x40000)
-            surfPos = 0x40000;
+        if (frontEndDataOut->surfPos > R_SURFS_BUFFER_BYTES) // mod: retail 0x40000
+            surfPos = R_SURFS_BUFFER_BYTES;
         else
             surfPos = frontEndDataOut->surfPos;
         frontEndDataOut->surfPos = surfPos;

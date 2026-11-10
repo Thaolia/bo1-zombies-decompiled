@@ -369,6 +369,9 @@ void __cdecl R_AddAllSceneEntSurfacesCamera(const GfxViewInfo *viewInfo)
     dobjLightingFinished = 0;
     modelLightingFinished = 0;
     dobjLightingInfo = lightingInfo;
+    // mod: retail finishes a kind's lighting early once the shared 1024 entries are full (and the dyn models then
+    // overwrite DObj results not read yet). With r_mod_sceneModels raised, the array holds every kind at its cap
+    const unsigned int lightingInfoLimit = R_ModSceneModelLimit() > 1024 ? R_MOD_LIGHTING_INFO_MAX : 0x400;
 
     {
         PROF_SCOPED("sceneDObj lighting");
@@ -376,7 +379,7 @@ void __cdecl R_AddAllSceneEntSurfacesCamera(const GfxViewInfo *viewInfo)
         visibleLights = viewInfo->visibleLights;
         LaunchDobjLightingJobs(viewInfo, scene.sceneDObjCount, scene.sceneDObjVisData[0], lightingInfo);
         lightingInfoUsed = scene.sceneDObjCount;
-        if ((unsigned int)(scene.sceneModelCount + scene.sceneDObjCount) > 0x400)
+        if ((unsigned int)(scene.sceneModelCount + scene.sceneDObjCount) > lightingInfoLimit)
         {
             Sys_AssistAndWaitWorkerCmdInternal(&r_model_lightingWorkerCmd);
             FinishDobjLighting(
@@ -399,7 +402,7 @@ void __cdecl R_AddAllSceneEntSurfacesCamera(const GfxViewInfo *viewInfo)
         PROF_SCOPED("sceneModel lighting");
         LaunchModelLightingJobs(viewInfo, scene.sceneModelCount, scene.sceneModelVisData[0], modelLightingInfo);
         lightingInfoUsed = scene.sceneModelCount + lightingInfoUsed;
-        if (scene.sceneDynModelCount + lightingInfoUsed > 0x400)
+        if (scene.sceneDynModelCount + lightingInfoUsed > lightingInfoLimit)
         {
             Sys_AssistAndWaitWorkerCmdInternal(&r_model_lightingWorkerCmd);
             FinishModelLighting(
@@ -1674,9 +1677,9 @@ int __cdecl R_DrawBModel(
         size = sizeof(BModelSurface) * surfaceCount + 152;
     newConstantSet = 0;
     startSurfPos = _InterlockedExchangeAdd(&frontEndDataOut->surfPos, size);
-    if ( size + startSurfPos <= 0x40000 )
+    if ( size + startSurfPos <= R_SURFS_BUFFER_BYTES ) // mod: retail 0x40000
     {
-        if ( (startSurfPos & 3) != 0
+        if ( (startSurfPos & (R_SURF_UNIT - 1)) != 0 // mod: retail & 3
             && !Assert_MyHandler(
                         "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_dpvs.cpp",
                         2137,
@@ -1697,12 +1700,12 @@ int __cdecl R_DrawBModel(
         newPlacement->scale = 1.0f;
         bmodelSurf = (BModelSurface *)&newPlacement[1];
         surfId = (char *)&newPlacement[1] - (char *)frontEndDataOut;
-        if ( (((_BYTE)(uintptr_t)newPlacement + 32 - (_BYTE)(uintptr_t)frontEndDataOut) & 3) != 0
+        if ( (((_BYTE)(uintptr_t)newPlacement + 32 - (_BYTE)(uintptr_t)frontEndDataOut) & (R_SURF_UNIT - 1)) != 0 // mod: retail & 3
             && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_dpvs.cpp", 2154, 0, "%s", "!(surfId & 3)") )
         {
             __debugbreak();
         }
-        bmodelInfo->surfId = surfId >> 2;
+        bmodelInfo->surfId = surfId / R_SURF_UNIT; // mod: retail >> 2
         for ( surfIndex = 0; surfIndex < surfaceCount; ++surfIndex )
         {
             bmodelSurf->placement = newPlacement;
@@ -2361,7 +2364,7 @@ void __cdecl R_FilterXModelIntoScene(
             (gfxEntIndex) = 0;
         }
         sceneEntIndex = R_AllocSceneModel();
-        if ( sceneEntIndex < 0x400 )
+        if ( sceneEntIndex < R_MOD_SCENE_MODEL_MAX ) // mod: retail 0x400
         {
             sceneModel = &scene.sceneModel[sceneEntIndex];
             sceneModel->model = model;

@@ -127,4 +127,4 @@ void __cdecl R_ShutdownModelLightingImage();
 void __cdecl R_InitStaticModelLighting();
 void __cdecl R_SetModelLightingCoordsForSource(unsigned __int16 handle, GfxCmdBufSourceState *source);
 
-extern GfxLightingInfo lightingInfo[1024];
+extern GfxLightingInfo lightingInfo[R_MOD_LIGHTING_INFO_MAX]; // mod: retail [1024]

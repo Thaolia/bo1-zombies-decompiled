@@ -31,7 +31,7 @@ the local server's rcon password lives), `--no-mouse` keyboard only.
 | F1 | Jouer | the mode, a summary, Launch / Stop the game / Stop the local server, the state of the game files, and the exact command line |
 | F2 | Serveurs | favourites and LAN servers with their live status (name, map, players, ping); add, edit, remove, join |
 | F3 | Solo | map (base maps, Dead Ops Arcade, the package's mapkit layouts, Black Ops II's Nuketown when `make_dist.sh --bo2` packaged it), god mode, zinfo, noperks, quick restart, horde settings, difficulty; rows a map does not use are greyed with the reason |
-| F4 | Lancement | player name, window mode and size, the port's FPS counter, gamepad aim assist (each "game setting" / on / off), the local server's map, port and rcon password |
+| F4 | Lancement | player name, window mode and size, the port's FPS counter, the models drawn per frame (1024, 2048 or 4096: `r_mod_sceneModels` with a model lighting pool to match, for maps imported by MapKit), gamepad aim assist (each "game setting" / on / off), the local server's map, port and rcon password |
 | F5 | Config du jeu | a form of `players/config.cfg`: mouse, gamepad, FOV, resolution, vsync, FPS cap, gamma, MSAA, anisotropy, texture quality, shadows, depth of field, blood, subtitles; any other dvar; key binds |
 | F6 | Dvars libres | free command lines, each one a `+line` before the map or the connection, enabled one by one |
 | F7 | Installation | the Black Ops install (found in Steam's libraries, picked in a folder browser, or typed), the state of each part, Install, progress |

@@ -559,7 +559,7 @@ struct __declspec(align(16)) GfxSpotShadow // sizeof=0x1D0
 struct __declspec(align(32)) GfxBackEndData // sizeof=0x186300
 {                                       // XREF: .data:s_backEndData/r
                                         // GfxBackEndDataArray/r
-    unsigned __int8 surfsBuffer[262144];
+    unsigned __int8 surfsBuffer[R_SURFS_BUFFER_BYTES]; // mod: retail 262144 (R_SURF_UNIT)
     FxCodeMeshData codeMeshes[2048];
     unsigned int primDrawSurfsBuf[65536];
     GfxViewParms viewParms[4];

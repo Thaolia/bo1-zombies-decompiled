@@ -509,7 +509,7 @@ void R_SkinXModelCmd(SkinXModelCmd *data)
         skinnedSurf = surfPos;
         if (surfPos->skinnedCachedOffset == -3)
         {
-            surfPos = (GfxModelSkinnedSurface *)((char *)surfPos + 4);
+            surfPos = (GfxModelSkinnedSurface *)((char *)surfPos + R_SURF_UNIT); // mod: retail 4
             continue;
         }
 

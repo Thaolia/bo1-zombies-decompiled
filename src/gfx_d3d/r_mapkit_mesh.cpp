@@ -811,11 +811,12 @@ void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
     }
     for (int c = 0; c < s_mesh.chunkCount; ++c)
         R_FilterXModelIntoScene(&s_mesh.models[c], &s_mesh.placements[c], 0, &s_mesh.lighting[c], 0.0f);
-    // The scene holds 1024 models a frame (GfxScene::sceneModel, r_modelLimit) and Nuketown has 2096 props: past the
-    // limit R_AllocSceneModel drops the rest. The props go nearest first, by the distance to their bounding sphere, so
-    // the dropped ones are the farthest. The sphere, not the origin: a prop's origin can lie far from its geometry
-    // (Nuketown's clock tower: origin 1 000 units off, radius 1 378). A first version only put the props within 1 024
-    // units first, in file order: in front of a house the budget ran out before the doors, written last.
+    // The scene holds 1024 models a frame (GfxScene::sceneModel, r_modelLimit; up to 4096 with r_mod_sceneModels) and
+    // Nuketown has 2096 props: past the limit R_AllocSceneModel drops the rest. The props go nearest first, by the
+    // distance to their bounding sphere, so the dropped ones are the farthest. The sphere, not the origin: a prop's
+    // origin can lie far from its geometry (Nuketown's clock tower: origin 1 000 units off, radius 1 378). A first
+    // version only put the props within 1 024 units first, in file order: in front of a house the budget ran out before
+    // the doors, written last.
     int candidates = 0;
     for (int i = 0; i < s_mesh.instanceCount; ++i)
     {

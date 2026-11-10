@@ -255,6 +255,18 @@ Nuketown has about 195 000 world vertices before its props).
     1 000 units off, and the tower was dropped in front of the viewer, leaving its clock hanging in the sky. A first
     version added the props within 1 024 units first but in file order, and in front of a house the budget ran out
     before the doors, which `bo2_mesh.py` writes last.
+  - **A larger scene (2026-11-10, asked by the user).** `r_mod_sceneModels` (1024 to 4096, default 1024, ZmClient's
+    Lancement view: "Modèles affichés par image") raises that budget. The renderer frustum-culls before it counts
+    (camera and sun-shadow views), so the 1 024 were all in view: from the street, 2 092 to 2 099 models are wanted a
+    frame, and at 4096 the clock and the distant mountain come back.
+    - The next limit was the per-frame surface buffer (`GfxBackEndData::surfsBuffer`). A draw surface's 16-bit
+      `objectId` addresses it in 4-byte units, so it holds 256 KB. At 1 024 models, Nuketown already filled 220 to
+      231 KB of it; at 4096 it wanted 305 to 313 KB a frame and dropped the rest, zombies included, since DObjs share
+      the buffer.
+    - On 64-bit every entry of that buffer is a multiple of 8 bytes, so the unit is now `R_SURF_UNIT` (8 on 64-bit,
+      retail's 4 on 32-bit) and the buffer 512 KB. The hidden-surface marker (`-3`) takes one unit too.
+    - Each model past retail's also needs a model lighting entry: ZmClient passes `r_mod_modelLightingEntries` at the
+      count + 1 024 (5 120 at 4096: none refused; with the retail 1 024, the test run logged one `MODEL_LIGHTING_EXHAUSTED`).
   - **Props drawn inside out (fixed 2026-11-10).** The engine draws a triangle whose right-hand normal points away
     from the viewer, BO2's own winding, which the world OBJ keeps. `bo2_mesh.py` wound the props the other way, with
     their right-hand normals out, as `bo2_props_collision.py` needs for its prisms. Every prop then showed its back

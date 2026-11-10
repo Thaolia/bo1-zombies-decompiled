@@ -5,6 +5,13 @@
 #include <cstddef>
 #include <cstring>
 
+// mod: a draw surface's objectId (16 bits) addresses GfxBackEndData::surfsBuffer in units of R_SURF_UNIT bytes. Retail's
+// 4 caps the buffer at 256 KB, which a map imported by MapKit fills with its 1024 props alone (r_mod_sceneModels). On
+// 64-bit every entry (GfxModelRigidSurface, GfxModelSkinnedSurface, BModelSurface, GfxModelWaterSurface, the hidden
+// surface marker) is a multiple of 8 bytes, so 8 doubles the buffer; 32-bit keeps retail's 4
+#define R_SURF_UNIT BO1_ARCH_SIZE(4, 8)
+#define R_SURFS_BUFFER_BYTES (0x10000 * R_SURF_UNIT)
+
 enum GfxDrawSceneMethod : __int32
 {                                                                             // XREF: GfxDrawMethod/r
         GFX_DRAW_SCENE_NONE                = 0x0,

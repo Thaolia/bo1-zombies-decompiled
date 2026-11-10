@@ -46,6 +46,10 @@ NIGHTMARE_MAPS = ("zombie_pentagon", "zombie_theater")
 AIM_DVARS = (("aim_assist", "bo1_aimassist"), ("aim_slowdown", "aim_slowdown_enabled"),
              ("aim_lockon", "aim_lockon_enabled"), ("aim_autoaim", "aim_autoaim_enabled"))
 MAX_COMMAND_LINES = 63      # Com_ParseCommandLine keeps 64 lines, the first being the text before the first '+'
+# r_mod_sceneModels: the models the renderer draws per frame (retail 1024, the engine's cap 4096). A map imported by
+# MapKit (Nuketown: 2 096 props) needs more; each model past retail's also takes a model lighting entry
+SCENE_MODEL_CHOICES = (1024, 2048, 4096)
+MODEL_LIGHTING_ENTRIES_MAX = 5120   # r_mod_modelLightingEntries' cap (r_model_lighting.cpp)
 
 DEFAULTS = {
     "mode": "solo",
@@ -67,6 +71,7 @@ DEFAULTS = {
     "window": "borderless",
     "window_size": "1280x720",
     "fps_counter": False,
+    "scene_models": 1024,              # one of SCENE_MODEL_CHOICES
     # aim assist (gamepad): "" leaves the game's value, "1" / "0" sets it
     "aim_assist": "",
     "aim_slowdown": "",
@@ -155,6 +160,8 @@ class Profile:
             self.data["mode"] = DEFAULTS["mode"]
         if self.data["window"] not in WINDOW_MODES:
             self.data["window"] = DEFAULTS["window"]
+        if self.data["scene_models"] not in SCENE_MODEL_CHOICES:
+            self.data["scene_models"] = DEFAULTS["scene_models"]
         self.data["extra"] = [e for e in self.data["extra"] if isinstance(e, dict) and isinstance(e.get("text"), str)]
         self.data["favorites"] = [f for f in self.data["favorites"] if isinstance(f, dict) and f.get("host")]
 
@@ -312,6 +319,22 @@ def window_flags(p):
     return ["+set", "r_fullscreen", "0", "+set", "r_borderless", "1", "+set", "vid_xpos", "0", "+set", "vid_ypos", "0"]
 
 
+def add_scene_models(argv, count):
+    """Raises the renderer's models per frame to count: r_mod_sceneModels, and a model lighting pool of count + 1024
+    (the retail pool, which DObjs and dyn models share; measured on Nuketown at 4096: none refused). A larger pool the
+    line already asks for (the horde's past 300 zombies) is kept."""
+    if count <= 1024:
+        return
+    entries = min(MODEL_LIGHTING_ENTRIES_MAX, count + 1024)
+    for i in range(len(argv) - 2):
+        if argv[i] == "+set" and argv[i + 1] == "r_mod_modelLightingEntries":
+            argv[i + 2] = str(max(int(argv[i + 2]), entries))
+            break
+    else:
+        argv += ["+set", "r_mod_modelLightingEntries", str(entries)]
+    argv += ["+set", "r_mod_sceneModels", str(count)]
+
+
 def server_address(p):
     if p["mode"] == "host":
         return f"127.0.0.1:{p['host_port']}"
@@ -367,6 +390,7 @@ def build_command(p, exe, dist_root, launch_cfg=""):
             argv += ["+set", "bo1_testclient_god", "1"]
         argv += solo_mod_flags(p, dist_root)
     argv += window_flags(p)
+    add_scene_models(argv, p["scene_models"])
     if p["fps_counter"]:
         argv += ["+set", "bo1_fpscounter", "1"]
     for key, dvar in AIM_DVARS:
