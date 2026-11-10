@@ -71,6 +71,20 @@ struct Recorder
         uint64_t frames = 0, draws = 0, uploadBytes = 0, pipelines = 0, links = 0;
         Clock::duration frameWait{}, linkWait{}, syncWait{};
     } stats;
+
+    // exit() without Shutdown (the engine's Sys_Quit leaves its device alive) destroys s_recorder with the thread
+    // still running, and a joinable std::thread's destructor calls std::terminate: stop it as Shutdown does
+    ~Recorder()
+    {
+        if (!thread.joinable())
+            return;
+        {
+            std::lock_guard<std::mutex> lock(queue.lock);
+            queue.quit = true;
+        }
+        queue.wake.notify_one();
+        thread.join();
+    }
 };
 
 std::unique_ptr<Recorder> s_recorder;
