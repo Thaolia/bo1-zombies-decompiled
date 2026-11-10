@@ -36,6 +36,8 @@ Au lancement, un menu texte s'ouvre avant le jeu. On y choisit :
 - l'aim assist : activé ou non, avec ralentissement, verrouillage et visée auto ;
 - le compteur de zombies à côté du tableau des scores (mod zinfo : zombies en vie et restants dans la manche),
   activé par défaut ;
+- le **départ** : un écran pour les points (de 1 000 à 100 000, au lieu des 500 du jeu) et les atouts donnés à
+  l'arrivée sur la map en solo (mod admin). Un atout n'est donné que si la map a sa machine ;
 - le rendu (deko3d ou OpenGL), la limite de FPS (30 ou 60), les ombres, le filtre de texture et le compteur
   FPS/batterie ;
 - les **touches de la manette** : un écran liste chaque action du jeu (tirer, viser, sauter, recharger, grenade,
@@ -47,7 +49,7 @@ Au lancement, un menu texte s'ouvre avant le jeu. On y choisit :
 
 Les touches : croix pour choisir, gauche/droite pour modifier, A pour valider, **+** pour lancer la partie
 directement sur la map (ou, avec un serveur, ouvrir le menu du jeu, qui rejoint alors le serveur tout seul), **−** pour
-quitter. Dans les écrans du serveur et des touches, B revient au menu. Les choix sont gardés dans `sdmc:/switch/bo1zm/menu.cfg`. Au lancement, le
+quitter. Dans les écrans du serveur, du départ et des touches, B revient au menu. Les choix sont gardés dans `sdmc:/switch/bo1zm/menu.cfg`. Au lancement, le
 menu écrit `launch.cfg` (la ligne de commande du moteur) et `gfx.cfg` (le rendu). Le contenu facultatif de
 `launch_extra.cfg` est ajouté à la ligne de commande, ce qui sert pour des options de diagnostic. Avec un fichier
 vide `skip_menu` dans le même dossier, le jeu démarre sans menu, sur `launch.cfg` et `gfx.cfg` tels quels. C'est
@@ -130,7 +132,8 @@ ne renvoie pas son log en rcon : à distance, les réponses `admin:` du mod ne s
 
 Lanceur du client : `tools/zmclient` (même famille de programme, `zmclient` / `zmclient.exe` dans les paquets). Vues
 Jouer, Serveurs (favoris et serveurs du réseau local, avec leur état en direct), Solo (map, horde, nightmare/hell,
-noperks, maps mapkit, zinfo, relance rapide : les drapeaux du lanceur `tools/mod-launcher.hta`, à l'identique),
+noperks, maps mapkit, zinfo, relance rapide : les drapeaux du lanceur `tools/mod-launcher.hta`, à l'identique ; points
+et atouts de départ, donnés par le mod admin),
 Lancement (nom, fenêtre, aide à la visée, serveur local), Config du jeu (`players/config.cfg` : souris, manette, FOV,
 résolution, graphismes, touches), Dvars libres, Installation et Journal. Trois façons de jouer : en solo, en
 rejoignant un serveur, ou en lançant le serveur du dossier puis en le rejoignant (ZmAdmin l'administre ensuite avec

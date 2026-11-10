@@ -1,7 +1,8 @@
 // The start menu of the Switch build. Map, aim assist, god mode, the Tab zombie counter, graphics and controllers are
 // chosen with the pad on libnx's text console before the engine starts, so a game opens straight on its map without the
 // front end. A second view sets up joining a dedicated server instead (docs/SERVER.md): the game then opens on its own
-// menu and joins by itself. A third chooses which button does what in the game (gamepad_remap.h); this menu itself
+// menu and joins by itself. Another sets a solo game's start kit (points and perks, given by mods/admin). A third
+// chooses which button does what in the game (gamepad_remap.h); this menu itself
 // keeps reading the console's buttons as they are, so a layout that went wrong can always be fixed here. The choices
 // persist in menu.cfg; Start writes launch.cfg and gfx.cfg from them (launcher_config.cpp), which a skip_menu boot
 // (emulator, scripted runs) then reuses as they are. The console font is ASCII only: no accents in the text.
@@ -93,6 +94,7 @@ enum View
     VIEW_MAIN,
     VIEW_SERVER,
     VIEW_PAD,
+    VIEW_KIT,
 };
 
 enum Item
@@ -106,6 +108,7 @@ enum Item
     ITEM_AIM_AUTOAIM,
     ITEM_GOD,
     ITEM_TABINFO,
+    ITEM_KIT,
     ITEM_BACKEND,
     ITEM_MAXFPS,
     ITEM_SHADOWS,
@@ -125,12 +128,22 @@ enum Item
     ITEM_PAD_LAST = ITEM_PAD_FIRST + BO1_PAD_COUNT - 1,
     ITEM_PAD_RESET,
     ITEM_PAD_BACK,
+    // Start kit view: the points, one line per perk (kLauncherPerks order), back.
+    ITEM_KIT_POINTS,
+    ITEM_KIT_PERK_FIRST,
+    ITEM_KIT_PERK_LAST = ITEM_KIT_PERK_FIRST + 7,
+    ITEM_KIT_BACK,
     ITEM_COUNT
 };
 
 bool PadControlItem(int item)
 {
     return item >= ITEM_PAD_FIRST && item <= ITEM_PAD_LAST;
+}
+
+bool KitPerkItem(int item)
+{
+    return item >= ITEM_KIT_PERK_FIRST && item <= ITEM_KIT_PERK_LAST;
 }
 
 struct ItemInfo
@@ -151,6 +164,7 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_MAIN, 13, "  Visee auto", "En visant (ZL), le reticule saute sur le zombie le plus proche."},
     {VIEW_MAIN, 15, "God mode", "Les zombies ne peuvent pas tuer le joueur (partie solo)."},
     {VIEW_MAIN, 16, "Compteur zombies", "Zombies en vie et restants dans la manche, a cote du tableau des scores."},
+    {VIEW_MAIN, 17, "Depart", "A: points et atouts donnes a l'arrivee sur la map (partie solo)."},
     {VIEW_MAIN, 19, "Rendu", "deko3d: le plus rapide. OpenGL: l'ancien chemin, plus lent."},
     {VIEW_MAIN, 20, "Limite de FPS", "30: plus stable et plus econome en batterie. 60: plus fluide."},
     {VIEW_MAIN, 21, "Ombres", "Ombres dynamiques. Les couper fait gagner des FPS."},
@@ -170,13 +184,20 @@ const ItemInfo kItems[ITEM_COUNT] = {
 #undef PAD_LINE
     {VIEW_PAD, 23, "Reinitialiser", "A: remet les touches du jeu d'origine."},
     {VIEW_PAD, 25, "RETOUR", "Revient au menu (aussi: bouton B)."},
+    {VIEW_KIT, 6, "Points de depart", "Gauche/Droite: les points a l'arrivee sur la map, au lieu des 500 du jeu."},
+#define KIT_PERK(row) {VIEW_KIT, row, nullptr, "Gauche/Droite ou A: atout gratuit a l'arrivee, si la map a sa machine."}
+    KIT_PERK(8), KIT_PERK(9), KIT_PERK(10), KIT_PERK(11), KIT_PERK(12), KIT_PERK(13), KIT_PERK(14), KIT_PERK(15),
+#undef KIT_PERK
+    {VIEW_KIT, 17, "RETOUR", "Revient au menu (aussi: bouton B)."},
 };
+static_assert(ITEM_KIT_PERK_LAST - ITEM_KIT_PERK_FIRST + 1 == 8, "one kit line per kLauncherPerks entry");
 static_assert(sizeof(kItems) / sizeof(kItems[0]) == ITEM_COUNT, "one kItems line per Item");
 const int kGraphicsHeaderRow = 18;
 const int kControllerFirstRow = 27;
 const int kControllerMaxRows = 8; // handheld + players 1-7: the rows up to DEMARRER
 const int kPadInfoRow = 28;
 const int kNetInfoRow = 17;
+const int kKitInfoRow = 19;
 const int kHelpRow = 37;
 const int kStatusRow = 38;
 const int kFooterRow = 40;
@@ -187,8 +208,8 @@ bool Selectable(const LauncherSettings &s, View view, int item)
         return false;
     if (item == ITEM_AIM_SLOWDOWN || item == ITEM_AIM_LOCKON || item == ITEM_AIM_AUTOAIM)
         return s.aimAssist;
-    // A dedicated server picks the map and decides god mode and the zombie counter.
-    if (item == ITEM_MAP || item == ITEM_GOD || item == ITEM_TABINFO)
+    // A dedicated server picks the map and decides god mode, the zombie counter and its players' start.
+    if (item == ITEM_MAP || item == ITEM_GOD || item == ITEM_TABINFO || item == ITEM_KIT)
         return !s.join;
     return true;
 }
@@ -203,11 +224,13 @@ bool TypedItem(int item)
 bool ActionItem(int item)
 {
     return item == ITEM_CONTROLLERS || item == ITEM_START || item == ITEM_NET_BACK || item == ITEM_PAD ||
-           item == ITEM_PAD_RESET || item == ITEM_PAD_BACK;
+           item == ITEM_PAD_RESET || item == ITEM_PAD_BACK || item == ITEM_KIT || item == ITEM_KIT_BACK;
 }
 
 const char *ItemLabel(int item)
 {
+    if (KitPerkItem(item))
+        return kLauncherPerks[item - ITEM_KIT_PERK_FIRST].label;
     return PadControlItem(item) ? Launcher_PadActionLabel(item - ITEM_PAD_FIRST) : kItems[item].label;
 }
 
@@ -238,6 +261,20 @@ std::string ValueText(const LauncherSettings &s, int item)
         return YesNo(s.god);
     case ITEM_TABINFO:
         return YesNo(s.tabInfo);
+    case ITEM_KIT:
+    {
+        int perks = 0;
+        for (int i = 0; i < kLauncherPerkCount; ++i)
+            perks += (s.startPerks >> i) & 1;
+        if (!s.startPoints && !perks)
+            return "Celui du jeu";
+        std::string text = s.startPoints ? std::to_string(s.startPoints) + " points" : "500 points";
+        if (perks)
+            text += ", " + std::to_string(perks) + (perks > 1 ? " atouts" : " atout");
+        return text;
+    }
+    case ITEM_KIT_POINTS:
+        return s.startPoints ? std::to_string(s.startPoints) : "Ceux du jeu (500)";
     case ITEM_BACKEND:
         return s.backend == LAUNCHER_BACKEND_DEKO3D ? "deko3d" : "OpenGL";
     case ITEM_MAXFPS:
@@ -263,6 +300,8 @@ std::string ValueText(const LauncherSettings &s, int item)
     default:
         if (PadControlItem(item))
             return Launcher_PadButtonLabel(s.pad.source[item - ITEM_PAD_FIRST]);
+        if (KitPerkItem(item))
+            return YesNo((s.startPerks >> (item - ITEM_KIT_PERK_FIRST)) & 1);
         return "";
     }
 }
@@ -312,7 +351,18 @@ void Change(LauncherSettings *s, int item, int dir)
     case ITEM_FPSCOUNTER:
         s->fpsCounter = !s->fpsCounter;
         break;
+    case ITEM_KIT_POINTS:
+    {
+        int at = 0;
+        while (at < kLauncherStartPointCount && kLauncherStartPoints[at] != s->startPoints)
+            ++at;
+        at = (at % kLauncherStartPointCount + dir + kLauncherStartPointCount) % kLauncherStartPointCount;
+        s->startPoints = kLauncherStartPoints[at];
+        break;
+    }
     default:
+        if (KitPerkItem(item))
+            s->startPerks ^= 1u << (item - ITEM_KIT_PERK_FIRST);
         if (PadControlItem(item))
         {
             const int control = item - ITEM_PAD_FIRST;
@@ -493,7 +543,7 @@ void DrawItem(const LauncherSettings &s, View view, int item, int selected)
     const ItemInfo &info = kItems[item];
     const bool isSelected = item == selected;
     At(info.row, 3);
-    if (item == ITEM_START || item == ITEM_NET_BACK || item == ITEM_PAD_BACK)
+    if (item == ITEM_START || item == ITEM_NET_BACK || item == ITEM_PAD_BACK || item == ITEM_KIT_BACK)
     {
         std::printf("%s%s[ %s ]%s", isSelected ? "> " : "  ", isSelected ? "\x1b[30;43m" : kColorSelected, info.label,
                     kColorNormal);
@@ -503,7 +553,7 @@ void DrawItem(const LauncherSettings &s, View view, int item, int selected)
     std::printf("%s%s %-24s", color, isSelected ? ">" : " ", ItemLabel(item));
     if (item == ITEM_CONTROLLERS)
         std::printf("[A] ecran des manettes%s", kColorNormal);
-    else if (item == ITEM_SERVER || item == ITEM_PAD || item == ITEM_PAD_RESET || TypedItem(item))
+    else if (item == ITEM_SERVER || item == ITEM_PAD || item == ITEM_PAD_RESET || item == ITEM_KIT || TypedItem(item))
         std::printf("[A] %s%s", ValueText(s, item).c_str(), kColorNormal);
     else if (PadControlItem(item))
     {
@@ -524,6 +574,7 @@ void Draw(const LauncherSettings &s, View view, int selected, const Screen &scre
     At(2, 3);
     const char *title = view == VIEW_MAIN     ? "LANCEUR"
                         : view == VIEW_SERVER ? "CONNEXION AU SERVEUR"
+                        : view == VIEW_KIT    ? "DEPART (POINTS ET ATOUTS)"
                                               : "TOUCHES DE LA MANETTE";
     std::printf("%sBLACK OPS ZOMBIES - %s%s", kColorTitle, title, kColorNormal);
     if (screen.battery >= 0)
@@ -574,6 +625,17 @@ void Draw(const LauncherSettings &s, View view, int selected, const Screen &scre
         At(kPadInfoRow + 3, 5);
         std::printf("Les sticks (deplacement, camera) ne changent pas.");
     }
+    else if (view == VIEW_KIT)
+    {
+        At(kKitInfoRow, 3);
+        std::printf("%sDonnes a chaque partie solo, a l'arrivee sur la map (mod admin).%s", kColorTitle, kColorNormal);
+        At(kKitInfoRow + 1, 5);
+        std::printf("Un atout n'est donne que si la map a sa machine:");
+        At(kKitInfoRow + 2, 5);
+        std::printf("Kino et Five n'ont que Juggernog, Quick Revive, Speed Cola et Double Tap.");
+        At(kKitInfoRow + 3, 5);
+        std::printf("Sur un serveur, c'est le serveur qui decide.");
+    }
     else
     {
         At(kNetInfoRow, 3);
@@ -612,6 +674,8 @@ void Draw(const LauncherSettings &s, View view, int selected, const Screen &scre
     At(kFooterRow + 1, 3);
     if (view == VIEW_MAIN)
         std::printf("Haut/Bas: choisir  Gauche/Droite: modifier  A: valider  +: jouer  -: quitter");
+    else if (view == VIEW_KIT)
+        std::printf("Haut/Bas: choisir  Gauche/Droite: modifier  A: valider  B: retour  +: jouer  -: quitter");
     else if (view == VIEW_PAD)
         std::printf("Haut/Bas: choisir  Gauche/Droite: bouton  A: valider  B: retour  +: jouer  -: quitter");
     else
@@ -747,6 +811,16 @@ LauncherResult Launcher_Run(const char *buildStamp, char *line, size_t lineSize,
                 view = VIEW_MAIN;
                 selected = ITEM_PAD;
             }
+            else if (selected == ITEM_KIT)
+            {
+                view = VIEW_KIT;
+                selected = ITEM_KIT_POINTS;
+            }
+            else if (selected == ITEM_KIT_BACK)
+            {
+                view = VIEW_MAIN;
+                selected = ITEM_KIT;
+            }
             else if (TypedItem(selected))
                 screen.status = EditTyped(&s, selected);
             else
@@ -756,7 +830,7 @@ LauncherResult Launcher_Run(const char *buildStamp, char *line, size_t lineSize,
         if ((down & HidNpadButton_B) && view != VIEW_MAIN)
         {
             screen.status.clear();
-            selected = view == VIEW_SERVER ? ITEM_SERVER : ITEM_PAD;
+            selected = view == VIEW_SERVER ? ITEM_SERVER : view == VIEW_KIT ? ITEM_KIT : ITEM_PAD;
             view = VIEW_MAIN;
             dirty = true;
         }

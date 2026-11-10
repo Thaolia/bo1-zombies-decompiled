@@ -12,7 +12,7 @@ from . import gamesetup
 from . import help as H
 from .dirbrowser import FolderDialog, start_folder
 from .gamecfg import BY_NAME, SETTINGS, valid_bind_key, validate
-from .profile import (DEFAULT_PORT, MAP_LABELS, check_extra, map_installed, map_label, nightmare_available,
+from .profile import (DEFAULT_PORT, MAP_LABELS, START_PERKS, START_POINT_CHOICES, check_extra, map_installed, map_label, nightmare_available,
                       parse_size, quote_command, resolve_map, solo_maps, specials_available, valid_host, valid_name,
                       valid_password)
 
@@ -159,6 +159,13 @@ class RowsView(View):
             self.app.open(ChoiceDialog(title, items, picked, current=self.p[key]))
         return go
 
+    def toggle_perk(self, name):
+        def go():
+            perks = self.p["start_perks"]
+            self.p["start_perks"] = [p for p in perks if p != name] if name in perks else perks + [name]
+            self.app.save_profile()
+        return go
+
     def ask(self, key, title, label, help_text, parse, mask=False):
         """parse(text) returns the value to keep, or raises ValueError with why not."""
         def go():
@@ -175,6 +182,10 @@ class RowsView(View):
 
 def _yes(b):
     return "oui" if b else "non"
+
+
+def _points(n):
+    return f"{n:,}".replace(",", " ") if n else "ceux du jeu (500)"
 
 
 def _name(text):
@@ -461,6 +472,15 @@ class SoloView(RowsView):
             Row("zinfo", "Compteur de zombies (Tab)", _yes(p["zinfo"]), self.toggle("zinfo")),
             Row("noperks", "Sans machines à atouts", _yes(p["noperks"]), self.toggle("noperks")),
             Row("quickrestart", "R relance après la fin", _yes(p["quickrestart"]), self.toggle("quickrestart")),
+            section("Départ"),
+            Row("start_points", "Points de départ", _points(p["start_points"]),
+                self.choose("start_points", "Points de départ",
+                            [(n, _points(n), H.ROW_HELP["start_points"]) for n in START_POINT_CHOICES])),
+        ]
+        no_machines = "sans machines à atouts (noperks) : rien à donner" if p["noperks"] else None
+        rows += [Row("start_perk", f"Atout : {label}", _yes(key in p["start_perks"]), self.toggle_perk(key),
+                     disabled=no_machines) for key, label in START_PERKS]
+        rows += [
             section("Horde"),
             Row("horde", "Mode horde", _yes(p["horde"]), self.toggle("horde")),
             Row("horde_max", "Zombies en même temps", str(p["horde_max"]),

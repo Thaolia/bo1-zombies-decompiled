@@ -20,6 +20,14 @@ const LauncherMap kLauncherMaps[] = {
 };
 const int kLauncherMapCount = int(sizeof(kLauncherMaps) / sizeof(kLauncherMaps[0]));
 
+const int kLauncherStartPoints[] = {0, 1000, 2500, 5000, 10000, 25000, 50000, 100000};
+const int kLauncherStartPointCount = int(sizeof(kLauncherStartPoints) / sizeof(kLauncherStartPoints[0]));
+const LauncherPerk kLauncherPerks[] = {
+    {"jugg", "Juggernog"},   {"revive", "Quick Revive"}, {"speed", "Speed Cola"},       {"doubletap", "Double Tap"},
+    {"staminup", "Stamin-Up"}, {"phd", "PhD Flopper"},   {"deadshot", "Deadshot Daiquiri"}, {"mule", "Mule Kick"},
+};
+const int kLauncherPerkCount = int(sizeof(kLauncherPerks) / sizeof(kLauncherPerks[0]));
+
 namespace
 {
 const char *const kBackendNames[LAUNCHER_BACKEND_COUNT] = {"deko3d", "gl"};
@@ -138,6 +146,29 @@ void Apply(LauncherSettings *s, const std::string &key, const std::string &value
         ParseBool(value, &s->god);
     else if (key == "zinfo")
         ParseBool(value, &s->tabInfo);
+    else if (key == "start_points")
+    {
+        for (int i = 0; i < kLauncherStartPointCount; ++i)
+            if (value == std::to_string(kLauncherStartPoints[i]))
+                s->startPoints = kLauncherStartPoints[i];
+    }
+    else if (key == "start_perks")
+    {
+        // comma-separated names; unknown ones are skipped
+        s->startPerks = 0;
+        size_t pos = 0;
+        while (pos <= value.size())
+        {
+            size_t end = value.find(',', pos);
+            if (end == std::string::npos)
+                end = value.size();
+            const std::string name = Trim(value.substr(pos, end - pos));
+            for (int i = 0; i < kLauncherPerkCount; ++i)
+                if (name == kLauncherPerks[i].key)
+                    s->startPerks |= 1u << i;
+            pos = end + 1;
+        }
+    }
     else if (key == "backend")
     {
         for (int i = 0; i < LAUNCHER_BACKEND_COUNT; ++i)
@@ -205,6 +236,8 @@ std::string Launcher_FormatSettings(const LauncherSettings &s)
     out += std::string("aim_autoaim=") + (s.aimAutoaim ? "1" : "0") + "\n";
     out += std::string("god=") + (s.god ? "1" : "0") + "\n";
     out += std::string("zinfo=") + (s.tabInfo ? "1" : "0") + "\n";
+    out += "start_points=" + std::to_string(s.startPoints) + "\n";
+    out += "start_perks=" + Launcher_StartPerkList(s) + "\n";
     out += std::string("backend=") + kBackendNames[s.backend] + "\n";
     out += "maxfps=" + std::to_string(s.maxFps) + "\n";
     out += std::string("shadows=") + (s.shadows ? "1" : "0") + "\n";
@@ -230,10 +263,15 @@ std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::strin
     // playing client around each server frame (G_SP_HeadlessTestClientFrame).
     // Only a local server reads it: the dedicated server decides god mode for its players.
     line += std::string(" +set bo1_testclient_god ") + (s.god && !join ? "1" : "0");
-    // The dedicated server stacks mods/zinfo for all its players itself (FS_ModStackNames). Before the extra, so a
-    // launch_extra.cfg that sets its own fs_mods wins.
-    if (s.tabInfo && !join)
-        line += " +set fs_mods zinfo";
+    // The dedicated server stacks mods/zinfo for all its players itself (FS_ModStackNames), and decides its players'
+    // start. Before the extra, so a launch_extra.cfg that sets its own fs_mods wins. mods/admin gives the start kit.
+    const bool kit = !join && (s.startPoints > 0 || s.startPerks != 0);
+    if (!join && (s.tabInfo || kit))
+        line += std::string(" +set fs_mods") + (s.tabInfo ? " zinfo" : "") + (kit ? " admin" : "");
+    if (kit && s.startPoints > 0)
+        line += " +set zm_startpoints " + std::to_string(s.startPoints);
+    if (kit && s.startPerks != 0)
+        line += " +set zm_startperks " + Launcher_StartPerkList(s);
     line += " +set com_maxfps " + std::to_string(s.maxFps);
     line += std::string(" +set sm_enable ") + (s.shadows ? "1" : "0");
     line += std::string(" +set bo1_fpscounter ") + (s.fpsCounter ? "1" : "0");
@@ -276,6 +314,15 @@ bool Launcher_ParsePort(const std::string &text, int *port)
         return false;
     *port = value;
     return true;
+}
+
+std::string Launcher_StartPerkList(const LauncherSettings &s)
+{
+    std::string list;
+    for (int i = 0; i < kLauncherPerkCount; ++i)
+        if (s.startPerks & (1u << i))
+            list += std::string(list.empty() ? "" : ",") + kLauncherPerks[i].key;
+    return list;
 }
 
 std::string Launcher_ServerAddress(const LauncherSettings &s)

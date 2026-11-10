@@ -129,6 +129,10 @@ class App:
         for key, label in (("god", "god"), ("zinfo", "zinfo"), ("noperks", "noperks"), ("quickrestart", "R relance")):
             if p[key]:
                 parts.append(label)
+        if p["start_points"]:
+            parts.append(f"{p['start_points']} points")
+        if p["start_perks"]:
+            parts.append(f"{len(p['start_perks'])} atout" + ("s" if len(p["start_perks"]) > 1 else ""))
         return ", ".join(parts) or "aucun"
 
     def command(self):

@@ -50,6 +50,13 @@ MAX_COMMAND_LINES = 63      # Com_ParseCommandLine keeps 64 lines, the first bei
 # MapKit (Nuketown: 2 096 props) needs more; each model past retail's also takes a model lighting entry
 SCENE_MODEL_CHOICES = (1024, 2048, 4096)
 MODEL_LIGHTING_ENTRIES_MAX = 5120   # r_mod_modelLightingEntries' cap (r_model_lighting.cpp)
+# The start kit of a solo game, given by mods/admin when the player first spawns (zm_startpoints, zm_startperks): 0
+# points keeps the game's own 500. The perk names are those _admin.gsc admin_perk_name takes, in its order; a perk
+# without a machine on the map is not given.
+START_POINT_CHOICES = (0, 1000, 2500, 5000, 10000, 25000, 50000, 100000)
+START_PERKS = (("jugg", "Juggernog"), ("revive", "Quick Revive"), ("speed", "Speed Cola"), ("doubletap", "Double Tap"),
+               ("staminup", "Stamin-Up"), ("phd", "PhD Flopper"), ("deadshot", "Deadshot Daiquiri"),
+               ("mule", "Mule Kick"))
 
 DEFAULTS = {
     "mode": "solo",
@@ -58,6 +65,8 @@ DEFAULTS = {
     "zinfo": True,
     "noperks": False,
     "quickrestart": True,
+    "start_points": 0,                  # one of START_POINT_CHOICES
+    "start_perks": [],                  # names of START_PERKS
     "horde": False,
     "horde_max": 128,
     "horde_round": 1,
@@ -162,6 +171,9 @@ class Profile:
             self.data["window"] = DEFAULTS["window"]
         if self.data["scene_models"] not in SCENE_MODEL_CHOICES:
             self.data["scene_models"] = DEFAULTS["scene_models"]
+        if self.data["start_points"] not in START_POINT_CHOICES:
+            self.data["start_points"] = DEFAULTS["start_points"]
+        self.data["start_perks"] = [k for k, _ in START_PERKS if k in self.data["start_perks"]]
         self.data["extra"] = [e for e in self.data["extra"] if isinstance(e, dict) and isinstance(e.get("text"), str)]
         self.data["favorites"] = [f for f in self.data["favorites"] if isinstance(f, dict) and f.get("host")]
 
@@ -295,7 +307,28 @@ def solo_mod_flags(p, dist_root=None):
         a = nightmare_flags(p["difficulty"], a, bsp)
     if p["quickrestart"]:
         a += " +set bo1_mod_quickrestart 1"
-    return a.split()
+    argv = a.split()
+    if p["start_points"] or p["start_perks"]:
+        add_admin_mod(argv, bool(layout) and not p["horde"])
+        if p["start_points"]:
+            argv += ["+set", "zm_startpoints", str(p["start_points"])]
+        if p["start_perks"]:
+            argv += ["+set", "zm_startperks", ",".join(k for k, _ in START_PERKS if k in p["start_perks"])]
+    return argv
+
+
+def add_admin_mod(argv, mapkit):
+    """Stacks mods/admin (the start kit's script) on the line's fs_mods, or adds one: "mapkit admin" on a MapKit map
+    without other mods, whose line only sets fs_game."""
+    for i in range(1, len(argv)):
+        if argv[i] == "fs_mods" and argv[i - 1] == "+set":
+            j = i + 1
+            while j < len(argv) and not argv[j].startswith("+"):
+                j += 1
+            if "admin" not in argv[i + 1:j]:
+                argv.insert(j, "admin")
+            return
+    argv += ["+set", "fs_mods"] + (["mapkit", "admin"] if mapkit else ["admin"])
 
 
 def fs_game(p, dist_root=None):

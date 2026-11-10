@@ -261,6 +261,49 @@ class CommandLine(unittest.TestCase):
         p["mode"], p["join_host"] = "join", "10.0.0.1"
         self.assertEqual(dvar(P.build_command(p, "x", "/g"), "r_mod_sceneModels"), "2048")
 
+    def test_start_kit(self):
+        """Start points and perks stack mods/admin on the line's fs_mods (or add one) and set its two dvars."""
+        def mods_and_kit(p, root="/g"):
+            argv = P.solo_mod_flags(p, root)
+            i = argv.index("fs_mods") if "fs_mods" in argv else None
+            mods = []
+            if i is not None:
+                for a in argv[i + 1:]:
+                    if a.startswith("+"):
+                        break
+                    mods.append(a)
+            kit = {argv[k + 1]: argv[k + 2] for k in range(len(argv) - 2) if argv[k] == "+set"
+                   and argv[k + 1] in ("zm_startpoints", "zm_startperks")}
+            return mods, kit
+        p = P.Profile()
+        self.assertEqual(mods_and_kit(p), (["zinfo"], {}))         # the default line is unchanged
+        p["start_points"] = 50000
+        self.assertEqual(mods_and_kit(p), (["zinfo", "admin"], {"zm_startpoints": "50000"}))
+        p["start_perks"] = ["revive", "jugg"]                      # given in START_PERKS order
+        self.assertEqual(mods_and_kit(p)[1], {"zm_startpoints": "50000", "zm_startperks": "jugg,revive"})
+        p["start_points"], p["zinfo"] = 0, False
+        self.assertEqual(mods_and_kit(p), (["admin"], {"zm_startperks": "jugg,revive"}))
+        p["noperks"] = True
+        self.assertEqual(mods_and_kit(p)[0], ["noperks", "admin"])
+        p["noperks"], p["horde"] = False, True
+        self.assertEqual(mods_and_kit(p)[0], ["horde", "zinfo", "admin"])
+        p["horde"], p["difficulty"] = False, 2
+        self.assertEqual(mods_and_kit(p)[0], ["nightmare", "admin"])
+        with tempfile.TemporaryDirectory() as tmp:
+            layouts = os.path.join(tmp, "mods", "mapkit", "layouts")
+            os.makedirs(layouts)
+            with open(os.path.join(layouts, "bo2_zm_nuked.json"), "w") as f:
+                json.dump({"name": "bo2_zm_nuked", "base": "zombie_pentagon", "edits": []}, f)
+            p = P.Profile()
+            p["map"], p["zinfo"], p["start_points"] = "mapkit:bo2_zm_nuked", False, 50000
+            self.assertEqual(mods_and_kit(p, tmp)[0], ["mapkit", "admin"])
+            p["zinfo"] = True
+            self.assertEqual(mods_and_kit(p, tmp)[0], ["mapkit", "zinfo", "admin"])
+        # a join leaves the server to decide
+        p = P.Profile()
+        p["start_points"], p["mode"], p["join_host"] = 50000, "join", "10.0.0.1"
+        self.assertNotIn("zm_startpoints", P.build_command(p, "x", "/g"))
+
     def test_profile_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "sub", "profile.json")
@@ -271,6 +314,7 @@ class CommandLine(unittest.TestCase):
                 self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
             with open(path, "w") as f:
                 json.dump({"mode": "nope", "horde_max": "300", "god": True, "window": 3, "scene_models": 3000,
+                           "start_points": 42, "start_perks": ["mule", "nope", "jugg", "jugg"],
                            "favorites": [{"host": "a"}, {"name": "no host"}, 5]}, f)
             q = P.Profile(path)
             self.assertEqual(q["mode"], "solo")
@@ -278,6 +322,8 @@ class CommandLine(unittest.TestCase):
             self.assertTrue(q["god"])
             self.assertEqual(q["window"], "borderless")
             self.assertEqual(q["scene_models"], 1024)
+            self.assertEqual(q["start_points"], 0)
+            self.assertEqual(q["start_perks"], ["jugg", "mule"])
             self.assertEqual(q["favorites"], [{"host": "a"}])
 
     def test_cli_print_cmd(self):
