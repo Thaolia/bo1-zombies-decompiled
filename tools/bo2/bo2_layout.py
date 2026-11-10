@@ -14,7 +14,9 @@ imports/<map>/<map>.collision.bin: copy the .bin there in the run folder) and it
     text file of node pairs (--links-out, default <map>.links.txt; copy it to imports/<map>/ in the run folder). They
     are the graph between these nodes, instead of BO1's link test (g_mapkit_path.cpp: BO1 actors walk no facet steeper
     than 45.6 degrees, BO2's walk Nuketown's north ditch; and BO1's test crossed the sill clip of a window);
-  - mysterybox: the start chest;
+  - mysterybox: every chest location (zbarrier_*MagicBox*), "start" on BO2's start chests: with more than one,
+    retail's treasure_chest_init picks a start among them, moves the box and lights its beam (one chest stays put
+    and gets no beam);
   - door / debris: each zombie_door / zombie_debris trigger group, with BO2's cost; its box is the targeted brush
     models' (the door panel, the debris clip), its zones come from its script_flag ("culdesac_2_openhouse2_f1"), the
     one farther from the player start being the one it unlocks, and its "meshGroup" names the group of BO2 script
@@ -503,7 +505,7 @@ def build(ents, col, name, collision, links_file=None):
         edits.append({"kind": "traverse", "begin": pair[0], "end": pair[1], "yaw": yaw(e), "anim": anim})
 
     chests = [e for e in ents if e.get("classname", "").startswith("zbarrier_") and "MagicBox" in e["classname"]]
-    start = next((c for c in chests if "start" in c.get("script_noteworthy", "")), chests[0] if chests else None)
+    starts = [c for c in chests if "start" in c.get("script_noteworthy", "")] or chests[:1]
     cuts = []
 
     def place(origin, angle, yaws):
@@ -519,9 +521,11 @@ def build(ents, col, name, collision, links_file=None):
         return spot, round(col.free_side(spot, [angle + d for d in yaws], cut), 1)
 
     # BO2's box (a zbarrier) is oriented along its length; BO1's chest faces its yaw
-    if start:
-        origin, angle = place(vec(start["origin"]), yaw(start), (90, -90, 0, 180))
-        edits.append({"kind": "mysterybox", "name": "box", "origin": origin, "yaw": angle})
+    for chest in chests:
+        origin, angle = place(vec(chest["origin"]), yaw(chest), (90, -90, 0, 180))
+        name = chest.get("script_noteworthy", "").replace("_zbarrier", "") or f"box{len(edits)}"
+        edits.append({"kind": "mysterybox", "name": name, "origin": origin, "yaw": angle,
+                      "start": 1 if chest in starts else 0})
 
     skipped = []
     for e in ents:

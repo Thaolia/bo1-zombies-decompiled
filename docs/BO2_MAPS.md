@@ -288,7 +288,18 @@ Nuketown has about 195 000 world vertices before its props).
       (`CM_Mapkit_EditShown`), in place of the kit's box.
     - The self-test buys all 11 and checks each zone's unlock. Its `door_graph` check counts the active links through
       the doorway on an imported map: the houses also join the street through their windows.
-    The mystery box stands at the far end of house 1's backyard, behind the hedge.
+    - A cost retail has no hint for (its `default_buy_debris_<cost>` and `default_buy_door_<cost>` stop at 2000) showed
+      "UNDEFINED!! PLEASE SET THE SCRIPT_HINT ON THE ENT PROPERLY!" on Nuketown's two 3000 debris (the truck and the
+      ammo room). No localized string takes the cost as a parameter, so `_mapkit.gsc` (`mapkit_blocker_hints`)
+      registers the missing ones with retail's text, unlocalized: "Hold [use] to Clear Debris [Cost: 3000]".
+  - **Mystery box (2026-11-10, reported by the user).** The first layout kept only the start chest. With one chest,
+    retail's `treasure_chest_init` never moves the box and never shows its beam. `bo2_layout.py` now writes BO2's five
+    chest locations, "start" on its two start chests (retail picks one of them). Retail's beam (`lght_marker`, Five's
+    `fx_zombie_coast_marker`) is a faint additive column made for a dark sky, and hardly shows over Nuketown's
+    daylight sky. So on an imported map `_mapkit.gsc` (`mapkit_pandora_fx`, as `level.pandora_fx_func`) stacks the
+    same effect, two on the chest and two every 1 000 units up to 5 000, deleted with the retail light when the box
+    moves. Checked on D3D9 client screenshots: the beam stands over the box from across the map (about 2 900 units
+    away).
   - **Baked light on the props (2026-11-10).** BO2 bakes the light of a static model placement into one colour per
     vertex (`GfxStaticModelDrawInst::lmapVertexInfo`, per LOD). The OAT dumper writes them to
     `<map>.d3dbsp.smodellight.bin` (`BO2SMLT1`: per placement, its LODs' colours; per model, its LODs' vertex

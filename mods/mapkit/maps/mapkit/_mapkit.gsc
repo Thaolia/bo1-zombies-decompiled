@@ -21,6 +21,11 @@ main_start()
 	level.mapkit_layout = bo1_mapkit_layout();
 	LogPrint( "mapkit: runtime on layout " + level.mapkit_layout + ", " + bo1_mapkit_editcount() + " edits\n" );
 	mapkit_precache();
+	mapkit_blocker_hints();
+	if ( mapkit_imported() )
+	{
+		level.pandora_fx_func = ::mapkit_pandora_fx; // before _zombiemode_weapons::treasure_chest_init shows the beam
+	}
 	for ( i = 0; i < bo1_mapkit_editcount(); i++ )
 	{
 		kind = bo1_mapkit_get( i, "kind" );
@@ -55,6 +60,77 @@ main_start()
 			bo1_mapkit_mark( kind, mapkit_name( i ), mapkit_center( i ), 0 );
 		}
 	}
+}
+
+// A door or debris costing what retail has no hint for: _zombiemode::init_strings registers default_buy_door_<cost> and
+// default_buy_debris_<cost> from 100 to 2000 only, and blockers' set_hint_string then shows ZOMBIE_UNDEFINED ("PLEASE
+// SET THE SCRIPT_HINT"). BO2's Nuketown has two 3000 debris. No localized string takes the cost as a parameter, so the
+// missing ones get retail's text unlocalized (SetHintString takes a plain string; [{+activate}] is the use key, as in
+// ZOMBIE_BUTTON_BUY_TRAP). Runs before init_strings, which adds to level.zombie_hints without clearing it.
+mapkit_blocker_hints()
+{
+	if ( !IsDefined( level.zombie_hints ) )
+	{
+		level.zombie_hints = [];
+	}
+	for ( i = 0; i < bo1_mapkit_editcount(); i++ )
+	{
+		kind = bo1_mapkit_get( i, "kind" );
+		cost = bo1_mapkit_get( i, "cost" );
+		if ( ( kind != "door" && kind != "debris" ) || !IsDefined( cost ) || mapkit_retail_hint_cost( Int( cost ) ) )
+		{
+			continue;
+		}
+		cost = Int( cost );
+		if ( kind == "debris" )
+		{
+			level.zombie_hints["default_buy_debris_" + cost] = "Hold ^3[{+activate}]^7 to Clear Debris [Cost: " + cost + "]";
+		}
+		else
+		{
+			level.zombie_hints["default_buy_door_" + cost] = "Hold ^3[{+activate}]^7 to Open Door [Cost: " + cost + "]";
+		}
+	}
+}
+
+// The box's beam (retail default_pandora_fx_func: lght_marker, Five's fx_zombie_coast_marker, on a tag_origin at the
+// chest) is a faint additive column made for a dark sky: over an imported map's daylight sky it does not show. So the
+// same effect is stacked: two on the chest and two every PANDORA_SEGMENT units above it, gone with the retail light
+// (hide_chest deletes self.pandora_light when the box moves).
+mapkit_pandora_fx()
+{
+	self.pandora_light = Spawn( "script_model", self.chest_origin.origin );
+	self.pandora_light.angles = self.chest_origin.angles + ( -90, 0, 0 );
+	self.pandora_light SetModel( "tag_origin" );
+	segments = [];
+	for ( k = 1; k < 6; k++ )
+	{
+		segment = Spawn( "script_model", self.chest_origin.origin + ( 0, 0, k * 1000 ) );
+		segment.angles = self.pandora_light.angles;
+		segment SetModel( "tag_origin" );
+		segments[segments.size] = segment;
+	}
+	light = self.pandora_light;
+	PlayFXOnTag( level._effect["lght_marker"], light, "tag_origin" );
+	PlayFXOnTag( level._effect["lght_marker"], light, "tag_origin" );
+	for ( k = 0; k < segments.size; k++ )
+	{
+		PlayFXOnTag( level._effect["lght_marker"], segments[k], "tag_origin" );
+		PlayFXOnTag( level._effect["lght_marker"], segments[k], "tag_origin" );
+	}
+	while ( IsDefined( light ) )
+	{
+		wait( 0.5 );
+	}
+	for ( k = 0; k < segments.size; k++ )
+	{
+		segments[k] Delete();
+	}
+}
+
+mapkit_retail_hint_cost( cost )
+{
+	return cost == 100 || cost == 200 || cost == 250 || ( cost >= 500 && cost <= 2000 && cost % 250 == 0 );
 }
 
 main_end()
