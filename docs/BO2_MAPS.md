@@ -249,10 +249,12 @@ Nuketown has about 195 000 world vertices before its props).
     images are loaded whole, not streamed. A Windows client (`tools/headless.ps1 -Client`, D3D9) then draws the map and
     plays on to its scheduled quit (219 s with the load), with a normal exit.
   - The scene takes 1 024 models a frame (`GfxScene::sceneModel`). The chunks and the visible props go past it, and
-    `R_AllocSceneModel` drops the rest ("too many existing models (more than 1024)"). Props whose bounding sphere
-    comes within 1 024 units are added first, so the dropped ones are far. The test uses the sphere, not the origin,
-    because a prop's origin can lie far from its geometry. The clock tower's origin is 1 000 units off, and the tower
-    was dropped in front of the viewer, leaving its clock hanging in the sky.
+    `R_AllocSceneModel` drops the rest ("too many existing models (more than 1024)"). The props are added nearest
+    first, sorted each frame by the distance to their bounding sphere, so the dropped ones are the farthest. The sort
+    uses the sphere, not the origin, because a prop's origin can lie far from its geometry. The clock tower's origin is
+    1 000 units off, and the tower was dropped in front of the viewer, leaving its clock hanging in the sky. A first
+    version added the props within 1 024 units first but in file order, and in front of a house the budget ran out
+    before the doors, which `bo2_mesh.py` writes last.
   - **Props drawn inside out (fixed 2026-11-10).** The engine draws a triangle whose right-hand normal points away
     from the viewer, BO2's own winding, which the world OBJ keeps. `bo2_mesh.py` wound the props the other way, with
     their right-hand normals out, as `bo2_props_collision.py` needs for its prisms. Every prop then showed its back
@@ -261,7 +263,19 @@ Nuketown has about 195 000 world vertices before its props).
   - **Wall buys.** Retail `init_weapon_upgrade` hides a wall buy's weapon model until its first purchase, since a BO1
     map shows the weapon with a chalk drawing. Nuketown has no such drawing (BO2 draws its chalk by script), so on
     another game's map MapKit shows the models from the start (`mapkit_show_wallbuys`, `_mapkit.gsc`).
-  - Nuketown has no door or debris to buy: BO2's map is open from the start, as here (its 10 zones are enabled).
+  - **Doors and debris (2026-11-10).** A first version left them out, wrongly. BO2 has 6 doors and 5 debris on
+    Nuketown, each a group of `zombie_door` / `zombie_debris` triggers that share a target: the house fronts (750),
+    the back doors and the upper floor door (1000), the stairs' debris (1000 and 1250), the truck (3000) and the ammo
+    room (3000).
+    - `bo2_layout.py` makes each group a MapKit `door` or `debris` with BO2's cost. Its box is the targeted brush
+      models' (the door panel, the debris clip), placed by entity origin plus submodel bounds from the collision
+      dump. Its zones come from the `script_flag` (`culdesac_2_openhouse2_f1`; `culdesac` is the nearer of the
+      yellow and green zones). A walk from the start zones gives the one it unlocks.
+    - `bo2_mesh.py` writes the group's script models (BO2's white and brown doors, couches, chairs, armoires) as
+      props, plus a table of groups at the end of the file. The engine draws them until the purchase
+      (`CM_Mapkit_EditShown`), in place of the kit's box.
+    - The self-test buys all 11 and checks each zone's unlock. Its `door_graph` check counts the active links through
+      the doorway on an imported map: the houses also join the street through their windows.
     The mystery box stands at the far end of house 1's backyard, behind the hedge.
   - Not done yet: BO2's baked lighting (the light is the empty base's flat grey and the sun), standalone decals (left
     out with caulk and shadow casters), blending (glass is alpha tested), and a `vid_restart` (the mesh is not drawn

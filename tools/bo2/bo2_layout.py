@@ -15,6 +15,10 @@ imports/<map>/<map>.collision.bin: copy the .bin there in the run folder) and it
     are the graph between these nodes, instead of BO1's link test (g_mapkit_path.cpp: BO1 actors walk no facet steeper
     than 45.6 degrees, BO2's walk Nuketown's north ditch; and BO1's test crossed the sill clip of a window);
   - mysterybox: the start chest;
+  - door / debris: each zombie_door / zombie_debris trigger group, with BO2's cost; its box is the targeted brush
+    models' (the door panel, the debris clip), its zones come from its script_flag ("culdesac_2_openhouse2_f1"), the
+    one farther from the player start being the one it unlocks, and its "meshGroup" names the group of BO2 script
+    models (door, couch, chairs) that bo2_mesh.py draws until the purchase;
   - wallbuy: the weapon_upgrade structs whose weapon has a BO1 equivalent loaded on the Five base (WEAPONS);
   - perk / pap: the four Five perks and Pack-a-Punch on the first zm_random_machine landing spots (BO2 drops them
     at random), on the side a player can reach;
@@ -254,6 +258,79 @@ def zone_edits(ents, submodels):
     return zones
 
 
+def blocker_edits(ents, submodels, zones, start_zones):
+    """Door and debris edits for BO2's zombie_door / zombie_debris triggers, one per group of triggers sharing a target."""
+    by_name = {}
+    for e in ents:
+        by_name.setdefault(e.get("targetname"), []).append(e)
+    bases = {z["name"][: -len("_zone")] if z["name"].endswith("_zone") else z["name"]: z for z in zones}
+
+    def box_of(entity):
+        model = entity.get("model", "")
+        if not model.startswith("*") or int(model[1:]) >= len(submodels):
+            return None
+        b, o = submodels[int(model[1:])], vec(entity.get("origin", "0 0 0"))
+        return [o[k] + b[k] for k in range(3)], [o[k] + b[3 + k] for k in range(3)]
+
+    def zone_for(token, centre):
+        # a flag names a zone by its name less "_zone", or by a prefix of several ("culdesac": yellow and green)
+        found = [z for base, z in bases.items() if base == token or base.startswith(token + "_")]
+        return min(found, key=lambda z: sum(max(z["mins"][k] - centre[k], 0, centre[k] - z["maxs"][k]) ** 2
+                                            for k in range(3)))["name"] if found else None
+
+    def split_flag(flag, centre):
+        if "_2_" in flag:
+            a, b = flag.split("_2_", 1)
+            return zone_for(a, centre), zone_for(b, centre)
+        parts = flag.split("_")
+        for cut in range(1, len(parts)):
+            a, b = zone_for("_".join(parts[:cut]), centre), zone_for("_".join(parts[cut:]), centre)
+            if a and b and "_".join(parts[:cut]) in bases and "_".join(parts[cut:]) in bases:
+                return a, b
+        return None, None
+
+    groups = []
+    for trigger in ents:
+        kind = {"zombie_door": "door", "zombie_debris": "debris"}.get(trigger.get("targetname"))
+        target = trigger.get("target")
+        if not kind or not target or any(g["meshGroup"] == target for g in groups):
+            continue
+        boxes = [box_of(e) for e in by_name.get(target, []) if e.get("classname") == "script_brushmodel"]
+        boxes = [b for b in boxes if b] or [box_of(trigger)]
+        if not boxes[0]:
+            continue
+        mins = [round(min(b[0][k] for b in boxes), 2) for k in range(3)]
+        maxs = [round(max(b[1][k] for b in boxes), 2) for k in range(3)]
+        centre = [(mins[k] + maxs[k]) / 2 for k in range(3)]
+        a, b = split_flag(trigger.get("script_flag", ""), centre)
+        if not a or not b:
+            print(f"blocker {target}: no zones for flag {trigger.get('script_flag')}", file=sys.stderr)
+            continue
+        groups.append({"kind": kind, "name": target, "mins": mins, "maxs": maxs, "yaw": 0,
+                       "zones": (a, b), "cost": int(float(trigger.get("zombie_cost", 1000))), "meshGroup": target})
+
+    # each blocker unlocks the zone the player reaches later: a breadth-first walk from the start zones through them
+    reached, order, pending = set(start_zones), {}, list(groups)
+    while pending:
+        progress = False
+        for g in list(pending):
+            a, b = g["zones"]
+            if a in reached or b in reached:
+                g["from"], g["to"] = (a, b) if a in reached else (b, a)
+                pending.remove(g)
+                progress = True
+        for g in groups:
+            if "to" in g:
+                reached.add(g["to"])
+        if not progress:
+            for g in pending:  # cut off from the start: the flag's order
+                g["from"], g["to"] = g["zones"]
+            break
+    for g in groups:
+        del g["zones"]
+    return groups
+
+
 def segment_crosses_box(a, b, lo, hi):
     """Whether the segment a-b crosses the box [lo, hi] seen from above."""
     t0, t1 = 0.0, 1.0
@@ -473,6 +550,7 @@ def build(ents, col, name, collision, links_file=None):
         edits.append({"kind": "pap", "name": "pap", "origin": origin, "yaw": angle})
     if cuts:
         edits[0]["cut"] = cuts
+    edits += blocker_edits(ents, submodels, zones, {e["zone"] for e in edits if e["kind"] == "spawn"})
     edits += barrier_clips(edits, col)
 
     layout = {"name": name, "base": "zombie_pentagon", "empty": True, "edits": edits}

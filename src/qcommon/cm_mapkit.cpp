@@ -591,6 +591,7 @@ namespace
     cLeafBrushNode_s *s_retailNodes;
     unsigned int s_retailNodeCount;
     int s_editBModel[MK_MAX_EDITS]; // edit -> cmodel index ("*N"), -1 = none
+    bool s_editScriptHidden[MK_MAX_EDITS]; // bo1_mapkit_visible( edit, false ) was called: an opened door or debris
     int s_editUseBModel[MK_MAX_EDITS]; // blockers have a separate touch volume reaching both sides
     float s_editBCenter[MK_MAX_EDITS][3]; // the entity origin (the brush is built around it)
 
@@ -1754,6 +1755,7 @@ void CM_Mapkit_Load(const char *mapName)
     s_strUsed = 0;
     s_parseError = 0;
     s_boxCount = 0;
+    memset(s_editScriptHidden, 0, sizeof(s_editScriptHidden));
     s_gapCount = 0;
     s_editsNode = -1;
     s_layoutName[0] = 0;
@@ -1813,8 +1815,15 @@ void CM_Mapkit_Load(const char *mapName)
         {
             float mins[3], maxs[3];
             if (MkJ_Vec3(MkJ_Child(c, "mins"), mins) && MkJ_Vec3(MkJ_Child(c, "maxs"), maxs))
+            {
+                const int before = s_boxCount;
                 Mapkit_AddBox(mins, maxs, MkJ_Str(c, "material", "mc/pent_art_wall_wood07_dark"),
                     strcmp(kind, "box") ? 0 : Mapkit_Contents(MkJ_Str(c, "contents", "solid")), MkJ_Num(c, "texScale", 128.0f), e);
+                // a blocker drawn by a mesh edit's group (another game's door or furniture, r_mapkit_mesh.cpp) keeps
+                // its box for collision only
+                if (s_boxCount > before && strcmp(kind, "box") && MkJ_Str(c, "meshGroup", 0))
+                    s_boxes[s_boxCount - 1].hidden = true;
+            }
             else
                 Com_PrintWarning(1, "mapkit: box edit %d needs mins and maxs\n", e);
         }
@@ -1887,9 +1896,21 @@ bool CM_Mapkit_IsSubmodel(unsigned int index)
 
 void CM_Mapkit_SetVisible(int edit, bool visible)
 {
+    // a blocker drawn by a mesh group never shows its box (the script shows every blocker's box at start)
+    const char *group = 0;
+    float unused[3];
+    const bool meshDrawn = CM_Mapkit_GetField(edit, "meshGroup", &group, unused) == MKF_STRING;
     for (int i = 0; i < s_boxCount; ++i)
         if (s_boxes[i].editIndex == edit)
-            s_boxes[i].hidden = !visible;
+            s_boxes[i].hidden = !visible || meshDrawn;
+    if (edit >= 0 && edit < MK_MAX_EDITS)
+        s_editScriptHidden[edit] = !visible;
+}
+
+// the renderer asks this for a mesh group bound to a door or debris edit (r_mapkit_mesh.cpp): hidden once opened
+bool CM_Mapkit_EditShown(int edit)
+{
+    return edit < 0 || edit >= MK_MAX_EDITS || !s_editScriptHidden[edit];
 }
 
 static bool CM_Mapkit_BoxTouches(const traceWork_t *tw, const cbrush_t *b)

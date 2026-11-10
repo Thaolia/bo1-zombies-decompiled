@@ -23,6 +23,9 @@ and FAR_CELL beyond it (the distant backdrop), so the view culls them and the li
       u32 surfaceCount, then its surfaces as a chunk's (positions in model space)
   u32 instanceCount, then per instance: u32 model, f32[3] origin, f32[3][3] axes (model x, y, z in the world), f32 scale
   i32 sky model (the worldspawn's skyboxmodel, one of the models above, drawn around the viewer; -1: none)
+  u32 groupCount, then per group: char[64] name, u32 count, count x u32 instance: the props a door or debris removes
+      when bought (BO2's blockers are script models: their doors and furniture, written as instances above); a group
+      is named after its triggers' target, the "meshGroup" of the layout's door or debris edit (bo2_layout.py)
 The output is the player's own game data: keep it out of the repository. docs/BO2_MAPS.md has the procedure.
 """
 import argparse
@@ -181,6 +184,17 @@ def model_tris(path):
     return out
 
 
+def angles_to_axes(text):
+    """An entity's "angles" (pitch yaw roll, degrees) as the model's x, y, z axes in the world, flattened (the game's
+    AnglesToAxis: forward, left, up)."""
+    pitch, yaw, roll = (math.radians(float(v)) for v in text.split())
+    sp, cp, sy, cy, sr, cr = math.sin(pitch), math.cos(pitch), math.sin(yaw), math.cos(yaw), math.sin(roll), math.cos(roll)
+    forward = (cp * cy, cp * sy, -sp)
+    right = (-sr * sp * cy + cr * sy, -sr * sp * sy - cr * cy, -sr * cp)
+    up = (cr * sp * cy + sr * sy, cr * sp * sy - sr * cy, cr * cp)
+    return [*forward, *(-v for v in right), *up]
+
+
 def read_lods(dump, name):
     """A model's LODs as [(distance, material -> triangles)]: OAT's xmodel JSON gives each LOD's OBJ and the distance
     up to which it draws (0 on the last one: drawn at any distance); without the JSON, the OBJs found, the last at 0."""
@@ -293,30 +307,59 @@ def main(argv=None):
     # props: one model per BO2 xmodel, with its LODs (distances from OAT's xmodel JSON), and one instance per placement
     exports = os.path.join(args.dump, "model_export")
     models, model_index, instances, missing = [], {}, [], set()
+
+    def add_model(name):
+        """The index of an xmodel in models, read on first use; -1 when it has nothing to draw."""
+        if name not in model_index:
+            # a LOD whose materials are all left out (decals) has nothing to draw: the engine wants surfaces
+            lods = [(dist, {m: t for m, t in lod.items() if not skipped(m)}) for dist, lod in read_lods(args.dump, name)]
+            lods = [(dist, lod) for dist, lod in lods if lod]
+            if not lods:
+                missing.add(name)
+                model_index[name] = -1
+                return -1
+            for material, dds in read_mtl(os.path.join(exports, name + ".mtl"), images).items():
+                colour.setdefault(material, dds)
+            for _, tris in lods:
+                for material in tris:
+                    groups.setdefault(material, [])  # listed with the world's materials
+            model_index[name] = len(models)
+            models.append((name, lods))
+        return model_index[name]
+
     with open(base + ".smodels.csv", encoding="latin-1") as f:
         for row in csv.DictReader(f):
             name = row["model"]
-            if name not in model_index:
-                # a LOD whose materials are all left out (decals) has nothing to draw: the engine wants surfaces
-                lods = [(dist, {m: t for m, t in lod.items() if not skipped(m)})
-                        for dist, lod in read_lods(args.dump, name)]
-                lods = [(dist, lod) for dist, lod in lods if lod]
-                if not lods:
-                    missing.add(name)
-                    model_index[name] = -1
-                    continue
-                for material, dds in read_mtl(os.path.join(exports, name + ".mtl"), images).items():
-                    colour.setdefault(material, dds)
-                for _, tris in lods:
-                    for material in tris:
-                        groups.setdefault(material, [])  # listed with the world's materials
-                model_index[name] = len(models)
-                models.append((name, lods))
-            if model_index[name] < 0:
+            if add_model(name) < 0:
                 continue
             axes = [float(row[f"a{a}{i}"]) for a in "xyz" for i in range(3)]
             instances.append((model_index[name], [float(row[k]) for k in ("x", "y", "z")], axes,
                               float(row["scale"])))
+
+    # blockers: the script models a zombie_door or zombie_debris trigger targets (doors, couches, chairs), drawn
+    # until the purchase, in groups the engine binds to the layout's door and debris edits
+    ents = read_entities(base + ".ents")
+    by_name = {}
+    for e in ents:
+        by_name.setdefault(e.get("targetname"), []).append(e)
+    blocker_groups = {}
+    for trigger in ents:
+        if trigger.get("targetname") not in ("zombie_door", "zombie_debris") or not trigger.get("target"):
+            continue
+        group = trigger["target"]
+        if group in blocker_groups:
+            continue
+        blocker_groups[group] = []
+        for e in by_name.get(group, []):
+            name = e.get("model", "")
+            if e.get("classname") != "script_model" or not name or name.startswith("*"):
+                continue
+            index = add_model(name)
+            if index < 0:
+                continue
+            blocker_groups[group].append(len(instances))
+            instances.append((index, [float(v) for v in e["origin"].split()], angles_to_axes(e.get("angles", "0 0 0")),
+                              float(e.get("modelscale", 1.0))))
 
     # the sky: the worldspawn's skybox model, one more model (no placement: the engine draws it around the viewer)
     sky, sky_materials = -1, set()
@@ -425,6 +468,10 @@ def main(argv=None):
         for model, origin, axes, scale in instances:
             f.write(struct.pack("<I3f9ff", model, *origin, *axes, scale))
         f.write(struct.pack("<i", sky))
+        f.write(struct.pack("<I", len(blocker_groups)))
+        for group, members in blocker_groups.items():
+            f.write(group.encode("latin-1")[:63].ljust(64, b"\0"))
+            f.write(struct.pack(f"<I{len(members)}I", len(members), *members))
     print(f"{out_bin}: {len(records)} materials, {len(chunks)} chunks, {surf_count} surfaces, {verts} vertices, {tris} triangles; "
           f"{sum(1 for v in converted.values() if v)} images; {len(instances)} props of {len(models)} models "
           f"({model_tris_total[0]} triangles over all their LODs), "
