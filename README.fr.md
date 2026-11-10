@@ -145,7 +145,7 @@ les pathnodes, les traversées, la boîte, les armes au mur, les atouts et le Pa
 headless (l'auto-test y achète la boîte, tous les atouts, toutes les armes au mur et le Pack-a-Punch, et un zombie sort
 de chacun de ses 36 points de sortie du sol pour rejoindre le joueur en suivant le graphe de nodes d'origine de BO2, en sautant
 jusqu'aux étages des maisons et par-dessus ses clôtures et ses fenêtres) et s'affiche texturée avec
-ses props et son ciel (pas encore l'éclairage d'origine) ; ses props arrêtent les joueurs et les balles. Détails :
+ses props, éclairés par la lumière précalculée de BO2, et son ciel (pas encore les lightmaps du monde) ; ses props arrêtent les joueurs et les balles. Détails :
 `docs/BO2_MAPS.md`.
 
 
@@ -183,4 +183,6 @@ décrit. Les paquets contiennent vos propres fichiers de jeu : gardez-les pour v
 `--bo2 DIR` ajoute aussi aux paquets windows et linux votre propre extraction d'une map de Black Ops II
 (`docs/BO2_MAPS.md`, « Running it »). Le script prend `DIR/mods/mapkit/layouts/bo2_*.json` et
 `DIR/mods/mapkit/imports/`, et la vue Solo de ZmClient propose alors « Mapkit : Nuketown (Black Ops II) ». Cette
-extraction est une donnée du jeu : `--bo2` ne se combine pas avec `--no-game-data`.
+extraction est une donnée du jeu : `--bo2` ne se combine pas avec `--no-game-data`. Nuketown a plus de 2 000 props :
+dans la vue Lancement de ZmClient, « Modèles affichés par image » à 4096 (`r_mod_sceneModels`) les dessine tous,
+1024 (le jeu d'origine) laisse tomber les plus lointains.

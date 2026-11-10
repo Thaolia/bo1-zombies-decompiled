@@ -10,6 +10,8 @@
 #include "r_warn.h"
 #include <qcommon/threads.h>
 
+static_assert(sizeof(GfxModelWaterSurface) % R_SURF_UNIT == 0, "GfxModelWaterSurface vs R_SURF_UNIT"); // mod
+
 float max_plop_size = 5.0;
 float max_plop_height = 5.0;
 int explodesize = 3;
@@ -1373,7 +1375,7 @@ void __cdecl R_RenderWaterModel(unsigned int viewIndex)
                 waterSurf->vertCount = 289;
                 waterSurf->triCount = data.tileTriCount[lod];
                 surfId = modelSurf - (char *)frontEndDataOut;
-                if ( (((_BYTE)(uintptr_t)modelSurf - (_BYTE)(uintptr_t)frontEndDataOut) & 3) != 0
+                if ( (((_BYTE)(uintptr_t)modelSurf - (_BYTE)(uintptr_t)frontEndDataOut) & (R_SURF_UNIT - 1)) != 0 // mod: retail & 3
                     && !Assert_MyHandler(
                                 "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_water_sim.cpp",
                                 1374,
@@ -1386,7 +1388,7 @@ void __cdecl R_RenderWaterModel(unsigned int viewIndex)
                 HIDWORD(drawSurf.packed) = ((((s_world.waterMaterial->info.drawSurf.packed >> 58) & 0x3F) - 1) << 26)
                                                                  | HIDWORD(s_world.waterMaterial->info.drawSurf.packed) & 0x38007FF
                                                                  | 0x500000;
-                *(unsigned int *)&drawSurf.fields = (unsigned __int16)(surfId >> 2)
+                *(unsigned int *)&drawSurf.fields = (unsigned __int16)(surfId / R_SURF_UNIT) /* mod: retail >> 2 */
                                                                         | *(unsigned int *)&s_world.waterMaterial->info.drawSurf.fields & 0xF00F0000
                                                                         | 0x100000;
                 scene.drawSurfs[1][scene.drawSurfCount[1]++] = drawSurf;
@@ -1400,7 +1402,7 @@ char *__cdecl R_SurfaceAlloc(unsigned int size)
     unsigned int startSurfPos; // [esp+4h] [ebp-4h]
 
     startSurfPos = _InterlockedExchangeAdd(&frontEndDataOut->surfPos, size);
-    if ( size + startSurfPos <= 0x40000 )
+    if ( size + startSurfPos <= R_SURFS_BUFFER_BYTES ) // mod: retail 0x40000
         return (char *)frontEndDataOut + startSurfPos;
     R_WarnOncePerFrame(R_WARN_MAX_SCENE_SURFS_SIZE);
     return 0;

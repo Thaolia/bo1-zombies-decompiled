@@ -46,6 +46,10 @@ ROW_HELP = {
               "Plein écran : à la résolution de config.cfg (vue Config du jeu, F5).",
     "window_size": "La taille de la fenêtre en mode Fenêtre, LARGEURxHAUTEUR.",
     "fps_counter": "Le petit compteur d'images par seconde du portage, en haut à gauche.",
+    "scene_models": "Les modèles que le jeu dessine par image (r_mod_sceneModels ; 1024 dans le jeu d'origine). Une map "
+                    "importée par Mapkit en a bien plus (Nuketown : 2 096 props) : à 1024 les plus lointains manquent "
+                    "(l'horloge de la tour vue de la rue). 4096 les dessine tous et agrandit d'autant la réserve "
+                    "d'éclairage des modèles. Utile surtout pour les maps importées.",
     "aim_assist": "Aide à la visée à la manette (bo1_aimassist). Les trois réglages suivants n'agissent que si elle "
                   "est active. « réglage du jeu » : rien n'est forcé.",
     "aim_slowdown": "La visée ralentit sur un zombie.",

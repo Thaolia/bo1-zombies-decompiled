@@ -6,9 +6,11 @@
 #include <cstdint>
 #include <cstring>
 #include <iomanip>
+#include <algorithm>
 #include <iostream>
 #include <set>
 #include <string>
+#include <vector>
 
 using namespace T6;
 
@@ -77,6 +79,66 @@ namespace
 
 namespace gfx_world
 {
+    // <map>.d3dbsp.smodellight.bin, little-endian: BO2's baked lighting of its static models, one colour per vertex of
+    // each placed model's LODs (GfxStaticModelDrawInst::lmapVertexInfo), and the vertex positions they follow:
+    //   char[8] "BO2SMLT1"
+    //   u32 instanceCount (the rows of <map>.d3dbsp.smodels.csv, in order), then per instance: u32 lodCount, then per
+    //       LOD: u32 count, count x u32 colour (as the game stores it; 0 when the LOD has none)
+    //   u32 modelCount, then per model: char[64] name, u32 lodCount, then per LOD: u32 vertCount, vertCount x f32[3]
+    //       position in model space, the order of the colours (the LOD's surfaces' verts0, one after the other)
+    static void DumpStaticModelLighting(AssetDumpingContext& context, const std::string& name, const GfxWorldDpvsStatic& dpvs)
+    {
+        const auto bin = context.OpenAssetFile(name + ".smodellight.bin");
+        if (!bin)
+            return;
+        const auto u32 = [&](uint32_t v) { bin->write(reinterpret_cast<const char*>(&v), 4); };
+        bin->write("BO2SMLT1", 8);
+        u32(dpvs.smodelCount);
+        std::vector<const XModel*> models;
+        size_t lit = 0;
+        for (auto i = 0u; i < dpvs.smodelCount; i++)
+        {
+            const auto& inst = dpvs.smodelDrawInsts[i];
+            const auto lods = inst.model ? std::min<unsigned>(inst.model->numLods, 4u) : 0u;
+            u32(lods);
+            for (auto l = 0u; l < lods; l++)
+            {
+                const auto& info = inst.lmapVertexInfo[l];
+                const auto count = info.lmapVertexColors ? info.numLmapVertexColors : 0u;
+                u32(count);
+                if (count)
+                    bin->write(reinterpret_cast<const char*>(info.lmapVertexColors), 4 * count);
+                lit += count != 0;
+            }
+            if (inst.model && std::find(models.begin(), models.end(), inst.model) == models.end())
+                models.push_back(inst.model);
+        }
+        u32(static_cast<uint32_t>(models.size()));
+        for (const auto* model : models)
+        {
+            char padded[64]{};
+            std::strncpy(padded, model->name ? model->name : "?", 63);
+            bin->write(padded, 64);
+            const auto lods = std::min<unsigned>(model->numLods, 4u);
+            u32(lods);
+            for (auto l = 0u; l < lods; l++)
+            {
+                const auto& lod = model->lodInfo[l];
+                uint32_t verts = 0;
+                for (auto k = 0u; k < lod.numsurfs; k++)
+                    verts += model->surfs[lod.surfIndex + k].verts0 ? model->surfs[lod.surfIndex + k].vertCount : 0;
+                u32(verts);
+                for (auto k = 0u; k < lod.numsurfs; k++)
+                {
+                    const auto& surf = model->surfs[lod.surfIndex + k];
+                    for (auto v = 0u; surf.verts0 && v < surf.vertCount; v++)
+                        bin->write(reinterpret_cast<const char*>(&surf.verts0[v].xyz), 12);
+                }
+            }
+        }
+        std::cout << "gfxworld " << name << ": " << lit << " lit static model LODs, " << models.size() << " models\n";
+    }
+
     void ObjDumperT6::DumpAsset(AssetDumpingContext& context, const XAssetInfo<AssetGfxWorld::Type>& asset)
     {
         const auto* world = asset.Asset();
@@ -185,5 +247,6 @@ namespace gfx_world
                 *csv << "," << axis.x << "," << axis.y << "," << axis.z;
             *csv << "," << p.scale << "\n";
         }
+        DumpStaticModelLighting(context, asset.m_name, dpvs);
     }
 } // namespace gfx_world

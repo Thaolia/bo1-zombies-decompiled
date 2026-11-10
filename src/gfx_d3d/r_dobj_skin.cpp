@@ -235,7 +235,7 @@ unsigned int    R_SkinSceneDObjModels(
                 if (partsBitsVisCheck)
                 {
                     surfPos->skinnedCachedOffset = -3;
-                    surfPos = (GfxModelSkinnedSurface *)((char *)surfPos + 4);
+                    surfPos = (GfxModelSkinnedSurface *)((char *)surfPos + R_SURF_UNIT); // mod: retail 4
                 }
                 else
                 {
@@ -327,7 +327,7 @@ unsigned int    R_SkinSceneDObjModels(
                 }
                 else if (surfPos2_->skinnedCachedOffset == -3)
                 {
-                    surfPos2_ = (GfxModelSkinnedSurface *)((char *)surfPos2_ + 4);
+                    surfPos2_ = (GfxModelSkinnedSurface *)((char *)surfPos2_ + R_SURF_UNIT); // mod: retail 4
                 }
                 else
                 {
@@ -378,7 +378,7 @@ unsigned int    R_SkinSceneDObjModels(
                 }
                 else if (surfPos2->skinnedCachedOffset == -3)
                 {
-                    surfPos2 = (GfxModelSkinnedSurface *)((char *)surfPos2 + 4);
+                    surfPos2 = (GfxModelSkinnedSurface *)((char *)surfPos2 + R_SURF_UNIT); // mod: retail 4
                 }
                 else
                 {
@@ -402,9 +402,9 @@ unsigned int    R_SkinSceneDObjModels(
     }
     totalSurfSize = (char *)surfPos - (char *)surfsBuffer;
     startSurfPos = _InterlockedExchangeAdd(&frontEndDataOut->surfPos, (char *)surfPos - (char *)surfsBuffer);
-    if (totalSurfSize + startSurfPos <= 0x40000)
+    if (totalSurfSize + startSurfPos <= R_SURFS_BUFFER_BYTES) // mod: retail 0x40000
     {
-        if ((startSurfPos & 3) != 0
+        if ((startSurfPos & (R_SURF_UNIT - 1)) != 0 // mod: retail & 3
             && !Assert_MyHandler(
                 "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_dobj_skin.cpp",
                 854,

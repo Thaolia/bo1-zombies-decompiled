@@ -2,6 +2,12 @@
 
 #include <universal/dvar.h>
 
+// mod: the scene's model slots a frame, retail 1024; r_mod_sceneModels raises the limit up to this many (a map imported
+// by MapKit draws thousands of props)
+#define R_MOD_SCENE_MODEL_MAX 4096
+// mod: the lighting results of one frame's DObjs, models and dyn models (retail 1024, shared, finished early when full)
+#define R_MOD_LIGHTING_INFO_MAX (1024 + R_MOD_SCENE_MODEL_MAX + 1024)
+
 void __cdecl R_RegisterDvars();
 const dvar_s *__cdecl R_RegisterWorkerThreadDvar(char *name, unsigned int workerIndex);
 char __cdecl R_CheckDvarModified(const dvar_s *dvar);
@@ -283,6 +289,14 @@ extern const dvar_s *r_mod_fxElems; // mod (L43): r_mod_fxElems (FX_ResetSystem,
 inline unsigned int R_ModGfxEntLimit() { return r_mod_gfxEnts ? (unsigned int)r_mod_gfxEnts->current.integer : 256u; } // gfxEnts[2048]
 extern const dvar_s *r_mod_scsShare; // mod (L43): r_mod_scsShare
 extern const dvar_s *r_modelLimit;
+extern const dvar_s *r_mod_sceneModels; // mod: r_mod_sceneModels
+// mod: the scene's model limit: r_mod_sceneModels when raised past retail's 1024, else r_modelLimit (at most 1024)
+inline unsigned int R_ModSceneModelLimit()
+{
+    if ( r_mod_sceneModels && r_mod_sceneModels->current.integer > 1024 )
+        return (unsigned int)r_mod_sceneModels->current.integer;
+    return (unsigned int)r_modelLimit->current.integer;
+}
 extern const dvar_s *r_brushLimit;
 extern const dvar_s *r_spotLightFovInnerFraction;
 extern const dvar_s *r_spotLightStartRadius;

@@ -386,7 +386,7 @@ int    R_SkinXModel(
         if ( v14 )
         {
             *(unsigned int *)v17 = -3;
-            v17 += 4;
+            v17 += R_SURF_UNIT; // mod: retail 4, the hidden-surface marker keeps the entries R_SURF_UNIT aligned
         }
         else
         {
@@ -405,9 +405,9 @@ LABEL_42:
         }
     }
     v10 = _InterlockedExchangeAdd(&frontEndDataOut->surfPos, v17 - v18);
-    if ( v17 - v18 + v10 <= 0x40000 )
+    if ( v17 - v18 + v10 <= R_SURFS_BUFFER_BYTES ) // mod: retail 0x40000
     {
-        if ( (v10 & 3) != 0
+        if ( (v10 & (R_SURF_UNIT - 1)) != 0 // mod: retail & 3
             && !Assert_MyHandler(
                         "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_model.cpp",
                         619,
@@ -417,7 +417,7 @@ LABEL_42:
         {
             __debugbreak();
         }
-        modelInfo->surfId = v10 >> 2;
+        modelInfo->surfId = v10 / R_SURF_UNIT; // mod: retail >> 2
         memcpy(&frontEndDataOut->surfsBuffer[v10], v18, v17 - v18);
         modelInfo->lod = LodForDist;
         return 1;

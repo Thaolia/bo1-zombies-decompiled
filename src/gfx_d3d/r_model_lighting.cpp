@@ -95,7 +95,7 @@ struct GfxSmodelLightGlob // sizeof=0xA080
 $ACD36BF6C142509D89D5FAE1478EBC2D modelLightGlob;
 GfxSmodelLightGlob smodelLightGlob;
 
-GfxLightingInfo lightingInfo[1024];
+GfxLightingInfo lightingInfo[R_MOD_LIGHTING_INFO_MAX]; // mod: retail [1024]
 
 // mod: counted exhaustion evidence; the callers retain the retail skip-draw fallback.
 static unsigned int s_modelLightingFailures;

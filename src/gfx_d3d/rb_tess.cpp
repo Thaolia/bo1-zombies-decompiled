@@ -1208,7 +1208,7 @@ unsigned int __cdecl R_TessXModelSkinnedDrawSurfList(
     drawSurfIndex = 0;
     if (info->cameraView)
     {
-        modelSurf = (const GfxModelSkinnedSurface *)((char *)data + 4 * LOWORD(drawSurf.packed));
+        modelSurf = (const GfxModelSkinnedSurface *)((char *)data + R_SURF_UNIT * LOWORD(drawSurf.packed)); // mod: retail 4 *
         baseGfxEntIndex = modelSurf->info.gfxEntIndex;
         if (modelSurf->info.gfxEntIndex)
         {
@@ -1303,7 +1303,7 @@ unsigned int __cdecl R_TessXModelSkinnedDrawSurfList(
                 drawSurf.packed = drawSurfList[drawSurfIndex].packed;
                 if ((drawSurfMask.packed & drawSurf.packed) != drawSurfKey)
                     break;
-                v4 = 4 * LOWORD(drawSurf.packed);
+                v4 = R_SURF_UNIT * LOWORD(drawSurf.packed); // mod: retail 4 *
                 modelSurf = (const GfxModelSkinnedSurface *)&data->surfsBuffer[v4];
             } while (*(unsigned __int16 *)&data->surfsBuffer[v4 + offsetof(GfxModelSkinnedSurface, info.gfxEntIndex)] == baseGfxEntIndex
                 || !R_DrawXModelSurfCheckBreak(
@@ -1359,7 +1359,7 @@ unsigned int __cdecl R_TessXModelSkinnedDrawSurfList(
                     HIDWORD(drawSurfMask.packed) & packed_high,
                     *(_DWORD *)&drawSurfMask.fields & *(_DWORD *)&drawSurf.fields) != drawSurfKey)
                     break;
-                v6 = 4 * LOWORD(drawSurf.packed);
+                v6 = R_SURF_UNIT * LOWORD(drawSurf.packed); // mod: retail 4 *
                 modelSurf = (const GfxModelSkinnedSurface *)&data->surfsBuffer[v6];
             } while (*(unsigned __int16 *)&data->surfsBuffer[v6 + offsetof(GfxModelSkinnedSurface, info.gfxEntIndex)] == baseGfxEntIndex
                 || !R_DrawXModelSurfCheckBreak(
@@ -1397,7 +1397,7 @@ unsigned int __cdecl R_TessXModelSkinnedDrawSurfList(
         {
             __debugbreak();
         }
-        modelSurf = (const GfxModelSkinnedSurface *)((char *)data + 4 * LOWORD(drawSurf.packed));
+        modelSurf = (const GfxModelSkinnedSurface *)((char *)data + R_SURF_UNIT * LOWORD(drawSurf.packed)); // mod: retail 4 *
         if (modelSurf->info.gfxEntIndex)
             materialTime = data->gfxEnts[modelSurf->info.gfxEntIndex].materialTime;
         else
@@ -1423,7 +1423,7 @@ unsigned int __cdecl R_TessXModelSkinnedDrawSurfList(
             drawSurf.packed = drawSurfList[drawSurfIndex].packed;
             if ((drawSurfMask.packed & drawSurf.packed) != drawSurfKey)
                 break;
-            modelSurf = (const GfxModelSkinnedSurface *)((char *)data + 4 * LOWORD(drawSurf.packed));
+            modelSurf = (const GfxModelSkinnedSurface *)((char *)data + R_SURF_UNIT * LOWORD(drawSurf.packed)); // mod: retail 4 *
         }
     }
     RB_EndTrackImmediatePrims(&context.state->prim);
@@ -1502,7 +1502,7 @@ unsigned int __cdecl R_TessXModelRigidDrawSurfList(
     }
     if (info->cameraView)
     {
-        modelSurf = (const GfxModelRigidSurface *)((char *)data + 4 * LOWORD(drawSurf.packed));
+        modelSurf = (const GfxModelRigidSurface *)((char *)data + R_SURF_UNIT * LOWORD(drawSurf.packed)); // mod: retail 4 *
         gfxEntIndex = modelSurf->surf.info.gfxEntIndex;
         if (modelSurf->surf.info.gfxEntIndex)
         {
@@ -1718,7 +1718,7 @@ unsigned int __cdecl R_TessXModelWaterList(const GfxDrawSurfListArgs *listArgs, 
     drawSurfIndex = 0;
     do
     {
-        modelSurf = (const GfxModelWaterSurface *)((char *)data + 4 * LOWORD(drawSurf.packed));
+        modelSurf = (const GfxModelWaterSurface *)((char *)data + R_SURF_UNIT * LOWORD(drawSurf.packed)); // mod: retail 4 *
         matrix = R_GetActiveWorldMatrix(commonSource)->matrices.matrix;
         MatrixIdentity33(axis);
         origin[0] = modelSurf->origin[0] - commonSource->eyeOffset[0];
@@ -1855,7 +1855,7 @@ unsigned int __cdecl R_TessXModelRigidSkinnedDrawSurfList(
         drawSurfSubKey = drawSurfSubMask.packed & drawSurf.packed;
         do
         {
-            modelSurf = (const GfxModelRigidSurface *)((char *)data + 4 * LOWORD(drawSurf.packed));
+            modelSurf = (const GfxModelRigidSurface *)((char *)data + R_SURF_UNIT * LOWORD(drawSurf.packed)); // mod: retail 4 *
             if (info->cameraView)
             {
                 gfxEntIndex = modelSurf->surf.info.gfxEntIndex;
@@ -2388,7 +2388,7 @@ unsigned int __cdecl R_TessBModel(const GfxDrawSurfListArgs *listArgs, GfxCmdBuf
         constantSet = 0;
         do
         {
-            bmodelSurf = (const BModelSurface *)((char *)data + 4 * LOWORD(drawSurf.packed));
+            bmodelSurf = (const BModelSurface *)((char *)data + R_SURF_UNIT * LOWORD(drawSurf.packed)); // mod: retail 4 *
             surf = bmodelSurf->surf;
             tris = &surf->tris;
             if (!surf->tris.triCount

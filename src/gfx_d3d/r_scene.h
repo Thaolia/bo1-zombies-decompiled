@@ -6,6 +6,7 @@
 #include <cgame_mp/cg_local_mp.h>
 #include <DynEntity/DynEntity_gamestate.h>
 #include <cgame/cg_visionsets.h>
+#include "r_dvars.h" // mod: R_MOD_SCENE_MODEL_MAX
 
 struct GfxCmdBufInput;
 struct GfxViewParms;
@@ -245,9 +246,9 @@ struct __declspec(align(64)) GfxScene // sizeof=0x1B0000
     //volatile int sceneModelCount;       // XREF: R_AddAllSceneEntSurfacesCamera(GfxViewInfo const *)+D7/r
     volatile unsigned int sceneModelCount;       // XREF: R_AddAllSceneEntSurfacesCamera(GfxViewInfo const *)+D7/r
                                         // R_AddAllSceneEntSurfacesCamera(GfxViewInfo const *)+18B/r ...
-    GfxSceneModel sceneModel[1024];     // XREF: LaunchModelLightingJobs+36/o
+    GfxSceneModel sceneModel[R_MOD_SCENE_MODEL_MAX]; // mod: retail 1024 (r_mod_sceneModels) XREF: LaunchModelLightingJobs+36/o
                                         // FinishModelLighting+51/o ...
-    unsigned __int8 sceneModelVisData[7][1024];
+    unsigned __int8 sceneModelVisData[7][R_MOD_SCENE_MODEL_MAX]; // mod: retail [7][1024]
                                         // XREF: R_AddAllSceneEntSurfacesCamera(GfxViewInfo const *)+186/o
                                         // R_AddAllSceneEntSurfacesCamera(GfxViewInfo const *)+1DC/o ...
     //volatile int sceneBrushCount;       // XREF: R_AddAllSceneEntSurfacesCamera(GfxViewInfo const *)+3F2/r

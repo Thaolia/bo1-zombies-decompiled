@@ -2005,7 +2005,7 @@ void __cdecl R_StreamUpdateForBModel(
     BModelSurface *modelSurf; // [esp+88h] [ebp-Ch]
     unsigned int count; // [esp+90h] [ebp-4h]
 
-    modelSurf = (BModelSurface *)((char *)frontEndDataOut + 4 * surfId);
+    modelSurf = (BModelSurface *)((char *)frontEndDataOut + R_SURF_UNIT * surfId); // mod: retail 4 *
     count = 0;
     surfIndex = bmodel->startSurfIndex;
     while (count < bmodel->surfaceCount)

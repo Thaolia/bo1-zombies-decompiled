@@ -34,7 +34,7 @@ With [OpenAssetTools](https://github.com/Laupetin/OpenAssetTools) 0.34.0 (GPL v3
 | World (`gfxworld`) | 195 091 vertices, 9 865 static surfaces, **131 032 triangles**, 464 materials, all 464 with their colour map extracted; 2 082 placed static models (name, origin, axes, scale) |
 | Models and textures | 1 801 OBJ (all LODs) with `.mtl`, 1 419 DDS images; one HUD icon missing (`hud_mp_firerate_auto`) |
 | Collision (`clipmap`) | 7 620 brushes (7 357 world, 263 of 140 submodels: doors, debris), 33 971 non-axial sides, 24 502 terrain triangles (128 of a submodel, 15 without a collision material), 766 collision materials |
-| Not yet extracted | the collision of the 1 349 static models with collision (cars, fences: it comes from their xmodels), lighting (lightmaps in `gfxworld`, `comworld` lights), the T6 pathnode graph (`gameworldmp`; the nodes are also in the entities) |
+| Not yet extracted | the collision of the 1 349 static models with collision (cars, fences: it comes from their xmodels), the world's lightmaps (three `*_secondary` images whose pixels are in the `.ipak`, not the fastfile), `comworld` lights, the T6 pathnode graph (`gameworldmp`; the nodes are also in the entities) |
 
 The exported world and the entities share one frame: in a top-down plot the spawns, spawners, magic boxes and
 pathnodes fall on the geometry (the two houses, the cul-de-sac, the garages). The world's bounding box (about 85 000
@@ -255,6 +255,18 @@ Nuketown has about 195 000 world vertices before its props).
     1 000 units off, and the tower was dropped in front of the viewer, leaving its clock hanging in the sky. A first
     version added the props within 1 024 units first but in file order, and in front of a house the budget ran out
     before the doors, which `bo2_mesh.py` writes last.
+  - **A larger scene (2026-11-10, asked by the user).** `r_mod_sceneModels` (1024 to 4096, default 1024, ZmClient's
+    Lancement view: "Modèles affichés par image") raises that budget. The renderer frustum-culls before it counts
+    (camera and sun-shadow views), so the 1 024 were all in view: from the street, 2 092 to 2 099 models are wanted a
+    frame, and at 4096 the clock and the distant mountain come back.
+    - The next limit was the per-frame surface buffer (`GfxBackEndData::surfsBuffer`). A draw surface's 16-bit
+      `objectId` addresses it in 4-byte units, so it holds 256 KB. At 1 024 models, Nuketown already filled 220 to
+      231 KB of it; at 4096 it wanted 305 to 313 KB a frame and dropped the rest, zombies included, since DObjs share
+      the buffer.
+    - On 64-bit every entry of that buffer is a multiple of 8 bytes, so the unit is now `R_SURF_UNIT` (8 on 64-bit,
+      retail's 4 on 32-bit) and the buffer 512 KB. The hidden-surface marker (`-3`) takes one unit too.
+    - Each model past retail's also needs a model lighting entry: ZmClient passes `r_mod_modelLightingEntries` at the
+      count + 1 024 (5 120 at 4096: none refused; with the retail 1 024, the test run logged one `MODEL_LIGHTING_EXHAUSTED`).
   - **Props drawn inside out (fixed 2026-11-10).** The engine draws a triangle whose right-hand normal points away
     from the viewer, BO2's own winding, which the world OBJ keeps. `bo2_mesh.py` wound the props the other way, with
     their right-hand normals out, as `bo2_props_collision.py` needs for its prisms. Every prop then showed its back
@@ -277,7 +289,25 @@ Nuketown has about 195 000 world vertices before its props).
     - The self-test buys all 11 and checks each zone's unlock. Its `door_graph` check counts the active links through
       the doorway on an imported map: the houses also join the street through their windows.
     The mystery box stands at the far end of house 1's backyard, behind the hedge.
-  - Not done yet: BO2's baked lighting (the light is the empty base's flat grey and the sun), standalone decals (left
+  - **Baked light on the props (2026-11-10).** BO2 bakes the light of a static model placement into one colour per
+    vertex (`GfxStaticModelDrawInst::lmapVertexInfo`, per LOD). The OAT dumper writes them to
+    `<map>.d3dbsp.smodellight.bin` (`BO2SMLT1`: per placement, its LODs' colours; per model, its LODs' vertex
+    positions in the same order, since the OBJ export reorders and splits vertices). `bo2_mesh.py` finds each OBJ
+    vertex's colour by its position (exact to 1/100 unit for 97 %, else the nearest within 1 unit), gives each lit
+    placement its own copy of the model, and writes `BO2MESH5`: a `u32` colour after each vertex. The engine puts it in
+    the packed vertex colour, which BO1's model shaders multiply with the colour map.
+    - The stored colour is `0xAARRGGBB` with mid-grey for full light: the tool doubles RGB (`LIGHT_SCALE`) and drops
+      the alpha. The alpha follows the brightness (0 in the shade, 254 to 255 in the open): most likely the sun's
+      visibility, which BO2's shader combines with its sun. It is not used yet.
+    - 716 of the 2 082 placements carry colours. The other 1 366 have none (BO2 lights them from its light grid) and
+      stay white.
+    - Side by side with the unlit mesh (D3D9, same views): the truck and the couch are no longer washed out, the
+      street's rubble stands out, and the freezer in house 1 is green again.
+    - Cost: 333 prop models become 898 (a model whose placements are all lit copies is left out), the mesh's vertices
+      go from 0.93 M to 1.84 M (+29 MB at 32 bytes each) and the file from 35 to 78 MB. The number of props drawn, and
+      so the 1 024-model scene budget, does not change.
+  - Not done yet: the world's lightmaps (the light on the BO2 world surfaces is still the empty base's flat grey and
+    the sun), the alpha of the props' colours, standalone decals (left
     out with caulk and shadow casters), blending (glass is alpha tested), and a `vid_restart` (the mesh is not drawn
     again until the next map load: its buffers belonged to the old device).
 - **Prop collision (2026-11-09).** BO2's clipMap lists the 1 349 static models that collide (`smodelcoll.csv`, written
@@ -293,7 +323,7 @@ Nuketown has about 195 000 world vertices before its props).
   go round its props.
 - Windows checks (`tools/headless.ps1`), and the Switch.
 - Dog rounds (Five's dogs are not converted), BO2's own mechanics (the bus, buildables, Who's Who...), its characters
-  and animations (T6 skeletons and xanims), its sounds and its baked lighting. The game is BO1's zombies on Nuketown's
+  and animations (T6 skeletons and xanims), its sounds and the world's lightmaps. The game is BO1's zombies on Nuketown's
   geometry.
 
 ### Running it

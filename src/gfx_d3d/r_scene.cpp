@@ -56,6 +56,12 @@
 #include <DynEntity/DynEntity_client.h>
 #include "r_primarylights.h"
 
+// mod: every surfsBuffer entry keeps the next one on an R_SURF_UNIT boundary (objectId counts in that unit)
+static_assert(sizeof(GfxModelRigidSurface) % R_SURF_UNIT == 0, "GfxModelRigidSurface vs R_SURF_UNIT");
+static_assert(sizeof(GfxModelSkinnedSurface) % R_SURF_UNIT == 0, "GfxModelSkinnedSurface vs R_SURF_UNIT");
+static_assert(sizeof(BModelSurface) % R_SURF_UNIT == 0, "BModelSurface vs R_SURF_UNIT");
+static_assert(sizeof(GfxScaledPlacement) % R_SURF_UNIT == 0, "R_AddBModelSurfaces' placement vs R_SURF_UNIT");
+
 GfxScene scene;
 GfxViewParms lockPvsViewParms;
 
@@ -98,10 +104,14 @@ unsigned int __cdecl R_AllocSceneModel()
         __debugbreak();
     }
     sceneEntIndex = _InterlockedExchangeAdd(&scene.sceneModelCount, 1u);
-    if ( sceneEntIndex >= r_modelLimit->current.integer )
+    const unsigned int limit = R_ModSceneModelLimit(); // mod: r_mod_sceneModels when raised, else r_modelLimit
+    if ( sceneEntIndex >= limit )
     {
-        scene.sceneModelCount = r_modelLimit->current.integer;
-        R_WarnOncePerFrame(R_WARN_KNOWN_MODELS, r_modelLimit->current.integer);
+        scene.sceneModelCount = limit;
+        R_WarnOncePerFrame(R_WARN_KNOWN_MODELS, limit);
+        // mod: no slot, as R_AllocSceneDObj (L43). The raw index is the limit again on every overflow after the
+        // clamp: below the array's end it handed one slot past the count out again and again
+        return R_MOD_SCENE_MODEL_MAX;
     }
     return sceneEntIndex;
 }
@@ -451,7 +461,7 @@ void __cdecl R_AddDObjToScene(
         else
         {
             sceneEntIndex = R_AllocSceneModel();
-            if ( sceneEntIndex < 0x400 )
+            if ( sceneEntIndex < R_MOD_SCENE_MODEL_MAX ) // mod: retail 0x400
             {
                 sceneModel = &scene.sceneModel[sceneEntIndex];
                 model = DObjGetModel(obj, 0);
@@ -1128,7 +1138,7 @@ void __cdecl R_AddBModelSurfacesCamera(
     if ( !bmodel && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_scene.cpp", 994, 0, "%s", "bmodel") )
         __debugbreak();
     surfId = bmodelInfo->surfId;
-    modelSurf = (BModelSurface *)((char *)frontEndDataOut + 4 * surfId);
+    modelSurf = (BModelSurface *)((char *)frontEndDataOut + R_SURF_UNIT * surfId); // mod: retail 4 *
     if ( reflectionProbeIndex >= 8
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_scene.cpp",
@@ -1206,7 +1216,7 @@ void __cdecl R_AddBModelSurfacesCamera(
         ++count;
         ++surfIndex;
         ++modelSurf;
-        surfId += sizeof(BModelSurface) / 4;
+        surfId += sizeof(BModelSurface) / R_SURF_UNIT; // mod: retail / 4
     }
 }
 
@@ -1227,7 +1237,7 @@ GfxDrawSurf *__cdecl R_AddBModelSurfaces(
     if ( !bmodel && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_scene.cpp", 1051, 0, "%s", "bmodel") )
         __debugbreak();
     surfId = bmodelInfo->surfId;
-    modelSurf = (BModelSurface *)((char *)frontEndDataOut + 4 * surfId);
+    modelSurf = (BModelSurface *)((char *)frontEndDataOut + R_SURF_UNIT * surfId); // mod: retail 4 *
     count = 0;
     surfIndex = bmodel->startSurfIndex;
     while ( count < bmodel->surfaceCount )
@@ -1269,7 +1279,7 @@ GfxDrawSurf *__cdecl R_AddBModelSurfaces(
         ++count;
         ++surfIndex;
         ++modelSurf;
-        surfId += sizeof(BModelSurface) / 4;
+        surfId += sizeof(BModelSurface) / R_SURF_UNIT; // mod: retail / 4
     }
     return drawSurf;
 }
@@ -1373,7 +1383,7 @@ void R_AddXModelSurfacesCamera(
     totalVertCount = 0;
     iassert(model);
     surfId = modelInfo->surfId;
-    modelSurf = (GfxModelRigidSurface *)((char *)frontEndDataOut + 4 * surfId);
+    modelSurf = (GfxModelRigidSurface *)((char *)frontEndDataOut + R_SURF_UNIT * surfId); // mod: retail 4 *
     lod = modelInfo->lod;
     numsurfs = XModelGetSurfCount(model, lod);
     material = XModelGetSkins(model, lod);
@@ -1389,7 +1399,7 @@ void R_AddXModelSurfacesCamera(
         if (skinnedCachedOffset == -3)
         {
             ++surfId;
-            modelSurf = (GfxModelRigidSurface *)((char *)modelSurf + 4);
+            modelSurf = (GfxModelRigidSurface *)((char *)modelSurf + R_SURF_UNIT); // mod: retail 4
         }
         else
         {
@@ -1399,7 +1409,7 @@ void R_AddXModelSurfacesCamera(
             region = (*material)->cameraRegion;
             if (region == 3)
             {
-                surfId += sizeof(GfxModelRigidSurface) / 4;
+                surfId += sizeof(GfxModelRigidSurface) / R_SURF_UNIT; // mod: retail / 4
                 ++modelSurf;
             }
             else
@@ -1485,7 +1495,7 @@ void R_AddXModelSurfacesCamera(
                     XSurface = R_GetXSurface((unsigned int *)modelSurf, surfType);
                     totalVertCount += XSurfaceGetNumVerts(XSurface);
                 }
-                surfId += sizeof(GfxModelRigidSurface) / 4;
+                surfId += sizeof(GfxModelRigidSurface) / R_SURF_UNIT; // mod: retail / 4
                 ++modelSurf;
             }
         }
@@ -1549,7 +1559,7 @@ GfxDrawSurf *__cdecl R_AddXModelSurfaces(
     if ( !model && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_scene.cpp", 1310, 0, "%s", "model") )
         __debugbreak();
     surfId = modelInfo->surfId;
-    modelSurf = (GfxModelRigidSurface *)((char *)frontEndDataOut + 4 * surfId);
+    modelSurf = (GfxModelRigidSurface *)((char *)frontEndDataOut + R_SURF_UNIT * surfId); // mod: retail 4 *
     lod = modelInfo->lod;
     numsurfs = XModelGetSurfCount(model, lod);
     material = XModelGetSkins(model, lod);
@@ -1564,7 +1574,7 @@ GfxDrawSurf *__cdecl R_AddXModelSurfaces(
         if ( modelSurf->surf.skinnedCachedOffset == -3 )
         {
             ++surfId;
-            modelSurf = (GfxModelRigidSurface *)((char *)modelSurf + 4);
+            modelSurf = (GfxModelRigidSurface *)((char *)modelSurf + R_SURF_UNIT); // mod: retail 4
         }
         else
         {
@@ -1624,12 +1634,12 @@ GfxDrawSurf *__cdecl R_AddXModelSurfaces(
                 LODWORD(newDrawSurf) = (unsigned __int16)surfId | *(unsigned int *)&(*material)->info.drawSurf.fields & 0xFFFF0000;
                 drawSurf->packed = newDrawSurf;
                 ++drawSurf;
-                surfId += sizeof(GfxModelRigidSurface) / 4;
+                surfId += sizeof(GfxModelRigidSurface) / R_SURF_UNIT; // mod: retail / 4
                 ++modelSurf;
             }
             else
             {
-                surfId += sizeof(GfxModelRigidSurface) / 4;
+                surfId += sizeof(GfxModelRigidSurface) / R_SURF_UNIT; // mod: retail / 4
                 ++modelSurf;
             }
         }
@@ -1787,7 +1797,7 @@ void __cdecl R_AddDObjSurfacesCamera(
                     {
                         if ( skinnedCachedOffset == -3 )
                         {
-                            surfSize = 4;
+                            surfSize = R_SURF_UNIT; // mod: retail 4
                             goto LABEL_34;
                         }
                         surfType = SF_XMODEL_SKINNED;
@@ -1820,7 +1830,7 @@ void __cdecl R_AddDObjSurfacesCamera(
                         skinnedSurf->info.lightingHandle = lightingHandle;
                         skinnedSurf->info.dobjModelIndex = modelIndex;
                         surfId = (_BYTE *)modelSurf - (_BYTE *)frontEndDataOut;
-                        if ( (((_BYTE)(uintptr_t)modelSurf - (_BYTE)(uintptr_t)frontEndDataOut) & 3) != 0
+                        if ( (((_BYTE)(uintptr_t)modelSurf - (_BYTE)(uintptr_t)frontEndDataOut) & (R_SURF_UNIT - 1)) != 0 // mod: retail & 3
                             && !Assert_MyHandler(
                                         "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_scene.cpp",
                                         1588,
@@ -1830,7 +1840,7 @@ void __cdecl R_AddDObjSurfacesCamera(
                         {
                             __debugbreak();
                         }
-                        surfIda = surfId >> 2;
+                        surfIda = surfId / R_SURF_UNIT; // mod: retail >> 2
                         if ( surfIda >= 0x10000
                             && !Assert_MyHandler(
                                         "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_scene.cpp",
@@ -1990,7 +2000,7 @@ LABEL_25:
             {
                 if ( skinnedCachedOffset == -3 )
                 {
-                    surfSize = 4;
+                    surfSize = R_SURF_UNIT; // mod: retail 4
 LABEL_24:
                     ++subMatIndex;
                     ++material;
@@ -2034,7 +2044,7 @@ LABEL_24:
                     HIDWORD(newDrawSurf.packed) = HIDWORD(newDrawSurf.packed) & 0xFE7FFFFF | 0x1000000;
                 }
                 surfId = (_BYTE *)modelSurf - (_BYTE *)frontEndDataOut;
-                if ( (((_BYTE)(uintptr_t)modelSurf - (_BYTE)(uintptr_t)frontEndDataOut) & 3) != 0
+                if ( (((_BYTE)(uintptr_t)modelSurf - (_BYTE)(uintptr_t)frontEndDataOut) & (R_SURF_UNIT - 1)) != 0 // mod: retail & 3
                     && !Assert_MyHandler(
                                 "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_scene.cpp",
                                 1779,
@@ -2044,7 +2054,7 @@ LABEL_24:
                 {
                     __debugbreak();
                 }
-                surfIda = surfId >> 2;
+                surfIda = surfId / R_SURF_UNIT; // mod: retail >> 2
                 if ( surfIda >= 0x10000
                     && !Assert_MyHandler(
                                 "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_scene.cpp",

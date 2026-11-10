@@ -86,7 +86,7 @@ on an empty Five base: BO2's own collision, zones, spawns, risers, pathnodes, tr
 Pack-a-Punch. Nuketown Zombies runs headless (the self-test buys the box, every perk, every wall buy and Pack-a-Punch there, and a
 zombie climbs out of each of its 36 risers and reaches the player along BO2's own node graph, jumping up to the houses'
 upper floors and over its fences and windows) and is drawn textured
-with its props and its sky (no baked lighting yet); its props block players and bullets. See `docs/BO2_MAPS.md`.
+with its props, lit with BO2's baked light, and its sky (the world's lightmaps not yet); its props block players and bullets. See `docs/BO2_MAPS.md`.
 
 ## Packages
 
@@ -118,6 +118,7 @@ hold your own game files: keep them for your own devices, never publish them (th
 `--bo2 DIR` also puts your own Black Ops II map extraction (`docs/BO2_MAPS.md`, "Running it") into the windows and linux
 packages. It takes `DIR/mods/mapkit/layouts/bo2_*.json` and `DIR/mods/mapkit/imports/`, and ZmClient's Solo view then
 offers "Mapkit : Nuketown (Black Ops II)". The extraction is game data, so `--bo2` cannot be combined with
-`--no-game-data`.
+`--no-game-data`. Nuketown has over 2 000 props: ZmClient's Lancement view, "Modèles affichés par image" at 4096
+(`r_mod_sceneModels`), draws them all; 1024 (retail) drops the farthest.
 
 French version: `README.fr.md`.

@@ -521,6 +521,11 @@ class LaunchView(RowsView):
                 self.ask("window_size", "Taille de la fenêtre", "Taille", "LARGEURxHAUTEUR, ex. 1600x900",
                          self._size), disabled=None if p["window"] == "window" else "seulement en mode Fenêtre"),
             Row("fps_counter", "Compteur FPS du portage", _yes(p["fps_counter"]), self.toggle("fps_counter")),
+            Row("scene_models", "Modèles affichés par image", str(p["scene_models"]),
+                self.choose("scene_models", "Modèles affichés par image", [
+                    (1024, "1024", "le jeu d'origine"),
+                    (2048, "2048", "maps importées (Nuketown) : plus de décor au loin"),
+                    (4096, "4096", "maps importées : tout le décor ; un peu plus lourd")])),
             section("Manette : aide à la visée"),
             Row("aim_assist", "Aide à la visée", H.TRISTATE_LABELS[p["aim_assist"]],
                 self.tristate("aim_assist", "Aide à la visée")),
