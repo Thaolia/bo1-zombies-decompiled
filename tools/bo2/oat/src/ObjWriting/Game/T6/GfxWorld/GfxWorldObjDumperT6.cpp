@@ -16,11 +16,16 @@ using namespace T6;
 
 namespace
 {
-    // The T6 world vertex in draw.vd0, 36 bytes (worked out from zm_nuked's buffer, 2026-11-09): xyz (3 floats),
-    // binormalSign (float), color (4 bytes), texCoord (2 halves), lmapCoord (2 halves), normal and tangent (packed).
+    // The T6 world vertex in draw.vd0, 36 bytes (worked out from zm_nuked's buffer, 2026-11-09/10): xyz (3 floats),
+    // binormalSign (float), color (4 bytes), texCoord (2 halves), two packed 10:10:10 unit vectors (normal, tangent:
+    // their top 2 bits are always 0), lmapCoord (two 16-bit unorms: u low, v high, over one lightmap slice).
     // A surface's vertices start at its tris.vertexDataOffset0, and its indices count from there.
     constexpr size_t STRIDE = 36u;
+    constexpr size_t COLOR_OFFSET = 16u;
     constexpr size_t TEXCOORD_OFFSET = 20u;
+    constexpr size_t PACKED0_OFFSET = 24u;
+    constexpr size_t PACKED1_OFFSET = 28u;
+    constexpr size_t LMAPCOORD_OFFSET = 32u;
 
     float HalfToFloat(const uint16_t h)
     {
@@ -79,6 +84,69 @@ namespace
 
 namespace gfx_world
 {
+    struct WorldLightCorner
+    {
+        uint32_t lmapCoord;
+        uint32_t color;
+        uint32_t packed[2];
+        uint8_t lightmapIndex;
+        uint8_t primaryLightIndex;
+        uint8_t flags;
+        uint8_t pad;
+    };
+    static_assert(sizeof(WorldLightCorner) == 20);
+
+    // <map>.d3dbsp.worldlight.bin, little-endian: the world's baked lighting inputs, one record per OBJ vertex (each
+    // triangle corner of <map>.d3dbsp.obj, in its order):
+    //   char[8] "BO2WLT1\0", u32 cornerCount, then per corner: u32 lmapCoord (two 16-bit unorms), u32 colour, u32[2] the
+    //   packed unit vectors at offsets 24 and 28, the vertex's own bytes, u8 its surface's lightmapIndex,
+    //   u8 primaryLightIndex, u8 flags, u8 pad
+    // <map>.d3dbsp.worldlight.txt: the lightmap images per index and the world sun's parameters, for reading.
+    static void DumpWorldLighting(AssetDumpingContext& context, const std::string& name, const GfxWorld& world,
+                                  const std::vector<WorldLightCorner>& corners)
+    {
+        if (const auto bin = context.OpenAssetFile(name + ".worldlight.bin"))
+        {
+            bin->write("BO2WLT1", 8);
+            const auto count = static_cast<uint32_t>(corners.size());
+            bin->write(reinterpret_cast<const char*>(&count), 4);
+            bin->write(reinterpret_cast<const char*>(corners.data()), static_cast<std::streamsize>(corners.size() * sizeof(WorldLightCorner)));
+        }
+        const auto txt = context.OpenAssetFile(name + ".worldlight.txt");
+        if (!txt)
+            return;
+        auto& out = *txt;
+        out << std::setprecision(9);
+        out << "lightmapCount " << world.draw.lightmapCount << "\n";
+        for (auto i = 0; i < world.draw.lightmapCount && world.draw.lightmaps; i++)
+        {
+            const auto& lm = world.draw.lightmaps[i];
+            out << "lightmap " << i << " primary " << (lm.primary && lm.primary->name ? lm.primary->name : "-")
+                << " secondary " << (lm.secondary && lm.secondary->name ? lm.secondary->name : "-") << "\n";
+        }
+        const auto& sun = world.sunParse.initWorldSun[0];
+        out << "sun " << world.sunParse.name << " control " << sun.control << " angles " << sun.angles.x << " "
+            << sun.angles.y << " " << sun.angles.z << "\n";
+        out << "ambientColor " << sun.ambientColor.x << " " << sun.ambientColor.y << " " << sun.ambientColor.z << " "
+            << sun.ambientColor.w << "\n";
+        out << "sunCd " << sun.sunCd.x << " " << sun.sunCd.y << " " << sun.sunCd.z << " " << sun.sunCd.w << "\n";
+        out << "sunCs " << sun.sunCs.x << " " << sun.sunCs.y << " " << sun.sunCs.z << " " << sun.sunCs.w << "\n";
+        out << "skyColor " << sun.skyColor.x << " " << sun.skyColor.y << " " << sun.skyColor.z << " " << sun.skyColor.w
+            << "\n";
+        out << "exposure " << sun.exposure << "\n";
+        out << "sunPrimaryLightIndex " << world.sunPrimaryLightIndex << " primaryLightCount " << world.primaryLightCount
+            << "\n";
+        out << "lightingFlags " << world.lightingFlags << " lightingQuality " << world.lightingQuality << "\n";
+        if (const auto* l = world.sunLight)
+        {
+            out << "sunLight type " << static_cast<int>(l->type) << " color " << l->color.x << " " << l->color.y << " "
+                << l->color.z << " dir " << l->dir.x << " " << l->dir.y << " " << l->dir.z << "\n";
+            out << "sunLight diffuseColor " << l->diffuseColor.x << " " << l->diffuseColor.y << " " << l->diffuseColor.z
+                << " " << l->diffuseColor.w << " shadowColor " << l->shadowColor.x << " " << l->shadowColor.y << " "
+                << l->shadowColor.z << " " << l->shadowColor.w << "\n";
+        }
+    }
+
     // <map>.d3dbsp.smodellight.bin, little-endian: BO2's baked lighting of its static models, one colour per vertex of
     // each placed model's LODs (GfxStaticModelDrawInst::lmapVertexInfo), and the vertex positions they follow:
     //   char[8] "BO2SMLT1"
@@ -186,6 +254,8 @@ namespace gfx_world
         out << "mtllib " << asset.m_name.substr(slash == std::string::npos ? 0 : slash + 1) << ".mtl\n";
 
         // Each triangle corner written as its own vertex: simple, and Blender's "merge by distance" welds them.
+        // <map>.d3dbsp.worldlight.bin follows the same corners (see DumpWorldLighting).
+        std::vector<WorldLightCorner> corners;
         size_t triangles = 0, skipped = 0, written = 0;
         for (auto s = 0u; s < dpvs.staticSurfaceCount; s++)
         {
@@ -221,6 +291,16 @@ namespace gfx_world
                     std::memcpy(uv, bytes + a + TEXCOORD_OFFSET, sizeof(uv));
                     out << "v " << xyz[0] << " " << xyz[1] << " " << xyz[2] << "\n";
                     out << "vt " << HalfToFloat(uv[0]) << " " << 1.0f - HalfToFloat(uv[1]) << "\n";
+                    WorldLightCorner corner;
+                    std::memcpy(&corner.lmapCoord, bytes + a + LMAPCOORD_OFFSET, 4);
+                    std::memcpy(&corner.color, bytes + a + COLOR_OFFSET, 4);
+                    std::memcpy(&corner.packed[0], bytes + a + PACKED0_OFFSET, 4);
+                    std::memcpy(&corner.packed[1], bytes + a + PACKED1_OFFSET, 4);
+                    corner.lightmapIndex = static_cast<uint8_t>(surface.lightmapIndex);
+                    corner.primaryLightIndex = static_cast<uint8_t>(surface.primaryLightIndex);
+                    corner.flags = static_cast<uint8_t>(surface.flags);
+                    corner.pad = 0;
+                    corners.push_back(corner);
                 }
                 out << "f " << written + 1 << "/" << written + 1 << " " << written + 2 << "/" << written + 2 << " "
                     << written + 3 << "/" << written + 3 << "\n";
@@ -248,5 +328,6 @@ namespace gfx_world
             *csv << "," << p.scale << "\n";
         }
         DumpStaticModelLighting(context, asset.m_name, dpvs);
+        DumpWorldLighting(context, asset.m_name, *world, corners);
     }
 } // namespace gfx_world
