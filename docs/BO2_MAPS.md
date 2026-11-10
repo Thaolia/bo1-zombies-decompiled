@@ -228,8 +228,8 @@ Nuketown has about 195 000 world vertices before its props).
   adds them every frame with `R_FilterXModelIntoScene`, as the skybox model is added (a prop past its last LOD's
   distance x 1.5 is not added); none of them is in the asset database. Each colour map gets one material: a copy of
   `mc/rus_metal_panel03` (a model material, the 32-byte packed vertex), or of the alpha-tested leaf
-  `mc/t5_foliage_tree_sorbus_leaf01_static` for the 62 BO2 materials that test or blend alpha (from OAT's material
-  JSON), with that colour map, the flat normal map and a black specular map, linked into the database
+  `mc/t5_foliage_tree_sorbus_leaf01_static` for the BO2 materials that test or blend alpha (from OAT's material
+  JSON; decals and glass since 2026-11-10, below), with that colour map, the flat normal map and a black specular map, linked into the database
   (`DB_AddXAsset`) so that the material sort gives it a sorted index. Screenshots (GL backend, llvmpipe) show the
   cul-de-sac, the burnt sidings, fences, hedges, rocks, cars, power poles and the mushroom cloud of the backdrop.
   - The colour map is the base layer's: a BO2 material can hold several colour-map samplers (embers, thermal,
@@ -296,9 +296,9 @@ Nuketown has about 195 000 world vertices before its props).
     vertex's colour by its position (exact to 1/100 unit for 97 %, else the nearest within 1 unit), gives each lit
     placement its own copy of the model, and writes `BO2MESH5`: a `u32` colour after each vertex. The engine puts it in
     the packed vertex colour, which BO1's model shaders multiply with the colour map.
-    - The stored colour is `0xAARRGGBB` with mid-grey for full light: the tool doubles RGB (`LIGHT_SCALE`) and drops
-      the alpha. The alpha follows the brightness (0 in the shade, 254 to 255 in the open): most likely the sun's
-      visibility, which BO2's shader combines with its sun. It is not used yet.
+    - The first version read the stored colour as `0xAARRGGBB`, doubled RGB by eye and dropped the alpha. BO2's lit
+      static model shaders (`lprobe` techniques, read with `fxc /dumpbin`) say otherwise, and it was corrected on
+      2026-11-10 (below).
     - 716 of the 2 082 placements carry colours. The other 1 366 have none (BO2 lights them from its light grid) and
       stay white.
     - Side by side with the unlit mesh (D3D9, same views): the truck and the couch are no longer washed out, the
@@ -339,10 +339,52 @@ Nuketown has about 195 000 world vertices before its props).
     - BO2 shapes the cone and the end of the range with constants (`lightFallOffA/B`, an attenuation texture) the
       bake approximates with those curves. Checked on D3D9 screenshots before and after: house 1's living room and
       stairs lit, its kitchen ceiling green from the green lamps, house 2's upper floor warm.
-  - Not done yet: the alpha of the props' colours,
-    standalone decals (left
-    out with caulk and shadow casters), blending (glass is alpha tested), and a `vid_restart` (the mesh is not drawn
-    again until the next map load: its buffers belonged to the old device).
+  - **The props' light as BO2 computes it (2026-11-10, asked by the user).** The vertex shader of a lit static model
+    takes the baked colour `c` as an indirect light `32 * c.rgb^2` (divided by the light grid's value at the vertex
+    normal, which the pixel shader multiplies back at the pixel's normal, so about 1), and passes `c.a` to the pixel
+    shader as the sun's visibility: `L = 32 * c.rgb^2 + c.a * sunDiffuse * saturate(dot(sunDir, N))`, then
+    `sqrt(albedo^2 * L * exposure)` as the world. `bo2_mesh.py` (`prop_light`) now computes that `L` with each
+    vertex's normal turned by its placement, and turns it into a colour with the world's reference and floor
+    (`WorldLight.colour`): props and world share one exposure, and `LIGHT_SCALE` is gone.
+    - The bytes are R, G, B, A in memory (`0xAABBGGRR` as a `u32`), not `0xAARRGGBB`: the first version swapped red
+      and blue. Measured against the world's lightmaps, whose indirect light in the shade is red-poor (R / G 0.75,
+      B / G 1.03): the props' low byte gives R / G 0.73 and the third byte B / G 1.03. Sunlit props (alpha above 220)
+      get an indirect `(4.5, 5.5, 5.9)` against the world's `(2.6, 3.5, 3.6)`: the same scale.
+    - What stays approximate: the reference itself (the 75th percentile of the sunlit ground maps to the colour map
+      as it is). BO2 then applies its exposure, tone curve and colour grading, which MapKit does not reproduce.
+  - **Decals and glass (2026-11-10, asked by the user).** `bo2_mesh.py` (`blend_flags`) reads the state of each
+    material's lit pass. BO2 blends almost all its see-through materials (fences, leaves, overlays), after a depth
+    prepass that writes their depth first; BO1 has no such pass for these models, and a hedge blended without it
+    would draw its leaves out of order. So:
+    - a layer that lies on another surface (a depth offset on the lit pass and a decal sort below BO2's 40, or a decal
+      or overlay name: `decal_`, `_dec`, `_blend`) is a decal, flag 4: 45 materials on Nuketown (cracks, rugs,
+      burnt floors, radiation puddles, dirt and ash overlays). The engine draws it with a copy of the blended base
+      (`blendBase`, default `mc/global_glass`: premultiplied blend, alpha above 0, no depth write) with the decal
+      depth offset added to its states (`loadBits[1]` 0x10, `R_ForceSetPolygonOffset`) and sort key 29, the sort of
+      Five's own blended model decal (`mc/mtl_veh_jet_f4_decals`), between the opaque materials and the glass (43).
+      Five has no model decal to copy as it is: its decals either test alpha or carry samplers of their own;
+    - six decals multiply the colour under them (`zero / srccolor`: burn stains, the blast crater, a wall fillet, red
+      numbers). No base material multiplies, so the tool converts their colour map to DXT5 black with alpha
+      `1 - luminance`: blended over the surface it gives `dst * luminance`, the same darkening for grey maps (the red
+      numbers lose their red);
+    - glass, blended but not a decal, is flag 8 and draws with the blended base: Nuketown's broken glass and two
+      character materials;
+    - every other blended or alpha-tested material stays alpha tested (36 drawn on Nuketown).
+    Decals that overlap draw in the order of their materials, not BO2's sort keys.
+    - Checked on D3D9 client screenshots before and after, same views: the props lose their yellow cast (the truck is
+      grey, the couch beige, the kitchen's stove and freezer green), the green radiation puddles lie on house 1's
+      floors, the street keeps its cracks, the garage door its burns, the mountains of the backdrop (a decal-sorted
+      BO2 material, `mc/mtl_p6_zm_vista_mountain`, whose colour map the first versions left out) stand behind the
+      clock, and the burnt walls and floors drawn as decals show no holes. All 274 colour maps load.
+  - **`vid_restart` (2026-11-10).** The mesh's vertex and index buffers are `D3DPOOL_DEFAULT` ones, which a device
+    Reset needs released: `vid_restart` after a mode change, or a full-screen window losing its device. The engine
+    releases the database's models (`R_ReleaseLostDeviceAssets2`) and rebuilds them (`R_RecoverLostDevice`), but
+    these models are outside the database, so the Reset was attempted with them alive. Both functions now call
+    `R_Mapkit_ReleaseMeshBuffers` / `R_Mapkit_RestoreMeshBuffers` (`mapkit: mesh buffers rebuilt on the reset device`
+    in the console). Checked with two `vid_restart`s after a `r_vsync` change on the D3D9 client: both recover the
+    device, rebuild the buffers (0 surfaces without) and draw the map as before. That test client runs a D3D9Ex device
+    (`bo1_headless_client`), whose Reset does not require the default pool released, so it could not show the
+    failure a plain D3D9 device would have had: the fix follows D3D9's rule, not an observed crash.
 - **Prop collision (2026-11-09).** BO2's clipMap lists the 1 349 static models that collide (`smodelcoll.csv`, written
   by the OAT dumper: model, contents, origin, inverse scaled axes; every row matches a drawn placement by name and
   origin). `tools/bo2/bo2_props_collision.py` adds them to the `BO2COL2` file as world brushes, from each model's

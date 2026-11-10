@@ -16,7 +16,9 @@ and FAR_CELL beyond it (the distant backdrop), so the view culls them and the li
   char[8] "BO2MESH5"
   u32 materialCount, then per material: char[64] BO2 material name, char[64] colour map image name (images/<it>.iwi),
       u32 flags (1: alpha tested in BO2: drawn with the engine's alpha-tested base material; 2: the sky's, a cube map
-      drawn with the engine's skybox base material)
+      drawn with the engine's skybox base material; 4: a decal, blended over the surface it lies on: drawn with the
+      engine's decal base material (alpha blended, depth offset); 8: blended, not a decal (glass, grates): drawn with
+      the engine's blended base material; the engine takes the alpha-tested base when it has no such base)
   u32 chunkCount, then per chunk: f32[3] origin, f32 radius, u32 surfaceCount, then per surface:
       u16 material, u16 pad, u32 vertCount, u32 triCount,
       vertCount x (f32[3] position relative to origin, f32[3] normal, f32[2] uv, u32 colour 0xAARRGGBB), triCount x u16[3]
@@ -41,7 +43,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bo2_layout import read_entities  # noqa: E402  (the worldspawn names the sky model)
-from bo2_worldlight import WorldLight, light_triangles, read_world_light  # noqa: E402
+from bo2_worldlight import WorldLight, light_triangles, pack, read_world_light  # noqa: E402
 
 CELL = 512.0
 FAR_CELL = 8192.0
@@ -50,15 +52,18 @@ MAX_VERTS = 65535   # XSurface::vertCount and triCount are 16-bit
 MAX_TRIS = 65535
 MAX_SURFS = 120     # the renderer's rigid path keeps at most 128 surfaces per model on its stack (R_SkinXModel)
 
-# Materials not drawn: shadow casters and caulk (never visible), and standalone decals, which lie on another surface
-# and need blending this first version does not do (a layered "*N(wpc/a:wpc/b)" material keeps its base layer)
-SKIP = re.compile(r"caulk|(?<!no_)shadow|nodraw|(^|/)decal_|_decal|_dec(_|\d|$)")
+# Materials not drawn: shadow casters and caulk (never visible)
+SKIP = re.compile(r"caulk|(?<!no_)shadow|nodraw")
+FLAG_ALPHA_TEST, FLAG_SKY, FLAG_DECAL, FLAG_BLEND = 1, 2, 4, 8
+DECAL_NAME = re.compile(r"(^|/)decal_|_decal|_dec(_|\d|$)|_blend$")
 
 WHITE = 0xFFFFFFFF  # the vertex colour of a surface with no baked light: the model shaders multiply by it
-# BO2 stores a static model's baked light as 0xAARRGGBB with mid-grey 0x80 for full light; the engine's vertex colour
-# multiplies the colour map, white being full light. The alpha (0 in the shade, 254-255 in the open, most likely the
-# sun's visibility for BO2's own sun term) is dropped. 2.0 was judged on D3D9 screenshots, not measured against BO2.
-LIGHT_SCALE = 2.0
+# BO2's lit static models (lprobe techniques, vs/ps_4_0 read with fxc /dumpbin) take the baked vertex light c (bytes
+# R, G, B, A in memory, so 0xAABBGGRR as a u32) as an indirect light of 32 * c.rgb^2 (scaled by the light grid's ratio
+# at the pixel's normal, about 1) and c.a as the sun's visibility: L = 32 * c.rgb^2 + c.a * sunDiffuse *
+# saturate(dot(sunDir, N)), then sqrt(albedo^2 * L * exposure) as the world. The world's reference turns L into the
+# vertex colour (WorldLight.colour), so props and world share one exposure.
+PROP_INDIRECT = 32.0
 
 DDS_FORMATS = {b"DXT1": (0x0B, 8), b"DXT3": (0x0C, 16), b"DXT5": (0x0D, 16)}
 
@@ -102,15 +107,41 @@ def read_smodel_light(path):
     return placements, positions
 
 
-def light_colour(stored):
-    """A BO2 baked vertex colour as the engine's vertex colour (0xAARRGGBB, alpha 255)."""
-    channels = [min(255, int(((stored >> shift) & 0xFF) * LIGHT_SCALE + 0.5)) for shift in (16, 8, 0)]
-    return 0xFF000000 | channels[0] << 16 | channels[1] << 8 | channels[2]
+def prop_light(stored, normal, world_light):
+    """A BO2 baked static model vertex colour (0xAABBGGRR) at a world normal as the engine's vertex colour."""
+    c = [((stored >> shift) & 0xFF) / 255.0 for shift in (0, 8, 16, 24)]
+    ndl = min(max(sum(world_light.sun_dir[k] * normal[k] for k in range(3)), 0.0), 1.0)
+    light = [PROP_INDIRECT * c[k] * c[k] + c[3] * world_light.sun_diffuse[k] * ndl for k in range(3)]
+    return pack(world_light.colour(light))
 
 
-def lit_lod(lod, positions, colours):
-    """A LOD's triangles (material -> [[(position, uv)] * 3]) with each vertex's baked colour, found by its position
-    among the model's own vertices (exactly to 1/100 unit, else the nearest within 1 unit; white when none is)."""
+def vertex_normals(lod, axes):
+    """Each position's smooth outward normal in the world: a LOD's triangles are wound for drawing (right-hand normal
+    into the surface, read_lods), turned by the placement's axes (model x, y, z in the world)."""
+    sums = {}
+    for tris in lod.values():
+        for tri in tris:
+            a, b, c = (t[0] for t in tri)
+            e1 = (b[0] - a[0], b[1] - a[1], b[2] - a[2])
+            e2 = (c[0] - a[0], c[1] - a[1], c[2] - a[2])
+            n = (e1[2] * e2[1] - e1[1] * e2[2], e1[0] * e2[2] - e1[2] * e2[0], e1[1] * e2[0] - e1[0] * e2[1])
+            for p in (a, b, c):
+                s = sums.setdefault(p, [0.0, 0.0, 0.0])
+                for k in range(3):
+                    s[k] += n[k]
+    out = {}
+    for p, n in sums.items():
+        w = [n[0] * axes[k] + n[1] * axes[3 + k] + n[2] * axes[6 + k] for k in range(3)]
+        length = math.sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2])
+        out[p] = tuple(v / length for v in w) if length > 1e-12 else (0.0, 0.0, 1.0)
+    return out
+
+
+def lit_lod(lod, positions, colours, axes, world_light):
+    """A LOD's triangles (material -> [[(position, uv)] * 3]) with each vertex's baked light (prop_light), found by
+    its position among the model's own vertices (exactly to 1/100 unit, else the nearest within 1 unit; white when
+    none is)."""
+    normals = vertex_normals(lod, axes)
     exact, cells = {}, {}
     for i, p in enumerate(positions):
         exact.setdefault((round(p[0], 2), round(p[1], 2), round(p[2], 2)), i)
@@ -129,7 +160,7 @@ def lit_lod(lod, positions, colours):
                             d = (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 + (q[2] - p[2]) ** 2
                             if d <= best:
                                 best, i = d, j
-        return light_colour(colours[i]) if i is not None else WHITE
+        return prop_light(colours[i], normals[p], world_light) if i is not None else WHITE
 
     cache = {}
     out = {}
@@ -173,9 +204,10 @@ def image_name(dds_path):
     return f"bo2_{clean}_{hashlib.sha1(stem.encode('latin-1')).hexdigest()[:8]}"
 
 
-def dds_to_iwi(src, dst):
+def dds_to_iwi(src, dst, multiply=False):
     """A DXT DDS (largest mip first) as an IW image: GfxImageFileHeader, then the mips smallest first, which is the
-    order Image_LoadDxtc uploads them in. Returns False for a format the engine cannot take."""
+    order Image_LoadDxtc uploads them in; multiply: as multiply_to_alpha's DXT5. Returns False for a format the engine
+    cannot take."""
     try:
         with open(src, "rb") as f:
             data = f.read()
@@ -202,6 +234,11 @@ def dds_to_iwi(src, dst):
         faces.append(levels)
     if at > len(data):
         return False
+    if multiply:
+        if cube:
+            return False
+        faces = [[multiply_to_alpha(level, fourcc) for level in face] for face in faces]
+        fmt = DDS_FORMATS[b"DXT5"][0]
     flags = 0 if mips == full else 2  # 2: no mipmaps (Image_CountMipmaps), only the top level is uploaded
     if cube:
         flags |= 4  # a cube texture (Image_Setup); Image_LoadDxtc reads each mip's six faces in turn
@@ -213,6 +250,41 @@ def dds_to_iwi(src, dst):
     with open(dst, "wb") as f:
         f.write(header + body)
     return True
+
+
+def dxt_colours(block, four):
+    """The 16 (r, g, b) of a DXT colour block (8 bytes); four: always the 4-colour mode (DXT3/5)."""
+    c0, c1, bits = struct.unpack("<HHI", block)
+    rgb = [((c >> 11 & 31) * 255 // 31, (c >> 5 & 63) * 255 // 63, (c & 31) * 255 // 31) for c in (c0, c1)]
+    if four or c0 > c1:
+        rgb += [tuple((2 * a + b) // 3 for a, b in zip(rgb[0], rgb[1])),
+                tuple((a + 2 * b) // 3 for a, b in zip(rgb[0], rgb[1]))]
+    else:
+        rgb += [tuple((a + b) // 2 for a, b in zip(rgb[0], rgb[1])), (0, 0, 0)]
+    return [rgb[bits >> (2 * i) & 3] for i in range(16)]
+
+
+def dxt5_alpha_block(alphas):
+    """A DXT5 alpha block (8 bytes) for 16 alphas: 8-step ramp between their max and min."""
+    hi, lo = max(alphas), min(alphas)
+    if hi == lo:
+        return struct.pack("<BB6x", hi, lo)
+    ramp = [hi, lo] + [((7 - k) * hi + k * lo) // 7 for k in range(1, 7)]
+    bits = 0
+    for i, a in enumerate(alphas):
+        bits |= min(range(8), key=lambda k: abs(ramp[k] - a)) << (3 * i)
+    return struct.pack("<BB", hi, lo) + bits.to_bytes(6, "little")
+
+
+def multiply_to_alpha(level, fourcc):
+    """A multiply decal's DXT mip level (BO2 draws dst * src) as DXT5 black with alpha 1 - luminance: blended with
+    srcalpha / invsrcalpha that gives dst * luminance, the same darkening for grey maps (a tinted map loses its tint)."""
+    block, four = (8, False) if fourcc == b"DXT1" else (16, True)
+    out = bytearray()
+    for at in range(0, len(level), block):
+        rgb = dxt_colours(level[at + block - 8:at + block], four)
+        out += dxt5_alpha_block([255 - (r * 77 + g * 150 + b * 29 >> 8) for r, g, b in rgb]) + bytes(8)
+    return bytes(out)
 
 
 def read_obj(path):
@@ -310,8 +382,14 @@ def read_lods(dump, name, with_index=False):
     return lods
 
 
-def alpha_tested(dump, material):
-    """Whether OAT's material JSON says the BO2 material tests or blends alpha (fences, foliage, glass)."""
+def blend_flags(dump, material):
+    """How the BO2 material draws, from OAT's material JSON: (flags, multiply), judged on the state of its lit pass.
+    BO2 blends nearly all its see-through materials (fences, leaves, overlays) after a depth prepass that BO1 lacks:
+    blended without it, a hedge's leaves would draw out of order. So only the layers that lie on another surface
+    become FLAG_DECAL (a depth offset on the lit pass and a decal sort, below BO2's 40, or a decal or overlay name);
+    glass becomes FLAG_BLEND; any other blended or alpha-tested material stays FLAG_ALPHA_TEST. multiply: the decal
+    multiplies the colour under it (src zero, dst srccolor: burn stains, cracks), which no base material does: its
+    colour map is converted (multiply_to_alpha). A layered "*N(wpc/a:wpc/b)" material is its base layer's."""
     name = material
     if name.startswith("*"):
         inner = re.search(r"\(([^:)]+)", name)
@@ -321,14 +399,25 @@ def alpha_tested(dump, material):
         with open(path, encoding="latin-1") as f:
             data = json.load(f)
     except (OSError, ValueError):
-        return False
-    for bits in data.get("stateBits", []):
-        if bits.get("alphaTest", "disabled") != "disabled":
-            return True
-        if bits.get("colorWriteRgb") and bits.get("srcBlendRgb") == "srcalpha":
-            return True
-    return False
-
+        return 0, False
+    entries, states = data.get("stateBitsEntry", []), data.get("stateBits", [])
+    # the lit pass: the first lit technique's state (T6 technique 3, else 4, the first "lit" one), else the unlit one
+    lit = next((entries[t] for t in (3, 4, 2) if t < len(entries) and 0 <= entries[t] < len(states)), None)
+    if lit is None:
+        return 0, False
+    bits = states[lit]
+    src, dst = bits.get("srcBlendRgb"), bits.get("dstBlendRgb")
+    multiply = src == "zero" and dst == "srccolor"
+    blend = dst == "invsrcalpha" or multiply  # the lit passes blend premultiplied colour (src one)
+    test = bits.get("alphaTest", "disabled") != "disabled"
+    if not (blend or test):
+        return 0, False
+    overlay = DECAL_NAME.search(name) is not None or data.get("sortKey", 40) < 40
+    if bits.get("polygonOffset", "offset0") != "offset0" and overlay:
+        return FLAG_DECAL, multiply
+    if blend and "glass" in name:
+        return FLAG_BLEND, False
+    return FLAG_ALPHA_TEST, False
 
 def skipped(material):
     return not material.startswith("*") and SKIP.search(material) is not None
@@ -481,7 +570,7 @@ def main(argv=None):
 
     # BO2's baked light of each placed static model, one colour per vertex: a lit placement gets its own copy of its
     # model, its vertices coloured (the colour is in the vertex, and the light differs from one placement to another)
-    light = read_smodel_light(base + ".smodellight.bin")
+    light = read_smodel_light(base + ".smodellight.bin") if world_light else None
     lit_placements = 0
     if light:
         placements, model_positions = light
@@ -494,7 +583,8 @@ def main(argv=None):
             for dist, lod, lod_index in lods:
                 ok = (lod_index < len(colours) and lod_index < len(known) and colours[lod_index]
                       and len(colours[lod_index]) == len(known[lod_index]))
-                new_lods.append((dist, lit_lod(lod, known[lod_index], colours[lod_index]) if ok else lod, lod_index))
+                new_lods.append((dist, lit_lod(lod, known[lod_index], colours[lod_index], axes, world_light) if ok else lod,
+                                 lod_index))
                 coloured |= bool(ok)
             if coloured:
                 instances[index] = (len(models), origin, axes, scale)
@@ -506,7 +596,7 @@ def main(argv=None):
         models = [models[old] for old in used]
         instances = [(remap[model],) + tuple(rest) for model, *rest in instances]
     print(f"baked light: {lit_placements} placed models lit" if light else
-          "baked light: no smodellight.bin in the dump (rerun tools/bo2/oat's Unlinker): props unlit")
+          "baked light: no smodellight.bin or worldlight.bin in the dump (rerun tools/bo2/oat's Unlinker): props unlit")
 
     # the sky: the worldspawn's skybox model, one more model (no placement: the engine draws it around the viewer)
     sky, sky_materials = -1, set()
@@ -531,17 +621,19 @@ def main(argv=None):
     materials, records, converted, failed = {}, [], {}, []
     for name in names:
         dds = colour.get(name)
+        flags, multiply = (FLAG_SKY, False) if name in sky_materials else blend_flags(args.dump, name)
         image = ""
         if dds:
-            image = image_name(dds)
-            if dds not in converted:
-                converted[dds] = dds_to_iwi(dds, os.path.join(args.out, "images", image + ".iwi"))
-                if not converted[dds]:
+            image = image_name(dds) + ("_mul" if multiply else "")
+            key = (dds, multiply)
+            if key not in converted:
+                converted[key] = dds_to_iwi(dds, os.path.join(args.out, "images", image + ".iwi"), multiply)
+                if not converted[key]:
                     failed.append(os.path.basename(dds))
-            if not converted[dds]:
+            if not converted[key]:
                 image = ""
         materials[name] = len(records)
-        records.append((name, image, 2 if name in sky_materials else 1 if alpha_tested(args.dump, name) else 0))
+        records.append((name, image, flags))
 
     cells = build(groups, materials)
     chunks = []  # (origin, radius, [(material, verts, normals, faces)])
@@ -626,7 +718,9 @@ def main(argv=None):
     print(f"{out_bin}: {len(records)} materials, {len(chunks)} chunks, {surf_count} surfaces, {verts} vertices, {tris} triangles; "
           f"{sum(1 for v in converted.values() if v)} images; {len(instances)} props of {len(models)} models "
           f"({model_tris_total[0]} triangles over all their LODs), "
-          f"{sum(r[2] for r in records)} alpha-tested materials")
+          f"materials: {sum(r[2] == FLAG_ALPHA_TEST for r in records)} alpha tested, "
+          f"{sum(r[2] == FLAG_DECAL for r in records)} decals ({sum(i.endswith('_mul') for _, i, _ in records)} "
+          f"multiplying), {sum(r[2] == FLAG_BLEND for r in records)} blended")
     if missing:
         print("props with nothing to draw (no OBJ, or only left-out materials): " + ", ".join(sorted(missing)))
     if left_out:

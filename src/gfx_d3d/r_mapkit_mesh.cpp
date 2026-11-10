@@ -1,5 +1,6 @@
 #include "r_mapkit_mesh.h"
 #include <algorithm>
+#include <initializer_list>
 #include "r_dpvs.h"
 #include "r_dvars.h"
 #include "r_image.h"
@@ -25,13 +26,15 @@
 #include <string.h>
 
 // mod: mapkit "mesh" edit: {"kind":"mesh","file":"imports/<map>/<map>.mesh.bin","images":"imports/<map>/images",
-// "base":"<mc/ material>","alphaBase":"<alpha-tested mc/ material>","skyBase":"<skybox material>"}. The file
-// (BO2MESH4, written by tools/bo2/bo2_mesh.py, which documents it) holds chunks of another game's world, its props and
+// "base":"<mc/ material>","alphaBase":"<alpha-tested mc/ material>","blendBase":"<blended mc/ material>",
+// "skyBase":"<skybox material>"}. The file
+// (BO2MESH4/5, written by tools/bo2/bo2_mesh.py, which documents it) holds chunks of another game's world, its props and
 // its sky: each chunk becomes a rigid XModel, one surface per material, each prop model an XModel with its LODs, drawn
 // once per placement, and the sky model is drawn around the viewer (the empty base adds no skybox of its own). All are
 // added every frame by R_FilterXModelIntoScene like the skybox model (none of them is in the asset database). Each
 // colour map is an IW image loaded outside the database; the materials are copies of one BO1 model material ("mc/": the
-// 32-byte packed vertex) with that colour map, a flat normal map and no specular, linked into the database so that the
+// 32-byte packed vertex), chosen by the material's flags (opaque, alpha tested, blended, decal: blended with a depth
+// offset, sky), with that colour map, a flat normal map and no specular, linked into the database so that the
 // material sort (which only walks database materials in fastfile mode) gives them a sorted index. Those copies and their images live for
 // the whole process: a material linked into the database may outlive the map. The models are rebuilt per map.
 
@@ -43,6 +46,14 @@ namespace
     int s_vertBytes = 32;
     const unsigned int MATERIAL_ALPHA = 1;
     const unsigned int MATERIAL_SKY = 2;
+    const unsigned int MATERIAL_DECAL = 4; // blended over the surface it lies on: blendBase with a depth offset
+    const unsigned int MATERIAL_BLEND = 8; // blended (glass)
+    // GfxStateBits::loadBits[1]: the depth offset (R_ForceSetPolygonOffset: 0x10 x1 the decal bias, 0x30 shadow maps)
+    const unsigned int STATE1_OFFSET_MASK = 0x30;
+    const unsigned int STATE1_OFFSET_DECAL = 0x10;
+    // MEASURED on the Five base: mc/mtl_veh_jet_f4_decals, its blended decal with a depth offset, sorts at 29 (between
+    // the opaque materials and glass, 43)
+    const unsigned char DECAL_SORT_KEY = 29;
     const int NAME_BYTES = 64;
     const int MAX_SURFS_PER_LOD = 128; // R_SkinXModel's stack array
     const int MAX_LODS = 4;            // XModel::lodInfo
@@ -54,6 +65,8 @@ namespace
     {
         char image[NAME_BYTES];
         char base[NAME_BYTES];
+        bool decal; // the base with STATE1_OFFSET_DECAL and DECAL_SORT_KEY
+        GfxStateBits *states; // a decal's copy of its base's state table
         GfxImage gfx;
         MaterialTextureDef *table;
         char materialName[NAME_BYTES + 16];
@@ -139,11 +152,11 @@ namespace
         }
     };
 
-    int Mesh_FindLook(const char *image, const char *base)
+    int Mesh_FindLook(const char *image, const char *base, bool decal)
     {
         for (int i = 0; i < s_lookCount; ++i)
         {
-            if (!strcmp(s_looks[i]->image, image) && !strcmp(s_looks[i]->base, base))
+            if (!strcmp(s_looks[i]->image, image) && !strcmp(s_looks[i]->base, base) && s_looks[i]->decal == decal)
                 return i;
         }
         return -1;
@@ -177,6 +190,14 @@ namespace
     {
         for (int s = 0; s < s_mesh.surfCount; ++s)
             XSurfaceReleaseResources(&s_mesh.surfs[s]);
+    }
+
+    int Mesh_SurfacesWithoutBuffers()
+    {
+        int count = 0;
+        for (int s = 0; s < s_mesh.surfCount; ++s)
+            count += !s_mesh.surfs[s].vb0 || !s_mesh.surfs[s].indexBuffer;
+        return count;
     }
 
     void Mesh_OnRenderThread(void (*callback)(void *))
@@ -256,6 +277,25 @@ namespace
         memcpy(&copy, base, sizeof(copy));
         copy.info.name = look->materialName;
         copy.textureTable = look->table;
+        if (look->decal)
+        {
+            if (!look->states)
+            {
+                look->states = (GfxStateBits *)calloc(base->stateBitsCount ? base->stateBitsCount : 1, sizeof(GfxStateBits));
+                if (!look->states)
+                    return 0;
+                memcpy(look->states, base->stateBitsTable, sizeof(GfxStateBits) * base->stateBitsCount);
+                // BO2 draws a decal over its surface at the decal depth offset; the passes that have their own offset
+                // (shadow maps) keep it
+                for (int k = 0; k < base->stateBitsCount; ++k)
+                {
+                    if (!(look->states[k].loadBits[1] & STATE1_OFFSET_MASK))
+                        look->states[k].loadBits[1] |= STATE1_OFFSET_DECAL;
+                }
+            }
+            copy.stateBitsTable = look->states;
+            copy.info.sortKey = DECAL_SORT_KEY;
+        }
         XAssetHeader header;
         header.material = &copy;
         look->material = DB_AddXAsset(ASSET_TYPE_MATERIAL, header).material;
@@ -355,13 +395,21 @@ namespace
         const int *lookOf;
         const unsigned int *materialFlags;
         unsigned int materialCount;
-        Material *base, *alphaBase, *skyBase;
+        Material *base, *alphaBase, *blendBase, *skyBase;
         int untextured;
     };
 
     Material *Mesh_BaseFor(const MeshFill *fill, unsigned int flags)
     {
-        return (flags & MATERIAL_SKY) ? fill->skyBase : (flags & MATERIAL_ALPHA) ? fill->alphaBase : fill->base;
+        return (flags & MATERIAL_SKY) ? fill->skyBase : (flags & (MATERIAL_DECAL | MATERIAL_BLEND)) ? fill->blendBase
+            : (flags & MATERIAL_ALPHA) ? fill->alphaBase : fill->base;
+    }
+
+    // the database keys a material by name: one prefix per base
+    const char *Mesh_LookPrefix(unsigned int flags)
+    {
+        return (flags & MATERIAL_SKY) ? "mapkit_sky" : (flags & MATERIAL_DECAL) ? "mapkit_decal"
+            : (flags & MATERIAL_BLEND) ? "mapkit_blend" : (flags & MATERIAL_ALPHA) ? "mapkit_alpha" : "mapkit";
     }
 
     void Mesh_ReadSurfaces(Reader &r, unsigned int count, MeshFill *fill)
@@ -472,6 +520,11 @@ void __cdecl R_Mapkit_LoadMesh()
     Material *alphaBase = Mesh_BaseMaterial(edit, "alphaBase", "mc/t5_foliage_tree_sorbus_leaf01_static");
     if (!alphaBase)
         alphaBase = base;
+    // MEASURED on the Five base: glass, blended (premultiplied: one / invsrcalpha), alpha tested above 0, no depth
+    // write, camera region 1, sort key 43, technique set mc_l_sm_b0c0n0s0 (colour, normal and specular maps). The
+    // decals are copies of it with a depth offset: Five's own model decals either test alpha or carry samplers of
+    // their own (mc/mtl_veh_jet_f4_decals: technique set mc_l_sm_b0c0s0sc0x0)
+    Material *blendBase = Mesh_BaseMaterial(edit, "blendBase", "mc/global_glass");
     // MEASURED on the Five base: the frontend skybox's material (technique skycubemaphdr: a cube map by view direction)
     Material *skyBase = Mesh_BaseMaterial(edit, "skyBase", "mc/mtl_skybox_sp_frontend");
     if (skyBase)
@@ -488,6 +541,7 @@ void __cdecl R_Mapkit_LoadMesh()
     MeshFill fill = {};
     fill.base = base;
     fill.alphaBase = alphaBase;
+    fill.blendBase = blendBase ? blendBase : alphaBase;
     fill.skyBase = skyBase ? skyBase : base;
 
     void *buf = 0;
@@ -523,7 +577,9 @@ void __cdecl R_Mapkit_LoadMesh()
         if (!image[0])
             continue;
         const char *baseName = Mesh_BaseFor(&fill, materialFlags[m])->info.name;
-        int look = Mesh_FindLook(image, baseName);
+        // a decal needs its depth offset from a blended base (without one it draws alpha tested, as before)
+        const bool decal = (materialFlags[m] & MATERIAL_DECAL) && blendBase;
+        int look = Mesh_FindLook(image, baseName, decal);
         if (look < 0)
         {
             if (s_lookCount == s_lookCapacity)
@@ -540,11 +596,8 @@ void __cdecl R_Mapkit_LoadMesh()
                 break;
             I_strncpyz(l->image, image, sizeof(l->image));
             I_strncpyz(l->base, baseName, sizeof(l->base));
-            // one name per base: the database keys a material by name
-            Com_sprintf(l->materialName, sizeof(l->materialName), "%s/%s",
-                (materialFlags[m] & MATERIAL_SKY) ? "mapkit_sky" : (materialFlags[m] & MATERIAL_ALPHA) ? "mapkit_alpha"
-                                                                                                       : "mapkit",
-                image);
+            l->decal = decal;
+            Com_sprintf(l->materialName, sizeof(l->materialName), "%s/%s", Mesh_LookPrefix(materialFlags[m]), image);
             l->gfx.name = l->image;
             l->gfx.semantic = 2;
             if (!Mesh_ReadImage(l, imageDir))
@@ -565,9 +618,12 @@ void __cdecl R_Mapkit_LoadMesh()
     for (int i = 0; i < s_lookCount; ++i)
     {
         MkMeshLook *look = s_looks[i];
-        Material *lookBase = !strcmp(look->base, base->info.name) ? base
-            : !strcmp(look->base, alphaBase->info.name) ? alphaBase
-            : !strcmp(look->base, fill.skyBase->info.name) ? fill.skyBase : 0;
+        Material *lookBase = 0;
+        for (Material *candidate : { base, alphaBase, fill.blendBase, fill.skyBase })
+        {
+            if (!lookBase && !strcmp(look->base, candidate->info.name))
+                lookBase = candidate;
+        }
         if (look->uploaded && lookBase && Mesh_LinkMaterial(look, lookBase))
             ++linked;
     }
@@ -776,16 +832,36 @@ void __cdecl R_Mapkit_LoadMesh()
 
     s_mesh.device = dx.device;
     Mesh_OnRenderThread(Mesh_CreateBuffers);
-    int noBuffers = 0;
-    for (int s = 0; s < s_mesh.surfCount; ++s)
-        noBuffers += !s_mesh.surfs[s].vb0 || !s_mesh.surfs[s].indexBuffer;
+    const int noBuffers = Mesh_SurfacesWithoutBuffers();
     s_mesh.ready = noBuffers == 0;
     Com_Printf(8, "mapkit: mesh edit %d: %s: %u chunks, %u prop models, %u props (%d bad), %d surfaces, %u vertices, %u "
-        "triangles; %d colour maps (%d new, %d missing), %d materials linked on %s and %s, %d surfaces untextured, %d "
-        "without GPU buffers; sky %s; %d props removed by a door or debris\n", edit, file, chunkCount, modelCount,
-        instanceCount, badInstances, s_mesh.surfCount, fill.vertUsed, fill.triUsed, s_lookCount, newImages, missingImages,
-        linked, base->info.name, alphaBase->info.name, fill.untextured, noBuffers,
+        "triangles; %d colour maps (%d new, %d missing), %d materials linked on %s, %s and %s, %d surfaces "
+        "untextured, %d without GPU buffers; sky %s; %d props removed by a door or debris\n", edit, file, chunkCount,
+        modelCount, instanceCount, badInstances, s_mesh.surfCount, fill.vertUsed, fill.triUsed, s_lookCount, newImages,
+        missingImages, linked, base->info.name, alphaBase->info.name, fill.blendBase->info.name, fill.untextured,
+        noBuffers,
         s_mesh.skyModel >= 0 ? s_mesh.models[s_mesh.skyModel].name : "none", grouped);
+}
+
+// The buffers are D3DPOOL_DEFAULT ones (R_AllocStaticVertexBuffer): a device Reset (vid_restart with a new mode, a
+// full-screen device lost to alt-tab) fails while one is alive. R_ReleaseLostDeviceAssets2 releases the database's
+// models and R_RecoverLostDevice rebuilds them; these models are outside the database, so both call here.
+void __cdecl R_Mapkit_ReleaseMeshBuffers()
+{
+    if (!s_mesh.models || s_mesh.device != dx.device)
+        return;
+    s_mesh.ready = false;
+    Mesh_OnRenderThread(Mesh_ReleaseBuffers);
+}
+
+void __cdecl R_Mapkit_RestoreMeshBuffers()
+{
+    if (!s_mesh.models || s_mesh.device != dx.device || s_mesh.ready)
+        return;
+    Mesh_OnRenderThread(Mesh_CreateBuffers);
+    const int noBuffers = Mesh_SurfacesWithoutBuffers();
+    s_mesh.ready = noBuffers == 0;
+    Com_Printf(8, "mapkit: mesh buffers rebuilt on the reset device (%d surfaces without)\n", noBuffers);
 }
 
 void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
@@ -794,7 +870,7 @@ void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
         return;
     if (s_mesh.device != dx.device)
     {
-        // vid_restart: the buffers went with the old device; this mesh is not drawn until the next map load
+        // a new device (the renderer restarted without a map reload): the buffers went with the old one
         Com_PrintWarning(8, "mapkit: mesh dropped with the old graphics device (reload the map to draw it)\n");
         s_mesh.ready = false;
         return;
