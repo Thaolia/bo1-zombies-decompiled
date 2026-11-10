@@ -321,13 +321,25 @@ Nuketown has about 195 000 world vertices before its props).
     - BO1's model shaders multiply the colour map by the vertex colour, so the colour is `sqrt(light / reference)`,
       the reference being the 75th percentile of the sunlit corners: sunlit ground looks as before, the shade
       darkens and takes BO2's bounce (green in the green house's kitchen). `LIGHT_FLOOR` (0.12) keeps the darkest
-      surfaces from black, since the lamps of the houses, BO2's dynamic primary lights, are not baked in.
+      surfaces from black.
     - A vertex colour only follows the lightmap at the vertices, so a triangle is split where the light at its edge
       midpoints or centre differs from the corners' by more than 0.06, down to 16 units (about one texel): 123 099
       splits, 131 032 triangles become 252 000 (175 000 vertices become 303 000).
     - Checked on D3D9 client screenshots before and after, same views: shaded façades, eaves, sidewalks and rocks,
       the houses' interiors darker and tinted; no crack along the split edges.
-  - Not done yet: the houses' lamps (BO2's primary spot lights, in `comworld`), the alpha of the props' colours,
+    - **The lamps (2026-11-10, asked by the user).** A surface's primary light can also be one of `comworld`'s:
+      Nuketown has 4 spots over the street (type 2, `white_light`) and 12 lamps in and around the houses (type 5,
+      `white_light_cube`, a cube shadow map: omni lights), green, orange and blue. OAT's new
+      `ComWorldLightsDumperT6` writes them (`<map>.d3dbsp.lights.csv`), and the bake adds, for a surface whose
+      primary light is one of them, `vis * colour * saturate(dot(L, N)) * min(dAttenuation / d^2, 1) * cone *
+      window` (L toward the light, `window` = `(1 - (d / radius)^2)^2`, a cone only for the spots).
+    - A spot's `dir` points from the lit area to the light, as the sun's does: every spot's surfaces lie at cos
+      -0.97 to -0.82 of it. Read the other way, the cone cut off almost every lamp. The lamps' surfaces lie on every
+      side of theirs, so they get no cone.
+    - BO2 shapes the cone and the end of the range with constants (`lightFallOffA/B`, an attenuation texture) the
+      bake approximates with those curves. Checked on D3D9 screenshots before and after: house 1's living room and
+      stairs lit, its kitchen ceiling green from the green lamps, house 2's upper floor warm.
+  - Not done yet: the alpha of the props' colours,
     standalone decals (left
     out with caulk and shadow casters), blending (glass is alpha tested), and a `vid_restart` (the mesh is not drawn
     again until the next map load: its buffers belonged to the old device).
@@ -352,7 +364,7 @@ Nuketown has about 195 000 world vertices before its props).
 On the session's machine (paths to adapt), with OAT built as `tools/bo2/oat/README.md` says:
 
     Z="/mnt/c/Program Files (x86)/Steam/steamapps/common/Call of Duty Black Ops II/zone/all"
-    Unlinker --include-assets gfxworld,clipmap,gameworldmp,mapents -o out/?zone? "$Z/zm_nuked.ff"
+    Unlinker --include-assets gfxworld,clipmap,comworld,gameworldmp,mapents -o out/?zone? "$Z/zm_nuked.ff"
     Unlinker --include-assets xmodel,image,material --model-format OBJ --image-format DDS -o out/?zone? "$Z/zm_nuked.ff"
     I=<run>/mods/mapkit/imports/zm_nuked
     tools/bo2/bo2_props_collision.py out/zm_nuked zm_nuked --out $I/zm_nuked.collision.bin

@@ -1,24 +1,26 @@
 diff --git a/src/ObjWriting/Game/T6/ObjWriterT6.cpp b/src/ObjWriting/Game/T6/ObjWriterT6.cpp
-index 05a30c1..94e301c 100644
+index 05a30c1..dad21d2 100644
 --- a/src/ObjWriting/Game/T6/ObjWriterT6.cpp
 +++ b/src/ObjWriting/Game/T6/ObjWriterT6.cpp
-@@ -1,6 +1,9 @@
+@@ -1,6 +1,10 @@
  #include "ObjWriterT6.h"
  
  #include "FontIcon/FontIconDumperT6.h"
 +#include "ClipMap/ClipMapCollisionDumperT6.h"
 +#include "GfxWorld/GfxWorldObjDumperT6.h"
++#include "ComWorld/ComWorldLightsDumperT6.h"
 +#include "GameWorld/GameWorldPathDumperT6.h"
  #include "Game/T6/Font/FontDumperT6.h"
  #include "Game/T6/Image/ImageDumperT6.h"
  #include "Game/T6/Maps/MapEntsDumperT6.h"
-@@ -49,12 +52,12 @@ void ObjWriter::RegisterAssetDumpers(AssetDumpingContext& context)
+@@ -49,12 +53,12 @@ void ObjWriter::RegisterAssetDumpers(AssetDumpingContext& context)
      RegisterAssetDumper(std::make_unique<image::DumperT6>());
      RegisterAssetDumper(std::make_unique<sound::SndBankDumperT6>());
      // REGISTER_DUMPER(AssetDumperSndPatch, m_sound_patch)
 -    // REGISTER_DUMPER(AssetDumperClipMap, m_clip_map)
+-    // REGISTER_DUMPER(AssetDumperComWorld, m_com_world)
 +    RegisterAssetDumper(std::make_unique<clip_map::CollisionDumperT6>()); // local addition: collision
-     // REGISTER_DUMPER(AssetDumperComWorld, m_com_world)
++    RegisterAssetDumper(std::make_unique<com_world::LightsDumperT6>()); // local addition: primary lights
      // REGISTER_DUMPER(AssetDumperGameWorldSp, m_game_world_sp)
 -    // REGISTER_DUMPER(AssetDumperGameWorldMp, m_game_world_mp)
 +    RegisterAssetDumper(std::make_unique<game_world::PathDumperT6>()); // local addition: path nodes and links

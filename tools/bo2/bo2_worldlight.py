@@ -11,7 +11,18 @@ ps_4_0, read with fxc /dumpbin) compute, in linear light:
     L   = A + B * saturate(dot(dir, N)) + vis * sunDiffuse * saturate(dot(sunDir, N))
 
 with vis = slice2.a, the sun's baked visibility (the sun shadow map replaces it near the viewer), sunDiffuse the
-world's sun light colour and the pixel's colour = sqrt(albedo^2 * L * exposure). MapKit draws the world with BO1's
+world's sun light colour and the pixel's colour = sqrt(albedo^2 * L * exposure). A surface whose primary light is
+another light of comworld (<map>.d3dbsp.lights.csv: the street's spots, the houses' lamps) gets that light instead of
+the sun, as BO2's light variant draws it:
+
+    vis * colour * saturate(dot(L, N)) * min(dAttenuation / d^2, 1) * cone * window
+
+with L the direction to the light, d its distance and window (1 - (d / radius)^2)^2. A spot (type 2) has a cone, a
+smoothstep from cosHalfFovOuter to cosHalfFovInner on dot(L, dir): its dir points from the lit area to the light, as
+the sun's does (each spot's surfaces lie at cos -0.97 to -0.82 of dir). The lamps (type 5, "white_light_cube": a cube
+shadow map) light all around them: their surfaces lie on every side, so no cone. BO2 shapes the cone and the end of
+the range with constants (lightFallOffA/B, the attenuation texture) this bake approximates with those curves.
+MapKit draws the world with BO1's
 model shaders, which multiply the colour map by the vertex colour: the colour here is sqrt(L / reference), the
 reference being the light of the sunlit ground (so sunlit ground keeps the colour map, as before, and shade darkens).
 
@@ -22,6 +33,7 @@ Inputs, from tools/bo2/oat's GfxWorldObjDumperT6.cpp: <map>.d3dbsp.worldlight.bi
 <map>.d3dbsp.worldlight.txt (the lightmap images and the sun) and the lightmap images (images/_lightmapN_secondary.dds,
 uncompressed RGBA).
 """
+import csv
 import math
 import os
 import struct
@@ -32,18 +44,20 @@ SPLIT_TOLERANCE = 0.06
 # ... and while its longest edge is longer than this: BO2's lightmaps hold about one texel per 13 units on Nuketown
 SPLIT_MIN_EDGE = 16.0
 SPLIT_MAX_DEPTH = 8
-# The darkest colour: BO2 adds dynamic lights (the houses' lamps) this bake leaves out, so no surface goes to black
+# The darkest colour: a floor under BO2's darkest corners, which its exposure and tone curve lift
 LIGHT_FLOOR = 0.12
 # The reference is this percentile of the light over the corners the sun reaches (vis above SUNLIT_VIS)
 REFERENCE_PERCENTILE = 0.75
 SUNLIT_VIS = 0.8
 NO_LIGHTMAP = 31  # GfxSurface::lightmapIndex of a surface without one (sky, unlit materials)
+SPOT, OMNI = 2, 5  # ComPrimaryLight::type of the street's spots and of the houses' lamps
 
 
 def read_world_light(base):
     """(corners, info) from <base>.worldlight.bin and .txt, or None when the dump has no such files. corners[i] is OBJ
     vertex i's (u, v, lightmap index, primary light index); info holds 'lightmaps' (index -> image name), 'sunDir',
-    'sunDiffuse' and 'sunPrimaryLightIndex'."""
+    'sunDiffuse', 'sunPrimaryLightIndex' and 'lights' (read_lights, from <base>.lights.csv)."""
+    info = {"lightmaps": {}, "lights": read_lights(base + ".lights.csv")}
     try:
         with open(base + ".worldlight.bin", "rb") as f:
             data = f.read()
@@ -60,7 +74,6 @@ def read_world_light(base):
     for i in range(count):
         lmap, _colour, _p0, _p1, index, primary = struct.unpack_from("<4I2B", data, 12 + 20 * i)
         corners.append(((lmap & 0xFFFF) / 65535.0, (lmap >> 16) / 65535.0, index, primary))
-    info = {"lightmaps": {}}
     for line in text:
         words = line.split()
         if not words:
@@ -76,6 +89,21 @@ def read_world_light(base):
         if key not in info:
             sys.exit(f"{base}.worldlight.txt: no {key} (rerun tools/bo2/oat's Unlinker)")
     return corners, info
+
+
+def read_lights(path):
+    """index -> spot light (dict of floats) from tools/bo2/oat's ComWorldLightsDumperT6 CSV; {} without the file."""
+    lights = {}
+    try:
+        with open(path, encoding="latin-1") as f:
+            for row in csv.DictReader(f):
+                if int(row["type"]) in (SPOT, OMNI):  # 1 is the sun, 0 the empty light
+                    lights[int(row["index"])] = {k: float(row[k]) for k in ("type",
+                        "r", "g", "b", "dx", "dy", "dz", "x", "y", "z", "radius", "cosHalfFovOuter", "cosHalfFovInner",
+                        "dAttenuation")}
+    except OSError:
+        pass
+    return lights
 
 
 class Lightmap:
@@ -129,10 +157,11 @@ class WorldLight:
         self.sun_diffuse = info["sunDiffuse"]
         self.sun_dir = info["sunDir"]
         self.sun_index = info["sunPrimaryLightIndex"]
+        self.lights = info["lights"]
         self.reference = (1.0, 1.0, 1.0)
 
-    def light(self, index, primary, u, v, normal):
-        """Linear light (r, g, b) of the lmap shader, None without a lightmap."""
+    def light(self, index, primary, u, v, normal, position=None):
+        """Linear light (r, g, b) of the lmap shader, None without a lightmap. A lamp needs the position."""
         lightmap = self.lightmaps.get(index)
         if lightmap is None:
             return None
@@ -147,6 +176,24 @@ class WorldLight:
             ndl = min(max(sum(self.sun_dir[k] * normal[k] for k in range(3)), 0.0), 1.0)
             vis = s2[3]
             out = [out[k] + vis * self.sun_diffuse[k] * ndl for k in range(3)]
+        elif primary in self.lights and position is not None:
+            lamp = self.lights[primary]
+            to = (lamp["x"] - position[0], lamp["y"] - position[1], lamp["z"] - position[2])
+            d2 = to[0] * to[0] + to[1] * to[1] + to[2] * to[2]
+            d = math.sqrt(d2)
+            if 1e-3 < d < lamp["radius"]:
+                l = (to[0] / d, to[1] / d, to[2] / d)
+                ndl = min(max(sum(l[k] * normal[k] for k in range(3)), 0.0), 1.0)
+                atten = min(lamp["dAttenuation"] / d2, 1.0)
+                window = (1.0 - d2 / (lamp["radius"] * lamp["radius"])) ** 2
+                cone = 1.0
+                if lamp["type"] == SPOT:
+                    axis = l[0] * lamp["dx"] + l[1] * lamp["dy"] + l[2] * lamp["dz"]
+                    outer, inner = lamp["cosHalfFovOuter"], lamp["cosHalfFovInner"]
+                    t = min(max((axis - outer) / max(inner - outer, 1e-6), 0.0), 1.0)
+                    cone = t * t * (3.0 - 2.0 * t)
+                scale = s2[3] * ndl * atten * window * cone
+                out = [out[k] + scale * lamp[c] for k, c in enumerate("rgb")]
         return out
 
     def calibrate(self, samples):
@@ -205,7 +252,7 @@ def light_triangles(world_light, tris, stats):
 
     def colour_at(corner, normal):
         p, uv, (lu, lv), index, primary = corner
-        return world_light.colour(world_light.light(index, primary, lu, lv, normal))
+        return world_light.colour(world_light.light(index, primary, lu, lv, normal, p))
 
     def mid(c0, c1):
         lerp = lambda a, b: tuple((a[k] + b[k]) * 0.5 for k in range(len(a)))  # noqa: E731
