@@ -249,8 +249,20 @@ Nuketown has about 195 000 world vertices before its props).
     images are loaded whole, not streamed. A Windows client (`tools/headless.ps1 -Client`, D3D9) then draws the map and
     plays on to its scheduled quit (219 s with the load), with a normal exit.
   - The scene takes 1 024 models a frame (`GfxScene::sceneModel`). The chunks and the visible props go past it, and
-    `R_AllocSceneModel` drops the rest ("too many existing models (more than 1024)"). Props within 1 024 units are
-    added first, so the dropped ones are far.
+    `R_AllocSceneModel` drops the rest ("too many existing models (more than 1024)"). Props whose bounding sphere
+    comes within 1 024 units are added first, so the dropped ones are far. The test uses the sphere, not the origin,
+    because a prop's origin can lie far from its geometry. The clock tower's origin is 1 000 units off, and the tower
+    was dropped in front of the viewer, leaving its clock hanging in the sky.
+  - **Props drawn inside out (fixed 2026-11-10).** The engine draws a triangle whose right-hand normal points away
+    from the viewer, BO2's own winding, which the world OBJ keeps. `bo2_mesh.py` wound the props the other way, with
+    their right-hand normals out, as `bo2_props_collision.py` needs for its prisms. Every prop then showed its back
+    faces. The clock's face turned to the tower with its numbers mirrored, signs and the garage door were missing,
+    and inner faces showed through walls. `read_lods` now reverses the props' triangles for drawing only.
+  - **Wall buys.** Retail `init_weapon_upgrade` hides a wall buy's weapon model until its first purchase, since a BO1
+    map shows the weapon with a chalk drawing. Nuketown has no such drawing (BO2 draws its chalk by script), so on
+    another game's map MapKit shows the models from the start (`mapkit_show_wallbuys`, `_mapkit.gsc`).
+  - Nuketown has no door or debris to buy: BO2's map is open from the start, as here (its 10 zones are enabled).
+    The mystery box stands at the far end of house 1's backyard, behind the hedge.
   - Not done yet: BO2's baked lighting (the light is the empty base's flat grey and the sun), standalone decals (left
     out with caulk and shadow casters), blending (glass is alpha tested), and a `vid_restart` (the mesh is not drawn
     again until the next map load: its buffers belonged to the old device).
