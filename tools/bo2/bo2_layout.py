@@ -67,6 +67,8 @@ TRAVERSES = {
     "zm_jump_up_154": "mapkit_jump_up",
 }
 PERKS = ["specialty_armorvest", "specialty_quickrevive", "specialty_fastreload", "specialty_rof"]
+BESIDE_REACH = 64.0   # a blocker's zones: those within this of its box when its flag names none
+CLASSIC = "zclassic"  # the gametype whose machines and power switch a map with several modes (TranZit) keeps
 
 
 def read_entities(path):
@@ -260,6 +262,15 @@ def zone_edits(ents, submodels):
     return zones
 
 
+def zones_beside(zones, mins, maxs, reach=BESIDE_REACH):
+    """The two zones nearest a blocker's box (a zone and the box touch or come within reach), or (None, None)."""
+    def gap(z):
+        return sum(max(z["mins"][k] - maxs[k], 0, mins[k] - z["maxs"][k]) ** 2 for k in range(3)) ** 0.5
+    near = sorted((gap(z), z["name"]) for z in zones)
+    near = [name for d, name in near if d <= reach]
+    return (near[0], near[1]) if len(near) >= 2 else (None, None)
+
+
 def blocker_edits(ents, submodels, zones, start_zones):
     """Door and debris edits for BO2's zombie_door / zombie_debris triggers, one per group of triggers sharing a target."""
     by_name = {}
@@ -306,10 +317,17 @@ def blocker_edits(ents, submodels, zones, start_zones):
         centre = [(mins[k] + maxs[k]) / 2 for k in range(3)]
         a, b = split_flag(trigger.get("script_flag", ""), centre)
         if not a or not b:
-            print(f"blocker {target}: no zones for flag {trigger.get('script_flag')}", file=sys.stderr)
+            # TranZit's flags name doors, not zones ("OnTowDoorBarber"): the two zones that touch the blocker's box
+            a, b = zones_beside(zones, mins, maxs)
+        if not a or not b:
+            print(f"blocker {target}: no zones for flag {trigger.get('script_flag')} nor beside it", file=sys.stderr)
             continue
-        groups.append({"kind": kind, "name": target, "mins": mins, "maxs": maxs, "yaw": 0,
-                       "zones": (a, b), "cost": int(float(trigger.get("zombie_cost", 1000))), "meshGroup": target})
+        group = {"kind": kind, "name": target, "mins": mins, "maxs": maxs, "yaw": 0,
+                 "zones": (a, b), "cost": int(float(trigger.get("zombie_cost", 1000))), "meshGroup": target}
+        if kind == "door" and trigger.get("script_noteworthy") == "local_electric_door":
+            # TranZit's doors that the power opens by itself (MapKit's electric_door)
+            group["power"], group["cost"] = 1, 0
+        groups.append(group)
 
     # each blocker unlocks the zone the player reaches later: a breadth-first walk from the start zones through them
     reached, order, pending = set(start_zones), {}, list(groups)
@@ -542,7 +560,7 @@ def build(ents, col, name, collision, links_file=None):
     # BO2 drops these machines from the sky: each zm_random_machine struct, high above the map, targets the struct
     # where the machine lands (its yaw included)
     by_targetname = {e["targetname"]: e for e in ents if "targetname" in e}
-    machines = []
+    machines, machines_skipped = [], []
     for e in ents:
         if e.get("script_noteworthy") == "zm_random_machine":
             land = by_targetname.get(e.get("target", ""), e)
@@ -552,6 +570,27 @@ def build(ents, col, name, collision, links_file=None):
     if len(machines) > len(PERKS):
         origin, angle = machines[len(PERKS)]
         edits.append({"kind": "pap", "name": "pap", "origin": origin, "yaw": angle})
+    # TranZit places its machines per gametype (zm_perk_machine structs, script_string "zclassic_perks_transit ...")
+    for e in ents:
+        if e.get("targetname") != "zm_perk_machine" or CLASSIC not in e.get("script_string", ""):
+            continue
+        perk = e.get("script_noteworthy", "")
+        origin, angle = place(vec(e["origin"]), yaw(e), (0, 180, 90, -90))
+        if perk == "specialty_weapupgrade":
+            edits.append({"kind": "pap", "name": "pap", "origin": origin, "yaw": angle})
+        elif perk in PERKS:
+            edits.append({"kind": "perk", "perk": perk, "origin": origin, "yaw": angle})
+        else:
+            machines_skipped.append(perk)
+    # its power comes from a switch the players build: MapKit's switch stands where the classic one is built
+    for e in ents:
+        if (e.get("targetname") == "powerswitch_p6_zm_buildable_pswitch_body"
+                and e.get("script_gameobjectname") == CLASSIC):
+            o = vec(e["origin"])
+            ground = col.floor([o[0], o[1], o[2] + 32], SOLID)
+            edits.append({"kind": "powerswitch", "name": "switch",
+                          "origin": [o[0], o[1], round(ground, 2) if ground is not None else o[2]], "yaw": yaw(e)})
+            break
     if cuts:
         edits[0]["cut"] = cuts
     edits += blocker_edits(ents, submodels, zones, {e["zone"] for e in edits if e["kind"] == "spawn"})
@@ -561,7 +600,7 @@ def build(ents, col, name, collision, links_file=None):
     counts = {}
     for edit in edits:
         counts[edit["kind"]] = counts.get(edit["kind"], 0) + 1
-    return layout, counts, skipped, traverse_skipped
+    return layout, counts, skipped, traverse_skipped, machines_skipped
 
 
 def main(argv=None):
@@ -591,14 +630,16 @@ def main(argv=None):
         print(f"{links_out}: {len(pairs)} links between pathnodes")
     else:
         print(f"{base}.paths.csv not found (dump the gameworldmp asset): no node links file")
-    layout, counts, skipped, traverse_skipped = build(ents, col, name, collision,
-                                                      links_out and os.path.basename(links_out))
+    layout, counts, skipped, traverse_skipped, machines_skipped = build(ents, col, name, collision,
+                                                                        links_out and os.path.basename(links_out))
     out = args.out or f"{name}.json"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(layout, f, indent=1)
     print(f"{out}: " + ", ".join(f"{v} {k}" for k, v in counts.items()))
     if skipped:
         print("wall weapons without a BO1 equivalent, left out: " + ", ".join(sorted(set(skipped))))
+    if machines_skipped:
+        print("machines without a BO1 equivalent on the base, left out: " + ", ".join(machines_skipped))
     if traverse_skipped:
         print("traversals without a BO1 animscript, left out: " + ", ".join(
             f"{k} x{traverse_skipped.count(k)}" for k in sorted(set(traverse_skipped))))

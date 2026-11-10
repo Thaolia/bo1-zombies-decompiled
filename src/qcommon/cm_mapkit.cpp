@@ -26,9 +26,11 @@ namespace
         int count;
     };
 
-    const int MKJ_MAX_NODES = 8192;
-    const int MKJ_STR_BYTES = 128 * 1024;
-    const int MK_MAX_BOXES = 512;
+    // sized for a layout imported from another game: BO2's TranZit has about 5 600 edits (5 350 pathnodes, six values
+    // each) and their strings, and more barrier clip boxes than a hand-made layout
+    const int MKJ_MAX_NODES = 65536;
+    const int MKJ_STR_BYTES = 1024 * 1024;
+    const int MK_MAX_BOXES = 2048;
 
     MkJson s_json[MKJ_MAX_NODES];
     int s_jsonCount;
@@ -578,8 +580,8 @@ namespace
 // ---- empty base: layout brush models (zone volumes, wall-buy triggers, "bmodel" ents), windows, wall buys, spawners ----
 namespace
 {
-    const int MK_MAX_BMODELS = 256;
-    const int MK_MAX_EDITS = 1024;
+    const int MK_MAX_BMODELS = 512; // the retail submodels and the layout's together stay below 1 024 (checked below)
+    const int MK_MAX_EDITS = 8192;
     cmodel_t *s_bmCmodels; // cm arrays grown by the layout's brush models (0 = cm holds the retail arrays)
     cbrush_t *s_bmBrushes;
     cLeafBrushNode_s *s_bmNodes;

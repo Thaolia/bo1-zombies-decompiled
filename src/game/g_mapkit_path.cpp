@@ -51,7 +51,7 @@ static MkNodeSrc s_mkSrc[0x2000];
 static int s_mkGridOmitted;
 // the "links" edit: s_mkNodeEdit maps the n-th "node" edit to its s_mkSrc index; the pairs are s_mkSrc indices
 static int s_mkNodeEdit[0x2000], s_mkNodeEditCount;
-static unsigned __int16 s_mkExtraLinks[0x8000][2];
+static unsigned __int16 s_mkExtraLinks[0x10000][2]; // BO2's TranZit: 43 257 links
 static int s_mkExtraLinkCount;
 static bool s_mkFileNode[0x2000]; // s_mkSrc index: a "node" edit whose links come from the links file
 static const char *s_mkLinksFile;

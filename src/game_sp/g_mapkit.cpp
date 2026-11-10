@@ -219,7 +219,7 @@ namespace
         float origin[3];
         float radius;
     };
-    const int MK_MAX_MARKS = 512;
+    const int MK_MAX_MARKS = 2048;
     MapkitMark s_marks[MK_MAX_MARKS];
     int s_markCount;
     char s_markLayout[64];
