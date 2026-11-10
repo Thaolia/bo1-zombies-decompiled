@@ -931,7 +931,9 @@ static void CM_Mapkit_WarnPurchaseOverlap()
 // machine stand on the same spot: _mapkit.gsc reads the result as fields "_spot" / "_spotyaw".
 namespace
 {
-    const int MK_MAX_SPOTS = 256;
+    // one per edit: a layout imported from another game (BO2's Nuketown: ~980 edits, its box, perks and Pack-a-Punch
+    // past edit 850) lost every machine clip past a 256 cap, and players walked through them
+    const int MK_MAX_SPOTS = MK_MAX_EDITS;
     struct MkSpot { bool set, clip; float origin[3]; float yaw; float cmins[3], cmaxs[3]; };
     MkSpot s_spots[MK_MAX_SPOTS];
 
