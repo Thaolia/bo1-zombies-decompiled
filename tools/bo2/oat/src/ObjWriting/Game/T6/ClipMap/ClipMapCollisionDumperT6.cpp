@@ -249,7 +249,9 @@ namespace
                 const auto& smodel = clip->staticModelList[i];
                 if (!smodel.xmodel || !smodel.xmodel->name)
                     continue;
-                out << smodel.xmodel->name << "," << smodel.contents << "," << smodel.origin.x << "," << smodel.origin.y
+                // a model of another zone is a reference named ",<name>" (zm_transit's gump zones): without the comma
+                const char* model = smodel.xmodel->name[0] == ',' ? smodel.xmodel->name + 1 : smodel.xmodel->name;
+                out << model << "," << smodel.contents << "," << smodel.origin.x << "," << smodel.origin.y
                     << "," << smodel.origin.z;
                 for (const auto& axis : smodel.invScaledAxis)
                     out << "," << axis.x << "," << axis.y << "," << axis.z;

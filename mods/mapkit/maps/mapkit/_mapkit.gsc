@@ -22,6 +22,7 @@ main_start()
 	LogPrint( "mapkit: runtime on layout " + level.mapkit_layout + ", " + bo1_mapkit_editcount() + " edits\n" );
 	mapkit_precache();
 	mapkit_blocker_hints();
+	mapkit_marathon_perk();
 	if ( mapkit_imported() )
 	{
 		level.pandora_fx_func = ::mapkit_pandora_fx; // before _zombiemode_weapons::treasure_chest_init shows the beam
@@ -128,6 +129,172 @@ mapkit_pandora_fx()
 	}
 }
 
+// Stamin-Up (BO2's TranZit has one): Five's zones lack its machine, bottle, icon and light; the zones of the maps that
+// have it do (Ascension, Call of the Dead, Shangri-La, Moon), loaded beside Five with bo1_mod_zones. Only then does the
+// map say it uses the perk, which makes _zombiemode_perks::init precache them (PrecacheItem of a missing bottle is a
+// script error that stops the perks' init); without one the machine is left out (mapkit_place_perk).
+mapkit_marathon_perk()
+{
+	// the bottle comes with another map's zone (bo1_mod_zones), which a run folder may lack: checked, not assumed
+	loaded = bo1_mapkit_weaponloaded( "zombie_perk_bottle_marathon" );
+	for ( i = 0; i < bo1_mapkit_editcount(); i++ )
+	{
+		if ( bo1_mapkit_get( i, "kind" ) == "perk" && bo1_mapkit_get( i, "perk" ) == "specialty_longersprint" )
+		{
+			if ( loaded )
+			{
+				level.zombiemode_using_marathon_perk = true;
+			}
+			else
+			{
+				LogPrint( "mapkit: Stamin-Up left out: no loaded zone holds zombie_perk_bottle_marathon (bo1_mod_zones zombie_cosmodrome, zombie_coast, zombie_temple or zombie_moon)\n" );
+			}
+			return;
+		}
+	}
+}
+
+// "bus" edit: a vehicle that drives a loop and carries the players standing in it (BO2's TranZit bus, written by
+// tools/bo2/bo2_layout.py). Its collision is the layout's brush models: "floor" (the one that moves, the engine also
+// draws the mesh edit's moverModel on it) and "parts" (walls, roof, door steps), linked to the floor; the engine
+// carries a player standing on a moving script_brushmodel, as on Five's elevators. "path" lists the loop's points on
+// the ground, "stops" [point index, seconds, 0] where it waits, "pivot" the floor's centre in the vehicle's space
+// (x forward, the vehicle's origin on the ground), "speed" its units a second. The brush models stand at the loop's
+// first point, facing the second, with angles 0: the floor's yaw is the heading less that first heading.
+mapkit_bus( i )
+{
+	floor = GetEnt( bo1_mapkit_get( i, "floor" ), "targetname" );
+	if ( !IsDefined( floor ) )
+	{
+		LogPrint( "mapkit: bus edit " + i + ": no brush model " + bo1_mapkit_get( i, "floor" ) + "\n" );
+		return;
+	}
+	parts = GetEntArray( bo1_mapkit_get( i, "parts" ), "targetname" );
+	for ( p = 0; p < parts.size; p++ )
+	{
+		parts[p] LinkTo( floor );
+	}
+	count = Int( bo1_mapkit_get( i, "#path" ) );
+	stops = Int( bo1_mapkit_get( i, "#stops" ) );
+	pivot = bo1_mapkit_get( i, "pivot" );
+	speed = bo1_mapkit_get( i, "speed" );
+	first = bo1_mapkit_get( i, "path.0" );
+	second = bo1_mapkit_get( i, "path.1" );
+	heading = VectorToAngles( ( second[0] - first[0], second[1] - first[1], 0 ) )[1];
+	yaw = heading;
+	LogPrint( "mapkit: bus " + bo1_mapkit_get( i, "name" ) + " on a loop of " + count + " points, " + stops + " stops, "
+		+ parts.size + " parts\n" );
+	level.mapkit_bus_floor = floor;
+	at = 0;
+	while ( true )
+	{
+		for ( s = 0; s < stops; s++ )
+		{
+			stop = bo1_mapkit_get( i, "stops." + s );
+			if ( Int( stop[0] ) == at )
+			{
+				LogPrint( "mapkit: bus stop " + s + " (point " + at + ") at " + floor.origin + " yaw " + floor.angles[1] + "\n" );
+				level.mapkit_bus_at = at;
+				level notify( "mapkit_bus_stop", at );
+				wait( stop[1] );
+				level.mapkit_bus_at = -1;
+				level notify( "mapkit_bus_leave", at );
+			}
+		}
+		next = ( at + 1 ) % count;
+		from = bo1_mapkit_get( i, "path." + at );
+		to = bo1_mapkit_get( i, "path." + next );
+		flat = ( to[0] - from[0], to[1] - from[1], 0 );
+		if ( Length( flat ) > 1 )
+		{
+			yaw = VectorToAngles( flat )[1];
+		}
+		time = Distance( from, to ) / speed;
+		if ( time < 0.05 )
+		{
+			time = 0.05;
+		}
+		c = Cos( yaw );
+		sn = Sin( yaw );
+		centre = to + ( pivot[0] * c - pivot[1] * sn, pivot[0] * sn + pivot[1] * c, pivot[2] );
+		floor MoveTo( centre, time );
+		// to an absolute angle: a relative RotateYaw started while the last one still turns starts from where that one
+		// stood, and the floor lost 24 degrees a loop
+		turn = AngleClamp180( yaw - heading - floor.angles[1] );
+		if ( Abs( turn ) > 0.01 )
+		{
+			floor RotateTo( ( 0, floor.angles[1] + turn, 0 ), Min( time, 0.5 ) );
+		}
+		floor waittill( "movedone" );
+		at = next;
+		if ( GetDvarInt( "mapkit_bus_log" ) == 1 )
+		{
+			players = get_players();
+			for ( p = 0; p < players.size; p++ )
+			{
+				local = players[p].origin - floor.origin;
+				LogPrint( "mapkit: bus point " + at + " floor " + floor.origin + " yaw " + floor.angles[1] + ", player " + p
+					+ " at " + players[p].origin + " (" + Length( ( local[0], local[1], 0 ) ) + " units out, "
+					+ local[2] + " up)\n" );
+			}
+		}
+	}
+}
+
+// The client boards the bus at its first stop, stands still, and must still be on its floor at the next stop.
+mapkit_check_bus( player )
+{
+	for ( i = 0; i < bo1_mapkit_editcount(); i++ )
+	{
+		if ( bo1_mapkit_get( i, "kind" ) != "bus" )
+		{
+			continue;
+		}
+		name = mapkit_name( i );
+		floor = level.mapkit_bus_floor;
+		if ( !IsDefined( floor ) )
+		{
+			LogPrint( "mapkit: check bus " + name + " FAIL no moving floor\n" );
+			continue;
+		}
+		first = Int( bo1_mapkit_get( i, "stops.0" )[0] );
+		next = Int( bo1_mapkit_get( i, "stops.1" )[0] );
+		start = GetTime();
+		while ( ( !IsDefined( level.mapkit_bus_at ) || level.mapkit_bus_at != first ) && GetTime() - start < 900000 )
+		{
+			wait( 0.25 );
+		}
+		if ( !IsDefined( level.mapkit_bus_at ) || level.mapkit_bus_at != first )
+		{
+			LogPrint( "mapkit: check bus " + name + " FAIL never stopped at point " + first + "\n" );
+			continue;
+		}
+		SetDvar( "bo1_testclient_goto", "" );
+		SetDvar( "bo1_testclient_look", "" );
+		SetDvar( "bo1_testclient_press", "" );
+		player SetOrigin( floor.origin + ( 0, 0, 9 ) );
+		wait( 1 );
+		boarded = player.origin;
+		start = GetTime();
+		while ( ( !IsDefined( level.mapkit_bus_at ) || level.mapkit_bus_at != next ) && GetTime() - start < 900000 )
+		{
+			wait( 0.25 );
+		}
+		gap = Distance2D( player.origin, floor.origin );
+		height = player.origin[2] - floor.origin[2];
+		if ( IsDefined( level.mapkit_bus_at ) && level.mapkit_bus_at == next && gap < 260 && height > 0 && height < 24 )
+		{
+			LogPrint( "mapkit: check bus " + name + " PASS rode from " + boarded + " to " + player.origin + " (point " + first
+				+ " to " + next + ", " + gap + " units from the floor's centre)\n" );
+		}
+		else
+		{
+			LogPrint( "mapkit: check bus " + name + " FAIL the client was left at " + player.origin + ", the floor is at "
+				+ floor.origin + " (boarded at " + boarded + ")\n" );
+		}
+	}
+}
+
 mapkit_retail_hint_cost( cost )
 {
 	return cost == 100 || cost == 200 || cost == 250 || ( cost >= 500 && cost <= 2000 && cost % 250 == 0 );
@@ -149,6 +316,10 @@ main_end()
 		if ( ( kind == "door" || kind == "debris" ) && IsDefined( level.mapkit_empty ) )
 		{
 			level thread mapkit_blocker_open( i );
+		}
+		if ( kind == "bus" )
+		{
+			level thread mapkit_bus( i );
 		}
 		if ( bo1_mapkit_get( i, "kind" ) == "perk" )
 		{
@@ -436,6 +607,7 @@ mapkit_perk_model( perk )
 	case "specialty_quickrevive": return "zombie_vending_revive";
 	case "specialty_fastreload": return "zombie_vending_sleight";
 	case "specialty_rof": return "zombie_vending_doubletap";
+	case "specialty_longersprint": return "zombie_vending_marathon"; // with bo1_mod_zones (mapkit_marathon_perk)
 	}
 	return undefined;
 }
@@ -448,6 +620,7 @@ mapkit_perk_targetname( perk )
 	case "specialty_quickrevive": return "vending_revive";
 	case "specialty_fastreload": return "vending_sleight";
 	case "specialty_rof": return "vending_doubletap";
+	case "specialty_longersprint": return "vending_marathon";
 	}
 	return undefined;
 }
@@ -460,6 +633,10 @@ mapkit_place_perk( i )
 	perk = bo1_mapkit_get( i, "perk" );
 	origin = bo1_mapkit_get( i, "origin" );
 	model = mapkit_perk_model( perk );
+	if ( perk == "specialty_longersprint" && !is_true( level.zombiemode_using_marathon_perk ) )
+	{
+		return; // mapkit_marathon_perk said why
+	}
 	if ( !IsDefined( model ) || !IsDefined( origin ) )
 	{
 		LogPrint( "mapkit: perk edit " + i + " skipped (perk " + perk + " has no Five machine model, or no origin)\n" );
@@ -1119,9 +1296,24 @@ mapkit_check()
 			LogPrint( "mapkit_doctor purchase " + rec.edit + "\n" );
 		}
 		mapkit_test_funds( player );
+		// BO1 sells a player 4 perks (_zombiemode_perks vending_trigger_think): with a fifth machine (TranZit's
+		// Stamin-Up) one held perk is dropped first, as going down would (perk_think)
+		if ( IsDefined( player.num_perks ) && player.num_perks >= 4 )
+		{
+			for ( h = 0; h < level.mapkit_perks.size; h++ )
+			{
+				if ( player HasPerk( level.mapkit_perks[h].perk ) )
+				{
+					LogPrint( "mapkit: perk " + level.mapkit_perks[h].perk + " dropped: the player holds BO1's 4 perks\n" );
+					player notify( level.mapkit_perks[h].perk + "_stop" );
+					wait( 0.5 );
+					break;
+				}
+			}
+		}
 		stand = rec.origin + rec.out * 40;
 		look = rec.origin + rec.out * 12 + ( 0, 0, 44 );
-		mapkit_test_place( stand );
+		stand = mapkit_test_place( stand, true );
 		SetDvar( "bo1_testclient_goto", stand[0] + "," + stand[1] + "," + stand[2] );
 		SetDvar( "bo1_testclient_look", look[0] + "," + look[1] + "," + look[2] );
 		SetDvar( "bo1_testclient_press", "3," + GetTime() + ",1500,200" );
@@ -1149,6 +1341,7 @@ mapkit_check()
 	mapkit_check_wallbuys( player );
 	mapkit_check_pap( player );
 	mapkit_check_lights();
+	mapkit_check_bus( player );
 	level.mapkit_test_purchases = false;
 	SetDvar( "bo1_testclient_press", "" );
 	for ( i = 0; i < bo1_mapkit_editcount(); i++ )
@@ -1156,7 +1349,7 @@ mapkit_check()
 		kind = bo1_mapkit_get( i, "kind" );
 		if ( kind != "window" && kind != "perk" && kind != "room" && kind != "box" && kind != "stairs" && kind != "node" && kind != "zone"
 			&& kind != "wallbuy" && kind != "spawner" && kind != "spawn" && kind != "door" && kind != "debris" && kind != "mysterybox"
-			&& kind != "pap" && kind != "powerswitch" && kind != "light" && kind != "riser" )
+			&& kind != "pap" && kind != "powerswitch" && kind != "light" && kind != "riser" && kind != "bus" )
 		{
 			LogPrint( "mapkit: check " + kind + " " + mapkit_name( i ) + " SKIP (no runtime check for this kind yet)\n" );
 		}
@@ -2180,24 +2373,68 @@ mapkit_show_wallbuys()
 }
 
 // +set mapkit_test_walk 1 keeps the walk on an imported map too (to test the test client's own navigation)
-mapkit_test_place( stand )
+// Returns the spot the client was put on. With `retry`, when a player's box does not fit on the floor there
+// (TranZit's bench beside Quick Revive held the client 39 units up), the spots 16 and 32 units around with a floor are
+// tried, and the caller walks the client to the one that fits.
+mapkit_test_place( stand, retry )
 {
 	if ( !mapkit_imported() || GetDvar( "mapkit_test_walk" ) == "1" )
 	{
-		return;
+		return stand;
 	}
 	players = get_players();
 	if ( !players.size )
 	{
-		return;
+		return stand;
 	}
-	floor_trace = BulletTrace( stand + ( 0, 0, 64 ), stand - ( 0, 0, 256 ), false, undefined );
-	spot = stand;
+	first = mapkit_test_floor( stand );
+	if ( IsDefined( retry ) && retry )
+	{
+		for ( attempt = 0; attempt < 17; attempt++ )
+		{
+			cand = stand;
+			if ( attempt > 0 )
+			{
+				cand = stand + AnglesToForward( ( 0, ( attempt - 1 ) * 45, 0 ) ) * ( 16 + 16 * Int( ( attempt - 1 ) / 8 ) );
+			}
+			spot = mapkit_test_floor( cand );
+			if ( !IsDefined( spot ) )
+			{
+				continue;
+			}
+			// the box let down from 40 units above reaches the floor: nothing beside the spot holds it up
+			if ( Distance( PlayerPhysicsTrace( spot + ( 0, 0, 40 ), spot + ( 0, 0, 1 ) ), spot + ( 0, 0, 1 ) ) < 0.5 )
+			{
+				if ( attempt > 0 )
+				{
+					LogPrint( "mapkit: test client put at " + spot + ", " + Distance( spot, first ) + " units from "
+						+ first + " where it does not fit\n" );
+				}
+				players[0] SetOrigin( spot );
+				return ( spot[0], spot[1], stand[2] );
+			}
+		}
+	}
+	if ( IsDefined( first ) )
+	{
+		players[0] SetOrigin( first );
+	}
+	else
+	{
+		players[0] SetOrigin( stand );
+	}
+	return stand;
+}
+
+// the floor under a spot (within 64 above and 256 below), undefined when there is none
+mapkit_test_floor( spot )
+{
+	floor_trace = BulletTrace( spot + ( 0, 0, 64 ), spot - ( 0, 0, 256 ), false, undefined );
 	if ( floor_trace["fraction"] < 1 )
 	{
-		spot = floor_trace["position"];
+		return floor_trace["position"];
 	}
-	players[0] SetOrigin( spot );
+	return undefined;
 }
 
 // A purchase's wait: a walk across an imported map (Nuketown: 3 500 units from the box to Juggernog, about 20 s at
@@ -2217,6 +2454,20 @@ mapkit_test_visit( stand, look )
 	SetDvar( "bo1_testclient_goto", stand[0] + "," + stand[1] + "," + stand[2] );
 	SetDvar( "bo1_testclient_look", look[0] + "," + look[1] + "," + look[2] );
 	SetDvar( "bo1_testclient_press", "3," + GetTime() + ",1500,200" );
+}
+
+mapkit_in_zone( name, p )
+{
+	for ( z = 0; z < bo1_mapkit_editcount(); z++ )
+	{
+		if ( bo1_mapkit_get( z, "kind" ) == "zone" && mapkit_name( z ) == name )
+		{
+			lo = bo1_mapkit_get( z, "mins" );
+			hi = bo1_mapkit_get( z, "maxs" );
+			return p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1] && p[2] >= lo[2] && p[2] <= hi[2];
+		}
+	}
+	return false;
 }
 
 mapkit_window_zone( i )
@@ -2264,6 +2515,12 @@ mapkit_check_progression( player )
 			LogPrint( "mapkit: check " + kind + " " + mapkit_name( i ) + " FAIL missing blocker (requires empty base)\n" );
 			continue;
 		}
+		// A free power door (BO2's local_electric_door) opened when the power came on: nothing to buy.
+		if ( IsDefined( bo1_mapkit_get( i, "power" ) ) && flag( "mkdoor" + i + "_open" ) )
+		{
+			LogPrint( "mapkit: check " + kind + " " + mapkit_name( i ) + " PASS opened by the power\n" );
+			continue;
+		}
 		// A blocker whose `to` zone is already enabled closes a loop: check only the path through its own doorway.
 		was_locked = !maps\_zombiemode_zone_manager::zone_is_enabled( to );
 		bo1_mapkit_graphcheck( i, false, !was_locked );
@@ -2275,6 +2532,15 @@ mapkit_check_progression( player )
 			yaw = 0;
 		}
 		f = AnglesToForward( ( 0, yaw, 0 ) );
+		// walk through into the zone it opens: an imported blocker's yaw does not say which side that is (TranZit's
+		// bank vault lies behind its door's 0). Turned round only when the far side is outside that zone and the near
+		// side inside it (Nuketown's zones overlap, and a zone's centre can lie on either side).
+		ahead = ( o[0], o[1], lo[2] + 32 ) + f * 80;
+		behind = ( o[0], o[1], lo[2] + 32 ) - f * 80;
+		if ( !mapkit_in_zone( to, ahead ) && mapkit_in_zone( to, behind ) )
+		{
+			f = ( 0, 0, 0 ) - f;
+		}
 		stand = ( o[0], o[1], lo[2] ) - f * 48;
 		player maps\_zombiemode_score::add_to_player_score( 5000 );
 		before = player.score;

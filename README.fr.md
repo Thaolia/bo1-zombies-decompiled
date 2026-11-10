@@ -148,8 +148,11 @@ les pathnodes, les traversées, la boîte, les armes au mur, les atouts et le Pa
 headless (l'auto-test y achète la boîte, tous les atouts, toutes les armes au mur et le Pack-a-Punch, et un zombie sort
 de chacun de ses 36 points de sortie du sol pour rejoindre le joueur en suivant le graphe de nodes d'origine de BO2, en sautant
 jusqu'aux étages des maisons et par-dessus ses clôtures et ses fenêtres) et s'affiche texturée avec
-ses props et son monde éclairés par la lumière précalculée de BO2 (lightmaps, lampes et lumière des sommets), ses decals, son verre et son ciel ; ses props arrêtent les joueurs et les balles. Détails :
-`docs/BO2_MAPS.md`.
+ses props et son monde éclairés par la lumière précalculée de BO2 (lightmaps, lampes et lumière des sommets), ses decals, son verre et son ciel ; ses props arrêtent les joueurs et les balles. TranZit vient de la même façon, en mode
+classique : ses portes (celles du courant s'ouvrent avec le courant), Juggernog, Quick Revive, Speed Cola, Double Tap,
+Stamin-Up (avec la zone d'Ascension chargée), le Pack-a-Punch et l'interrupteur aux places où BO2 les construit, et son
+bus, qui fait la boucle par le dépôt, le diner, la ferme, la centrale et la ville en emportant les joueurs qui s'y
+tiennent (les zombies n'y montent pas, et ses props ne sont pas encore éclairés). Détails : `docs/BO2_MAPS.md`.
 
 
 ## Paquets prêts à copier
@@ -185,7 +188,8 @@ décrit. Les paquets contiennent vos propres fichiers de jeu : gardez-les pour v
 
 `--bo2 DIR` ajoute aussi aux paquets windows et linux votre propre extraction d'une map de Black Ops II
 (`docs/BO2_MAPS.md`, « Running it »). Le script prend `DIR/mods/mapkit/layouts/bo2_*.json` et
-`DIR/mods/mapkit/imports/`, et la vue Solo de ZmClient propose alors « Mapkit : Nuketown (Black Ops II) ». Cette
+`DIR/mods/mapkit/imports/`, et la vue Solo de ZmClient propose alors « Mapkit : Nuketown (Black Ops II) » et « Mapkit : TranZit (Black Ops II) »
+(qui charge aussi la zone d'Ascension pour le Stamin-Up). Cette
 extraction est une donnée du jeu : `--bo2` ne se combine pas avec `--no-game-data`. Nuketown a plus de 2 000 props :
 dans la vue Lancement de ZmClient, « Modèles affichés par image » à 4096 (`r_mod_sceneModels`) les dessine tous,
 1024 (le jeu d'origine) laisse tomber les plus lointains.

@@ -5,10 +5,12 @@
 #include <game/pathnode.h>
 #include <game_mp/g_main_mp.h>
 #include <clientscript/cscr_vm.h>
+#include <clientscript/cscr_stringlist.h>
 #include <universal/com_files.h>
 #include <universal/dvar.h>
 #include <universal/com_memory.h>
 #include <database/db_assetnames.h>
+#include <database/db_registry.h>
 #include <bgame/bg_weapons.h>
 #include <xanim/xmodel_utils.h>
 
@@ -133,20 +135,75 @@ void G_Mapkit_f_graphcheck()
     if (imported && path && CM_Mapkit_GetField(edit, "mins", 0, box[0]) == MKF_VECTOR
         && CM_Mapkit_GetField(edit, "maxs", 0, box[1]) == MKF_VECTOR)
     {
-        int crossing = 0;
+        int crossing = 0, all = 0;
         for (unsigned int i = 0; i < path->nodeCount; ++i)
         {
             const pathnode_t *node = &path->nodes[i];
-            for (int l = 0; l < node->dynamic.wLinkCount; ++l)
+            for (int l = 0; l < node->constant.totalLinkCount; ++l)
             {
                 const unsigned int next = node->constant.Links[l].nodeNum;
                 if (next < path->nodeCount
                     && G_Mapkit_LinkCrosses(node->constant.vOrigin, path->nodes[next].constant.vOrigin, box[0], box[1]))
-                    ++crossing;
+                {
+                    ++all;
+                    if (l < node->dynamic.wLinkCount)
+                        ++crossing;
+                }
             }
+        }
+        if (!all)
+        {
+            // TranZit's pow_door_rr: the other game's graph reaches the zone another way (stairs below the doorway)
+            G_LogPrintf("mapkit: check door_graph %s SKIP edit %d: no node link crosses its doorway, active or not (%s -> "
+                "%s)\n", name, edit, from, to);
+            return;
         }
         G_LogPrintf("mapkit: check door_graph %s %s edit %d %s purchase: %d active links through its doorway (%s -> %s)\n",
             name, (crossing > 0) == expected ? "PASS" : "FAIL", edit, expected ? "after" : "before", crossing, from, to);
+        // A purchased door whose doorway stays cut: the links through it, active or not, with their disconnect count,
+        // then the other entities still holding them (a link disconnected by two entities comes back only when both
+        // connect it again).
+        for (unsigned int i = 0, shown = 0; crossing == 0 && expected && i < path->nodeCount && shown < 4; ++i)
+        {
+            const pathnode_t *node = &path->nodes[i];
+            for (int l = 0; l < node->constant.totalLinkCount && shown < 4; ++l)
+            {
+                const pathlink_s &link = node->constant.Links[l];
+                if (link.nodeNum < path->nodeCount
+                    && G_Mapkit_LinkCrosses(node->constant.vOrigin, path->nodes[link.nodeNum].constant.vOrigin, box[0],
+                        box[1]))
+                {
+                    ++shown;
+                    G_LogPrintf("mapkit: door_graph %s: link %u -> %u (%s, disconnect count %d)\n", name, i,
+                        (unsigned int)link.nodeNum, l < node->dynamic.wLinkCount ? "active" : "inactive",
+                        (int)link.disconnectCount);
+                }
+            }
+        }
+        // A purchased door whose doorway stays cut: name the other entities still holding its links (a link
+        // disconnected by two entities comes back only when both connect it again).
+        for (int e = 0; crossing == 0 && expected && e < level.num_entities; ++e)
+        {
+            const gentity_s *ent = &g_entities[e];
+            const unsigned short first = ent->disconnectedLinks;
+            int held = 0, total = 0;
+            for (unsigned short k = first; k && total < 0x800; ++total)
+            {
+                const PathLinkInfo &info = g_path.pathLinkInfoArray[k];
+                if (info.from < path->nodeCount && info.to < path->nodeCount
+                    && G_Mapkit_LinkCrosses(path->nodes[info.from].constant.vOrigin, path->nodes[info.to].constant.vOrigin,
+                        box[0], box[1]))
+                    ++held;
+                k = info.next;
+                if (k == first)
+                    break;
+            }
+            if (held)
+                G_LogPrintf("mapkit: door_graph %s: entity %d %s (%g %g %g)-(%g %g %g) holds %d of its links (%d in all)\n",
+                    name, e, ent->targetname ? SL_ConvertToString(ent->targetname, SCRIPTINSTANCE_SERVER) : "<unnamed>",
+                    ent->r.absmin[0], ent->r.absmin[1], ent->r.absmin[2], ent->r.absmax[0], ent->r.absmax[1],
+                    ent->r.absmax[2], held, total + 1);
+        }
         return;
     }
     bool seen[0x2000] = {};
@@ -206,6 +263,7 @@ void G_Mapkit_f_graphcheck()
 //   bo1_mapkit_get(edit, key)               a field of an edit: string / float / vector, undefined if absent
 //                                             (key may be dotted: "gaps.0.side"; "#gaps" = array length)
 //   bo1_mapkit_layout()                     the loaded layout's name ("" = none)
+//   bo1_mapkit_weaponloaded(name)           1 if a loaded zone holds the weapon (another map's, bo1_mod_zones)
 //   bo1_mapkit_mark(kind, name, origin, r)  record a placement / zone / probe for the validator dump
 //   bo1_mapkit_dump(file)                   write <fs_game>/<file>: boxes, marks, retail brushes and pathnodes
 //                                             around the edits (tools/mapkit/topdown.mjs draws it)
@@ -219,7 +277,7 @@ namespace
         float origin[3];
         float radius;
     };
-    const int MK_MAX_MARKS = 512;
+    const int MK_MAX_MARKS = 2048;
     MapkitMark s_marks[MK_MAX_MARKS];
     int s_markCount;
     char s_markLayout[64];
@@ -259,6 +317,13 @@ void G_Mapkit_f_editcount()
 void G_Mapkit_f_layout()
 {
     Scr_AddString(CM_Mapkit_LayoutName(), SCRIPTINSTANCE_SERVER);
+}
+
+// whether a zone loaded holds this weapon: a PrecacheItem of a missing one throws and stops the calling script thread
+void G_Mapkit_f_weaponloaded()
+{
+    const XAssetEntryPoolEntry *entry = DB_FindXAssetEntry(ASSET_TYPE_WEAPON, Scr_GetString(0, SCRIPTINSTANCE_SERVER));
+    Scr_AddInt(entry && entry->entry.zoneIndex != 0, SCRIPTINSTANCE_SERVER);
 }
 
 void G_Mapkit_f_get()
@@ -428,6 +493,31 @@ void G_Mapkit_f_dump()
             firstTraverse = false;
         }
         out += "]}";
+    }
+    // the entities holding disconnected links (doors' clips: DisconnectPaths), with how many each holds
+    out += "],\n\"disconnected\":[";
+    n = 0;
+    for (int e = 0; path && e < level.num_entities; ++e)
+    {
+        const gentity_s *ent = &g_entities[e];
+        const unsigned short head = ent->disconnectedLinks;
+        if (!ent->r.inuse || !head)
+            continue;
+        int held = 0;
+        for (unsigned short k = head; k && held < 0x800;)
+        {
+            ++held;
+            k = g_path.pathLinkInfoArray[k].next;
+            if (k == head)
+                break;
+        }
+        sprintf_s(buf, "%s\n{\"entity\":%d,\"targetname\":\"%s\",\"links\":%d,\"absmin\":", n++ ? "," : "", e,
+            ent->targetname ? SL_ConvertToString(ent->targetname, SCRIPTINSTANCE_SERVER) : "", held);
+        out += buf;
+        Mapkit_AppendVec(out, ent->r.absmin);
+        out += ",\"absmax\":";
+        Mapkit_AppendVec(out, ent->r.absmax);
+        out += "}";
     }
     out += "]}\n";
     // FS_WriteFile asserts Sys_IsMainThread and the server runs on its own thread: plain stdio into fs_homepath/fs_game

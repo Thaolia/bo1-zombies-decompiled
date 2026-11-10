@@ -27,10 +27,10 @@
 
 static pathnode_t s_mkNodes[0x2000];
 static pathbasenode_t s_mkBaseNodes[0x2000];
-static pathlink_s s_mkLinks[0x8000];
+static pathlink_s s_mkLinks[0x20000]; // BO2's TranZit: 42 000 links (0x8000 left 1 466 of its nodes without any)
 static unsigned __int16 s_mkLeafNodes[0x4000];
 static unsigned char *s_mkVis;
-static int s_mkLinkUsed, s_mkLeafUsed;
+static int s_mkLinkUsed, s_mkLeafUsed, s_mkLinkOverflow;
 static int s_mkFirstAdded = -1, s_mkAddedCount;
 static unsigned __int16 s_mkIndirect[0x2000]; // the empty base's node kd tree leaves point into it
 
@@ -51,7 +51,7 @@ static MkNodeSrc s_mkSrc[0x2000];
 static int s_mkGridOmitted;
 // the "links" edit: s_mkNodeEdit maps the n-th "node" edit to its s_mkSrc index; the pairs are s_mkSrc indices
 static int s_mkNodeEdit[0x2000], s_mkNodeEditCount;
-static unsigned __int16 s_mkExtraLinks[0x8000][2];
+static unsigned __int16 s_mkExtraLinks[0x10000][2]; // BO2's TranZit: 43 257 links
 static int s_mkExtraLinkCount;
 static bool s_mkFileNode[0x2000]; // s_mkSrc index: a "node" edit whose links come from the links file
 static const char *s_mkLinksFile;
@@ -263,6 +263,7 @@ void G_Mapkit_AppendPathnodes()
     s_mkFirstAdded = -1;
     s_mkAddedCount = 0;
     s_mkLinkUsed = 0;
+    s_mkLinkOverflow = 0;
     s_mkLeafUsed = 0;
     if (!CM_Mapkit_Active() || !gameWorldCurrent)
         return;
@@ -385,7 +386,10 @@ static bool Mapkit_LinkNearBox(const float *a, const float *b)
 static pathlink_s *Mapkit_AllocLinks(int count)
 {
     if (s_mkLinkUsed + count > (int)(sizeof(s_mkLinks) / sizeof(s_mkLinks[0])))
+    {
+        s_mkLinkOverflow += count;
         return 0;
+    }
     pathlink_s *links = &s_mkLinks[s_mkLinkUsed];
     s_mkLinkUsed += count;
     return links;
@@ -424,11 +428,15 @@ void G_Mapkit_LinkPathnodes()
     for (int i = 0; i < level.num_entities; ++i)
     {
         oldContents[i] = g_entities[i].r.contents;
-        if (g_entities[i].r.inuse && Path_IsDynamicBlockingEntity(&g_entities[i]))
+        // the layout's own brush models too: a vehicle parked where it starts (BO2's TranZit bus) left the nodes
+        // around it in solid, though they are clear once it drives off
+        if (g_entities[i].r.inuse && (Path_IsDynamicBlockingEntity(&g_entities[i])
+                || (g_entities[i].r.bmodel && CM_Mapkit_IsSubmodel(g_entities[i].s.index.brushmodel))))
             g_entities[i].r.contents = 0;
     }
     // a layout node the drop found in solid (an actor capsule touching a crease of imported terrain or a wall, by a
-    // fraction of a unit: zm_nuked had 10) tries the spots 8 and 16 units around it, as a designer would nudge it
+    // fraction of a unit: zm_nuked had 10) tries its own spot again (now without the brush models above), then the
+    // spots 8 and 16 units around it, as a designer would nudge it
     int moved = 0;
     for (unsigned int i = first; i < path->nodeCount; ++i)
     {
@@ -436,9 +444,10 @@ void G_Mapkit_LinkPathnodes()
         const MkNodeSrc *src = &s_mkSrc[i - first];
         if (node->constant.type != NODE_BADNODE || src->type == NODE_BADNODE || (src->animscript && !node->constant.animscriptfunc))
             continue;
-        for (int attempt = 0; attempt < 16 && node->constant.type == NODE_BADNODE; ++attempt)
+        int attempt = -1;
+        for (; attempt < 16 && node->constant.type == NODE_BADNODE; ++attempt)
         {
-            const float r = attempt < 8 ? 8.0f : 16.0f, a = (float)(attempt & 7) * 0.78539816f;
+            const float r = attempt < 0 ? 0.0f : attempt < 8 ? 8.0f : 16.0f, a = (float)(attempt & 7) * 0.78539816f;
             node->constant.vOrigin[0] = src->origin[0] + r * cosf(a);
             node->constant.vOrigin[1] = src->origin[1] + r * sinf(a);
             node->constant.vOrigin[2] = src->origin[2];
@@ -450,6 +459,14 @@ void G_Mapkit_LinkPathnodes()
             node->constant.vOrigin[0] = src->origin[0];
             node->constant.vOrigin[1] = src->origin[1];
             node->constant.vOrigin[2] = src->origin[2];
+            Com_Printf(18, "mapkit: node %u in solid at (%g %g %g), no free spot within 16 units: left bad\n", i,
+                src->origin[0], src->origin[1], src->origin[2]);
+            continue;
+        }
+        if (attempt == 0) // the loop stepped past the attempt that worked: its own spot
+        {
+            Com_Printf(18, "mapkit: node %u at (%g %g %g) is clear without the layout's brush models\n", i,
+                src->origin[0], src->origin[1], src->origin[2]);
             continue;
         }
         ++moved;
@@ -595,7 +612,9 @@ void G_Mapkit_LinkPathnodes()
     {
         // empty base: node visibility from zero (sight traces hit only the mapkit boxes; retail Path_BuildNodeVis)
         memset(path->pathVis, 0, path->visBytes);
+        g_pathNodeVisRange = CM_Mapkit_NodeVisRange();
         Path_BuildNodeVis(path->pathVis, path->visBytes);
+        g_pathNodeVisRange = 0.0f;
     }
     for (int i = 0; i < level.num_entities; ++i)
         g_entities[i].r.contents = oldContents[i];
@@ -606,6 +625,11 @@ void G_Mapkit_LinkPathnodes()
     if (s_mkLinksFile)
         Com_Printf(18, "mapkit: %d of the links file's %d links added (the others reach a bad node)\n", extra,
             s_mkExtraLinkCount);
+    if (s_mkLinkOverflow)
+        Com_PrintWarning(18, "mapkit: the link pool (%d) is full: %d links left out, nodes without their links\n",
+            (int)(sizeof(s_mkLinks) / sizeof(s_mkLinks[0])), s_mkLinkOverflow);
+    else
+        Com_Printf(18, "mapkit: link pool %d of %d used\n", s_mkLinkUsed, (int)(sizeof(s_mkLinks) / sizeof(s_mkLinks[0])));
     // self-test: every layout node must be found by the goal-node lookup an actor uses (Path_FindPathFrom: radius 192,
     // 64 candidates, height check) at its own spot; a node the lookup misses is a spot no zombie can path to
     int found = 0, missed = 0, firstMiss = -1;

@@ -471,6 +471,7 @@ static void G_m_mod_nearestactordist(scr_entref_t entref)
 // mod: mapkit builtins (g_mapkit.cpp)
 void G_Mapkit_f_editcount();
 void G_Mapkit_f_layout();
+void G_Mapkit_f_weaponloaded();
 void G_Mapkit_f_get();
 void G_Mapkit_f_mark();
 void G_Mapkit_f_visible();
@@ -485,6 +486,7 @@ const BuiltinFunctionDef g_sp_ai_functions[] =
 {
     { "bo1_mapkit_editcount", G_Mapkit_f_editcount, 0 }, // mod (L46): mapkit layout access
     { "bo1_mapkit_layout", G_Mapkit_f_layout, 0 },
+    { "bo1_mapkit_weaponloaded", G_Mapkit_f_weaponloaded, 0 },
     { "bo1_mapkit_get", G_Mapkit_f_get, 0 },
     { "bo1_mapkit_mark", G_Mapkit_f_mark, 0 },
     { "bo1_mapkit_visible", G_Mapkit_f_visible, 0 },

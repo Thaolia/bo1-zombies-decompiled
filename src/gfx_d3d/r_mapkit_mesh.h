@@ -11,5 +11,8 @@ void __cdecl R_Mapkit_FreeMesh();
 // lost device: releases the GPU buffers before the device Reset, rebuilds them after it (r_init.cpp)
 void __cdecl R_Mapkit_ReleaseMeshBuffers();
 void __cdecl R_Mapkit_RestoreMeshBuffers();
+// a layout brush model that moves (a script_brushmodel of the layout's "ent" edits, cg_ents_mp.cpp CG_ScriptMover):
+// the mesh edit's "moverModel" is drawn with it (BO2's TranZit bus)
+void __cdecl R_Mapkit_SetMoverPose(int brushModel, const float *origin, const float *angles);
 // adds the visible chunks and props to the scene, as the skybox model is added
 void __cdecl R_Mapkit_AddMesh(const float *viewOrigin);

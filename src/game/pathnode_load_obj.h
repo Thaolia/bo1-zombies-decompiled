@@ -28,6 +28,9 @@ void __cdecl Path_MakePathDataPermanent(
 pathnode_tree_t *__cdecl Path_BuildNodeBsp_r(unsigned __int16 *nodes, int numNodes);
 pathnode_tree_t *__cdecl Path_AllocPathnodeTree();
 void __cdecl Path_BuildNodeVis(unsigned __int8 *visbuf, unsigned int iVisCacheSize);
+// mod: mapkit - Path_BuildNodeVis leaves node pairs farther apart than this not visible (0, the default: every pair).
+// An imported map's thousands of nodes (BO2's TranZit: 5 350 over 26 000 units) would take hours of sight traces.
+extern float g_pathNodeVisRange;
 void __cdecl GetNodeAttackPoint(const pathnode_t *node, float *attackPos);
 int __cdecl Path_GetExpandedNodeNums_r(unsigned int iNodeStart, float fDistLeft, int *iNodeNums, int iNodeCount);
 int __cdecl Path_CheckExpandedNodeVis(int (*iNodeNums)[8192], int *iNodeCount, unsigned __int8 *visbuf);

@@ -1023,6 +1023,21 @@ int __cdecl NodeVisCacheEntry_0(int i, int j)
     return j + gameWorldCurrent->path.nodeCount * i;
 }
 
+float g_pathNodeVisRange; // mod: mapkit (pathnode_load_obj.h)
+
+namespace
+{
+    bool Path_NodesBeyondVisRange(unsigned int a, unsigned int b)
+    {
+        if (g_pathNodeVisRange <= 0.0f)
+            return false;
+        const float *pa = gameWorldCurrent->path.nodes[a].constant.vOrigin;
+        const float *pb = gameWorldCurrent->path.nodes[b].constant.vOrigin;
+        const float d[3] = { pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2] };
+        return d[0] * d[0] + d[1] * d[1] + d[2] * d[2] > g_pathNodeVisRange * g_pathNodeVisRange;
+    }
+}
+
 void __cdecl Path_BuildNodeVis(unsigned __int8 *visbuf, unsigned int iVisCacheSize)
 {
     int v2; // eax
@@ -1055,6 +1070,8 @@ void __cdecl Path_BuildNodeVis(unsigned __int8 *visbuf, unsigned int iVisCacheSi
         GetNodeAttackPoint(&gameWorldCurrent->path.nodes[i], start);
         for ( j = i + 1; j < gameWorldCurrent->path.nodeCount; ++j )
         {
+            if ( Path_NodesBeyondVisRange(i, j) ) // mod: mapkit
+                continue;
             GetNodeAttackPoint(&gameWorldCurrent->path.nodes[j], end);
             if ( !CM_BoxSightTrace(0, start, end, vec3_origin, vec3_origin, 0, 0x2809803) )
             {
@@ -1077,6 +1094,8 @@ void __cdecl Path_BuildNodeVis(unsigned __int8 *visbuf, unsigned int iVisCacheSi
         nodeCount[0] = Path_GetExpandedNodeNums_r(i, 256.0, (int *)nodeNums, 1);
         for ( ja = i + 1; ja < gameWorldCurrent->path.nodeCount; ++ja )
         {
+            if ( Path_NodesBeyondVisRange(i, ja) ) // mod: mapkit
+                continue;
             entry = ExpandedNodeVisCacheEntry_0(ja, i);
             if ( ((1 << (entry & 7)) & visbuf[entry >> 3]) == 0 )
             {
