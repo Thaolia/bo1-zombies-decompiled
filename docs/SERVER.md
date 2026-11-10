@@ -114,6 +114,10 @@ Load the map either from `server.cfg` or from the command line, not from both (e
 - Clients connect with `connect <server address>:<port>` from the console, or by themselves with `cl_autoConnect`
   (below). A client accepts LAN addresses only (10/8, 172.16/12, 192.168/16, 169.254/16 and its own /24) unless
   `cl_allowWanConnect 1` is set; a refused address prints `connect: ... is not a LAN address` and changes nothing.
+- The server and its clients must come from builds of the same snapshot protocol. On 2026-11-10 the player entity's
+  net fields changed order (`msg_mp.cpp`: loop sound and attacker sent as changing fields, as in SP). A client built
+  before that commit and a server built after it, or the other way round, read each other's snapshots wrong:
+  rebuild the server, the PCs and the Switch together.
 
 ## Joining from a client (PC)
 
