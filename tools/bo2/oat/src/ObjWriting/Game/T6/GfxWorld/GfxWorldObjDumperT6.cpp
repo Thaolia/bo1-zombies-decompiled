@@ -154,6 +154,15 @@ namespace gfx_world
     //       LOD: u32 count, count x u32 colour (as the game stores it; 0 when the LOD has none)
     //   u32 modelCount, then per model: char[64] name, u32 lodCount, then per LOD: u32 vertCount, vertCount x f32[3]
     //       position in model space, the order of the colours (the LOD's surfaces' verts0, one after the other)
+    // A static model whose XModel lives in another zone (zm_transit's props are in its zm_transit_gump_* zones) is a
+    // reference, named ",<name>" (XAssetInfoGeneric::IsReference): without the comma, which would also split the CSV.
+    std::string ModelName(const XModel* model)
+    {
+        if (!model || !model->name)
+            return "?";
+        return model->name[0] == ',' ? model->name + 1 : model->name;
+    }
+
     static void DumpStaticModelLighting(AssetDumpingContext& context, const std::string& name, const GfxWorldDpvsStatic& dpvs)
     {
         const auto bin = context.OpenAssetFile(name + ".smodellight.bin");
@@ -185,7 +194,7 @@ namespace gfx_world
         for (const auto* model : models)
         {
             char padded[64]{};
-            std::strncpy(padded, model->name ? model->name : "?", 63);
+            std::strncpy(padded, ModelName(model).c_str(), 63);
             bin->write(padded, 64);
             const auto lods = std::min<unsigned>(model->numLods, 4u);
             u32(lods);
@@ -218,8 +227,10 @@ namespace gfx_world
             std::cerr << "gfxworld " << asset.m_name << ": no vertex, index or surface data\n";
             return;
         }
-        // zm_nuked holds a few more 36-byte vertices than vertexCount says (195164 for 195091): check the stride only.
-        if (draw.vertexDataSize0 % STRIDE != 0 || draw.vertexDataSize0 / STRIDE < draw.vertexCount)
+        // zm_nuked holds a few more 36-byte vertices than vertexCount says (195164 for 195091), and zm_transit's buffer
+        // ends 20 bytes past a whole vertex (21264176 bytes for 590529): only the vertices it counts must fit. Every
+        // surface's own range is checked below.
+        if (draw.vertexDataSize0 / STRIDE < draw.vertexCount)
         {
             std::cerr << "gfxworld " << asset.m_name << ": " << draw.vertexDataSize0 << " vertex bytes for "
                       << draw.vertexCount << " vertices: not the 36-byte layout this dumper knows\n";
@@ -321,7 +332,7 @@ namespace gfx_world
         {
             const auto& inst = dpvs.smodelDrawInsts[i];
             const auto& p = inst.placement;
-            *csv << (inst.model && inst.model->name ? inst.model->name : "?") << "," << p.origin.x << ","
+            *csv << ModelName(inst.model) << "," << p.origin.x << ","
                  << p.origin.y << "," << p.origin.z;
             for (const auto& axis : p.axis)
                 *csv << "," << axis.x << "," << axis.y << "," << axis.z;
