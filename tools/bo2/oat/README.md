@@ -24,7 +24,10 @@ licence, the **GNU GPL v3**, not part of this repository's engine code. See `doc
   `<map>.d3dbsp.paths.csv`, one row per node (index, node type, origin, its links `to:dist:negotiation`), the graph
   BO2's map compiler made; `tools/bo2/bo2_layout.py` turns its links between plain pathnodes into the layout's
   `links` file.
-- `ObjWriterT6.patch`: registers the three dumpers in `src/ObjWriting/Game/T6/ObjWriterT6.cpp`.
+- `src/ObjWriting/Game/T6/ComWorld/ComWorldLightsDumperT6.{h,cpp}`: dumps the `comworld` asset's primary lights as
+  `<map>.d3dbsp.lights.csv` (type, colour, direction, origin, radius, cone, attenuation...), the lights a world
+  surface's `primaryLightIndex` names; `tools/bo2/bo2_worldlight.py` bakes the lamps from it.
+- `ObjWriterT6.patch`: registers the four dumpers in `src/ObjWriting/Game/T6/ObjWriterT6.cpp`.
 
 ## Build (Linux / WSL)
 
@@ -40,7 +43,7 @@ premake gathers the source files when it generates the makefiles: a file added l
 ## Use
 
     Z="/mnt/c/Program Files (x86)/Steam/steamapps/common/Call of Duty Black Ops II/zone/all"
-    oat-src/build/bin/Release_x64/Unlinker --include-assets gfxworld,clipmap,gameworldmp -o out/?zone? "$Z/zm_nuked.ff"
+    oat-src/build/bin/Release_x64/Unlinker --include-assets gfxworld,clipmap,comworld,gameworldmp -o out/?zone? "$Z/zm_nuked.ff"
     oat-src/build/bin/Release_x64/Unlinker --include-assets mapents,xmodel,image,material \
         --model-format OBJ --image-format DDS -o out/?zone? "$Z/zm_nuked.ff"
 
