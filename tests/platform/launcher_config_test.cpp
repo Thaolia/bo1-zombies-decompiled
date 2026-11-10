@@ -33,7 +33,8 @@ bool SameSettings(const LauncherSettings &a, const LauncherSettings &b)
     return a.join == b.join && a.serverHost == b.serverHost && a.serverPort == b.serverPort && a.playerName == b.playerName && a.map == b.map && a.aimAssist == b.aimAssist && a.aimSlowdown == b.aimSlowdown &&
            a.aimLockon == b.aimLockon && a.aimAutoaim == b.aimAutoaim && a.god == b.god && a.tabInfo == b.tabInfo && a.backend == b.backend &&
            a.maxFps == b.maxFps && a.shadows == b.shadows && a.fpsCounter == b.fpsCounter &&
-           a.texFilter == b.texFilter && std::memcmp(&a.pad, &b.pad, sizeof(a.pad)) == 0;
+           a.texFilter == b.texFilter && a.startPoints == b.startPoints && a.startPerks == b.startPerks &&
+           std::memcmp(&a.pad, &b.pad, sizeof(a.pad)) == 0;
 }
 } // namespace
 
@@ -124,6 +125,32 @@ int main()
               " +set sm_enable 1 +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0"
               " +devmap zombie_theater",
               "a join without a server address starts the solo game");
+
+    // The start kit: mods/admin stacked after zinfo, its two dvars, perks in kLauncherPerks order.
+    LauncherSettings kit;
+    kit.startPoints = 50000;
+    kit.startPerks = (1u << 1) | (1u << 0); // revive, jugg
+    const std::string kitLine = Launcher_BuildLaunchLine(kit, "");
+    Check(kitLine.find(" +set fs_mods zinfo admin +set zm_startpoints 50000 +set zm_startperks jugg,revive ") !=
+              std::string::npos,
+          "a start kit stacks mods/admin and sets zm_startpoints / zm_startperks");
+    Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(kit)), kit), "menu.cfg round-trips a start kit");
+    LauncherSettings kitNoTab = kit;
+    kitNoTab.tabInfo = false;
+    kitNoTab.startPoints = 0;
+    const std::string noTabLine = Launcher_BuildLaunchLine(kitNoTab, "");
+    Check(noTabLine.find(" +set fs_mods admin +set zm_startperks jugg,revive ") != std::string::npos &&
+              noTabLine.find("zm_startpoints") == std::string::npos,
+          "perks alone: fs_mods admin, no zm_startpoints");
+    LauncherSettings kitJoin = kit;
+    kitJoin.join = true;
+    kitJoin.serverHost = "192.168.1.20";
+    Check(Launcher_BuildLaunchLine(kitJoin, "").find("zm_start") == std::string::npos,
+          "a join leaves the start to the server");
+    const LauncherSettings kitParsed =
+        Launcher_ParseSettings("start_points=1234\nstart_perks= mule , nope,jugg\n");
+    Check(kitParsed.startPoints == 0 && kitParsed.startPerks == ((1u << 7) | 1u),
+          "an unknown point count keeps the default, unknown perks are skipped");
 
     LauncherSettings noName = join;
     noName.playerName.clear();

@@ -568,6 +568,9 @@ package_switch() {
     mkdir -p "$sd"
     cp "$WORK/switch/Release/BO1Zombies.nro" "$sd/"
     game_data "$sd"
+    # The start menu stacks mods/zinfo (Tab counter) and mods/admin (start points and perks): the engine reads mods
+    # under its base folder, sdmc:/switch/bo1zm/mods (FS_Startup)
+    rsync -a --delete "$ROOT/mods/" "$sd/mods/"
     cp "$ZONES/shaders.pack" "$WORK/dksh/shaders.dksh" "$sd/"
     # Bring-up switches (no menu, debug dumps, applet mode) never belong in a package.
     rm -f "$sd/skip_menu" "$sd/deko3d_debug" "$sd/allow_applet"
@@ -577,7 +580,7 @@ BO1 Zombies, portage Nintendo Switch (homebrew, Atmosphère)
 
 INSTALLATION
   Copiez le dossier « switch » de ce répertoire à la RACINE de la carte SD (il se fusionne avec /switch) :
-  /switch/bo1zm/BO1Zombies.nro, avec zone/, main/, shaders.pack, shaders.dksh et localization.txt.
+  /switch/bo1zm/BO1Zombies.nro, avec zone/, main/, mods/, shaders.pack, shaders.dksh et localization.txt.
   BO1Zombies.nro, shaders.pack et shaders.dksh vont ensemble : remplacez-les toujours tous les trois.
 
 LANCEMENT (mode application obligatoire)
@@ -587,6 +590,8 @@ LANCEMENT (mode application obligatoire)
 MENU DE DÉPART
   Map, aim assist, god mode, compteur de zombies, rendu, limite de FPS, ombres, filtre de texture, manettes.
   « Touches manette » : le bouton de la Switch de chaque action du jeu (tirer, viser, sauter...), au choix.
+  « Départ » : les points (jusqu'à 100 000) et les atouts donnés à l'arrivée sur la map en solo ; un atout
+  n'est donné que si la map a sa machine.
   + lance la partie. Le compteur de zombies (activé par défaut) affiche les zombies en vie et ceux qui restent
   dans la manche à côté du tableau des scores ; sur un serveur, c'est le serveur qui le décide.
   « Serveur » ouvre l'écran de connexion : activez-la, entrez l'adresse IP et le port du PC qui fait tourner le

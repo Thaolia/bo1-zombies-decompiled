@@ -20,6 +20,8 @@ On the console the game starts in a text menu, where you choose:
 - the aim assist and its slowdown, lock-on and auto-aim;
 - god mode;
 - the zombie counter beside the scoreboard (mods/zinfo: zombies alive and left this round), on by default;
+- the start kit: one screen for the points (1 000 to 100 000 instead of the game's 500) and the perks a solo player
+  gets on arrival (mods/admin's `zm_startpoints` / `zm_startperks`; a perk only when the map has its machine);
 - the renderer (deko3d or OpenGL), the frame-rate cap, shadows, texture filtering and the FPS/battery counter;
 - the pad's buttons: one screen lists each game action (fire, aim, jump, reload, grenade, knife, sprint...) with the
   Switch button that does it; left/right changes the button and the action that had it takes the old one, so no

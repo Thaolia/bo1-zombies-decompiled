@@ -28,6 +28,11 @@ ROW_HELP = {
     "zinfo": "En tenant Tab, les zombies en vie et ceux qui restent dans la manche s'affichent à gauche (mod zinfo).",
     "noperks": "Pas de machines à atouts (mod noperks). Le Pack-a-Punch et la boîte restent.",
     "quickrestart": "Après la fin de partie, R relance la même map avec les mêmes réglages.",
+    "start_points": "Les points de chaque joueur à son arrivée sur la map, au lieu des 500 du jeu (mod admin, "
+                    "zm_startpoints). Solo seulement : un serveur décide pour ses joueurs.",
+    "start_perk": "Un atout donné gratuitement à l'arrivée sur la map (mod admin, zm_startperks). Seulement s'il a "
+                  "sa machine sur cette map : Kino et Five n'ont que Juggernog, Quick Revive, Speed Cola et Double "
+                  "Tap.",
     "horde": "Mod horde : beaucoup de zombies à la fois ; la manche suivante commence quand le dernier zombie de la "
              "manche est apparu.",
     "horde_max": "Zombies en même temps (24 à 1024). Au-delà de 300 c'est lourd : le jeu active ses options de "

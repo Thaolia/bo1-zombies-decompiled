@@ -17,6 +17,18 @@ struct LauncherMap
 extern const LauncherMap kLauncherMaps[];
 extern const int kLauncherMapCount;
 
+// The start kit of a solo game, given by mods/admin when the player first spawns (zm_startpoints, zm_startperks; the
+// same choices as ZmClient's tools/zmclient/zmclient/profile.py). Points 0 keeps the game's own 500.
+extern const int kLauncherStartPoints[];
+extern const int kLauncherStartPointCount;
+struct LauncherPerk
+{
+    const char *key;   // the name mods/admin's admin_perk_name takes, and menu.cfg's
+    const char *label; // what the menu shows
+};
+extern const LauncherPerk kLauncherPerks[];
+extern const int kLauncherPerkCount;
+
 enum LauncherBackend
 {
     LAUNCHER_BACKEND_DEKO3D,
@@ -49,6 +61,8 @@ struct LauncherSettings
     bool aimAutoaim = false;
     bool god = false;
     bool tabInfo = true; // mods/zinfo: zombies alive / left this round beside the Tab scoreboard
+    int startPoints = 0;           // one of kLauncherStartPoints
+    unsigned startPerks = 0;       // bit i: kLauncherPerks[i]
     LauncherBackend backend = LAUNCHER_BACKEND_DEKO3D;
     int maxFps = 60; // 30 or 60
     bool shadows = true;
@@ -76,6 +90,9 @@ std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::strin
 bool Launcher_ValidServerHost(const std::string &host);
 bool Launcher_ParsePort(const std::string &text, int *port);
 bool Launcher_ValidPlayerName(const std::string &name);
+
+// The start perks as mods/admin's zm_startperks takes them: "jugg,revive" ("" for none).
+std::string Launcher_StartPerkList(const LauncherSettings &s);
 
 // "host:port", the address cl_autoConnect gets.
 std::string Launcher_ServerAddress(const LauncherSettings &s);
