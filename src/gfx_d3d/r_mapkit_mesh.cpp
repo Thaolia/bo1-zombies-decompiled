@@ -38,6 +38,9 @@
 namespace
 {
     const char MESH_MAGIC[8] = { 'B', 'O', '2', 'M', 'E', 'S', 'H', '4' };
+    // BO2MESH5: every vertex also carries a u32 colour (0xAARRGGBB, BO2's baked light), 36 bytes instead of 32
+    const char MESH_MAGIC_LIT[8] = { 'B', 'O', '2', 'M', 'E', 'S', 'H', '5' };
+    int s_vertBytes = 32;
     const unsigned int MATERIAL_ALPHA = 1;
     const unsigned int MATERIAL_SKY = 2;
     const int NAME_BYTES = 64;
@@ -259,14 +262,15 @@ namespace
         return look->material;
     }
 
-    void Mesh_PackVert(GfxPackedVertex *out, const float *p)
+    void Mesh_PackVert(GfxPackedVertex *out, const float *p, unsigned int colour)
     {
-        // p: position (3), normal (3), uv (2), as bo2_mesh.py writes them
+        // p: position (3), normal (3), uv (2), as bo2_mesh.py writes them; the model shaders multiply the colour map
+        // by the vertex colour, which carries the baked light of a BO2MESH5 file (white otherwise)
         out->xyz[0] = p[0];
         out->xyz[1] = p[1];
         out->xyz[2] = p[2];
         out->binormalSign = 1.0f;
-        out->color.packed = -1;
+        out->color.packed = colour;
         float n[3] = { p[3], p[4], p[5] };
         // any unit vector across the normal: the normal map is flat, so the tangent only has to be valid
         float t[3] = { -n[1], n[0], 0.0f };
@@ -337,7 +341,7 @@ namespace
             const unsigned int verts = r.U32(), tris = r.U32();
             if (verts > 65535 || tris > 65535)
                 r.bad = true;
-            r.Take(verts * 32 + tris * 6);
+            r.Take(verts * s_vertBytes + tris * 6);
             totals->verts += verts;
             totals->tris += tris;
         }
@@ -378,12 +382,15 @@ namespace
                 ++fill->untextured;
             }
             s_mesh.materials[fill->surfUsed] = material;
-            const float *src = (const float *)r.Take(verts * 32);
+            const unsigned char *src = r.Take(verts * s_vertBytes);
             for (unsigned int v = 0; v < verts; ++v)
             {
                 float p[8];
-                memcpy(p, src + v * 8, sizeof(p)); // the file is not aligned for floats
-                Mesh_PackVert(&s_mesh.verts[fill->vertUsed + v], p);
+                unsigned int colour = 0xFFFFFFFFu;
+                memcpy(p, src + v * s_vertBytes, sizeof(p)); // the file is not aligned for floats
+                if (s_vertBytes > 32)
+                    memcpy(&colour, src + v * s_vertBytes + 32, 4);
+                Mesh_PackVert(&s_mesh.verts[fill->vertUsed + v], p, colour);
             }
             memcpy(&s_mesh.indices[fill->triUsed * 3], r.Take(tris * 6), tris * 6);
             surf->vertCount = (unsigned short)verts;
@@ -492,9 +499,10 @@ void __cdecl R_Mapkit_LoadMesh()
     }
     Reader r = { (const unsigned char *)buf, len, 0, false };
     const unsigned char *magic = r.Take(8);
-    if (!magic || memcmp(magic, MESH_MAGIC, 8))
+    s_vertBytes = magic && !memcmp(magic, MESH_MAGIC_LIT, 8) ? 36 : 32;
+    if (!magic || (memcmp(magic, MESH_MAGIC, 8) && memcmp(magic, MESH_MAGIC_LIT, 8)))
     {
-        Com_PrintWarning(8, "mapkit: mesh edit %d: %s is not a BO2MESH4 file (rerun tools/bo2/bo2_mesh.py)\n", edit, file);
+        Com_PrintWarning(8, "mapkit: mesh edit %d: %s is not a BO2MESH4/5 file (rerun tools/bo2/bo2_mesh.py)\n", edit, file);
         FS_FreeFile(buf);
         return;
     }

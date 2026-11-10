@@ -12,13 +12,13 @@ MAX_SURFS surfaces of at most MAX_VERTS vertices (16-bit indices). Chunks are CE
 and FAR_CELL beyond it (the distant backdrop), so the view culls them and the light sample at each chunk is local.
 
 <map>.mesh.bin, little-endian:
-  char[8] "BO2MESH4"
+  char[8] "BO2MESH5"
   u32 materialCount, then per material: char[64] BO2 material name, char[64] colour map image name (images/<it>.iwi),
       u32 flags (1: alpha tested in BO2: drawn with the engine's alpha-tested base material; 2: the sky's, a cube map
       drawn with the engine's skybox base material)
   u32 chunkCount, then per chunk: f32[3] origin, f32 radius, u32 surfaceCount, then per surface:
       u16 material, u16 pad, u32 vertCount, u32 triCount,
-      vertCount x (f32[3] position relative to origin, f32[3] normal, f32[2] uv), triCount x u16[3]
+      vertCount x (f32[3] position relative to origin, f32[3] normal, f32[2] uv, u32 colour 0xAARRGGBB), triCount x u16[3]
   u32 modelCount, then per model: char[64] name, f32 radius, u32 lodCount, then per LOD: f32 distance (0: any),
       u32 surfaceCount, then its surfaces as a chunk's (positions in model space)
   u32 instanceCount, then per instance: u32 model, f32[3] origin, f32[3][3] axes (model x, y, z in the world), f32 scale
@@ -52,7 +52,97 @@ MAX_SURFS = 120     # the renderer's rigid path keeps at most 128 surfaces per m
 # and need blending this first version does not do (a layered "*N(wpc/a:wpc/b)" material keeps its base layer)
 SKIP = re.compile(r"caulk|(?<!no_)shadow|nodraw|(^|/)decal_|_decal|_dec(_|\d|$)")
 
+WHITE = 0xFFFFFFFF  # the vertex colour of a surface with no baked light: the model shaders multiply by it
+# BO2 stores a static model's baked light as 0xAARRGGBB with mid-grey 0x80 for full light; the engine's vertex colour
+# multiplies the colour map, white being full light. The alpha (0 in the shade, 254-255 in the open, most likely the
+# sun's visibility for BO2's own sun term) is dropped. 2.0 was judged on D3D9 screenshots, not measured against BO2.
+LIGHT_SCALE = 2.0
+
 DDS_FORMATS = {b"DXT1": (0x0B, 8), b"DXT3": (0x0C, 16), b"DXT5": (0x0D, 16)}
+
+
+def read_smodel_light(path):
+    """The dump's <map>.d3dbsp.smodellight.bin (tools/bo2/oat GfxWorldObjDumperT6.cpp): per static model placement
+    (the rows of smodels.csv), its LODs' vertex colours; per model, its LODs' vertex positions, in the colours' order.
+    None when the file is missing."""
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError:
+        return None
+    if data[:8] != b"BO2SMLT1":
+        sys.exit(f"{path}: not a BO2SMLT1 file")
+    at = 8
+
+    def u32():
+        nonlocal at
+        at += 4
+        return struct.unpack_from("<I", data, at - 4)[0]
+
+    placements = []
+    for _ in range(u32()):
+        lods = []
+        for _ in range(u32()):
+            count = u32()
+            lods.append(struct.unpack_from(f"<{count}I", data, at))
+            at += 4 * count
+        placements.append(lods)
+    positions = {}
+    for _ in range(u32()):
+        name = data[at:at + 64].split(b"\0")[0].decode("latin-1")
+        at += 64
+        lods = []
+        for _ in range(u32()):
+            count = u32()
+            lods.append([struct.unpack_from("<3f", data, at + 12 * k) for k in range(count)])
+            at += 12 * count
+        positions[name] = lods
+    return placements, positions
+
+
+def light_colour(stored):
+    """A BO2 baked vertex colour as the engine's vertex colour (0xAARRGGBB, alpha 255)."""
+    channels = [min(255, int(((stored >> shift) & 0xFF) * LIGHT_SCALE + 0.5)) for shift in (16, 8, 0)]
+    return 0xFF000000 | channels[0] << 16 | channels[1] << 8 | channels[2]
+
+
+def lit_lod(lod, positions, colours):
+    """A LOD's triangles (material -> [[(position, uv)] * 3]) with each vertex's baked colour, found by its position
+    among the model's own vertices (exactly to 1/100 unit, else the nearest within 1 unit; white when none is)."""
+    exact, cells = {}, {}
+    for i, p in enumerate(positions):
+        exact.setdefault((round(p[0], 2), round(p[1], 2), round(p[2], 2)), i)
+        cells.setdefault((math.floor(p[0]), math.floor(p[1]), math.floor(p[2])), []).append(i)
+
+    def colour_at(p):
+        i = exact.get((round(p[0], 2), round(p[1], 2), round(p[2], 2)))
+        if i is None:
+            best = 1.0
+            cx, cy, cz = math.floor(p[0]), math.floor(p[1]), math.floor(p[2])
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    for dz in (-1, 0, 1):
+                        for j in cells.get((cx + dx, cy + dy, cz + dz), ()):
+                            q = positions[j]
+                            d = (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 + (q[2] - p[2]) ** 2
+                            if d <= best:
+                                best, i = d, j
+        return light_colour(colours[i]) if i is not None else WHITE
+
+    cache = {}
+    out = {}
+    for material, tris in lod.items():
+        lit = []
+        for tri in tris:
+            corners = []
+            for p, uv in tri:
+                c = cache.get(p)
+                if c is None:
+                    c = cache[p] = colour_at(p)
+                corners.append((p, uv, c))
+            lit.append(corners)
+        out[material] = lit
+    return out
 
 
 def read_mtl(path, images):
@@ -195,7 +285,7 @@ def angles_to_axes(text):
     return [*forward, *(-v for v in right), *up]
 
 
-def read_lods(dump, name):
+def read_lods(dump, name, with_index=False):
     """A model's LODs as [(distance, material -> triangles)]: OAT's xmodel JSON gives each LOD's OBJ and the distance
     up to which it draws (0 on the last one: drawn at any distance); without the JSON, the OBJs found, the last at 0."""
     lods = []
@@ -210,10 +300,11 @@ def read_lods(dump, name):
     # The engine draws a triangle whose right-hand normal points away from the viewer, BO2's own (clockwise) winding,
     # which the world OBJ keeps: a prop wound as model_tris returns it was drawn inside out, its back faces showing
     # (Nuketown's clock face turned to the tower, its numbers mirrored, signs and doors missing).
-    for dist, rel in listed:
+    for index, (dist, rel) in enumerate(listed):
         path = os.path.join(dump, rel)
         if os.path.exists(path):
-            lods.append((dist, {m: [tri[::-1] for tri in tris] for m, tris in model_tris(path).items()}))
+            lod = {m: [tri[::-1] for tri in tris] for m, tris in model_tris(path).items()}
+            lods.append((dist, lod, index) if with_index else (dist, lod))
     return lods
 
 
@@ -312,26 +403,29 @@ def main(argv=None):
         """The index of an xmodel in models, read on first use; -1 when it has nothing to draw."""
         if name not in model_index:
             # a LOD whose materials are all left out (decals) has nothing to draw: the engine wants surfaces
-            lods = [(dist, {m: t for m, t in lod.items() if not skipped(m)}) for dist, lod in read_lods(args.dump, name)]
-            lods = [(dist, lod) for dist, lod in lods if lod]
+            lods = [(dist, {m: t for m, t in lod.items() if not skipped(m)}, index)
+                    for dist, lod, index in read_lods(args.dump, name, with_index=True)]
+            lods = [lod for lod in lods if lod[1]]
             if not lods:
                 missing.add(name)
                 model_index[name] = -1
                 return -1
             for material, dds in read_mtl(os.path.join(exports, name + ".mtl"), images).items():
                 colour.setdefault(material, dds)
-            for _, tris in lods:
+            for _, tris, _ in lods:
                 for material in tris:
                     groups.setdefault(material, [])  # listed with the world's materials
             model_index[name] = len(models)
             models.append((name, lods))
         return model_index[name]
 
+    row_instance = {}
     with open(base + ".smodels.csv", encoding="latin-1") as f:
-        for row in csv.DictReader(f):
+        for row_index, row in enumerate(csv.DictReader(f)):
             name = row["model"]
             if add_model(name) < 0:
                 continue
+            row_instance[row_index] = len(instances)
             axes = [float(row[f"a{a}{i}"]) for a in "xyz" for i in range(3)]
             instances.append((model_index[name], [float(row[k]) for k in ("x", "y", "z")], axes,
                               float(row["scale"])))
@@ -360,6 +454,35 @@ def main(argv=None):
             blocker_groups[group].append(len(instances))
             instances.append((index, [float(v) for v in e["origin"].split()], angles_to_axes(e.get("angles", "0 0 0")),
                               float(e.get("modelscale", 1.0))))
+
+    # BO2's baked light of each placed static model, one colour per vertex: a lit placement gets its own copy of its
+    # model, its vertices coloured (the colour is in the vertex, and the light differs from one placement to another)
+    light = read_smodel_light(base + ".smodellight.bin")
+    lit_placements = 0
+    if light:
+        placements, model_positions = light
+        for row, index in row_instance.items():
+            colours = placements[row] if row < len(placements) else []
+            model, origin, axes, scale = instances[index]
+            name, lods = models[model]
+            known = model_positions.get(name, [])
+            new_lods, coloured = [], False
+            for dist, lod, lod_index in lods:
+                ok = (lod_index < len(colours) and lod_index < len(known) and colours[lod_index]
+                      and len(colours[lod_index]) == len(known[lod_index]))
+                new_lods.append((dist, lit_lod(lod, known[lod_index], colours[lod_index]) if ok else lod, lod_index))
+                coloured |= bool(ok)
+            if coloured:
+                instances[index] = (len(models), origin, axes, scale)
+                models.append((name, new_lods))
+                lit_placements += 1
+        # a model whose placements all got their own lit copy is no longer drawn: leave it out of the file
+        used = sorted({instance[0] for instance in instances})
+        remap = {old: new for new, old in enumerate(used)}
+        models = [models[old] for old in used]
+        instances = [(remap[model],) + tuple(rest) for model, *rest in instances]
+    print(f"baked light: {lit_placements} placed models lit" if light else
+          "baked light: no smodellight.bin in the dump (rerun tools/bo2/oat's Unlinker): props unlit")
 
     # the sky: the worldspawn's skybox model, one more model (no placement: the engine draws it around the viewer)
     sky, sky_materials = -1, set()
@@ -415,7 +538,7 @@ def main(argv=None):
     tris = verts = surf_count = 0
     model_tris_total = [0]
     with open(out_bin, "wb") as f:
-        f.write(b"BO2MESH4")
+        f.write(b"BO2MESH5")
         f.write(struct.pack("<I", len(records)))
         for name, image, flags in records:
             f.write(name.encode("latin-1")[:63].ljust(64, b"\0"))
@@ -427,10 +550,12 @@ def main(argv=None):
             for m, vs, ns, fs in part:
                 f.write(struct.pack("<HHII", m, 0, len(vs), len(fs)))
                 buf = bytearray()
-                for (p, uv), n in zip(vs, ns):
+                for key, n in zip(vs, ns):
+                    p, uv = key[0], key[1]
                     length = math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]) or 1.0
-                    buf += struct.pack("<8f", p[0] - origin[0], p[1] - origin[1], p[2] - origin[2],
-                                       n[0] / length, n[1] / length, n[2] / length, uv[0], uv[1])
+                    buf += struct.pack("<8fI", p[0] - origin[0], p[1] - origin[1], p[2] - origin[2],
+                                       n[0] / length, n[1] / length, n[2] / length, uv[0], uv[1],
+                                       key[2] if len(key) > 2 else WHITE)
                 for tri in fs:
                     buf += struct.pack("<3H", *tri)
                 f.write(buf)
@@ -441,7 +566,7 @@ def main(argv=None):
         f.write(struct.pack("<I", len(models)))
         for name, lods in models:
             lod_surfs = []
-            for dist, lod in lods:
+            for dist, lod, *_ in lods:
                 surfs = []
                 for material in sorted(lod):
                     m = materials.get(material)
@@ -457,9 +582,11 @@ def main(argv=None):
                 for m, vs, ns, fs in surfs:
                     f.write(struct.pack("<HHII", m, 0, len(vs), len(fs)))
                     buf = bytearray()
-                    for (p, uv), n in zip(vs, ns):
+                    for key, n in zip(vs, ns):
+                        p, uv = key[0], key[1]
                         length = math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]) or 1.0
-                        buf += struct.pack("<8f", *p, n[0] / length, n[1] / length, n[2] / length, uv[0], uv[1])
+                        buf += struct.pack("<8fI", *p, n[0] / length, n[1] / length, n[2] / length, uv[0], uv[1],
+                                           key[2] if len(key) > 2 else WHITE)
                     for tri in fs:
                         buf += struct.pack("<3H", *tri)
                     f.write(buf)

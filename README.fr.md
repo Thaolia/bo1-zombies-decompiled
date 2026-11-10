@@ -145,7 +145,7 @@ les pathnodes, les traversées, la boîte, les armes au mur, les atouts et le Pa
 headless (l'auto-test y achète la boîte, tous les atouts, toutes les armes au mur et le Pack-a-Punch, et un zombie sort
 de chacun de ses 36 points de sortie du sol pour rejoindre le joueur en suivant le graphe de nodes d'origine de BO2, en sautant
 jusqu'aux étages des maisons et par-dessus ses clôtures et ses fenêtres) et s'affiche texturée avec
-ses props et son ciel (pas encore l'éclairage d'origine) ; ses props arrêtent les joueurs et les balles. Détails :
+ses props, éclairés par la lumière précalculée de BO2, et son ciel (pas encore les lightmaps du monde) ; ses props arrêtent les joueurs et les balles. Détails :
 `docs/BO2_MAPS.md`.
 
 
