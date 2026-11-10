@@ -476,6 +476,9 @@ def main(argv=None):
     parser.add_argument("dump", help="OAT's output folder for the zone")
     parser.add_argument("map", help="the map's name, e.g. zm_nuked")
     parser.add_argument("--out", required=True, help="the folder to write <map>.mesh.bin and images/ into")
+    parser.add_argument("--mover", action="append", default=[],
+                        help="an xmodel written without a placement, which the engine draws on a moving layout brush "
+                             "model (the mesh edit's moverModel: TranZit's veh_t6_civ_bus_zombie); repeatable")
     args = parser.parse_args(argv)
     base = os.path.join(args.dump, "maps", "mp", f"{args.map}.d3dbsp")
     images = os.path.join(args.dump, "images")
@@ -614,6 +617,19 @@ def main(argv=None):
                 groups.setdefault(material, [])
             sky = len(models)
             models.append((sky_name, [(0.0, lods[0][1])]))
+
+    # the movers: models with no placement (after the lit copies' clean-up, which drops unplaced models)
+    for mover in args.mover:
+        lods = [(dist, {m: t for m, t in lod.items() if not skipped(m)}) for dist, lod in read_lods(args.dump, mover)]
+        lods = [lod for lod in lods if lod[1]]
+        if not lods:
+            sys.exit(f"--mover {mover}: no OBJ in {args.dump}/model_export")
+        for material, dds in read_mtl(os.path.join(exports, mover + ".mtl"), images).items():
+            colour.setdefault(material, dds)
+        for _, tris in lods:
+            for material in tris:
+                groups.setdefault(material, [])
+        models.append((mover, lods))
 
     os.makedirs(os.path.join(args.out, "images"), exist_ok=True)
     names = sorted(m for m in groups if not skipped(m))

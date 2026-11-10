@@ -41,7 +41,11 @@ MAPKIT_LABELS = {
     "aldric_sanatorium": "Aldric Sanatorium (deux étages, power, Pack-a-Punch)",
     # docs/BO2_MAPS.md: the player's own extraction of Black Ops II's Nuketown, which make_dist.sh --bo2 packages
     "bo2_zm_nuked": "Nuketown (Black Ops II)",
+    "bo2_zm_transit": "TranZit (Black Ops II)",
 }
+# the zones a layout's assets come from beside Five's (bo1_mod_zones): TranZit's Stamin-Up machine and bottle are
+# Ascension's (_mapkit.gsc mapkit_marathon_perk)
+MAPKIT_ZONES = {"bo2_zm_transit": "zombie_cosmodrome"}
 NIGHTMARE_MAPS = ("zombie_pentagon", "zombie_theater")
 AIM_DVARS = (("aim_assist", "bo1_aimassist"), ("aim_slowdown", "aim_slowdown_enabled"),
              ("aim_lockon", "aim_lockon_enabled"), ("aim_autoaim", "aim_autoaim_enabled"))
@@ -298,6 +302,8 @@ def solo_mod_flags(p, dist_root=None):
             if p["zinfo"] or p["noperks"]:
                 a += (" +set fs_mods mapkit" + (" zinfo" if p["zinfo"] else "")
                       + (" noperks +set noperks 1" if p["noperks"] else ""))
+        if layout in MAPKIT_ZONES:
+            a += " +set bo1_mod_zones " + MAPKIT_ZONES[layout]
     elif p["horde"]:
         specials = specials_available(bsp, layout)
         a += " " + horde_flags(**horde_opts, napalm=p["horde_napalm"] and specials, sonic=p["horde_sonic"] and specials)

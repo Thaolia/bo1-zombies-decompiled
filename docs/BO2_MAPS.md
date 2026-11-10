@@ -416,6 +416,66 @@ Nuketown has about 195 000 world vertices before its props).
   and animations (T6 skeletons and xanims), its sounds and its dynamic lights. The game is BO1's zombies on Nuketown's
   geometry.
 
+### TranZit (`zm_transit`, 2026-11-10)
+
+TranZit goes through the same tools, with what its size and its bus needed:
+
+- **Dump.** 449 of its 511 prop models live in the streamed `zm_transit_gump_*` zones, and the map's XModels are
+  references named `,<name>`. The OAT dumper drops the comma (also in `smodelcoll.csv` and `smodellight.bin`), and the
+  gump dumps are merged into the map's (`rsync -a --ignore-existing zm_transit_gump_*/{xmodel,model_export,images,materials}/`).
+  Its vertex buffer ends 20 bytes past a whole vertex: only the counted vertices must fit.
+- **Scale.** 26 000 x 18 000 units, 5 350 pathnodes, 40 703 links, about 45 zones, 424 000 collision brushes with
+  70 000 terrain prisms, 690 000 world triangles and 10 866 props. MapKit's tables grew (JSON values 65 536, strings
+  1 MB, edits 8 192, boxes 2 048, brush models 512, marks 2 048, extra links 65 536). BO1's node visibility tests
+  every node pair at load: on 5 350 nodes it never finished. A layout with more than 2 000 nodes gets
+  `"nodeVisRange": 2048`, which skips the pairs farther apart (`Path_BuildNodeVis`), and the map loads in about
+  4.5 minutes on the Linux headless build. MapKit's node link pool held 32 768 links: TranZit needs 42 255, and the
+  nodes past the limit silently got none (1 466, found through two doors whose doorway no link crossed). It holds
+  131 072 now and logs its use (`mapkit: link pool N of 131072 used`) or its overflow.
+- **A crash.** A player among the power station's dense terrain prisms touched more than 128 planes at once:
+  `gjk_push_out` wrote through the NULL of the full plane array (segfault on the Linux server). The extra contacts are
+  left out now (`bg_slidemove.cpp`, `add_hit_info`).
+- **Game modes.** One map holds TranZit's classic mode and the Survival and Grief locations (town, farm, depot). Its
+  `zm_perk_machine` structs and power switch carry the gametype in `script_string` / `script_gameobjectname`, its
+  wall buys in `script_noteworthy` (`zrace_town`, `zstandard_farm, zgrief_farm`...): `bo2_layout.py` keeps the
+  classic ones (and the wall buys without one). The wall buy on the bus (`bus_buyable_weapon1`) is left out: it would
+  stay behind when the bus drives off. Double Tap stands in the barn's loft, whose floor is a clip brush only: a
+  machine stands on the walkable floor when BO2's spot is on it and the solid floor is far below.
+- **Doors.** 15 doors: their `script_flag` often names no zone, so a blocker takes the two zones beside its box.
+  `local_electric_door` doors are power doors (MapKit `"power": 1`, cost 0): they open when the power comes on.
+  Two (`pf1766_auto2357`, `pf1766_auto2358`) have no zone beside them and are left out.
+- **Machines and power.** Juggernog, Quick Revive, Speed Cola, Double Tap, Pack-a-Punch (the buildable one's spot)
+  and the power switch at the classic spot, no building needed. Stamin-Up's machine and bottle come with another
+  map's zone (`bo1_mod_zones zombie_cosmodrome`): MapKit places it only when a loaded zone holds
+  `zombie_perk_bottle_marathon` (`bo1_mapkit_weaponloaded`); ZmClient sets that zone for TranZit. Tombstone has no
+  BO1 machine. BO1 sells a player 4 perks: with Stamin-Up, a fifth machine stays refused until a perk is lost (the
+  self-test drops one before buying the next).
+- **The bus.** BO2's bus is a `script_vehicle` driven along `info_vehicle_node` chains. Here it is a MapKit `bus`
+  edit (`mods/mapkit/MAPKIT.md`): the loop is the chain through the depot's stop node (278 points), the stops are the
+  nodes whose `script_notify` is `reached_stop_point` (depot, diner, farm, power station, town), with BO2's
+  `script_float` as the wait. Its collision is ten layout brush models (floor, a step outside each door, walls with
+  the door openings, roof) that `_mapkit.gsc` moves point to point at 440 units a second; a player standing on the
+  floor rides as on Five's elevators. The mesh edit draws the bus model (`bo2_mesh.py --mover`) on the floor's
+  brush model (`R_Mapkit_SetMoverPose`, from `CG_ScriptMover`). The 23 pathnodes inside and on the parked bus are
+  left out (they would be a floating island), and the layout's brush models are off while MapKit drops its nodes,
+  so the nodes beside the parked bus are not left in solid. The loop's points stand on what an actor walks on:
+  on the solid brushes alone, five points by the diner fell 2 400 units under the road (terrain is prisms) and the
+  bus dove with them, leaving its rider behind. The front wall stands behind the windshield (model x 368), not at the
+  bumper (449): a rider pushed forward had the eye past the glass, where the one-sided faces showed no bus.
+  The engine carries a rider along a mover's translation but not around its turns: the rider slides until a wall
+  holds it, then stays there. The self-test's `bus` check boards the client at the depot, on the floor's centre, and
+  finds it on the floor at the diner. On a Windows client (D3D9, `mapkit_bus_log 1` logs the floor and the players
+  at every point) the player rode a whole loop and on, 8 units over the floor at every point, against the rear wall
+  after the first sharp turn, the bus drawn around them. Zombies do not board it, it has no doors, horn, lights or
+  driver, and it does not wait for the players: a player who misses it waits a loop (4 minutes 55).
+- **Self-test** (Linux headless, `bo1_mod_zones zombie_cosmodrome`, `mapkit_test_risers riser1,riser9`, the run
+  folder holding Ascension's converted zone): `pass 113 fail 0`: the 15 doors (10 bought, their zones unlocked, 5
+  opened by the power), the box, the five machines, Pack-a-Punch, the six wall buys, the power switch, two risers
+  and the bus ride. `pow_door_rr` is a SKIP: BO2's graph reaches its room by stairs below the doorway, so no link crosses
+  it.
+- **Not done.** The props are unlit (TranZit's placements carry no `smodellight` colours), the fog and the lava,
+  the buildables, Denizens, the Avogadro, the bank, the Jet Gun and the other BO2 weapons.
+
 ### Running it
 
 On the session's machine (paths to adapt), with OAT built as `tools/bo2/oat/README.md` says:

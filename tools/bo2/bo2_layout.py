@@ -9,6 +9,7 @@ imports/<map>/<map>.collision.bin: copy the .bin there in the run folder) and it
   - zones: the info_volume player volumes (the volumes of a zone with several become their union box);
   - spawn: the initial_spawn_points structs;
   - riser: the riser_location structs (BO2 zombies climb out of the ground), in the zone their targetname names;
+  - spawner: the spawn_location structs (TranZit's zombies behind its barricades), in the same way;
   - node: every node_pathnode, dropped onto the floor under it (BO2 keeps them where the designer placed them);
   - links: BO2's own links between those nodes (the dump's <map>.d3dbsp.paths.csv, from the gameworldmp asset), as a
     text file of node pairs (--links-out, default <map>.links.txt; copy it to imports/<map>/ in the run folder). They
@@ -67,8 +68,30 @@ TRAVERSES = {
     "zm_jump_up_154": "mapkit_jump_up",
 }
 PERKS = ["specialty_armorvest", "specialty_quickrevive", "specialty_fastreload", "specialty_rof"]
+# machines MapKit also places when their assets are loaded (Stamin-Up: with bo1_mod_zones zombie_cosmodrome)
+EXTRA_PERKS = ["specialty_longersprint"]
 BESIDE_REACH = 64.0   # a blocker's zones: those within this of its box when its flag names none
-CLASSIC = "zclassic"  # the gametype whose machines and power switch a map with several modes (TranZit) keeps
+CLASSIC = "zclassic"  # the gametype whose machines, power switch and wall buys a map with several modes (TranZit) keeps
+# MapKit rebuilds the node visibility at load, one sight trace per node pair: past BIG_MAP_NODES nodes (TranZit: 5 350)
+# that takes hours, so the layout limits it to node pairs within NODE_VIS_RANGE ("nodeVisRange"); a smaller map keeps
+# every pair, as BO1 does
+BIG_MAP_NODES = 2000
+NODE_VIS_RANGE = 2048
+# TranZit's bus (script_vehicle "zombie_bus", model veh_t6_civ_bus_zombie): model space x -96..449 rear to front
+# bumper, the windshield at x 368, y -74..81, z 0..156, its two doors on the right side (-y) at x 58 and 334, the floor
+# inside at z 36 with a step at 20. The front wall stands behind the windshield: at the bumper, a rider pushed forward
+# in a turn had the eye past the glass and saw no bus (the model's faces are one-sided).
+# MapKit carries players on layout brush models moved by _mapkit.gsc: the floor, a step outside each door (the floor is
+# two player steps up) and walls and roof, with the door openings left in the right wall.
+BUS_MODEL = "veh_t6_civ_bus_zombie"
+BUS_FLOOR = ((-90.0, -70.0, 20.0), (366.0, 77.0, 36.0))
+BUS_PARTS = [((34.0, -94.0, 0.0), (82.0, -70.0, 18.0)), ((310.0, -94.0, 0.0), (358.0, -70.0, 18.0)),
+             ((-96.0, -76.0, 36.0), (34.0, -70.0, 148.0)), ((82.0, -76.0, 36.0), (310.0, -70.0, 148.0)),
+             ((358.0, -76.0, 36.0), (372.0, -70.0, 148.0)), ((-96.0, 77.0, 36.0), (372.0, 81.0, 148.0)),
+             ((-96.0, -70.0, 36.0), (-90.0, 77.0, 148.0)), ((366.0, -70.0, 36.0), (372.0, 77.0, 148.0)),
+             ((-96.0, -76.0, 148.0), (449.0, 81.0, 156.0))]
+BUS_SPEED = 440.0  # units a second: BO2's speed 30 is mph (528 units/s), slowed down at its corners
+BUS_STOP = "reached_stop_point"  # the script_notify of the vehicle nodes where the bus stops
 
 
 def read_entities(path):
@@ -216,11 +239,12 @@ class Collision:
 
     def free_side(self, origin, yaws, skip=()):
         """The first of yaws whose front (24 to 56 units out, at knee and chest height) is free and has a floor
-        within 24 units of origin's height: where a player can stand to use the thing; yaws[0] when none is."""
+        within 24 units of origin's height: where a player can stand to use the thing; yaws[0] when none is. Tested
+        every 4 units: TranZit's depot walls are 3 units thick, and every 8 Quick Revive faced one."""
         for angle in yaws:
             f = (math.cos(math.radians(angle)), math.sin(math.radians(angle)))
             clear = all(not self.solid_at((origin[0] + f[0] * d, origin[1] + f[1] * d, origin[2] + h), skip)
-                        for d in range(24, 57, 8) for h in (16, 48))
+                        for d in range(24, 57, 4) for h in (16, 48))
             stand = (origin[0] + f[0] * 40, origin[1] + f[1] * 40, origin[2] + 24)
             ground = self.floor(stand)
             if clear and ground is not None and abs(ground - origin[2]) <= 24:
@@ -460,6 +484,82 @@ def node_links(ents, paths):
     return pairs
 
 
+def bus_route(ents):
+    """TranZit's bus loop: (start node entity, [points], [(point index, wait seconds, stop name)]), or None. The loop
+    is the info_vehicle_node chain through the depot's stop node (script_notify reached_stop_point); its stops are
+    the nodes with that notify, and their script_float is BO2's wait there."""
+    nodes = {e["targetname"]: e for e in ents if e.get("classname", "").startswith("info_vehicle_node")
+             and "targetname" in e}
+    start = next((n for n, e in nodes.items()
+                  if e.get("script_notify") == BUS_STOP and e.get("script_noteworthy") == "depot"), None)
+    if not start:
+        return None
+    points, stops, cur = [], [], start
+    while cur in nodes and len(points) < len(nodes):
+        e = nodes[cur]
+        if e.get("script_notify") == BUS_STOP:
+            stops.append((len(points), float(e.get("script_float", 10)), e.get("script_noteworthy", "")))
+        points.append(vec(e["origin"]))
+        cur = e.get("target")
+        if cur == start:
+            return nodes[start], points, stops
+    return None
+
+
+def bus_box(ents):
+    """The parked bus's box in the world (its origin, model bounds, 32 more above for the nodes on its roof)."""
+    vehicle = next((e for e in ents if e.get("classname") == "script_vehicle"
+                    and e.get("model") == BUS_MODEL), None)
+    if not vehicle:
+        return None
+    o, a = vec(vehicle["origin"]), math.radians(yaw(vehicle))
+    corners = [(x, y) for x in (-96.0, 449.0) for y in (-74.0, 81.0)]
+    xs = [o[0] + x * math.cos(a) - y * math.sin(a) for x, y in corners]
+    ys = [o[1] + x * math.sin(a) + y * math.cos(a) for x, y in corners]
+    return [min(xs), min(ys), o[2] - 16], [max(xs), max(ys), o[2] + 188]
+
+
+def bus_edits(ents, col):
+    """The bus's brush models at its start (the depot stop), its "bus" edit and the mesh edit's mover fields."""
+    route = bus_route(ents)
+    if not route:
+        return [], {}
+    start, points, stops = route
+    # the bus stands on the road: each point dropped onto the floor under it, what an actor walks on (terrain and clips
+    # included: the solid brushes alone dropped five points by the diner 2 400 units, under the road); BO2's vehicle
+    # nodes float about 40 units over the road, so a point with no floor within 128 units stays 48 under its node
+    ground = []
+    for p in points:
+        z = col.floor([p[0], p[1], p[2] + 64])
+        if z is None or p[2] - z > 128:
+            z = p[2] - 48
+        ground.append([round(p[0], 2), round(p[1], 2), round(z, 2)])
+    heading = math.atan2(ground[1][1] - ground[0][1], ground[1][0] - ground[0][0])
+    c, s_ = math.cos(heading), math.sin(heading)
+
+    def world_box(lo, hi):
+        corners = [(x, y) for x in (lo[0], hi[0]) for y in (lo[1], hi[1])]
+        xs = [ground[0][0] + x * c - y * s_ for x, y in corners]
+        ys = [ground[0][1] + x * s_ + y * c for x, y in corners]
+        return ([round(min(xs), 2), round(min(ys), 2), round(ground[0][2] + lo[2], 2)],
+                [round(max(xs), 2), round(max(ys), 2), round(ground[0][2] + hi[2], 2)])
+
+    edits = []
+    lo, hi = world_box(*BUS_FLOOR)
+    edits.append({"kind": "ent", "keys": {"classname": "script_brushmodel", "targetname": "mapkit_bus_floor"},
+                  "bmodel": {"mins": lo, "maxs": hi}})
+    for part in BUS_PARTS:
+        lo, hi = world_box(*part)
+        edits.append({"kind": "ent", "keys": {"classname": "script_brushmodel", "targetname": "mapkit_bus_part"},
+                      "bmodel": {"mins": lo, "maxs": hi}})
+    pivot = [round((BUS_FLOOR[0][k] + BUS_FLOOR[1][k]) / 2, 2) for k in range(3)]
+    edits.append({"kind": "bus", "name": "bus", "floor": "mapkit_bus_floor", "parts": "mapkit_bus_part",
+                  "pivot": pivot, "speed": BUS_SPEED, "path": ground,
+                  "stops": [[index, wait, 0] for index, wait, _ in stops]})
+    mover = {"moverModel": BUS_MODEL, "moverEntity": "mapkit_bus_floor", "moverOffset": pivot}
+    return edits, mover
+
+
 def build(ents, col, name, collision, links_file=None):
     submodels = col.submodels
     folder = os.path.dirname(collision)
@@ -494,6 +594,16 @@ def build(ents, col, name, collision, links_file=None):
             risers += 1
             edits.append({"kind": "riser", "name": f"riser{risers}", "origin": vec(e["origin"]), "yaw": yaw(e),
                           "zone": zone})
+        elif e.get("script_noteworthy") == "spawn_location" and target.endswith("_spawners"):
+            # TranZit's zombies also come from behind its barricades (script_string "depot_baricade4"): a spawner
+            # there, on the floor, whose zombies walk in over the barricade's traversal
+            zone = target[: -len("_spawners")]
+            if zone not in zone_names:
+                continue
+            p = vec(e["origin"])
+            ground = col.floor([p[0], p[1], p[2] + NODE_REACH])
+            edits.append({"kind": "spawner", "origin": [p[0], p[1], round(ground, 2) if ground is not None else p[2]],
+                          "yaw": yaw(e), "zone": zone})
 
     # BO2's compiler drops the pathnodes into its own path data (gameworldmp); the entities keep them where they were
     # placed, up to 150 units above the floor. BO1 links nodes on the floor (Path_CanLinkNodes ends within 18 units of
@@ -529,6 +639,11 @@ def build(ents, col, name, collision, links_file=None):
     def place(origin, angle, yaws):
         """A machine's spot on the solid floor, BO2's clip there to cut, and the side a player can use it from."""
         ground = col.floor([origin[0], origin[1], origin[2] + 32], SOLID)
+        # a loft floored by a clip brush only (TranZit's barn, Double Tap at z 264): the solid floor is the ground storey
+        # far below, while BO2's spot stands on the clip an actor walks on
+        walk = col.floor([origin[0], origin[1], origin[2] + 32])
+        if walk is not None and abs(walk - origin[2]) < 4 and (ground is None or walk - ground > 32):
+            ground = walk
         spot = [origin[0], origin[1], round(ground, 2) if ground is not None else origin[2]]
         cut = col.footprint(spot)
         cuts.extend({"mins": lo, "maxs": hi, "contents": c} for lo, hi, c in cut)
@@ -546,8 +661,17 @@ def build(ents, col, name, collision, links_file=None):
                       "start": 1 if chest in starts else 0})
 
     skipped = []
+    # TranZit lays out a set of wall buys per game mode and location (script_noteworthy "zrace_town",
+    # "zstandard_farm, zgrief_farm"...): classic keeps those without one and those naming a classic location. The one
+    # on the bus ("bus_buyable_weapon1", a trigger on the parked bus) would stay behind when the bus drives off.
+    def classic_wallbuy(e):
+        note = e.get("script_noteworthy")
+        if note is None:
+            return True
+        return any(token.strip().startswith(CLASSIC) for token in note.split(","))
+
     for e in ents:
-        if e.get("targetname") == "weapon_upgrade":
+        if e.get("targetname") == "weapon_upgrade" and classic_wallbuy(e):
             bo2 = e.get("zombie_weapon_upgrade", "")
             if bo2 not in WEAPONS:
                 skipped.append(bo2)
@@ -578,7 +702,7 @@ def build(ents, col, name, collision, links_file=None):
         origin, angle = place(vec(e["origin"]), yaw(e), (0, 180, 90, -90))
         if perk == "specialty_weapupgrade":
             edits.append({"kind": "pap", "name": "pap", "origin": origin, "yaw": angle})
-        elif perk in PERKS:
+        elif perk in PERKS or perk in EXTRA_PERKS:
             edits.append({"kind": "perk", "perk": perk, "origin": origin, "yaw": angle})
         else:
             machines_skipped.append(perk)
@@ -591,12 +715,17 @@ def build(ents, col, name, collision, links_file=None):
             edits.append({"kind": "powerswitch", "name": "switch",
                           "origin": [o[0], o[1], round(ground, 2) if ground is not None else o[2]], "yaw": yaw(e)})
             break
+    bus, mover = bus_edits(ents, col)
+    edits += bus
+    edits[1].update(mover)
     if cuts:
         edits[0]["cut"] = cuts
     edits += blocker_edits(ents, submodels, zones, {e["zone"] for e in edits if e["kind"] == "spawn"})
     edits += barrier_clips(edits, col)
 
     layout = {"name": name, "base": "zombie_pentagon", "empty": True, "edits": edits}
+    if sum(1 for e in edits if e["kind"] == "node") > BIG_MAP_NODES:
+        layout["nodeVisRange"] = NODE_VIS_RANGE
     counts = {}
     for edit in edits:
         counts[edit["kind"]] = counts.get(edit["kind"], 0) + 1
@@ -622,14 +751,28 @@ def main(argv=None):
     name = f"bo2_{args.map}"
     collision = args.collision or f"imports/{args.map}/{args.map}.collision.bin"
     links_out = None
+    # TranZit's bus has pathnodes inside and on its roof where it is parked: they would be a floating island once
+    # the bus drives off, so they are left out (with their links)
+    box = bus_box(ents)
+    placed = [e for e in ents if e.get("classname") == "node_pathnode"]
+    dropped = {n for n, e in enumerate(placed) if box and inside(vec(e["origin"]), {"mins": box[0], "maxs": box[1]})}
+    renumber = {}
+    for n in range(len(placed)):
+        if n not in dropped:
+            renumber[n] = len(renumber)
+    if dropped:
+        print(f"{len(dropped)} pathnodes in the parked bus left out")
     if os.path.exists(base + ".paths.csv"):
-        pairs = node_links(ents, read_paths(base + ".paths.csv"))
+        pairs = [(renumber[a], renumber[b]) for a, b in node_links(ents, read_paths(base + ".paths.csv"))
+                 if a in renumber and b in renumber]
         links_out = args.links_out or f"{args.map}.links.txt"
         with open(links_out, "w", encoding="utf-8") as f:
             f.write("".join(f"{a} {b}\n" for a, b in pairs))
         print(f"{links_out}: {len(pairs)} links between pathnodes")
     else:
         print(f"{base}.paths.csv not found (dump the gameworldmp asset): no node links file")
+    drop_ids = {id(placed[n]) for n in dropped}
+    ents = [e for e in ents if id(e) not in drop_ids]
     layout, counts, skipped, traverse_skipped, machines_skipped = build(ents, col, name, collision,
                                                                         links_out and os.path.basename(links_out))
     out = args.out or f"{name}.json"
