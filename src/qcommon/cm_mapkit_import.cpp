@@ -36,6 +36,26 @@ namespace
     int *s_cellStart;   // s_gridSize[0] * s_gridSize[1] + 1 offsets into s_cellBrushes
     int *s_cellBrushes;
 
+    // A listen server loads the map's collision twice (server and client CM_LoadMap): the import of the second load
+    // reuses the first's when the file and the edit's cuts are the same (TranZit: 10 s each on Windows).
+    // CM_MapkitImport_Clear only hides the data until then.
+    struct ImportPrint
+    {
+        char path[256];
+        int edit, len, cutCount;
+        unsigned long long hash;
+    } s_print;
+    bool s_kept;
+    int s_keptBrushes, s_keptTerrain, s_keptGrid[2];
+
+    unsigned long long Import_Hash(const void *data, size_t size, unsigned long long h)
+    {
+        const unsigned char *p = (const unsigned char *)data;
+        for (size_t i = 0; i < size; ++i)
+            h = (h ^ p[i]) * 0x100000001B3ull;
+        return h;
+    }
+
     struct Reader
     {
         const unsigned char *data;
@@ -338,14 +358,38 @@ namespace
 
 bool CM_MapkitImport_Load(const char *path, int edit, const CM_MapkitImportCut *cuts, int cutCount)
 {
-    Import_Free();
     void *buf = 0;
     const int len = FS_ReadFile(path, &buf);
     if (len <= 0 || !buf)
     {
+        Import_Free();
+        s_kept = false;
         Com_PrintWarning(1, "mapkit: collision edit %d: cannot read %s\n", edit, path);
         return false;
     }
+    ImportPrint print;
+    memset(&print, 0, sizeof(print)); // compared with memcmp: the padding too
+    strncpy(print.path, path, sizeof(print.path) - 1);
+    print.edit = edit;
+    print.len = len;
+    print.cutCount = cutCount;
+    print.hash = Import_Hash(buf, (size_t)len, 0xCBF29CE484222325ull);
+    if (cutCount > 0)
+        print.hash = Import_Hash(cuts, sizeof(*cuts) * (size_t)cutCount, print.hash);
+    if (s_kept && !memcmp(&print, &s_print, sizeof(print)))
+    {
+        s_kept = false;
+        s_brushCount = s_keptBrushes;
+        s_terrainBrushCount = s_keptTerrain;
+        s_gridSize[0] = s_keptGrid[0];
+        s_gridSize[1] = s_keptGrid[1];
+        FS_FreeFile(buf);
+        Com_Printf(1, "mapkit: collision edit %d: %s already loaded: %d brushes kept\n", edit, path, s_brushCount);
+        return true;
+    }
+    Import_Free();
+    s_kept = false;
+    s_print = print;
     Reader r = { (const unsigned char *)buf, len, 0, false };
     char magic[8];
     if (!r.Take(magic, 8) || memcmp(magic, MAGIC, 8))
@@ -533,7 +577,20 @@ bool CM_MapkitImport_Load(const char *path, int edit, const CM_MapkitImportCut *
 
 void CM_MapkitImport_Clear()
 {
-    Import_Free();
+    if (!s_brushCount)
+    {
+        Import_Free();
+        s_kept = false;
+        return;
+    }
+    s_kept = true;
+    s_keptBrushes = s_brushCount;
+    s_keptTerrain = s_terrainBrushCount;
+    s_keptGrid[0] = s_gridSize[0];
+    s_keptGrid[1] = s_gridSize[1];
+    s_brushCount = 0;
+    s_terrainBrushCount = 0;
+    s_gridSize[0] = s_gridSize[1] = 0;
 }
 
 int CM_MapkitImport_BrushCount()

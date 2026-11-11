@@ -1,6 +1,9 @@
 #include "r_mapkit_mesh.h"
+#include <win32/win_shared.h>
 #include <algorithm>
 #include <initializer_list>
+#include <unordered_map>
+#include <utility>
 #include "r_dpvs.h"
 #include "r_dvars.h"
 #include "r_image.h"
@@ -103,10 +106,13 @@ namespace
         MkMeshOrder *instanceOrder; // R_Mapkit_AddMesh's per-frame sort
         int skyModel;          // -1: none
         // "moverModel" drawn at the brush model of the "ent" edit named "moverEntity": its origin is the model's point
-        // "moverOffset" (model space), so the model sits at pose origin - axes * offset
+        // "moverOffset" (model space), so the model sits at pose origin - axes * offset. The brush model spawns with
+        // angles 0 whatever way the vehicle faces: "moverYaw" is that heading (TranZit's bus leaves the depot at 179.5
+        // degrees, and was drawn driving backwards)
         int moverModel;        // -1: none
         int moverBModel;
         float moverOffset[3];
+        float moverYaw;
         bool moverPosed;
         float moverOrigin[3];
         float moverAngles[3];
@@ -311,6 +317,25 @@ namespace
         return look->material;
     }
 
+    // Vec3PackUnitVec tries 256 scales per vector: TranZit's 1.5 million vertices took 31 s to pack. Many share a
+    // normal (flat world surfaces, LODs): each distinct normal is packed once, with its tangent, which follows from it.
+    struct MkNormalKey
+    {
+        unsigned int bits[3];
+        bool operator==(const MkNormalKey &o) const
+        {
+            return bits[0] == o.bits[0] && bits[1] == o.bits[1] && bits[2] == o.bits[2];
+        }
+    };
+    struct MkNormalHash
+    {
+        size_t operator()(const MkNormalKey &k) const
+        {
+            return (size_t)(k.bits[0] * 0x9E3779B1u ^ k.bits[1] * 0x85EBCA77u ^ k.bits[2] * 0xC2B2AE3Du);
+        }
+    };
+    std::unordered_map<MkNormalKey, std::pair<PackedUnitVec, PackedUnitVec>, MkNormalHash> s_packedNormals;
+
     void Mesh_PackVert(GfxPackedVertex *out, const float *p, unsigned int colour)
     {
         // p: position (3), normal (3), uv (2), as bo2_mesh.py writes them; the model shaders multiply the colour map
@@ -321,6 +346,16 @@ namespace
         out->binormalSign = 1.0f;
         out->color.packed = colour;
         float n[3] = { p[3], p[4], p[5] };
+        MkNormalKey key;
+        memcpy(key.bits, n, sizeof(key.bits));
+        const auto known = s_packedNormals.find(key);
+        if (known != s_packedNormals.end())
+        {
+            out->normal = known->second.first;
+            out->tangent = known->second.second;
+            out->texCoord = Vec2PackTexCoords(p + 6);
+            return;
+        }
         // any unit vector across the normal: the normal map is flat, so the tangent only has to be valid
         float t[3] = { -n[1], n[0], 0.0f };
         if (fabsf(n[2]) > 0.9f)
@@ -339,6 +374,7 @@ namespace
         out->normal = Vec3PackUnitVec(n);
         out->tangent = Vec3PackUnitVec(t);
         out->texCoord = Vec2PackTexCoords(p + 6);
+        s_packedNormals.emplace(key, std::make_pair(out->normal, out->tangent));
     }
 
     void Mesh_FreeModels()
@@ -502,6 +538,16 @@ namespace
 
 void __cdecl R_Mapkit_LoadMesh()
 {
+    const unsigned int start = Sys_Milliseconds();
+    struct Report
+    {
+        unsigned int start;
+        ~Report()
+        {
+            if (s_mesh.ready)
+                Com_Printf(8, "mapkit: mesh loaded in %u ms\n", Sys_Milliseconds() - start);
+        }
+    } report{start};
     R_Mapkit_FreeMesh();
     if (!r_loadForRenderer->current.enabled)
         return;
@@ -555,6 +601,7 @@ void __cdecl R_Mapkit_LoadMesh()
 
     void *buf = 0;
     const int len = FS_ReadFile(file, &buf);
+    const unsigned int readAt = Sys_Milliseconds();
     if (len <= 0 || !buf)
     {
         Com_PrintWarning(8, "mapkit: mesh edit %d: cannot read %s\n", edit, file);
@@ -623,6 +670,7 @@ void __cdecl R_Mapkit_LoadMesh()
     }
     if (newImages)
         Mesh_OnRenderThread(Mesh_UploadImages);
+    const unsigned int imagesAt = Sys_Milliseconds();
     int linked = 0;
     for (int i = 0; i < s_lookCount; ++i)
     {
@@ -808,6 +856,8 @@ void __cdecl R_Mapkit_LoadMesh()
         const char *ignored = 0;
         if (CM_Mapkit_GetField(edit, "moverOffset", &ignored, s_mesh.moverOffset) != MKF_VECTOR)
             memset(s_mesh.moverOffset, 0, sizeof(s_mesh.moverOffset));
+        float yaw[3] = {};
+        s_mesh.moverYaw = CM_Mapkit_GetField(edit, "moverYaw", &ignored, yaw) == MKF_NUMBER ? yaw[0] : 0.0f;
         Com_Printf(8, "mapkit: mesh edit %d: mover %s on %s (brush model %d)%s\n", edit, moverName, moverEntity,
             s_mesh.moverBModel, s_mesh.moverModel < 0 || s_mesh.moverBModel < 0 ? ": not found, not drawn" : "");
         if (s_mesh.moverBModel < 0)
@@ -858,8 +908,14 @@ void __cdecl R_Mapkit_LoadMesh()
     free(materialFlags);
     FS_FreeFile(buf);
 
+    const unsigned int builtAt = Sys_Milliseconds();
+    const size_t distinctNormals = s_packedNormals.size();
+    s_packedNormals = {};
     s_mesh.device = dx.device;
     Mesh_OnRenderThread(Mesh_CreateBuffers);
+    Com_Printf(8, "mapkit: mesh load times: file read %u ms, images %u ms, models built %u ms (%u distinct normals), GPU "
+        "buffers %u ms\n", readAt - start, imagesAt - readAt, builtAt - imagesAt, (unsigned int)distinctNormals,
+        Sys_Milliseconds() - builtAt);
     const int noBuffers = Mesh_SurfacesWithoutBuffers();
     s_mesh.ready = noBuffers == 0;
     Com_Printf(8, "mapkit: mesh edit %d: %s: %u chunks, %u prop models, %u props (%d bad), %d surfaces, %u vertices, %u "
@@ -928,7 +984,8 @@ void __cdecl R_Mapkit_AddMesh(const float *viewOrigin)
     {
         static unsigned short moverLighting;
         float axis[3][3];
-        AnglesToAxis(s_mesh.moverAngles, axis);
+        const float angles[3] = { s_mesh.moverAngles[0], s_mesh.moverAngles[1] + s_mesh.moverYaw, s_mesh.moverAngles[2] };
+        AnglesToAxis(angles, axis);
         GfxScaledPlacement placement = {};
         for (int k = 0; k < 3; ++k)
             placement.base.origin[k] = s_mesh.moverOrigin[k] - axis[0][k] * s_mesh.moverOffset[0]
