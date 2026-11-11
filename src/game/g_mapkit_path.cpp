@@ -24,6 +24,7 @@
 #include <clientscript/cscr_stringlist.h>
 #include <universal/com_memory.h>
 #include <universal/com_files.h>
+#include <win32/win_shared.h>
 
 static pathnode_t s_mkNodes[0x2000];
 static pathbasenode_t s_mkBaseNodes[0x2000];
@@ -267,6 +268,7 @@ void G_Mapkit_AppendPathnodes()
     s_mkLeafUsed = 0;
     if (!CM_Mapkit_Active() || !gameWorldCurrent)
         return;
+    const unsigned int start = Sys_Milliseconds();
     PathData *path = &gameWorldCurrent->path;
     int n = Mapkit_CollectNodes(s_mkSrc, 0x2000);
     Mapkit_ReadExtraLinks();
@@ -359,7 +361,7 @@ void G_Mapkit_AppendPathnodes()
     }
     s_mkFirstAdded = (int)oldCount;
     s_mkAddedCount = n;
-    Com_Printf(18, "mapkit: added %d pathnodes (%u..%u)\n", n, oldCount, newCount - 1);
+    Com_Printf(18, "mapkit: added %d pathnodes (%u..%u) in %u ms\n", n, oldCount, newCount - 1, Sys_Milliseconds() - start);
 }
 
 static bool Mapkit_LinkNearBox(const float *a, const float *b)
@@ -434,6 +436,7 @@ void G_Mapkit_LinkPathnodes()
                 || (g_entities[i].r.bmodel && CM_Mapkit_IsSubmodel(g_entities[i].s.index.brushmodel))))
             g_entities[i].r.contents = 0;
     }
+    const unsigned int start = Sys_Milliseconds();
     // a layout node the drop found in solid (an actor capsule touching a crease of imported terrain or a wall, by a
     // fraction of a unit: zm_nuked had 10) tries its own spot again (now without the brush models above), then the
     // spots 8 and 16 units around it, as a designer would nudge it
@@ -484,6 +487,7 @@ void G_Mapkit_LinkPathnodes()
     int cut = 0, linked = 0, bad = 0, extra = 0;
     float dist;
     int negotiation;
+    const unsigned int retried = Sys_Milliseconds();
     // 1. cut retail links that a mapkit box now blocks (the game's own link test fails); traversal links are kept
     for (unsigned int i = 0; i < first; ++i)
     {
@@ -608,6 +612,7 @@ void G_Mapkit_LinkPathnodes()
             }
         }
     }
+    const unsigned int linkedAt = Sys_Milliseconds();
     if (first == 0 && path->pathVis)
     {
         // empty base: node visibility from zero (sight traces hit only the mapkit boxes; retail Path_BuildNodeVis)
@@ -625,6 +630,8 @@ void G_Mapkit_LinkPathnodes()
     if (s_mkLinksFile)
         Com_Printf(18, "mapkit: %d of the links file's %d links added (the others reach a bad node)\n", extra,
             s_mkExtraLinkCount);
+    Com_Printf(18, "mapkit: node load times: bad node retries %u ms, links %u ms, visibility %u ms\n", retried - start,
+        linkedAt - retried, Sys_Milliseconds() - linkedAt);
     if (s_mkLinkOverflow)
         Com_PrintWarning(18, "mapkit: the link pool (%d) is full: %d links left out, nodes without their links\n",
             (int)(sizeof(s_mkLinks) / sizeof(s_mkLinks[0])), s_mkLinkOverflow);

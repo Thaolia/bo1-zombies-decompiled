@@ -309,6 +309,33 @@ def read_obj(path):
     return positions, uvs, groups
 
 
+def read_bmodels(base):
+    """BO2's brush models (<map>.d3dbsp.bmodels.obj, tools/bo2/oat's GfxWorldObjDumperT6): {index: material ->
+    triangles of (position, uv)}, the positions relative to the entity's origin, wound as the world's ({} without
+    the file: a dump from before it)."""
+    path = base + ".bmodels.obj"
+    if not os.path.exists(path):
+        return {}
+    positions, uvs, out = [], [], {}
+    current, material = None, None
+    with open(path, encoding="latin-1") as f:
+        for line in f:
+            tag = line[:2]
+            if tag == "v ":
+                positions.append(tuple(float(x) for x in line.split()[1:4]))
+            elif tag == "vt":
+                u, v = (float(x) for x in line.split()[1:3])
+                uvs.append((u, 1.0 - v))
+            elif tag == "g ":
+                current = out.setdefault(int(line.split()[1][len("bmodel"):]), {})
+            elif tag == "us":
+                material = line.split(" ", 1)[1].rstrip("\n")
+            elif tag == "f " and current is not None:
+                corners = [tuple(int(i) - 1 for i in c.split("/")[:2]) for c in line.split()[1:4]]
+                current.setdefault(material, []).append([(positions[c[0]], uvs[c[1]]) for c in corners])
+    return out
+
+
 def model_tris(path):
     """An OAT model OBJ (XModel/Obj/ObjWriter.cpp: game (x, y, z) written as (x, z, -y), v as 1 - v) as
     material -> triangles of (position, uv) in model space, each wound so that its right-hand normal points out of the
@@ -357,6 +384,27 @@ def angles_to_axes(text):
     right = (-sr * sp * cy + cr * sy, -sr * sp * sy - cr * cy, -sr * cp)
     up = (cr * sp * cy + sr * sy, cr * sp * sy - sr * cy, cr * cp)
     return [*forward, *(-v for v in right), *up]
+
+
+# Openings cut out of a mover model, (mins, maxs) boxes in model space (x forward, y left, z up): a triangle with its
+# three corners inside one is left out. TranZit's bus has its two folding doors (bo2_layout.py BUS_PARTS: the
+# openings at x 34-82 and 310-358 on the right side) shut in its bind pose, and the OBJ carries no bone weights to
+# open them.
+MOVER_HOLES = {
+    "veh_t6_civ_bus_zombie": [((34.0, -84.0, 12.0), (82.0, -58.0, 128.0)), ((308.0, -84.0, 12.0), (358.0, -58.0, 128.0))],
+}
+
+
+# script_brushmodel entities drawn for good (by targetname): the others are a blocker's (drawn until bought) or come and
+# go with scripts this import does not run (the depot's lava cover, blood decals hidden by the mature filter)
+STANDING_BMODELS = ("bridge_section",)
+
+
+def cut_holes(lod, holes):
+    """lod (material -> triangles of (position, uv)) without the triangles lying inside one of holes."""
+    def inside(tri, lo, hi):
+        return all(lo[k] <= p[k] <= hi[k] for p, _ in tri for k in range(3))
+    return {m: [t for t in tris if not any(inside(t, lo, hi) for lo, hi in holes)] for m, tris in lod.items()}
 
 
 def read_lods(dump, name, with_index=False):
@@ -535,6 +583,30 @@ def main(argv=None):
             models.append((name, lods))
         return model_index[name]
 
+    # BO2's brush models: the doors a blocker opens and TranZit's bridge sections, drawn by script_brushmodel entities
+    # (the world OBJ holds the static surfaces only)
+    bmodels = read_bmodels(base)
+    if bmodels:
+        for material, dds in read_mtl(base + ".bmodels.mtl", images).items():
+            colour.setdefault(material, dds)
+
+    def add_bmodel(entity):
+        """The index of a script_brushmodel's surfaces in models, as one prop model; -1 when it has none."""
+        model = entity.get("model", "")
+        if not model.startswith("*") or entity.get("script_noteworthy") == "clip":
+            return -1
+        name = "bmodel" + model[1:]
+        if name not in model_index:
+            tris = {m: t for m, t in bmodels.get(int(model[1:]), {}).items() if not skipped(m)}
+            if not tris:
+                model_index[name] = -1
+                return -1
+            for material in tris:
+                groups.setdefault(material, [])
+            model_index[name] = len(models)
+            models.append((name, [(0.0, tris, 0)]))
+        return model_index[name]
+
     row_instance = {}
     with open(base + ".smodels.csv", encoding="latin-1") as f:
         for row_index, row in enumerate(csv.DictReader(f)):
@@ -562,14 +634,30 @@ def main(argv=None):
         blocker_groups[group] = []
         for e in by_name.get(group, []):
             name = e.get("model", "")
-            if e.get("classname") != "script_model" or not name or name.startswith("*"):
+            if e.get("classname") == "script_brushmodel":
+                index = add_bmodel(e)
+            elif e.get("classname") != "script_model" or not name or name.startswith("*"):
                 continue
-            index = add_model(name)
+            else:
+                index = add_model(name)
             if index < 0:
                 continue
             blocker_groups[group].append(len(instances))
             instances.append((index, [float(v) for v in e["origin"].split()], angles_to_axes(e.get("angles", "0 0 0")),
                               float(e.get("modelscale", 1.0))))
+
+    # brush models that always stand: TranZit's bridge (two sections, walked on, never drawn before)
+    standing = 0
+    for e in ents:
+        if e.get("classname") == "script_brushmodel" and e.get("targetname") in STANDING_BMODELS:
+            index = add_bmodel(e)
+            if index >= 0:
+                instances.append((index, [float(v) for v in e["origin"].split()],
+                                  angles_to_axes(e.get("angles", "0 0 0")), 1.0))
+                standing += 1
+    if bmodels:
+        print(f"brush models: {sum(1 for n, i in model_index.items() if n.startswith('bmodel') and i >= 0)} drawn "
+              f"({standing} standing, the others with their blockers)")
 
     # BO2's baked light of each placed static model, one colour per vertex: a lit placement gets its own copy of its
     # model, its vertices coloured (the colour is in the vertex, and the light differs from one placement to another)
@@ -620,7 +708,8 @@ def main(argv=None):
 
     # the movers: models with no placement (after the lit copies' clean-up, which drops unplaced models)
     for mover in args.mover:
-        lods = [(dist, {m: t for m, t in lod.items() if not skipped(m)}) for dist, lod in read_lods(args.dump, mover)]
+        lods = [(dist, cut_holes({m: t for m, t in lod.items() if not skipped(m)}, MOVER_HOLES.get(mover, [])))
+                for dist, lod in read_lods(args.dump, mover)]
         lods = [lod for lod in lods if lod[1]]
         if not lods:
             sys.exit(f"--mover {mover}: no OBJ in {args.dump}/model_export")

@@ -4,6 +4,7 @@
 #include "common.h"
 #include <universal/com_files.h>
 #include <universal/dvar.h>
+#include <win32/win_shared.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -1867,7 +1868,9 @@ void CM_Mapkit_Load(const char *mapName)
                 else
                     Com_PrintWarning(1, "mapkit: collision edit %d: a cut box without mins and maxs, ignored\n", e);
             }
+            const unsigned int start = Sys_Milliseconds();
             CM_MapkitImport_Load(MkJ_Str(c, "file", ""), e, cuts, cutCount);
+            Com_Printf(1, "mapkit: collision edit %d loaded in %u ms\n", e, Sys_Milliseconds() - start);
         }
         else if (!strcmp(kind, "stairs"))
         {

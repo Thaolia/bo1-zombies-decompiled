@@ -76,7 +76,7 @@ CLASSIC = "zclassic"  # the gametype whose machines, power switch and wall buys 
 # that takes hours, so the layout limits it to node pairs within NODE_VIS_RANGE ("nodeVisRange"); a smaller map keeps
 # every pair, as BO1 does
 BIG_MAP_NODES = 2000
-NODE_VIS_RANGE = 2048
+NODE_VIS_RANGE = 1024  # 2048 cost 55 s of TranZit's load on Linux (actor navigation looks at near node pairs)
 # TranZit's bus (script_vehicle "zombie_bus", model veh_t6_civ_bus_zombie): model space x -96..449 rear to front
 # bumper, the windshield at x 368, y -74..81, z 0..156, its two doors on the right side (-y) at x 58 and 334, the floor
 # inside at z 36 with a step at 20. The front wall stands behind the windshield: at the bumper, a rider pushed forward
@@ -107,6 +107,9 @@ CLIP_KEEP = 0x1 | 0x2000  # solid or stopping shots: real geometry, never a mach
 MONSTER_CLIP = 0x20000
 BARRIER_RAISE = 72.0  # a mantled barrier's clip goes this far over its top: an actor cannot stand on it
 NODE_REACH = 8.0  # a node may sit this far under the surface it belongs to
+WINDOW_MANTLE = 64.0  # a mantle whose middle lies this close to a boarded window is that window's traversal
+WINDOW_WALL_REACH = 80  # a zbarrier's wall lies within this many units in front of it
+WINDOW_SPAWNER = 128.0  # a spawner added for a window stands this far outside it
 CELL = 256.0
 
 
@@ -556,7 +559,9 @@ def bus_edits(ents, col):
     edits.append({"kind": "bus", "name": "bus", "floor": "mapkit_bus_floor", "parts": "mapkit_bus_part",
                   "pivot": pivot, "speed": BUS_SPEED, "path": ground,
                   "stops": [[index, wait, 0] for index, wait, _ in stops]})
-    mover = {"moverModel": BUS_MODEL, "moverEntity": "mapkit_bus_floor", "moverOffset": pivot}
+    # the brush models spawn with angles 0: the model is drawn turned by the loop's first heading
+    mover = {"moverModel": BUS_MODEL, "moverEntity": "mapkit_bus_floor", "moverOffset": pivot,
+             "moverYaw": round(math.degrees(heading), 2)}
     return edits, mover
 
 
@@ -631,6 +636,75 @@ def build(ents, col, name, collision, links_file=None):
             ground = col.floor([p[0], p[1], p[2] + NODE_REACH])
             pair.append([p[0], p[1], round(ground, 2)] if ground is not None else p)
         edits.append({"kind": "traverse", "begin": pair[0], "end": pair[1], "yaw": yaw(e), "anim": anim})
+
+    # BO2's boarded windows (zbarrier_zmcore_BasicWoodBarrier: TranZit's 38) become MapKit windows: Five's prefab, six
+    # boards zombies tear off and players rebuild, its clip, goal and traversal. The zbarrier stands outside, about 40
+    # units in front of the wall, at the height of the sill; its yaw points into the building (its exterior_goal lies
+    # behind it). MapKit's window goes in the middle of the wall (found by walking in along that yaw at knee height)
+    # and on the inside floor: placed at the zbarrier, its inner traversal node fell into the wall. The mantle BO2's
+    # barricade traversal became is left out: it would let zombies in past the boards.
+    windows = []
+    for e in ents:
+        if not e.get("classname", "").startswith("zbarrier_zmcore_BasicWoodBarrier"):
+            continue
+        o = vec(e["origin"])
+        angle = yaw(e)
+        f = (math.cos(math.radians(angle)), math.sin(math.radians(angle)))
+        ahead = [o[0] + f[0] * 48, o[1] + f[1] * 48, o[2]]
+        behind = [o[0] - f[0] * 48, o[1] - f[1] * 48, o[2]]
+        if not any(inside(ahead, z) for z in zones) and any(inside(behind, z) for z in zones):
+            angle, f, ahead = angle + 180, (-f[0], -f[1]), behind
+        knee = o[2] - 24
+        hits = [d for d in range(0, WINDOW_WALL_REACH + 1, 2)
+                if col.solid_at([o[0] + f[0] * d, o[1] + f[1] * d, knee], ())]
+        wall = 0
+        if hits:
+            end = hits[0]
+            for d in hits[1:]:
+                if d - end > 2:
+                    break
+                end = d
+            wall = (hits[0] + end) / 2
+        o = [round(o[0] + f[0] * wall, 1), round(o[1] + f[1] * wall, 1), o[2]]
+        inner = [o[0] + f[0] * 48, o[1] + f[1] * 48]
+        ground = col.floor([inner[0], inner[1], o[2] + NODE_REACH])
+        name = e.get("script_string") or e.get("targetname") or f"window{len(windows) + 1}"
+        if any(w["name"] == name for w in windows):
+            name = f"{name}_{len(windows) + 1}"
+        windows.append({"kind": "window", "name": name,
+                        "origin": [o[0], o[1], round(ground, 2) if ground is not None else round(o[2] - 37, 2)],
+                        "yaw": round(angle % 360, 1)})
+    mantles = len(edits)
+    edits[:] = [t for t in edits if not (t["kind"] == "traverse" and t["anim"] == "mapkit_mantle" and any(
+        math.dist(w["origin"][:2], [(t["begin"][k] + t["end"][k]) / 2 for k in range(2)]) < WINDOW_MANTLE
+        for w in windows))]
+    mantles -= len(edits)
+    edits += windows
+    # MapKit sends a spawner's zombies to the nearest window of its zone (the zone 48 units in from the window, 32
+    # up): a window no BO2 spawner feeds gets one of its own, outside on the floor in front of it, so that every
+    # barricade sees zombies as in BO2
+    def window_zone(w):
+        r = math.radians(w["yaw"])
+        return zone_of([w["origin"][0] + math.cos(r) * 48, w["origin"][1] + math.sin(r) * 48, w["origin"][2] + 32])
+    fed = set()
+    for sp in [t for t in edits if t["kind"] == "spawner"]:
+        mine = [w for w in windows if window_zone(w) == sp["zone"]]
+        if mine:
+            fed.add(min(mine, key=lambda w: math.dist(w["origin"], sp["origin"]))["name"])
+    added = 0
+    for w in windows:
+        if w["name"] in fed:
+            continue
+        r = math.radians(w["yaw"])
+        out = [w["origin"][0] - math.cos(r) * WINDOW_SPAWNER, w["origin"][1] - math.sin(r) * WINDOW_SPAWNER]
+        ground = col.floor([out[0], out[1], w["origin"][2] + 64])
+        if ground is None:
+            continue
+        edits.append({"kind": "spawner", "origin": [round(out[0], 1), round(out[1], 1), round(ground, 2)],
+                      "yaw": w["yaw"], "zone": window_zone(w)})
+        added += 1
+    print(f"windows: {len(windows)} boarded windows, {mantles} barricade mantles they replace, {added} spawners added "
+          f"for the windows no BO2 spawner feeds")
 
     chests = [e for e in ents if e.get("classname", "").startswith("zbarrier_") and "MagicBox" in e["classname"]]
     starts = [c for c in chests if "start" in c.get("script_noteworthy", "")] or chests[:1]

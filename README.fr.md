@@ -150,7 +150,8 @@ de chacun de ses 36 points de sortie du sol pour rejoindre le joueur en suivant 
 jusqu'aux étages des maisons et par-dessus ses clôtures et ses fenêtres) et s'affiche texturée avec
 ses props et son monde éclairés par la lumière précalculée de BO2 (lightmaps, lampes et lumière des sommets), ses decals, son verre et son ciel ; ses props arrêtent les joueurs et les balles. TranZit vient de la même façon, en mode
 classique : ses portes (celles du courant s'ouvrent avec le courant), Juggernog, Quick Revive, Speed Cola, Double Tap,
-Stamin-Up (avec la zone d'Ascension chargée), le Pack-a-Punch et l'interrupteur aux places où BO2 les construit, et son
+Stamin-Up (avec la zone d'Ascension chargée), le Pack-a-Punch et l'interrupteur aux places où BO2 les construit, ses
+barricades (des planches que les zombies arrachent et que le joueur reconstruit), son pont et son
 bus, qui fait la boucle par le dépôt, le diner, la ferme, la centrale et la ville en emportant les joueurs qui s'y
 tiennent (les zombies n'y montent pas, et ses props ne sont pas encore éclairés). Détails : `docs/BO2_MAPS.md`.
 
