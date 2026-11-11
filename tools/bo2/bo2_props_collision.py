@@ -7,7 +7,8 @@
 The clipMap lists the static models that collide (<map>.d3dbsp.smodelcoll.csv, tools/bo2/oat): model and contents.
 Each is placed as the renderer places it (<map>.d3dbsp.smodels.csv: same model and origin) and shaped from its
 collision LOD (the xmodel JSON's collLod, else its last LOD):
-  - a model at most BOX_MAX units across becomes an oriented box around that LOD (a fence panel, a sign, a crate);
+  - a model at most BOX_MAX units across becomes an oriented box around that LOD (a fence panel, a sign, a crate),
+    unless a player could pass through it or climb it (box_like: a door frame, stairs);
   - a larger one keeps its triangles, each a prism PRISM_DEPTH units deep into the model, as the engine builds terrain
     triangles (cm_mapkit_import.cpp): a ramp stays a ramp, a roof a roof, a rock pile a pile.
 The props block players and shots, not the AI: their contents are BO1's player clip and shot-stopping bits
@@ -35,6 +36,11 @@ from bo2_mesh import model_tris  # noqa: E402  (same OBJ reading as the drawn pr
 
 MIN_HALF = 1.0     # a flat collision LOD (a sign) still gets some thickness
 BOX_MAX = 160.0    # larger models keep their triangles
+OPEN_RAYS = 8      # box_like: lines tried across the thinnest axis
+OPEN_SHARE = 0.25  # a model more open than this along its thinnest axis is not a box
+OPEN_MIN = 24.0    # an opening must be this wide and high to let a player through
+STAIR_LEVELS = 4   # box_like: upward face heights in a climbable run that make stairs
+STEP = 18.0        # BO1's step height
 PRISM_DEPTH = 16.0
 PLAY_PAD = 64.0
 PROP_CONTENTS = 0x10000 | 0x2000 | 0x80  # player clip; stops shots (BO1 bits, docs/BO2_MAPS.md)
@@ -65,6 +71,57 @@ def collision_lod(dump, name, cache):
             result = (tris, ([min(p[k] for p in pts) for k in range(3)], [max(p[k] for p in pts) for k in range(3)]))
     cache[name] = result
     return result
+
+
+def ray_hits(tris, origin, axis):
+    """Whether the line through origin along axis (0, 1, 2) crosses one of tris."""
+    a, b = [j for j in range(3) if j != axis]
+    u, v = origin[a], origin[b]
+    for tri in tris:
+        (x0, y0), (x1, y1), (x2, y2) = ((p[a], p[b]) for p in tri)
+        d = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+        if abs(d) < 1e-9:
+            continue
+        l0 = ((y1 - y2) * (u - x2) + (x2 - x1) * (v - y2)) / d
+        l1 = ((y2 - y0) * (u - x2) + (x0 - x2) * (v - y2)) / d
+        if l0 >= 0 and l1 >= 0 and l0 + l1 <= 1:
+            return True
+    return False
+
+
+def box_like(tris, bounds):
+    """Whether the model can stand as its bounding box: False when a player could pass through it or climb it.
+    - An opening: of a grid of OPEN_RAYS x OPEN_RAYS lines through the box along its thinnest axis, more than
+      OPEN_SHARE cross no triangle (a door frame, p_cub_door_wood_frame01, was a solid box across its doorway).
+    - Stairs: STAIR_LEVELS heights or more of upward faces, each within a player's step (STEP) of the next, rising
+      past STEP (TranZit's power station stairs, 126 x 151 x 82 with ten 8-unit steps, were one box 82 units high:
+      a player came down it and never back up)."""
+    lo, hi = bounds
+    size = [hi[k] - lo[k] for k in range(3)]
+    thin = min(range(3), key=lambda k: size[k])
+    a, b = [j for j in range(3) if j != thin]
+    if size[a] >= OPEN_MIN and size[b] >= OPEN_MIN:
+        misses = 0
+        for i in range(OPEN_RAYS):
+            for j in range(OPEN_RAYS):
+                origin = [0.0] * 3
+                origin[a] = lo[a] + size[a] * (i + 0.5) / OPEN_RAYS
+                origin[b] = lo[b] + size[b] * (j + 0.5) / OPEN_RAYS
+                misses += not ray_hits(tris, origin, thin)
+        if misses > OPEN_SHARE * OPEN_RAYS * OPEN_RAYS:
+            return False
+    levels = set()
+    for tri in tris:
+        n = cross([tri[1][k] - tri[0][k] for k in range(3)], [tri[2][k] - tri[0][k] for k in range(3)])
+        length = math.sqrt(dot(n, n))
+        if length > 1e-6 and n[2] / length > 0.7:
+            levels.add(round(sum(p[2] for p in tri) / 3))
+    run = []
+    for z in sorted(levels):
+        run = run + [z] if run and z - run[-1] <= STEP else [z]
+        if len(run) >= STAIR_LEVELS and run[-1] - run[0] > STEP:
+            return False
+    return True
 
 
 def brush_record(mins, maxs, contents, sides):
@@ -178,7 +235,7 @@ def main(argv=None):
             axes = [[float(place[f"a{a}{i}"]) for i in range(3)] for a in "xyz"]
             scale = float(place["scale"])
             contents = PROP_CONTENTS
-            if max(bounds[1][k] - bounds[0][k] for k in range(3)) * scale <= BOX_MAX:
+            if max(bounds[1][k] - bounds[0][k] for k in range(3)) * scale <= BOX_MAX and box_like(tris, bounds):
                 boxes.append(box_brush(origin, axes, scale, bounds[0], bounds[1], contents))
                 box_count += 1
                 continue

@@ -476,6 +476,38 @@ TranZit goes through the same tools, with what its size and its bus needed:
 - **Not done.** The props are unlit (TranZit's placements carry no `smodellight` colours), the fog and the lava,
   the buildables, Denizens, the Avogadro, the bank, the Jet Gun and the other BO2 weapons.
 
+#### The user's first TranZit run (2026-11-11)
+
+- **A bridge walked on but not drawn, doors not drawn.** They are BO2 brush models (`script_brushmodel`: the two
+  `bridge_section`s, the panels of `auto2389`, `pow_door_rr`, `pf1766_auto2355`...), whose surfaces the world OBJ
+  never held (it has the static surfaces only). The OAT dumper writes `<map>.d3dbsp.bmodels.obj` (one group per
+  `GfxWorld::models[m]`, positions relative to the entity's origin) and `bo2_mesh.py` makes each a prop model: in
+  its blocker's group for a door, standing for the bridge (`STANDING_BMODELS`).
+- **Huts a player could not enter, stairs that only went down.** `bo2_props_collision.py` made every prop up to 160
+  units across one oriented box: a door frame (`p_cub_door_wood_frame01`) was a solid box across its doorway, the
+  power station's stairs (126 x 151 x 82, ten 8-unit steps) one box 82 units high that a player dropped off and never
+  climbed. A small prop keeps its triangles when a player could pass through it (a quarter of the lines across its
+  thinnest axis hit nothing) or climb it (4 upward faces each within a step of the next): TranZit 527 000 prisms
+  instead of 400 000, Nuketown 76 000 instead of 31 000.
+- **The bus drove backwards, its doors shut.** Its brush models spawn with angles 0 while the loop starts at 179.5
+  degrees: the mesh edit's `moverYaw` turns the model by that heading. The doors are folding panels in the model's
+  exterior surfaces (the OBJ has no bone weights): `bo2_mesh.py` cuts the triangles inside the two door openings
+  (`MOVER_HOLES`).
+- **Barricades not rebuildable.** BO2's 38 `zbarrier_zmcore_BasicWoodBarrier` become MapKit windows (Five's prefab:
+  six boards zombies tear off and players rebuild). A zbarrier stands about 40 units in front of its wall: the window
+  goes on the wall, found by walking in along its yaw (placed at the zbarrier, its inner traversal node fell into the
+  wall), the mantle BO2's barricade traversal was is left out, and a window no BO2 spawner feeds gets a spawner 128
+  units outside it (7). Five's boards are narrower than BO2's openings and washed out by the lighting there. Self-test:
+  `pass 185 fail 12`: 33 of the 38 windows had a zombie tear the boards, climb in and reach the player; the others
+  are an upper-floor window of the farmhouse (its outside is a roof), windows a spawner's path does not reach, and
+  zones opened by a door whose windows saw no zombie within 90 s.
+- **A very long load.** Timings now logged (`mapkit: collision edit N loaded in`, `node load times`, `mesh load
+  times`). Measured on Windows: the node visibility at 2 048 units took 28 s (55 s on Linux), the mesh's models 31 s
+  (BO1's `Vec3PackUnitVec` tries 256 scales for each of 3 million vectors), and a listen server imported the
+  collision twice (server and client, 10 s each). Now: visibility within 1 024 units (7.6 s on Linux), each distinct
+  normal packed once (524 000 of 1.47 million: 18 s), the client reuses the server's import when the file and cuts
+  are the same (0.45 s). A Windows client's load went from about 150 to 120 s, most of the rest being the zones.
+
 ### Running it
 
 On the session's machine (paths to adapt), with OAT built as `tools/bo2/oat/README.md` says:

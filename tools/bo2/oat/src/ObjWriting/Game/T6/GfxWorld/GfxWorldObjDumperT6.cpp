@@ -216,6 +216,84 @@ namespace gfx_world
         std::cout << "gfxworld " << name << ": " << lit << " lit static model LODs, " << models.size() << " models\n";
     }
 
+    // <map>.d3dbsp.bmodels.obj and .mtl: the surfaces of each brush model (GfxWorld::models[m], drawn by the entities
+    // whose "model" is "*m": doors, TranZit's bridge sections), one group "bmodel<m>" each, in the same corner-per-vertex
+    // layout as the world OBJ. The world OBJ holds the static surfaces only (dpvs.staticSurfaceCount), so without this
+    // file a brush model the player walks on or buys is never drawn.
+    static void DumpBrushModels(AssetDumpingContext& context, const std::string& name, const GfxWorld& world,
+                                const char* bytes, size_t stride, size_t texcoordOffset)
+    {
+        const auto& draw = world.draw;
+        const auto& dpvs = world.dpvs;
+        const auto mtl = context.OpenAssetFile(name + ".bmodels.mtl");
+        const auto obj = context.OpenAssetFile(name + ".bmodels.obj");
+        if (!mtl || !obj)
+            return;
+        auto& out = *obj;
+        out << std::setprecision(9);
+        const auto slash = name.find_last_of('/');
+        out << "# " << name << " brush models, dumped by OAT's local GfxWorldObjDumperT6\n";
+        out << "mtllib " << name.substr(slash == std::string::npos ? 0 : slash + 1) << ".bmodels.mtl\n";
+        std::set<std::string> written;
+        size_t vertices = 0, triangles = 0, models = 0;
+        for (auto m = 1; m < world.modelCount; m++)
+        {
+            const auto& model = world.models[m];
+            if (!model.surfaceCount)
+                continue;
+            models++;
+            out << "g bmodel" << m << "\n";
+            for (auto k = 0u; k < model.surfaceCount; k++)
+            {
+                const auto s = model.startSurfIndex + k;
+                if (s >= static_cast<unsigned>(world.surfaceCount))
+                    break;
+                const auto& surface = dpvs.surfaces[s];
+                const auto material = MaterialName(surface.material);
+                if (written.insert(material).second)
+                {
+                    *mtl << "newmtl " << material << "\n";
+                    if (const auto* color = ColorMapName(surface.material))
+                        *mtl << "map_Kd ../../images/" << color << ".dds\n";
+                    *mtl << "\n";
+                }
+                out << "usemtl " << material << "\n";
+                for (auto t = 0u; t < surface.tris.triCount; t++)
+                {
+                    size_t at[3];
+                    bool ok = true;
+                    for (auto c = 0u; c < 3u && ok; c++)
+                    {
+                        const auto index = static_cast<size_t>(surface.tris.baseIndex) + t * 3u + c;
+                        ok = index < static_cast<size_t>(draw.indexCount);
+                        if (ok)
+                        {
+                            at[c] = static_cast<size_t>(surface.tris.vertexDataOffset0) + draw.indices[index] * stride;
+                            ok = at[c] + stride <= draw.vertexDataSize0;
+                        }
+                    }
+                    if (!ok)
+                        continue;
+                    for (const auto a : at)
+                    {
+                        float xyz[3];
+                        uint16_t uv[2];
+                        std::memcpy(xyz, bytes + a, sizeof(xyz));
+                        std::memcpy(uv, bytes + a + texcoordOffset, sizeof(uv));
+                        out << "v " << xyz[0] << " " << xyz[1] << " " << xyz[2] << "\n";
+                        out << "vt " << HalfToFloat(uv[0]) << " " << 1.0f - HalfToFloat(uv[1]) << "\n";
+                    }
+                    out << "f " << vertices + 1 << "/" << vertices + 1 << " " << vertices + 2 << "/" << vertices + 2 << " "
+                        << vertices + 3 << "/" << vertices + 3 << "\n";
+                    vertices += 3;
+                    triangles++;
+                }
+            }
+        }
+        std::cout << "gfxworld " << name << ": " << models << " brush models with surfaces, " << triangles
+                  << " triangles written to .bmodels.obj\n";
+    }
+
     void ObjDumperT6::DumpAsset(AssetDumpingContext& context, const XAssetInfo<AssetGfxWorld::Type>& asset)
     {
         const auto* world = asset.Asset();
@@ -340,5 +418,6 @@ namespace gfx_world
         }
         DumpStaticModelLighting(context, asset.m_name, dpvs);
         DumpWorldLighting(context, asset.m_name, *world, corners);
+        DumpBrushModels(context, asset.m_name, *world, bytes, STRIDE, TEXCOORD_OFFSET);
     }
 } // namespace gfx_world

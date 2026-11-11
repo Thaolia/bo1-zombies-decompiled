@@ -90,7 +90,8 @@ zombie climbs out of each of its 36 risers and reaches the player along BO2's ow
 upper floors and over its fences and windows) and is drawn textured
 with its props and its world lit with BO2's baked light (lightmaps, lamps and vertex light), its decals, its glass and its sky; its props block players and bullets. TranZit comes the same way, classic mode:
 its doors (the power ones open with the power), Juggernog, Quick Revive, Speed Cola, Double Tap, Stamin-Up (with
-Ascension's zone loaded), Pack-a-Punch and the power switch where BO2 builds them, and its bus, which drives the loop
+Ascension's zone loaded), Pack-a-Punch and the power switch where BO2 builds them, its barricades (boards zombies tear
+off and players rebuild), its bridge and its bus, which drives the loop
 through the depot, diner, farm, power station and town and carries the players standing in it (zombies do not board
 it, and its props are still unlit). See `docs/BO2_MAPS.md`.
 
