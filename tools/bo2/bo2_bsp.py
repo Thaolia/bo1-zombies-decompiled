@@ -337,11 +337,12 @@ def main(argv=None):
           f"{no_contents} contentless triangles); "
           f"tree {nodes} nodes, {leafs} leaves, {leafbrushes} leaf brushes, {aabbs} leaf partitions")
     if props:
-        boxes, tri_props, tri_count, fallback = prop_stats
+        boxes, piles, rocks, tri_props, tri_count, fallback = prop_stats
         print(f"props: {placed[0]} placements as static models ({placed[1]} left out), "
               f"{sum(1 for m in props.models.values() if m)} xmodels, "
-              f"{sum(1 for m in props.materials.values() if m)} materials; collision: {boxes} boxes, {tri_props} "
-              f"meshes as {tri_count} triangles, {fallback} meshes as boxes (no collision vertices left)")
+              f"{sum(1 for m in props.materials.values() if m)} materials; collision: {boxes} boxes, "
+              f"{piles} piles as {rocks} rocks, {tri_props} meshes as {tri_count} triangles, {fallback} meshes as boxes "
+              f"(no collision vertices left)")
         for note in props.notes[:20]:
             print("  " + note)
     if no_map:

@@ -1334,7 +1334,9 @@ void __cdecl Path_InitPaths()
         Path_BuildChains();
         if ( g_connectpaths->current.integer )
             Path_ConnectPaths();
-        else
+        // mod: on a MapKit empty base G_Mapkit_LinkPathnodes already linked every node and filled their visibility;
+        // our BSPs hold no LUMP_PATHCONNECTIONS, so Path_LoadPaths would erase all of it (Path_ErasePaths)
+        else if ( !CM_Mapkit_Empty() )
             Path_LoadPaths();
         Path_InitLinkCounts();
     }

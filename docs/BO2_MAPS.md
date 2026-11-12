@@ -151,9 +151,79 @@ Build it (paths of this machine; the output is the player's own game data, kept 
     ffconv --verify zombie_bo2nuked.ff <game>/usermaps/zombie_bo2nuked/zombie_bo2nuked.ff
     cp $OUT/zombie_bo2nuked.d3dbsp <game>/main/maps/; cp $OUT/images/*.iwi <game>/main/images/
 
-Not done yet: the props (cars, fences, furniture: step 3), the gameplay entities (spawners, windows, wall buys,
-doors, the box, perks: step 4), the lighting (step 5: BO2's lightmaps, a light grid, the sky). A dark quad lies in the
-street at the player start (a BO2 shadow decal drawn with the blended template); it waits for the lighting.
+The props, the gameplay and the lighting followed (next section).
+
+### Props, gameplay and lighting on the native world (2026-11-12)
+
+**Props** (`bo2_bsp.py --models <dump>`, `tools/bo2/bo2_bsp_props.py`). The Unlinker dumps the zone's xmodels again
+with `--model-format GLTF` (`$U --include-assets xmodel,material --model-format GLTF -o $D/nukedgltf/?zone?
+zm_nuked.ff`). Each of the 332 placed xmodels becomes a BO1 xmodel of the same LODs, its 222 materials copies of
+BO1 model templates from `zombie_theater` (`mtl_dest_glo_paper_01`, `mtl_filament`, `mtl_theater_paper_scrawl`:
+colour map only; BO2's blended rock techsets name theirs `Micro_1_ColorMap`). Each of the 2 082 placements is a
+`misc_model`, which the engine draws as a static model, culled and with its LODs. The engine gives a static model
+collision only from its xmodel's collision surfaces, which OAT's Linker does not build. The props collide through the
+BSP instead, as `bo2_props_collision.py` makes them collide for MapKit:
+- 721 box-like props are oriented box brushes;
+- the 113 rock and rubble piles are 949 brushes, one per rock (a connected piece of the collision LOD): its bounds
+  with the four upper corners cut off; stones under 16 units are stepped over. As triangles, Nuketown's 99 rubble
+  clumps alone took 67 000 of the 65 536 collision vertices (16-bit indices), and the school bus, the clock tower and
+  the overhanging roof, last in line, fell back to boxes: a 465-unit box stood in the street. A pile's convex hull
+  fills the hollows between its rocks (a ring of rocks around a mystery box swallowed the box: the box was paid for
+  and its weapon could not be taken), and a hull per rock would cost a plane per face (65 536 planes at most) for
+  some 4 500 rocks, where a box side costs none: 23 944 planes in all;
+- the 108 other larger meshes become 18 862 collision triangles (the terrain takes 15 864 vertices; any mesh past
+  the budget would become a box).
+
+OAT's T5 xmodel loader set `lodInfo[i].lod` for IW4/IW5 only, and BO1's static model cache asserts on it:
+`tools/bo2/oat/XModelLodT5.patch`.
+
+**Gameplay** (step 4). MapKit's `bo2_zm_nuked` layout already plays Nuketown: zones, spawns, the 36 risers, BO2's 703
+nodes and their 5 254 links, the traversals, the wall buys, the doors and debris, the box, the perks and
+Pack-a-Punch. It now runs on the BSP world instead of its own mesh and collision:
+
+    +set fs_game mods/mapkit +set fs_mods mapkit +set bo1_mod_mapkit bo2_zm_nuked_bsp \
+    +set bo1_mod_zones zombie_bo2nuked +set bo1_bspworld maps/zombie_bo2nuked.d3dbsp +devmap zombie_pentagon
+
+- `bo2_bsp.py --layout <bo2_zm_nuked.json>` leaves out the brushes inside the layout's cut boxes (the clips at the
+  machine spots: 20 brushes) and writes `bo2_zm_nuked_bsp.json`, the layout without its `collision` and `mesh` edits.
+  The doors and debris lose their BO2 props with the mesh: their blockers show MapKit's box instead.
+- `CM_Mapkit_Empty()` meant two things: "the layout supplies the level script, entities and pathnodes" and "there is
+  no world". `CM_Mapkit_WorldEmpty()` is the second one, false when the world comes from a BSP. The render, static
+  model, collision, physics, PVS, sky and model lighting switches use it.
+- A `bo1_mod_zones` zone found nowhere else is read from `usermaps/<zone>/<zone>.ff` (`DB_ModXFileHandle`).
+- The server waits for the zones before it reads a BSP world. Queued just before, the extra zone was still loading
+  while the static models looked up its xmodels, and the level zone linked its clipMap over the world being built:
+  `cm.numStaticModels` became Five's 5 395 in the middle of the BSP's 2 082.
+- A layout's pathnodes hold user-1 string references (`SL_GetString`, `g_mapkit_path.cpp`), as on a zone world:
+  `Path_Shutdown` and `Scr_FreePathnode` now treat them so. Freeing them as a BSP world's own nodes asserted at quit.
+- The layout's nodes keep their links: on a BSP world `Path_InitPaths` read them again from the BSP
+  (`Path_LoadPaths`), found no `LUMP_PATHCONNECTIONS` in ours and erased every link (`Path_ErasePaths`). Zombies then
+  could not find a path and the MapKit self-test's client stood still. It now skips that read on a MapKit empty base.
+  The self-test's door check treats a layout on a BSP world as an imported map (doorway links, not zone links).
+- MapKit's self-test (`+set mapkit_selftest 1` with the test client, Linux headless, timescale 4) passes 106 of 106
+  checks on the BSP world, as on the MapKit mesh: every door and debris (their doorway links cut, then given back),
+  the four perks, the seven wall buys, the box, Pack-a-Punch, the ten zones, and a zombie out of each of the 36 risers
+  reaching the player.
+- `PickAabbSplitPlane` (`universal/aabbtree.cpp`) never returned: its sweep ends when the next distance reaches
+  `FLT_MAX`, which the decompiled code compared with the double literal `3.4028235e38`, slightly above it. Only a world
+  read from a BSP builds that tree (`R_GenerateHighmipAabbs`), and Five's high-mip images gave it 34 static models.
+
+**Lighting** (step 5).
+- The world surfaces are cut into 1 024-unit cells per material and lightmap (2 130 surfaces) under an AABB tree, so
+  that the renderer culls them. The tree needed a split it could make, and culling is worth having on the console.
+- Lightmaps (`tools/bo2/bo2_bsp_light.py`): each of BO2's three lightmaps becomes one 512 x 512 BO1 lightmap with
+  the same coordinates. Every texel a world triangle covers is baked again with BO2's model (`bo2_worldlight.py`:
+  its lightmap slices, the sun's visibility or the triangle's lamp, with the triangle's normal), then divided by the
+  light of the sunlit ground. The sunlit ground thus keeps its colour map, as MapKit's vertex colours do. The whole
+  light goes into the first half of BO1's lightmap; the second half and the sun visibility stay 0, since BO2's sun is
+  already in it. A fourth, white lightmap serves the lit surfaces BO2 drew without one.
+- Models: a world without a light grid now takes MapKit's flat ground lighting. The empty grid lit every model with
+  one stray colour (cyan).
+- The sky: BO2's sky model (`skybox_dlc0_zm_nuketown`) is the worldspawn's `skyboxmodel`, which BO1 draws around the
+  viewer, its material a copy of `zombie_theater`'s `mtl_skybox_zombie_theater` (`mc_sky_cubemap_hdr`) with BO2's
+  cube map.
+- The hunk is 96 MB with `bo1_bspworld`: 45.9 MB for the world with its props, plus 37.7 MB of temporary memory while
+  the lightmaps load (one merged 2 048 x 2 048 group).
 
 ## What comes out of `zm_nuked`
 

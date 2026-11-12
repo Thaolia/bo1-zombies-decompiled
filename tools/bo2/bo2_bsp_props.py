@@ -6,9 +6,10 @@ materials copies of BO1 model templates (mc/, colour map only) with BO2's colour
 
 Collision: the engine only gives a static model collision from its xmodel's collision surfaces, which OAT's Linker does
 not build, so the props collide through the BSP itself (as bo2_props_collision.py does for MapKit): a small box-like
-model as an oriented box brush; a larger one as its collision LOD's triangles, while the BSP's 16-bit collision
-vertices last (largest models last), then as an oriented box. Only the props inside the map's zones collide (the rest
-lies past its invisible walls); lights do not (they caught a player's head).
+model as an oriented box brush; each rock of a rock or rubble pile as a brush (rock_brushes: Nuketown's 99 rubble
+clumps alone held 67 000 triangle vertices); any other larger one as its collision LOD's triangles, while the BSP's
+16-bit collision vertices last (largest models last), then as an oriented box. Only the props inside the map's zones
+collide (the rest lies past its invisible walls); lights do not (they caught a player's head).
 """
 import csv
 import json
@@ -26,6 +27,9 @@ MODEL_TEMPLATES = {0: "mtl_dest_glo_paper_01", FLAG_ALPHA_TEST: "mtl_filament", 
                    FLAG_BLEND: "mtl_theater_paper_scrawl"}
 SKY_TEMPLATE = "mtl_skybox_zombie_theater"  # mc_sky_cubemap_hdr: a cube map, BO2's sky models draw theirs the same way
 COLLISION_VERTS = 0x10000
+ROCKS = re.compile(r"rock|rubble")  # piles: a brush per rock instead of triangles
+ROCK_MIN = 16.0  # a stone smaller than this across is stepped over: no brush
+ROCK_CUTS = [(sx / math.sqrt(3), sy / math.sqrt(3), 1 / math.sqrt(3)) for sx in (-1, 1) for sy in (-1, 1)]
 MODEL_FALLBACK = "mc/" + MODEL_TEMPLATES[0]  # a name for a glTF material entry no surface uses any more
 
 
@@ -207,8 +211,41 @@ def box_sides(origin, axes, scale, lo, hi):
     return ([min(c[k] for c in corners) for k in range(3)], [max(c[k] for c in corners) for k in range(3)], sides)
 
 
+def rock_brushes(points, tris):
+    """The brushes of a pile (world points, triangles as point indices): one per rock, a connected piece of the mesh, as
+    its bounds with its four upper corners cut off. A pile's convex hull would fill the hollows between its rocks (a
+    ring of rocks around Nuketown's box swallowed the box and its trigger), a hull per rock would cost a plane per face
+    (65 536 at most, CMod_LoadPlanes) for some 4 500 rocks; a box side costs none."""
+    parent = list(range(len(points)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for a, b, c in tris:
+        parent[root(b)] = root(a)
+        parent[root(c)] = root(a)
+    rocks = {}
+    for i in range(len(points)):
+        rocks.setdefault(root(i), []).append(points[i])
+    out = []
+    for rock in rocks.values():
+        mins = [min(p[k] for p in rock) for k in range(3)]
+        maxs = [max(p[k] for p in rock) for k in range(3)]
+        if max(maxs[k] - mins[k] for k in range(3)) < ROCK_MIN:
+            continue
+        for k in range(3):  # a flat piece still gets some thickness
+            mid = (mins[k] + maxs[k]) / 2
+            mins[k], maxs[k] = min(mins[k], mid - MIN_HALF), max(maxs[k], mid + MIN_HALF)
+        out.append((mins, maxs, [(n, max(sum(n[k] * p[k] for k in range(3)) for p in rock)) for n in ROCK_CUTS]))
+    return out
+
+
 def prop_collision(bsp, dump, base, material, verts_used):
-    """The props' collision (module docstring). Returns (boxes, triangle props, triangles, fallback boxes)."""
+    """The props' collision (module docstring). Returns (boxes, piles, rock brushes, triangle props, triangles,
+    fallback boxes)."""
     placements = {}
     with open(base + ".smodels.csv", encoding="latin-1") as f:
         for row in csv.DictReader(f):
@@ -219,7 +256,7 @@ def prop_collision(bsp, dump, base, material, verts_used):
     def in_play(o):
         return any(all(z["mins"][k] - PLAY_PAD <= o[k] <= z["maxs"][k] + PLAY_PAD for k in range(3)) for z in zones)
 
-    cache, boxes, meshes = {}, [], []
+    cache, boxes, piles, meshes = {}, [], [], []
     with open(base + ".smodelcoll.csv", encoding="latin-1") as f:
         for row in csv.DictReader(f):
             name = row["model"]
@@ -241,6 +278,8 @@ def prop_collision(bsp, dump, base, material, verts_used):
             entry = (origin, axes, scale, tris, bounds)
             if max(bounds[1][k] - bounds[0][k] for k in range(3)) * scale <= BOX_MAX and box_like(tris, bounds):
                 boxes.append(entry)
+            elif ROCKS.search(name):
+                piles.append(entry)
             else:
                 meshes.append(entry)
 
@@ -250,6 +289,18 @@ def prop_collision(bsp, dump, base, material, verts_used):
 
     for origin, axes, scale, _, bounds in boxes:
         add_box(origin, axes, scale, bounds)
+    rock_count = 0
+    for origin, axes, scale, tris, _ in piles:
+        index = {}
+        for tri in tris:
+            for p in tri:
+                index.setdefault(tuple(p), len(index))
+        world = [None] * len(index)
+        for p, i in index.items():
+            world[i] = [origin[k] + scale * sum(p[j] * axes[j][k] for j in range(3)) for k in range(3)]
+        for mins, maxs, sides in rock_brushes(world, [[index[tuple(p)] for p in tri] for tri in tris]):
+            bsp.add_collision_brush(mins, maxs, material, [material] * 6, [(n, d, material) for n, d in sides])
+            rock_count += 1
     # Triangles while the 16-bit collision vertices last, smallest meshes first; the rest as boxes.
     meshes.sort(key=lambda e: len(e[3]))
     tri_props = tri_count = fallback = 0
@@ -272,5 +323,5 @@ def prop_collision(bsp, dump, base, material, verts_used):
         verts_used += len(local)
         tri_props += 1
         tri_count += len(out)
-    return len(boxes), tri_props, tri_count, fallback
+    return len(boxes), len(piles), rock_count, tri_props, tri_count, fallback
 
