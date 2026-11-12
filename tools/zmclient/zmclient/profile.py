@@ -58,6 +58,12 @@ MODEL_LIGHTING_ENTRIES_MAX = 5120   # r_mod_modelLightingEntries' cap (r_model_l
 # points keeps the game's own 500. The perk names are those _admin.gsc admin_perk_name takes, in its order; a perk
 # without a machine on the map is not given.
 START_POINT_CHOICES = (0, 1000, 2500, 5000, 10000, 25000, 50000, 100000)
+# mods/bo2weapons (docs/BO2_WEAPONS.md): the player's own Black Ops II weapons, in mods/bo2weapons/mod.ff, which the
+# engine loads when fs_mods names the mod (DB_FindModZone). Choice 0 is off; 1 to 3 are the script's bo2weapons_box 0
+# to 2. A client joining a server that has them loads the same mod.ff (join_bo2_weapons), or the weapons' indices do not
+# match and the game stops with "Weapon index mismatch".
+BO2_WEAPON_CHOICES = ((0, "non"), (1, "dans la boîte, avec celles de la map"),
+                      (2, "seules dans la boîte, + armes spéciales de la map"), (3, "seules dans la boîte"))
 START_PERKS = (("jugg", "Juggernog"), ("revive", "Quick Revive"), ("speed", "Speed Cola"), ("doubletap", "Double Tap"),
                ("staminup", "Stamin-Up"), ("phd", "PhD Flopper"), ("deadshot", "Deadshot Daiquiri"),
                ("mule", "Mule Kick"))
@@ -81,6 +87,7 @@ DEFAULTS = {
     "horde_unjam": True,
     "horde_clear_round": False,
     "difficulty": 0,                    # 0 Normal, 1 Nightmare, 2 Hell
+    "bo2_weapons": 0,                   # one of BO2_WEAPON_CHOICES
     "name": "",
     "window": "borderless",
     "window_size": "1280x720",
@@ -96,6 +103,8 @@ DEFAULTS = {
     "join_password": "",                # the server's g_password, not rcon
     "host_map": "zombie_theater",
     "host_port": DEFAULT_PORT,
+    "host_bo2_weapons": 0,              # the local server's BO2 weapons, one of BO2_WEAPON_CHOICES
+    "join_bo2_weapons": False,          # load mods/bo2weapons/mod.ff to join a server that has the BO2 weapons
     "extra": [],                        # {"on": bool, "text": "set r_foo 1"}: one + command each
     "favorites": [],                    # {"name", "host", "port", "password"}
     "steam_install": "",                # the Black Ops install the Installation view copies from
@@ -176,6 +185,9 @@ class Profile:
             self.data["window"] = DEFAULTS["window"]
         if self.data["scene_models"] not in SCENE_MODEL_CHOICES:
             self.data["scene_models"] = DEFAULTS["scene_models"]
+        for key in ("bo2_weapons", "host_bo2_weapons"):
+            if self.data[key] not in dict(BO2_WEAPON_CHOICES):
+                self.data[key] = 0
         if self.data["start_points"] not in START_POINT_CHOICES:
             self.data["start_points"] = DEFAULTS["start_points"]
         self.data["start_perks"] = [k for k, _ in START_PERKS if k in self.data["start_perks"]]
@@ -287,6 +299,35 @@ def nightmare_available(bsp, layout):
     return not layout and bsp in NIGHTMARE_MAPS
 
 
+def bo2_weapons_installed(dist_root):
+    """mods/bo2weapons/mod.ff is there: the player built it from their own Black Ops II (docs/BO2_WEAPONS.md)."""
+    return bool(dist_root) and os.path.isfile(os.path.join(dist_root, "mods", "bo2weapons", "mod.ff"))
+
+
+def bo2_weapons_available(bsp):
+    """Dead Ops Arcade has no box."""
+    return bsp != "zombietron"
+
+
+def add_bo2_weapons(argv, choice=None):
+    """Stacks mods/bo2weapons on the line's fs_mods, or adds one, naming fs_game's mod first as the engine stacks it
+    (fs_mods must name bo2weapons: an empty fs_mods runs no mod's hooks). choice: the solo box choice (1 to 3), which
+    sets bo2weapons_box; None for a client of a server, whose server decides."""
+    for i in range(1, len(argv)):
+        if argv[i] == "fs_mods" and argv[i - 1] == "+set":
+            j = i + 1
+            while j < len(argv) and not argv[j].startswith("+"):
+                j += 1
+            if "bo2weapons" not in argv[i + 1:j]:
+                argv.insert(j, "bo2weapons")
+            break
+    else:
+        game = next((argv[i + 2] for i in range(len(argv) - 2) if argv[i] == "+set" and argv[i + 1] == "fs_game"), "")
+        argv += ["+set", "fs_mods"] + ([game[len("mods/"):]] if game.startswith("mods/") else []) + ["bo2weapons"]
+    if choice:
+        argv += ["+set", "bo2weapons_box", str(choice - 1)]
+
+
 # ---------------------------------------------------------------------------------------------------- command line
 def solo_mod_flags(p, dist_root=None):
     """The mod part of mod-launcher.hta's args(), from the map's flags to the quick restart."""
@@ -323,6 +364,8 @@ def solo_mod_flags(p, dist_root=None):
             argv += ["+set", "zm_startpoints", str(p["start_points"])]
         if p["start_perks"]:
             argv += ["+set", "zm_startperks", ",".join(k for k, _ in START_PERKS if k in p["start_perks"])]
+    if p["bo2_weapons"] and bo2_weapons_available(bsp):
+        add_bo2_weapons(argv, p["bo2_weapons"])
     return argv
 
 
@@ -383,6 +426,13 @@ def server_address(p):
     return f"{p['join_host']}:{p['join_port']}"
 
 
+def wants_bo2_weapons(p, dist_root=None):
+    """The client loads mods/bo2weapons/mod.ff: solo with the BO2 weapons, or a client of a server that has them."""
+    if p["mode"] == "solo":
+        return bool(p["bo2_weapons"]) and bo2_weapons_available(resolve_map(p["map"], dist_root)[0])
+    return bool(p["host_bo2_weapons"]) if p["mode"] == "host" else p["join_bo2_weapons"]
+
+
 def problems(p, dist_root=None):
     """Why the profile cannot be launched as it is (empty when it can)."""
     out = []
@@ -402,6 +452,9 @@ def problems(p, dist_root=None):
         if not map_installed(bsp, dist_root):
             out.append(f"{MAP_LABELS.get(bsp, bsp)} n'est pas installée (pas de zone {bsp}.ff : votre Black Ops "
                        "n'a pas ce DLC)")
+    if wants_bo2_weapons(p, dist_root) and not bo2_weapons_installed(dist_root):
+        out.append("armes de Black Ops II : pas de mods/bo2weapons/mod.ff (à construire depuis votre Black Ops II, "
+                   "docs/BO2_WEAPONS.md)")
     if p["window"] == "window" and not parse_size(p["window_size"]):
         out.append("taille de fenêtre : LARGEURxHAUTEUR, ex. 1280x720")
     for e in p["extra"]:
@@ -431,6 +484,8 @@ def build_command(p, exe, dist_root, launch_cfg=""):
             # not the `god` command, which ClientSpawn clears: this dvar puts the bit back on every playing client
             argv += ["+set", "bo1_testclient_god", "1"]
         argv += solo_mod_flags(p, dist_root)
+    elif wants_bo2_weapons(p, dist_root):
+        add_bo2_weapons(argv)
     argv += window_flags(p)
     add_scene_models(argv, p["scene_models"])
     if p["fps_counter"]:

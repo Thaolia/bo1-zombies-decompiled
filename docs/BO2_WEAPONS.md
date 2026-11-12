@@ -17,13 +17,40 @@ BO2 zone --OAT Unlinker (T6)--> weapon file, xmodel JSON + glTF, xanim, material
 mods/bo2weapons/mod.ff + mods/bo2weapons/images/*.iwi + the mod's scripts --> the weapon in the box
 ```
 
-The engine loads `<fs_h>/<fs_game>/mod.ff` at start-up (`DB_ModFileExists`, the retail mod route), so `fs_game` must
-be `mods/bo2weapons`. `mods/bo2weapons/maps/bo2weapons/_bo2weapons.gsc` runs from the `_zombiemode_ffotd::main_start`
+The engine loads the zone `mod` at start-up (`DB_LoadGraphicsAssetsForPC`). Retail takes it from
+`<fs_h>/<fs_game>/mod.ff` only; `DB_FindModZone` (`db_registry.cpp`) also takes the `mod.ff` of the first mod of the
+`fs_mods` stack that has one, under `fs_h` then `fs_b`. So `+set fs_mods bo2weapons` is enough, and stacks with
+horde, MapKit, nightmare and the others, whose `fs_game` stays theirs. `fs_game mods/bo2weapons` still works for one
+machine, but a server's `fs_game` is sent to its clients, which then restart and reload without `mod.ff` (an assert in
+the script parser, or `Weapon index mismatch`): `fs_mods` avoids that path. `fs_b` matters for the dedicated server,
+whose `fs_h` is the package's `server/` folder.
+`mods/bo2weapons/maps/bo2weapons/_bo2weapons.gsc` runs from the `_zombiemode_ffotd::main_start`
 hook, which comes before `maps\_zombiemode_weapons::init()` on every zombie map. It reads the weapon list from
 `mp/bo2weapons.csv` in `mod.ff` (name, Pack-a-Punch name, VO type; written by the converter) and adds each weapon that
 a loaded zone holds (`bo1_mapkit_weaponloaded`) with `include_zombie_weapon` and `add_zombie_weapon`, the calls the
 map scripts make for retail weapons, chained through `level._zombie_custom_add_weapons`. A weapon missing from the
 zones is skipped, and the map then stays retail.
+
+## Playing with them
+
+- **The box.** `bo2weapons_box` (read when the map loads) picks what the box gives: `0` (default) the map's weapons
+  and BO2's, `1` BO2's and the map's wonder weapons and special grenades (Ray Gun, Thundergun, Wunderwaffe, Winter's
+  Howl, Wave Gun, 31-79 JGb215, V-R11, Scavenger, Crossbow, Cymbal Monkey, Gersh, Matryoshka, QED), `2` BO2's only.
+  The map's others leave the box through `is_in_box`, which `treasure_chest_ChooseWeightedRandomWeapon` reads. Wall
+  weapons stay. The weapons that spin in the box while it opens are still drawn from every weapon (retail picks them
+  for show only).
+- **ZmClient** (`tools/zmclient`): Solo view, row "Armes de Black Ops II" (no, with the map's, + specials, alone) adds
+  `bo2weapons` to the line's `fs_mods` and sets `bo2weapons_box`. Lancement view (local server): the same choice for
+  the server it starts. Play view, Join mode: "Armes de Black Ops II" loads `mod.ff` to join a server that has them.
+  The rows are greyed without `mods/bo2weapons/mod.ff`, and on Dead Ops Arcade.
+- **ZmAdmin** (`tools/zmadmin`): starting the local server asks for the same choice when the folder has `mod.ff`
+  (`+set fs_mods bo2weapons +set bo2weapons_box N`); the Settings view edits `bo2weapons_box` (next map load, Save
+  offers `zm_reset`). `mod.ff` loads at start-up only: adding `bo2weapons` later with `zm_mods` gives no weapon, and a
+  `server.cfg` that sets `fs_mods` replaces the line's.
+- **Clients of a server** that has them must load the same `mod.ff` (`+set fs_mods bo2weapons`), or the game stops
+  when it enters (`Weapon index mismatch`, the weapons' indices come from the server).
+- **Packages**: `tools/make_dist.sh --bo2 DIR` copies `DIR/mods/bo2weapons/mod.ff` (ffconv's 64-bit one) and `images/`
+  into the windows and linux packages.
 
 ## What the converter does (`tools/bo2/bo2_weapon.py`)
 
@@ -143,6 +170,9 @@ The HAMR (proof of concept):
 
 ## Not done yet
 
+- Joining, with `+set fs_mods bo2weapons` on the client, checked once (win64 dedicated server and client, Five,
+  box mode 2): the client entered and was given the upgraded DSR-50. Not checked: a client that loads `mod.ff` and
+  joins a server without the weapons; the box opened in play.
 - Linux and the Switch: not run. On the Switch, `mod.ff` needs `ffconv --abi aarch64`, and `mods/` reaches the SD
   card with the package. The 193 images (116 MB) may weigh on the console's memory.
 - The box and the Pack-a-Punch machine in play: checked only through `give`. PaP camo on the models is not seen yet.
@@ -153,8 +183,8 @@ The HAMR (proof of concept):
 - Scripted weapons (Jet Gun, staffs, Blundergat, Slowgun, Sliquifier, tomahawk, ballistic knife), equipment, the
   shields and Origins' extended-clip / stalker copies are left out (`SKIP`, or not a primary weapon). Weapons BO1
   already has under the same name (`m14_zm`, `mp5k_zm`, `ray_gun_zm`...) keep BO1's.
-- `mod.ff` only loads when `fs_game` is `mods/bo2weapons`. Stacking it with MapKit (whose `fs_game` is
-  `mods/mapkit`) would need the engine to load the `mod.ff` of every `fs_mods` folder.
+- One `mod.ff` loads: fs_game's, else the first stacked mod's. Two mods each shipping one would need distinct zone
+  names.
 
 ## Inventory
 

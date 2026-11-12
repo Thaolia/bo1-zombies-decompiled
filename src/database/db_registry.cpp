@@ -4493,6 +4493,42 @@ bool __cdecl DB_GetZoneAllocType(int zoneFlags)
     return zoneFlags >= 0x100000;
 }
 
+// mod: the "mod" zone's file. fs_game's mod.ff as retail, else the first mod of the fs_mods stack that has one
+// (mods/<name>/mod.ff): fs_mods "bo2weapons" loads its weapons without an fs_game, whose change sent by a server makes
+// a joining client restart. Each folder is looked up under fs_homepath, then fs_basepath (a package's mods/ sit beside
+// the program; the dedicated server's fs_homepath is server/). folder (when given) gets the folder's name.
+static bool DB_FindModZone(char *filename, unsigned int size, char *folder, unsigned int folderSize)
+{
+    char names[16][64];
+    char candidates[17][72];
+    int count = 0;
+    if ( fs_gameDirVar && *fs_gameDirVar->current.string )
+        I_strncpyz(candidates[count++], fs_gameDirVar->current.string, sizeof(candidates[0]));
+    const int stacked = FS_ModStackNames(names, 16);
+    for ( int i = 0; i < stacked; ++i )
+        Com_sprintf(candidates[count++], sizeof(candidates[0]), "mods/%s", names[i]);
+    const char *roots[2] = { fs_homepath ? fs_homepath->current.string : "",
+                             fs_basepath && fs_homepath && I_stricmp(fs_basepath->current.string,
+                                                                     fs_homepath->current.string)
+                                 ? fs_basepath->current.string : NULL };
+    for ( int c = 0; c < count; ++c )
+    {
+        for ( int r = 0; r < 2; ++r )
+        {
+            if ( !roots[r] || !*roots[r] )
+                continue;
+            Com_sprintf(filename, size, "%s\\%s\\mod.ff", roots[r], candidates[c]);
+            if ( GetFileAttributesA(filename) != -1 )
+            {
+                if ( folder )
+                    I_strncpyz(folder, candidates[c], folderSize);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void __cdecl DB_ModXFileHandle(const char *zoneName, void **zoneFile, FF_DIR *zoneDir)
 {
     const char *String; // eax
@@ -4500,7 +4536,7 @@ void __cdecl DB_ModXFileHandle(const char *zoneName, void **zoneFile, FF_DIR *zo
     bool v6; // [esp+4h] [ebp-10Ch]
     char filename[260]; // [esp+8h] [ebp-108h] BYREF
 
-    v6 = fs_gameDirVar && *fs_gameDirVar->current.string;
+    v6 = (fs_gameDirVar && *fs_gameDirVar->current.string) || DB_ModFileExists(); // mod: or fs_mods' mod.ff
     if ( !v6 || I_stricmp(zoneName, "mod") )
     {
         if ( fs_usermapDir && *fs_usermapDir->current.string )
@@ -4530,7 +4566,7 @@ void __cdecl DB_BuildOSPath_FromSource(const char *zoneName, FF_DIR source, unsi
     {
         if ( source == FFD_MOD_DIR )
         {
-            v4 = fs_gameDirVar && *fs_gameDirVar->current.string;
+            v4 = (fs_gameDirVar && *fs_gameDirVar->current.string) || (!I_stricmp(zoneName, "mod") && DB_ModFileExists());
             if ( !v4
                 && !Assert_MyHandler(
                             "C:\\projects_pc\\cod\\codsrc\\src\\database\\db_registry.cpp",
@@ -4541,6 +4577,8 @@ void __cdecl DB_BuildOSPath_FromSource(const char *zoneName, FF_DIR source, unsi
             {
                 __debugbreak();
             }
+            if ( !I_stricmp(zoneName, "mod") && DB_FindModZone(filename, size, NULL, 0) ) // mod: fs_mods' mod.ff
+                return;
             Com_sprintf(filename, size, "%s\\%s\\%s.ff", fs_homepath->current.string, fs_gameDirVar->current.string, zoneName);
         }
         else if ( source == FFD_USER_MAP )
@@ -5345,7 +5383,11 @@ char *__cdecl DB_ReferencedFFNameList()
                     I_strncat(g_zoneNameList, 2080, " ");
                 if ( g_zoneNames[i].dir == FFD_MOD_DIR )
                 {
-                    I_strncat(g_zoneNameList, 2080, fs_gameDirVar->current.string);
+                    char path[256], folder[72];
+                    // mod: the folder whose mod.ff loaded (fs_game's, or a stacked mod's)
+                    I_strncat(g_zoneNameList, 2080,
+                              DB_FindModZone(path, sizeof(path), folder, sizeof(folder)) ? folder
+                                                                                          : fs_gameDirVar->current.string);
                     I_strncat(g_zoneNameList, 2080, "/");
                 }
                 else if ( g_zoneNames[i].dir == FFD_USER_MAP )
@@ -5397,16 +5439,9 @@ char __cdecl DB_FileExists(const char *zoneName, FF_DIR source)
 char __cdecl DB_ModFileExists()
 {
     char filename[256]; // [esp+4h] [ebp-108h] BYREF
-    void *zoneFile; // [esp+108h] [ebp-4h]
 
-    if ( !fs_gameDirVar || !*fs_gameDirVar->current.string )
-        return 0;
-    DB_BuildOSPath_FromSource("mod", FFD_MOD_DIR, 0x100u, filename);
-    zoneFile = CreateFileA(filename, 0x80000000, 1u, 0, 3u, 0x60000000u, 0);
-    if ( zoneFile == (void *)-1 )
-        return 0;
-    CloseHandle(zoneFile);
-    return 1;
+    // mod: fs_game's mod.ff as retail, or a stacked mod's (DB_FindModZone)
+    return DB_FindModZone(filename, sizeof(filename), NULL, 0);
 }
 
 void __cdecl DB_AddUserMapDir(char *zoneName)

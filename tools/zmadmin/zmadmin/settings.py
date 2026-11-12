@@ -28,6 +28,7 @@ SETTINGS = [
     Setting("g_inactivity", "int", minimum=0),
     Setting("sv_maxclients", "int", minimum=1, maximum=32, reload=True),
     Setting("fs_mods", "mods"),
+    Setting("bo2weapons_box", "choice", choices=["0", "1", "2"], reload=True),
 ]
 BY_NAME = {s.name: s for s in SETTINGS}
 

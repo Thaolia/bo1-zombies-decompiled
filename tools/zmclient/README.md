@@ -30,8 +30,8 @@ the local server's rcon password lives), `--no-mouse` keyboard only.
 | --- | --- | --- |
 | F1 | Jouer | the mode, a summary, Launch / Stop the game / Stop the local server, the state of the game files, and the exact command line |
 | F2 | Serveurs | favourites and LAN servers with their live status (name, map, players, ping); add, edit, remove, join |
-| F3 | Solo | map (base maps, Dead Ops Arcade, the package's mapkit layouts, Black Ops II's Nuketown and TranZit when `make_dist.sh --bo2` packaged them; TranZit also loads Ascension's zone for Stamin-Up), god mode, zinfo, noperks, quick restart, start points, power and perks (mods/admin's `zm_startpoints` / `zm_startpower` / `zm_startperks`, stacked on the line's `fs_mods`), horde settings, difficulty; rows a map does not use are greyed with the reason |
-| F4 | Lancement | player name, window mode and size, the port's FPS counter, the models drawn per frame (1024, 2048 or 4096: `r_mod_sceneModels` with a model lighting pool to match, for maps imported by MapKit), gamepad aim assist (each "game setting" / on / off), the local server's map, port and rcon password |
+| F3 | Solo | map (base maps, Dead Ops Arcade, the package's mapkit layouts, Black Ops II's Nuketown and TranZit when `make_dist.sh --bo2` packaged them; TranZit also loads Ascension's zone for Stamin-Up), god mode, zinfo, noperks, quick restart, start points, power and perks (mods/admin's `zm_startpoints` / `zm_startpower` / `zm_startperks`, stacked on the line's `fs_mods`), Black Ops II's weapons (mods/bo2weapons, when `mods/bo2weapons/mod.ff` is there: in the box with the map's, alone plus the map's special weapons, or alone; `bo2weapons` stacked on `fs_mods`, `bo2weapons_box`), horde settings, difficulty; rows a map does not use are greyed with the reason |
+| F4 | Lancement | player name, window mode and size, the port's FPS counter, the models drawn per frame (1024, 2048 or 4096: `r_mod_sceneModels` with a model lighting pool to match, for maps imported by MapKit), gamepad aim assist (each "game setting" / on / off), the local server's map, port, Black Ops II weapons and rcon password |
 | F5 | Config du jeu | a form of `players/config.cfg`: mouse, gamepad, FOV, resolution, vsync, FPS cap, gamma, MSAA, anisotropy, texture quality, shadows, depth of field, blood, subtitles; any other dvar; key binds |
 | F6 | Dvars libres | free command lines, each one a `+line` before the map or the connection, enabled one by one |
 | F7 | Installation | the Black Ops install (found in Steam's libraries, picked in a folder browser, or typed), the state of each part, Install, progress |
@@ -46,7 +46,9 @@ The base is `Play.bat` / `play.sh`'s: `bo1_zombies 1`, `fs_b` and `fs_h` the fol
 `bo1_mod_sharedconfig 1` (one `players/config.cfg` for every mod, as the `.hta` does). Solo adds `net_ip 127.0.0.1`
 (nobody else can join, no firewall prompt) and ends with `+devmap <map>`; the two network modes end with
 `cl_allowWanConnect 1` and `cl_autoConnect <address>` (it retries while a local server is still loading), and never
-set god mode or mods: the server decides.
+set god mode or mods: the server decides. The one exception is Black Ops II's weapons: a client of a server that has
+them must load the same `mod.ff` (`+set fs_mods bo2weapons`, the Play view's "Armes de Black Ops II" in Join mode, and
+the local server's own choice in host mode), or it stops on entering (`Weapon index mismatch`).
 
 Two engine limits are checked before a launch: `Com_ParseCommandLine` cuts the line at **every** `+` (so no value
 may contain one, the folder's path included) and keeps 64 pieces, the text before the first `+` being one: ZmClient

@@ -3,9 +3,16 @@
 // upgrade. The weapons are listed in mod.ff's mp/bo2weapons.csv (name, Pack-a-Punch name, VO type), written by
 // tools/bo2/bo2_weapon.py. A weapon missing from the loaded zones (no mod.ff, or another fs_game) is skipped, so the
 // map stays retail instead of failing on PrecacheItem.
+//
+// bo2weapons_box picks what the box holds: 0 (default) the map's weapons and the BO2 ones, 1 the BO2 ones and the map's
+// wonder weapons and special grenades, 2 the BO2 ones only. Wall weapons stay; read when the map loads.
 
 main_start()
 {
+	if ( GetDvar( "bo2weapons_box" ) == "" )
+	{
+		SetDvar( "bo2weapons_box", "0" );
+	}
 	level.bo2weapons = [];
 	table = "mp/bo2weapons.csv";
 	for ( row = 0; ; row++ )
@@ -62,4 +69,64 @@ add_weapons()
 		// box weapons: the cost only matters on a wall, where none of them is
 		maps\_zombiemode_weapons::add_zombie_weapon( w.name, w.upgrade, &"ZOMBIE_WEAPON_BO2", 1500, w.vo, "", undefined );
 	}
+	box_only_bo2( GetDvarInt( "bo2weapons_box" ) );
+}
+
+// mode 1 or 2: the map's own weapons leave the box (is_in_box, which treasure_chest_ChooseWeightedRandomWeapon reads)
+box_only_bo2( mode )
+{
+	if ( mode != 1 && mode != 2 )
+	{
+		return;
+	}
+	bo2 = [];
+	for ( i = 0; i < level.bo2weapons.size; i++ )
+	{
+		bo2[level.bo2weapons[i].name] = true;
+	}
+	keys = GetArrayKeys( level.zombie_weapons );
+	removed = 0;
+	for ( i = 0; i < keys.size; i++ )
+	{
+		if ( IsDefined( bo2[keys[i]] ) || !is_true( level.zombie_weapons[keys[i]].is_in_box ) )
+		{
+			continue;
+		}
+		if ( mode == 1 && is_special( keys[i] ) )
+		{
+			continue;
+		}
+		level.zombie_weapons[keys[i]].is_in_box = false;
+		removed++;
+	}
+	LogPrint( "bo2weapons: box mode " + mode + ", " + removed + " map weapons out of the box\n" );
+}
+
+is_true( value )
+{
+	return IsDefined( value ) && value;
+}
+
+// BO1's wonder weapons and special grenades, kept in the box by mode 1
+is_special( name )
+{
+	switch ( name )
+	{
+	case "ray_gun_zm":
+	case "thundergun_zm":
+	case "tesla_gun_zm":
+	case "freezegun_zm":
+	case "shrink_ray_zm":
+	case "microwavegun_zm":
+	case "microwavegundw_zm":
+	case "humangun_zm":
+	case "sniper_explosive_zm":
+	case "crossbow_explosive_zm":
+	case "zombie_cymbal_monkey":
+	case "zombie_black_hole_bomb":
+	case "zombie_nesting_dolls":
+	case "zombie_quantum_bomb":
+		return true;
+	}
+	return false;
 }

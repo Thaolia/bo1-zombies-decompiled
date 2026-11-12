@@ -21,11 +21,19 @@ project) in `mods/bo2weapons/images/`. The game loads the images from there, not
 
 ## Start it
 
-`+set fs_game mods/bo2weapons +set fs_mods bo2weapons`. The engine loads `mod.ff` from the `fs_game` folder only
-(`DB_ModFileExists`), so `fs_game` must be this folder. Other mods stack after it in `fs_mods`.
+`+set fs_mods bo2weapons` (with the other mods of the line: `+set fs_mods zinfo bo2weapons`). The engine loads the
+`mod.ff` of the first stacked mod that has one, beside `fs_game`'s (`DB_FindModZone`), so the weapons stack with
+horde, MapKit and nightmare. ZmClient and ZmAdmin offer them (`docs/BO2_WEAPONS.md`, "Playing with them").
+
+`bo2weapons_box` picks what the box gives: `0` (default) the map's weapons and BO2's, `1` BO2's and the map's wonder
+weapons and special grenades, `2` BO2's only. Wall weapons stay the map's.
 
 Without `mod.ff` the scripts skip each weapon and the map stays retail: `games_mp.log` then says
-`bo2weapons: 0 weapons in the box`. With it, it says `bo2weapons: 36 weapons in the box`.
+`bo2weapons: 0 weapons in the box`. With it, it says `bo2weapons: 36 weapons in the box`, and with `bo2weapons_box`
+1 or 2 `bo2weapons: box mode 2, 23 map weapons out of the box` (Five).
+
+A player who joins a server that has the weapons loads the same `mod.ff` (`+set fs_mods bo2weapons`), or the game
+stops when it enters (`Weapon index mismatch`).
 
 ## What differs from Black Ops II
 

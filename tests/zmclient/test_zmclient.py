@@ -208,6 +208,54 @@ class CommandLine(unittest.TestCase):
             self.assertIn("+set fs_game mods/mapkit +set bo1_mod_mapkit bo2_zm_nuked", line)
             self.assertTrue(line.endswith("+devmap zombie_pentagon"), line)
 
+    def test_bo2_weapons(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = P.Profile()
+            p["map"], p["bo2_weapons"] = "zombie_pentagon", 3
+            # mod.ff is the player's own build: without it the line is refused
+            self.assertTrue(any("bo2weapons/mod.ff" in w for w in P.problems(p, tmp)))
+            os.makedirs(os.path.join(tmp, "mods", "bo2weapons"))
+            open(os.path.join(tmp, "mods", "bo2weapons", "mod.ff"), "w").close()
+            self.assertEqual(P.problems(p, tmp), [])
+            line = " ".join(P.build_command(p, "x", tmp))
+            self.assertIn("+set fs_mods zinfo bo2weapons ", line)
+            self.assertIn("+set bo2weapons_box 2", line)
+            self.assertNotIn("fs_game", line)
+            # a MapKit map's line only sets fs_game: its mod is named first, as the engine stacks it
+            p["map"], p["zinfo"] = "mapkit:aldric_sanatorium", False
+            line = " ".join(P.solo_mod_flags(p, tmp))
+            self.assertIn("+set fs_game mods/mapkit ", line)
+            self.assertIn("+set fs_mods mapkit bo2weapons ", line)
+            p["horde"], p["zinfo"] = True, True
+            self.assertIn("+set fs_mods mapkit horde zinfo bo2weapons ", " ".join(P.solo_mod_flags(p, tmp)))
+            p["map"], p["horde"], p["difficulty"], p["bo2_weapons"] = "zombie_theater", False, 1, 2
+            line = " ".join(P.solo_mod_flags(p, tmp))
+            self.assertIn("+set fs_mods nightmare zinfo bo2weapons ", line)
+            self.assertIn("+set bo2weapons_box 1", line)
+            # no box on Dead Ops Arcade
+            p["map"], p["difficulty"] = "zombietron", 0
+            self.assertNotIn("bo2weapons", " ".join(P.solo_mod_flags(p, tmp)))
+            p["bo2_weapons"] = 0
+            p["map"] = "zombie_pentagon"
+            self.assertNotIn("bo2weapons", " ".join(P.solo_mod_flags(p, tmp)))
+            # a client of a server with the weapons loads the same mod.ff; the server sets the box
+            p["mode"], p["host_bo2_weapons"] = "host", 1
+            line = " ".join(P.build_command(p, "x", tmp))
+            self.assertIn("+set fs_mods bo2weapons ", line)
+            self.assertNotIn("bo2weapons_box", line)
+            p["mode"], p["join_host"] = "join", "192.168.1.20"
+            self.assertNotIn("bo2weapons", " ".join(P.build_command(p, "x", tmp)))
+            p["join_bo2_weapons"] = True
+            self.assertIn("+set fs_mods bo2weapons ", " ".join(P.build_command(p, "x", tmp)))
+            shutil.rmtree(os.path.join(tmp, "mods", "bo2weapons"))
+            self.assertTrue(any("bo2weapons/mod.ff" in w for w in P.problems(p, tmp)))
+            # a saved value out of range falls back to off
+            path = os.path.join(tmp, "profile.json")
+            with open(path, "w") as f:
+                json.dump({"bo2_weapons": 7, "host_bo2_weapons": 2}, f)
+            q = P.Profile(path)
+            self.assertEqual((q["bo2_weapons"], q["host_bo2_weapons"]), (0, 2))
+
     def test_missing_dlc_map(self):
         with tempfile.TemporaryDirectory() as tmp:
             for f in ("Common/zombie_theater.ff", "Common/zombie_coast_patch.ff", "Russian/ru_patch.ff"):

@@ -193,7 +193,7 @@ class ServersView(View):
         local = app.config.local_settings(app.dist.root)
         maps = [(code, f"{name:<20} {code}", "") for code, name in H.MAPS]
 
-        def picked(map_name):
+        def form(map_name, bo2_box):
             def ok(v):
                 try:
                     port = _int_field(v["port"], 1)
@@ -201,15 +201,24 @@ class ServersView(View):
                     return f"port : {err}"
                 if not re.fullmatch(r"[A-Za-z0-9_.-]+", v["password"]):
                     return "mot de passe : lettres, chiffres, - _ . seulement, et pas vide"
-                local.update(map=map_name, port=port, password=v["password"])
+                local.update(map=map_name, port=port, password=v["password"], bo2_box=bo2_box)
                 app.config.save()
-                return app.launch_local(map_name, port, v["password"])
+                return app.launch_local(map_name, port, v["password"], bo2_box)
             app.open(FormDialog(f"Lancer {H.map_label(map_name)}", [
                 ("port", "Port UDP", local["port"], "3074 par défaut ; à ouvrir dans le pare-feu", False),
                 ("password", "Mot de passe rcon", local["password"],
                  "choisi par ZmAdmin, gardé pour ce dossier", False),
             ], ok, intro=["Le serveur démarre sans fenêtre et charge la map (une minute environ).",
                           "Son log : server/main/console_mp.log, visible dans la vue Log."]))
+
+        def picked(map_name):
+            if not app.dist.bo2_weapons():
+                form(map_name, None)
+                return
+            # the key is the choice's value; None (no BO2 weapons) cannot be one, -1 stands for it
+            app.open(ChoiceDialog("Armes de Black Ops II", [(k, label, text) for k, label, text in H.BO2_BOX_CHOICES],
+                                  lambda k: form(map_name, None if k < 0 else k),
+                                  current=-1 if local.get("bo2_box") is None else local["bo2_box"]))
         app.open(ChoiceDialog("Map du serveur local", maps, picked, current=local["map"]))
 
 

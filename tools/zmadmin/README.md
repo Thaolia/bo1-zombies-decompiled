@@ -19,7 +19,7 @@ shows are in French, the players' language.
 | F1 | Servers | saved servers (`servers.json`), and the local server when ZmAdmin sits in a `make_dist.sh` folder: start it (map, port, rcon password), connect, stop |
 | F2 | Players | each slot: state, health, points, ping, god/demigod/notarget/noclip/frozen; one key per `zm_*` action on the selected player, `a` for all |
 | F3 | Game | map, mods, start settings; go to a round, power on, reset, change map, change mods |
-| F4 | Settings | a form of the live settings (`sv_hostname`, `g_password`, `rcon_password`, `zm_startpoints`, `zm_startperks`, `zm_jip_mode`, `zm_debug_revive`, `g_inactivity`, `sv_maxclients`, `fs_mods`) |
+| F4 | Settings | a form of the live settings (`sv_hostname`, `g_password`, `rcon_password`, `zm_startpoints`, `zm_startperks`, `zm_jip_mode`, `zm_debug_revive`, `g_inactivity`, `sv_maxclients`, `fs_mods`, `bo2weapons_box`) |
 | F5 | Console | any command over rcon, with its reply and a saved history |
 | F6 | Log | the local server's `console_mp.log`, live, with a filter |
 
@@ -57,6 +57,9 @@ its own folder or the current one. It starts the server as that folder's script 
 `server/`, `bo1_server 1`, `net_ip 0.0.0.0`, `+devmap <map>`), with `bo1_tui 0` (no window; output in
 `server/main/zmadmin_server_output.log`) and the rcon password twice: `+set rcon_password` is applied before
 `server.cfg` runs, and the `+rcon_password <pw>` command after it, so a `server.cfg` password never locks ZmAdmin out.
+When the folder has `mods/bo2weapons/mod.ff` (Black Ops II's weapons, `docs/BO2_WEAPONS.md`), the launch asks
+whether to load them and what the box gives: `+set fs_mods bo2weapons +set bo2weapons_box <0-2>`. The mod.ff loads
+at start-up only, so `zm_mods` cannot add them later; players load the same mod.ff to join.
 The password is generated once per folder and kept in `servers.json`; the PID, port and map in
 `server/main/zmadmin_server.json`, so a later ZmAdmin finds a server that kept running (it checks the PID's program
 is that folder's). Quitting asks whether to stop it; a stop sends `quit` and kills the process after 15 s.

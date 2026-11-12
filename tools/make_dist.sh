@@ -18,9 +18,11 @@
 #   --no-build       package what is built; fail if anything is missing or out of date
 #   --no-game-data   windows and linux packages without any file of the game, in BO1Zombies_<platform>_nodata/:
 #                    the player installs them from their own Black Ops with ZmClient (Installation view)
-#   --bo2 DIR        your own Black Ops II map extraction (docs/BO2_MAPS.md, "Running it"): DIR/mods/mapkit/layouts/
-#                    bo2_*.json and DIR/mods/mapkit/imports/ go into the windows and linux packages, where ZmClient's
-#                    Solo view offers them ("Mapkit : Nuketown (Black Ops II)"); game data, so not with --no-game-data
+#   --bo2 DIR        your own Black Ops II extraction: its maps (docs/BO2_MAPS.md, "Running it": DIR/mods/mapkit/
+#                    layouts/bo2_*.json and DIR/mods/mapkit/imports/), its weapons (docs/BO2_WEAPONS.md: the 64-bit
+#                    DIR/mods/bo2weapons/mod.ff and DIR/mods/bo2weapons/images/), either or both. They go into the
+#                    windows and linux packages, where ZmClient's Solo view offers them ("Mapkit : Nuketown (Black
+#                    Ops II)", "Armes de Black Ops II"); game data, so not with --no-game-data
 #   --jobs N         parallel jobs                                   default: the CPU count
 #
 # What it builds when needed (unless --no-build): the win64-msvc preset (Visual Studio, from WSL), the Linux and
@@ -86,8 +88,11 @@ fi
 if [ -n "$BO2" ]; then
     [ "$GAME_DATA" = 1 ] || die "--bo2 is game data (Black Ops II's map, extracted): not with --no-game-data"
     BO2="$(cd "$BO2" && pwd)" || die "--bo2: no folder $BO2"
-    ls "$BO2"/mods/mapkit/layouts/bo2_*.json > /dev/null 2>&1 && [ -d "$BO2/mods/mapkit/imports" ] ||
-        die "--bo2: no mods/mapkit/layouts/bo2_*.json and mods/mapkit/imports/ in $BO2 (docs/BO2_MAPS.md)"
+    BO2_MAPS=0; BO2_WEAPONS=0
+    if ls "$BO2"/mods/mapkit/layouts/bo2_*.json > /dev/null 2>&1 && [ -d "$BO2/mods/mapkit/imports" ]; then BO2_MAPS=1; fi
+    if [ -f "$BO2/mods/bo2weapons/mod.ff" ] && [ -d "$BO2/mods/bo2weapons/images" ]; then BO2_WEAPONS=1; fi
+    [ $BO2_MAPS = 1 ] || [ $BO2_WEAPONS = 1 ] ||
+        die "--bo2: neither mods/mapkit/layouts/bo2_*.json with mods/mapkit/imports/ (docs/BO2_MAPS.md) nor mods/bo2weapons/mod.ff with mods/bo2weapons/images/ (docs/BO2_WEAPONS.md) in $BO2"
 fi
 
 OUT="$(abspath "$OUT")"
@@ -317,16 +322,30 @@ game_data() { # <dest> [video]: the game files every platform reads, from the in
 
 # The player's Black Ops II map extraction beside the repository's MapKit layouts: the layouts name their collision,
 # links, mesh and images under imports/ (docs/BO2_MAPS.md).
+# The weapons' mod.ff must be ffconv's 64-bit one (both packages run x86-64 builds); the scripts come from the
+# repository's mods/bo2weapons.
 bo2_data() { # <dest>
     [ -n "$BO2" ] || return 0
-    rsync -a --include='bo2_*.json' --exclude='*' "$BO2/mods/mapkit/layouts/" "$1/mods/mapkit/layouts/"
-    rsync -a "$BO2/mods/mapkit/imports/" "$1/mods/mapkit/imports/"
+    if [ $BO2_MAPS = 1 ]; then
+        rsync -a --include='bo2_*.json' --exclude='*' "$BO2/mods/mapkit/layouts/" "$1/mods/mapkit/layouts/"
+        rsync -a "$BO2/mods/mapkit/imports/" "$1/mods/mapkit/imports/"
+    fi
+    if [ $BO2_WEAPONS = 1 ]; then
+        rsync -a "$BO2/mods/bo2weapons/mod.ff" "$1/mods/bo2weapons/"
+        rsync -a --delete "$BO2/mods/bo2weapons/images/" "$1/mods/bo2weapons/images/"
+    fi
 }
 
 # The LISEZMOI.txt line of a package with the player's Black Ops II maps.
 bo2_note() {
     [ -n "$BO2" ] || return 0
-    echo "NUKETOWN    zmclient, vue Solo : « Mapkit : Nuketown (Black Ops II) », tirée de votre propre Black Ops II."
+    if [ $BO2_MAPS = 1 ]; then
+        echo "NUKETOWN    zmclient, vue Solo : « Mapkit : Nuketown (Black Ops II) », tirée de votre propre Black Ops II."
+    fi
+    if [ $BO2_WEAPONS = 1 ]; then
+        echo "ARMES BO2   zmclient, vue Solo : « Armes de Black Ops II » (ou zmadmin au lancement du serveur), tirées"
+        echo "            de votre propre Black Ops II. Un joueur qui rejoint votre serveur doit avoir le même mod.ff."
+    fi
     echo
 }
 

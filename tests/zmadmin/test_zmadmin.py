@@ -282,6 +282,24 @@ class LauncherTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             self.assertIsNone(launcher.find_dist(d))
 
+    def test_bo2_weapons(self):
+        with tempfile.TemporaryDirectory() as d:
+            for name in (launcher.EXE_NAME, launcher.SCRIPT_NAME):
+                open(os.path.join(d, name), "w").close()
+            for mod in ("zone", "mods/admin", "mods/bo2weapons"):
+                os.makedirs(os.path.join(d, mod))
+            dist = launcher.find_dist(d)
+            self.assertFalse(dist.bo2_weapons())
+            open(os.path.join(d, "mods", "bo2weapons", "mod.ff"), "w").close()
+            self.assertTrue(dist.bo2_weapons())
+            cmd = launcher.server_command(dist, "zombie_moon", 3080, "pw", bo2_box=2)
+            plain = launcher.server_command(dist, "zombie_moon", 3080, "pw")
+        line = " ".join(cmd)
+        self.assertIn("+set rcon_password pw +set fs_mods bo2weapons +set bo2weapons_box 2 +rcon_password pw", line)
+        self.assertTrue(line.endswith("+devmap zombie_moon"))
+        self.assertNotIn("fs_game", line)
+        self.assertNotIn("bo2weapons", " ".join(plain))
+
 
 class MouseTest(unittest.TestCase):
     def test_kinds(self):

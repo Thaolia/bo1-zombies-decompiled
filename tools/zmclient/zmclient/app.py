@@ -135,6 +135,8 @@ class App:
             parts.append(f"{len(p['start_perks'])} atout" + ("s" if len(p["start_perks"]) > 1 else ""))
         if p["start_power"]:
             parts.append("courant")
+        if p["bo2_weapons"]:
+            parts.append("armes BO2" + ("" if p["bo2_weapons"] == 1 else " seules"))
         return ", ".join(parts) or "aucun"
 
     def command(self):
@@ -181,7 +183,8 @@ class App:
                 password = self.local_password()
                 # a password local_settings just generated must reach servers.json, or ZmAdmin cannot use rcon
                 self.admin_config.save()
-                self.local.start(p["host_map"], int(p["host_port"]), password)
+                self.local.start(p["host_map"], int(p["host_port"]), password,
+                                 bo2_box=p["host_bo2_weapons"] - 1 if p["host_bo2_weapons"] else None)
             except (OSError, RuntimeError) as e:
                 self.msg(f"Serveur local non lancé : {e}", C_ERR)
                 return
