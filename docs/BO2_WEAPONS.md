@@ -96,12 +96,12 @@ Then:
 - `r_fullbright 1` shows BO2's textures (the strap's weave, the receiver's "EL PASO" marking), in place of the black
   silhouette that the embedded images gave.
 - The HK21 next to it for comparison: the HAMR is darker, as its colour maps are (mean 47 against 62).
+- `win32-msvc` (fresh build before the merge, 32-bit `mod.ff` as linked): the same hip, ADS, zoom and reload shots,
+  `hamr_zm in the box`, no assert.
 - `ffconv --verify`: 104 assets, the narrowed zone gives the 32-bit body back.
 
 ## Not done yet
 
-- `win32-msvc`: `mod.ff` loads, but the `build/Release` exe predates `bo1_mapkit_weaponloaded` and the script stops.
-  Rebuild it, then rerun.
 - Linux and the Switch: not run. On the Switch, `mod.ff` needs `ffconv --abi aarch64`, and `mods/` reaches the SD
   card with the package.
 - The box and the Pack-a-Punch machine in play: checked only through `give` (registration logged, upgrade weapon
