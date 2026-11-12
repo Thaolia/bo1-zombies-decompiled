@@ -2,6 +2,7 @@
 // lock returns that copy, and the unlock uploads the locked region to the backend.
 
 #include "d3d9emu.h"
+#include <platform/load_profile.h>
 
 #include <cstdio>
 
@@ -128,6 +129,7 @@ HRESULT Storage::Unlock(uint32_t layer, uint32_t level)
 
 void Storage::Upload(uint32_t layer, uint32_t level, const D3DBOX &box)
 {
+    const Bo1LoadScope profile(BO1_LOAD_TEXTURE_UPLOAD);
     device->BeforeTextureWrite(gpu);
     const uint32_t pitch = RowPitch(level);
     const uint32_t slice = SlicePitch(level);

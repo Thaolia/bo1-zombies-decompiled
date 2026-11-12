@@ -2,6 +2,7 @@
 #include <universal/assertive.h>
 #include "db_auth.h"
 #include "db_registry.h"
+#include <platform/load_profile.h>
 
 #include <Windows.h>
 #include <win32/win_shared.h>
@@ -530,6 +531,21 @@ void __cdecl DB_LoadXFileInternal()
     }
     v1 = g_totalWait;
     Com_Printf(10, "Loaded fastfile '%s' in %ims (%dms waiting)\n", g_load.filename, Sys_Milliseconds() - g_load.startTime, v1);
+#if !defined(_WIN32)
+    {
+        uint32_t n[BO1_LOAD_KINDS];
+        double ms[BO1_LOAD_KINDS];
+        for (int k = 0; k < BO1_LOAD_KINDS; ++k)
+            ms[k] = Bo1_LoadTake(Bo1LoadKind(k), &n[k]);
+        Com_Printf(10,
+                   "load profile '%s': zone reads %.0f ms (%u), inflate %.0f ms (%u), shader pack reads %.0f ms (%u), "
+                   "shader creation %.0f ms (%u), image files %.0f ms (%u), texture uploads %.0f ms (%u)\n",
+                   g_load.filename, ms[BO1_LOAD_READ], n[BO1_LOAD_READ], ms[BO1_LOAD_INFLATE], n[BO1_LOAD_INFLATE],
+                   ms[BO1_LOAD_SHADER_READ], n[BO1_LOAD_SHADER_READ], ms[BO1_LOAD_SHADER_CREATE],
+                   n[BO1_LOAD_SHADER_CREATE], ms[BO1_LOAD_IMAGE_FILE], n[BO1_LOAD_IMAGE_FILE],
+                   ms[BO1_LOAD_TEXTURE_UPLOAD], n[BO1_LOAD_TEXTURE_UPLOAD]);
+    }
+#endif
     if ( (g_load.flags & 1) != 0 )
         g_minimumFastFileLoaded = 1;
     DB_CancelLoadXFile();

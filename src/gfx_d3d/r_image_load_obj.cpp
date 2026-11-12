@@ -8,6 +8,7 @@
 #include <qcommon/threads.h>
 #include "rb_resource.h"
 #include "r_pixelcost_load_obj.h"
+#include <platform/load_profile.h>
 #include "r_outdoor.h"
 
 const BuiltinImageConstructorTable constructorTable[12] =
@@ -839,6 +840,9 @@ bool __cdecl Image_LoadFromFile(GfxImage *image, bool loadHighmip)
 {
     bool ret; // [esp+3h] [ebp-1h]
 
+#if !defined(_WIN32)
+    const Bo1LoadScope profile(BO1_LOAD_IMAGE_FILE);
+#endif
     Sys_LockWrite(&s_imageLoadLock);
     ret = Image_LoadFromFileWithReader(image, loadHighmip, FS_FOpenFileRead);
     Sys_UnlockWrite(&s_imageLoadLock);

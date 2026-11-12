@@ -1,6 +1,7 @@
 #include "db_auth.h"
 #include <universal/assertive.h>
 #include <qcommon/common.h>
+#include <platform/load_profile.h>
 
 int __cdecl DB_AuthLoad_InflateInit(z_stream_s *stream, bool isSecure)
 {
@@ -19,6 +20,9 @@ void __cdecl DB_AuthLoad_InflateEnd(z_stream_s *stream)
 
 int __cdecl DB_AuthLoad_Inflate(z_stream_s *stream, int flush)
 {
+#if !defined(_WIN32)
+    const Bo1LoadScope profile(BO1_LOAD_INFLATE);
+#endif
     return inflate(stream, flush);
 }
 
