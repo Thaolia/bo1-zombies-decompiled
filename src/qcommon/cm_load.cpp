@@ -1,4 +1,5 @@
 #include "cm_load.h"
+#include <qcommon/com_bsp_load_obj.h>
 #include "cm_mapkit.h"
 #include "common.h"
 #include <gfx_d3d/rb_backend.h>
@@ -84,7 +85,7 @@ void __cdecl CM_InitThreadData(unsigned int threadContext)
 
 void __cdecl CM_LoadMapData(const char *name)
 {
-    if ( useFastFile->current.enabled )
+    if ( !Com_WorldFromBsp() ) // mod (bspworld): useFastFile alone before
         CM_LoadMapData_FastFile(name);
     else
         CM_LoadMapData_LoadObj(name);
@@ -145,6 +146,7 @@ void __cdecl CM_Shutdown()
     const char *savedName; // [esp+0h] [ebp-4h]
 
     savedName = cm.name;
+    DynEnt_ReleaseRopeNameRefs(); // mod (bspworld): a BSP map's rope name references (DynEntity_load_obj.cpp)
     Com_Memset((unsigned int *)&cm, 0, sizeof(cm));
     cm.name = savedName;
     if ( cm.isInUse )

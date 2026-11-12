@@ -469,7 +469,7 @@ void __cdecl CMod_LoadBrushRelated(unsigned int version, bool usePvs)
     CMod_LoadSubmodels();
     user = Hunk_UserCreate(0x400000, HU_SCHEME_DEFAULT, 4u, 0, "CMod_LoadBrushRelated", 27);
     TempMemoryReset(user);
-    cm.leafbrushNodes = (cLeafBrushNode_s *)(TempMallocAlignStrict(0) - 20);
+    cm.leafbrushNodes = (cLeafBrushNode_s *)(TempMallocAlignStrict(0) - sizeof(cLeafBrushNode_s)); // 20 on 32-bit
     if ( version > 0xE )
         CMod_LoadLeafBrushNodes();
     else
@@ -959,7 +959,7 @@ const unsigned __int8 *CMod_LoadBrushes()
     if ( brushVertsCounts != brushCount )
         Com_Error(ERR_DROP, "CMod_LoadBrushes: bad number of brush verts counts: %i != %i", brushVertsCounts, brushCount);
     sidesCount -= 6 * brushCount;
-    allocSizeSides = 12 * sidesCount;
+    allocSizeSides = sizeof(cbrushside_t) * sidesCount; // 12 on 32-bit: its plane is a pointer
     if ( sidesCount )
         v1 = CM_Hunk_Alloc(allocSizeSides, "CMod_LoadBrushSides", 27);
     else
@@ -968,7 +968,7 @@ const unsigned __int8 *CMod_LoadBrushes()
     cm.numBrushSides = sidesCount;
     outSides = (cbrushside_t *)v1;
     countAllocatedBrushes = brushCount + 1;
-    allocSizeBrushes = 96 * (brushCount + 1);
+    allocSizeBrushes = sizeof(cbrush_t) * (brushCount + 1); // 96 on 32-bit: its sides and verts are pointers
     cm.brushes = (cbrush_t *)CM_Hunk_Alloc(allocSizeBrushes, "CMod_LoadBrushes", 27);
     cm.numBrushes = brushCount;
     if ( (unsigned __int16)brushCount != brushCount )

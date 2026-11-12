@@ -1,3 +1,4 @@
+#include <vector>
 #include "DynEntity_load_obj.h"
 #include "DynEntity_client.h"
 #include <qcommon/cm_load.h>
@@ -18,6 +19,24 @@ int num_ents;
 int num_ropes;
 int num_infos;
 int num_dents;
+
+// LoadRopeParams takes a script string reference on the targetname of every entity of a map loaded from a BSP, for its
+// rope and constraint matching, and never released them: SL_CheckLeaks then asserted at quit ("leaked string 'auto1'",
+// an info_null). They are kept here and released when the next BSP map's are read or the collision shuts down.
+static std::vector<unsigned __int16> s_ropeNameRefs;
+
+void DynEnt_KeepRopeNameRef(unsigned __int16 name)
+{
+    if ( name )
+        s_ropeNameRefs.push_back(name);
+}
+
+void DynEnt_ReleaseRopeNameRefs()
+{
+    for ( unsigned __int16 name : s_ropeNameRefs )
+        SL_RemoveRefToString(SCRIPTINSTANCE_SERVER, name);
+    s_ropeNameRefs.clear();
+}
 node_params_t ents_params[8192];
 node_params_t rope_params[8192];
 node_params_t info_params[8192];
@@ -163,8 +182,10 @@ void __cdecl DynEnt_LoadEntities()
     char *data_p; // [esp+31A9Ch] [ebp-54h] BYREF
     char IsValidClassName; // [esp+31AA3h] [ebp-4Dh]
     char *src; // [esp+31AA4h] [ebp-4Ch]
-    char className[7]; // [esp+31AA8h] [ebp-48h] BYREF
-    _BYTE v66[61]; // [esp+31AAFh] [ebp-41h] BYREF
+    // One 68-byte buffer in the 32-bit code (ebp-48h): Hex-Rays split it at the 7 bytes before the legacy model name it
+    // reads past them (ebp-41h). Kept split, GCC placed the halves apart and a class name past 7 bytes overwrote data_p.
+    char className[68]; // [esp+31AA8h] [ebp-48h] BYREF
+    _BYTE *const v66 = (_BYTE *)className + 7; // [esp+31AAFh] [ebp-41h]
 
     LoadRopeParams();
     if ( !Com_EntityString(0)
@@ -199,7 +220,7 @@ void __cdecl DynEnt_LoadEntities()
     if ( entCount >= 4096 )
         Com_Error(ERR_DROP, "Found [%d] Dyn Entities, Max is [%d]\n", entCount, 4095);
     entCount += 256;
-    base = Hunk_Alloc(84 * entCount, "DynEnt_LoadDefs", 10);
+    base = Hunk_Alloc(sizeof(DynEntityDef) * entCount, "DynEnt_LoadDefs", 10); // 84 on 32-bit: it holds pointers
     num = 0;
     if ( cm.num_constraints )
     {
@@ -510,7 +531,7 @@ void __cdecl DynEnt_LoadEntities()
         ++cm.dynEntCount[drawType + 2];
     }
     if ( !cm.dynEntDefList[0] )
-        cm.dynEntDefList[0] = (DynEntityDef *)((char *)base + 84 * num);
+        cm.dynEntDefList[0] = (DynEntityDef *)base + num;
     if ( cm.dynEntCount[1] + cm.dynEntCount[0] != num
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\DynEntity\\DynEntity_load_obj.cpp",
@@ -727,6 +748,7 @@ parseInfo_t *LoadRopeParams()
     const char *token; // [esp+1A8h] [ebp-4Ch]
     char value[68]; // [esp+1ACh] [ebp-48h] BYREF
 
+    DynEnt_ReleaseRopeNameRefs();
     ptr = Com_EntityString(0);
     num_dents = 0;
     num_ents = 0;
@@ -800,6 +822,7 @@ parseInfo_t *LoadRopeParams()
                             }
                             while ( v7 );
                             params.targetname_hash = SL_GetLowercaseString(params.targetname, 0, SCRIPTINSTANCE_SERVER);
+                            DynEnt_KeepRopeNameRef(params.targetname_hash);
                         }
                     }
                     else

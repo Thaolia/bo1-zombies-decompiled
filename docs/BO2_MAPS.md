@@ -37,7 +37,26 @@ The decompiled engine still has the whole BSP loader (`com_bsp_load_obj.cpp`, `c
 textures there) and unloads it. With `asset_viewer.d3dbsp` on Kino every load step passes (materials, lights,
 lightmaps, light grid, surfaces, cull groups, AABB trees, cells, portals, nodes, entities, probes; version 43 probes
 are widened to the version 45 layout) and the game starts; it then stops on Kino's brush model `*8`, which the test
-BSP does not have. Next: the collision, entities and path nodes from the same BSP, then a BSP of our own.
+BSP does not have.
+
+`+set bo1_bspworld 1` now reads a whole map's world from its own `maps/<map>.d3dbsp` when it has one (the front end
+and the retail maps keep their zones): the server's spawn and a remote client load the BSP for the collision
+(`CM_LoadMapFromBsp`, static models, dynamic entities, the entity string), the lights and the path nodes
+(`Com_WorldFromBsp()` replaces `useFastFile` at those switches), the client's `LoadWorld` for the render world. The
+map's zone still brings its scripts: `zombie_bsptest` (a `zombie_` name, so an SP zombies level) is a 1 KB zone of one
+rawfile, `maps/zombie_bsptest.gsc` (`maps\_callbacksetup::SetupCallbacks()`, `maps\_zombiemode_load::main()`),
+built by the Mod Tools' `linker_pc` (it builds zones fine, only not maps) and widened by `ffconv`. With
+`asset_viewer.d3dbsp` as `maps/zombie_bsptest.d3dbsp` the map runs for the whole test minute, the player walks on its
+floor (x 0 to 581, y 0 to 464, eye height kept) and a drop from z 400 lands on the collision; Kino is unchanged with or
+without the dvar.
+
+The load-obj paths had never run in the 64-bit port; they held the usual 32-bit sizes: `cbrushside_t` (12) and
+`cbrush_t` (96) in `CMod_LoadBrushes`, `cLeafBrushNode_s` (20) as the base of the leaf brush tree, `DynEntityDef` (84,
+which then overwrote the collision nodes with its 511 constraint sentinels), five `GfxTexture` arrays (4 per lightmap
+or probe), and two Hex-Rays-split stack buffers (`className[7]` + 61 bytes in `DynEnt_LoadEntities`, `char nptr` + 3
+bytes taking 2048-byte values in the world parameters) that GCC placed apart. `LoadRopeParams` also kept a script
+string reference on every targetname (SL_CheckLeaks at quit): they are released with the collision. Next: a BSP of our
+own.
 
 ## What comes out of `zm_nuked`
 

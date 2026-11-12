@@ -670,8 +670,16 @@ void __cdecl    SV_SpawnServer(int controllerIndex, char *server, int mapIsPrelo
     Dvar_SetString((dvar_s*)nextmap, "map_restart");
     Dvar_SetInt((dvar_s *)cl_paused, 0);
     Com_GetBspFilename(filename, 64, server);
+    // mod (bspworld): the world from the map's BSP with fastfiles on
+    const char *bspWorld = useFastFile->current.enabled ? Com_BspWorldPath(filename) : nullptr;
+    Com_SetWorldFromBsp(bspWorld != nullptr);
     if ( !useFastFile->current.enabled )
         Com_LoadBsp(filename);
+    else if ( bspWorld )
+    {
+        Com_Printf(15, "bspworld: world of '%s' read from %s\n", filename, bspWorld);
+        Com_LoadBsp((char *)bspWorld);
+    }
     if ( G_OnlyConnectingPaths() )
     {
         bspVersion = Com_GetBspVersion();
@@ -689,7 +697,7 @@ void __cdecl    SV_SpawnServer(int controllerIndex, char *server, int mapIsPrelo
     if (Com_IsSPLevel())
         g_spSaveMapChecksum = checksum;
     Com_LoadWorld(filename);
-    if ( !G_OnlyConnectingPaths() && !useFastFile->current.enabled )
+    if ( !G_OnlyConnectingPaths() && (!useFastFile->current.enabled || bspWorld) )
         Com_UnloadBsp();
     CM_LinkWorld();
     sv_serverId_value = (unsigned __int8)(sv_serverId_value + 16);

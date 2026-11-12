@@ -357,12 +357,40 @@ char __cdecl Com_CheckVersionLumpCountError(int version)
     return 0;
 }
 
-const char *Com_BspWorldPath()
+static const char *Com_BspWorldDvar()
 {
     static const dvar_s *dvar = _Dvar_RegisterString(
         "bo1_bspworld", (char *)"", 0,
-        "mod: a compiled BSP (maps/<name>.d3dbsp) the map's render world is read from; empty = the map's own zone");
+        "mod: 1 = the map's world from maps/<map>.d3dbsp; a .d3dbsp path = that BSP's; empty = the map's zones");
     return dvar && dvar->current.string && *dvar->current.string ? dvar->current.string : nullptr;
+}
+
+const char *Com_BspWorldPath(const char *mapBspFilename)
+{
+    const char *value = Com_BspWorldDvar();
+    if ( !value )
+        return nullptr;
+    if ( strcmp(value, "1") )
+        return value;
+    // Only a map that has a BSP: the front end and the retail maps keep their zones.
+    int h = 0;
+    FS_FOpenFileRead(mapBspFilename, &h);
+    if ( !h )
+        return nullptr;
+    FS_FCloseFile(h);
+    return mapBspFilename;
+}
+
+static bool s_worldFromBsp;
+
+void Com_SetWorldFromBsp(bool fromBsp)
+{
+    s_worldFromBsp = fromBsp;
+}
+
+bool Com_WorldFromBsp()
+{
+    return !useFastFile->current.enabled || s_worldFromBsp;
 }
 
 void __cdecl Com_LoadBsp(char *filename)
@@ -825,7 +853,7 @@ void __cdecl Com_PackBurnableSample(const DiskBurnableSample *in, ComBurnableSam
 
 void __cdecl Com_LoadWorld(char *name)
 {
-    if ( useFastFile->current.enabled )
+    if ( !Com_WorldFromBsp() )
         Com_LoadWorld_FastFile(name);
     else
         Com_LoadWorld_LoadObj(name);

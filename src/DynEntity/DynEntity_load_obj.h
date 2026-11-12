@@ -154,3 +154,7 @@ void __cdecl DynEnt_GetClientIdDrawType(unsigned __int16 absId, unsigned __int16
 DynEntityClient *__cdecl DynEnt_GetClientEntity(unsigned __int16 id);
 unsigned __int16 __cdecl DynEnt_GetClientAbsId(unsigned __int16 dynEntId, DynEntityDrawType drawType);
 int __cdecl DynEnt_GetXModelUsageCount(const XModel *xModel);
+
+// mod (bspworld): the script string references LoadRopeParams takes on a BSP map's targetnames (DynEntity_load_obj.cpp).
+void DynEnt_KeepRopeNameRef(unsigned __int16 name);
+void DynEnt_ReleaseRopeNameRefs();

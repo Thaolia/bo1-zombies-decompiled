@@ -573,14 +573,23 @@ void __cdecl CL_CM_LoadMap(char *mapname)
 {
     int checksum; // [esp+0h] [ebp-4h] BYREF
 
+    // mod (bspworld): a client of a remote server reads the BSP world here; a local server already did
+    const char *bspWorld = useFastFile->current.enabled && !com_sv_running->current.enabled ? Com_BspWorldPath(mapname)
+                                                                                            : nullptr;
+    if ( !com_sv_running->current.enabled )
+        Com_SetWorldFromBsp(bspWorld != nullptr);
     if ( !useFastFile->current.enabled )
         Com_LoadBsp(mapname);
+    else if ( bspWorld )
+        Com_LoadBsp((char *)bspWorld);
     CM_LoadMap(mapname, &checksum);
     if ( !com_sv_running->current.enabled )
     {
         CM_LinkWorld();
         Com_LoadWorld(mapname);
     }
+    if ( bspWorld )
+        Com_UnloadBsp();
 }
 
 void __cdecl CL_ShutdownCGame(int localClientNum)
@@ -988,7 +997,7 @@ int __cdecl LoadWorld(char *mapname)
 
     IsMenuLevel = Com_IsMenuLevel(0);
     // mod (bspworld): the render world from a compiled BSP, read for this load only (R_LoadWorld picks the BSP path).
-    const char *bspWorld = useFastFile->current.enabled ? Com_BspWorldPath() : nullptr;
+    const char *bspWorld = useFastFile->current.enabled ? Com_BspWorldPath(mapname) : nullptr;
     if ( bspWorld )
     {
         Com_Printf(16, "bspworld: render world of '%s' read from %s\n", mapname, bspWorld);
