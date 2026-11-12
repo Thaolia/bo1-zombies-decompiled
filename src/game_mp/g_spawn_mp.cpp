@@ -1,4 +1,5 @@
 #include "g_spawn_mp.h"
+#include <qcommon/com_bsp_load_obj.h>
 #include <game/g_load_utils.h>
 #include <clientscript/cscr_vm.h>
 #include "g_utils_mp.h"
@@ -657,7 +658,7 @@ void __cdecl G_CallSpawn(SpawnVar *spawnVar)
         {
             if ( !strncmp(classname, "node_", 5u) )
             {
-                if ( !useFastFile->current.enabled )
+                if ( Com_WorldFromBsp() ) // mod (bspworld): !useFastFile before
                     G_SpawnPathnodeStatic(spawnVar, classname);
                 G_SpawnPathnodeDynamic(spawnVar);
             }

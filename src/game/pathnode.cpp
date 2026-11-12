@@ -540,7 +540,7 @@ void __cdecl G_SpawnPathnodeDynamic(SpawnVar *spawnVar)
     {
         if ( g_path.actualNodeCount < 0x2000 )
         {
-            if ( useFastFile->current.enabled && g_path.actualNodeCount == gameWorldCurrent->path.nodeCount )
+            if ( !Com_WorldFromBsp() && g_path.actualNodeCount == gameWorldCurrent->path.nodeCount )
             {
                 ++g_path.extraNodes;
             }
@@ -668,7 +668,7 @@ void __cdecl G_ParsePathnodeScriptField(const char *key, char *value, pathnode_t
 {
     node_field_t *f; // [esp+4h] [ebp-4h]
 
-    if ( useFastFile->current.enabled )
+    if ( !Com_WorldFromBsp() )
     {
         PathNode_UpdateStringField("target", &node->constant.target, key, value);
         PathNode_UpdateStringField("targetname", &node->constant.targetname, key, value);
@@ -780,7 +780,7 @@ void __cdecl GScr_AddFieldsForPathnode()
 
 void __cdecl Scr_FreePathnode(pathnode_t *node)
 {
-    if ( !useFastFile->current.enabled )
+    if ( Com_WorldFromBsp() )
         Scr_FreePathnodeFields(node);
 
     iassert(!node->dynamic.pOwner.isDefined());
@@ -980,7 +980,7 @@ void __cdecl Path_Init(int restart)
 {
     char *String; // eax
 
-    if ( !useFastFile->current.enabled )
+    if ( Com_WorldFromBsp() )
     {
         String = (char *)Dvar_GetString("mapname");
         gameWorldCurrent->name = Com_GetHunkStringCopy(String);
@@ -1009,7 +1009,7 @@ void __cdecl Path_Shutdown()
     pathnode_t *nodea; // [esp+4h] [ebp-4h]
 
     Path_ShutdownBadPlaces();
-    if ( useFastFile->current.enabled )
+    if ( !Com_WorldFromBsp() )
     {
         for ( node = gameWorldCurrent->path.nodes; node != &gameWorldCurrent->path.nodes[g_path.actualNodeCount]; ++node )
         {
@@ -1025,7 +1025,7 @@ void __cdecl Path_Shutdown()
         Scr_FreePathnode(nodea);
     g_path.actualNodeCount = 0;
     debugPath = 0;
-    if ( !useFastFile->current.enabled )
+    if ( Com_WorldFromBsp() )
         Path_ShutdownStatic();
 }
 
@@ -1325,7 +1325,7 @@ void __cdecl Path_InitPaths()
 {
     _iobuf *v0; // eax
 
-    if ( !useFastFile->current.enabled )
+    if ( Com_WorldFromBsp() )
     {
         Path_BuildChains();
         if ( g_connectpaths->current.integer )
@@ -1335,7 +1335,7 @@ void __cdecl Path_InitPaths()
         Path_InitLinkCounts();
     }
     Path_InitLinkInfoArray();
-    if ( !useFastFile->current.enabled && Path_FindOverlappingNodes() && g_connectpaths->current.integer >= 2 )
+    if ( Com_WorldFromBsp() && Path_FindOverlappingNodes() && g_connectpaths->current.integer >= 2 )
     {
         printf("FATAL ERROR: Overlapping path nodes. Check console log.\n");
         Com_Error(ERR_FATAL, "Overlapping path nodes. Check console log.");

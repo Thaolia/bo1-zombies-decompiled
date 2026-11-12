@@ -449,3 +449,6 @@ void __cdecl R_BspGenerateReflections();
 void __cdecl R_RegisterSkyboxModel(char *xmodelName);
 
 extern GfxWorld s_world;
+// mod (bspworld): set while a BSP render world loads with fastfiles (r_bsp.cpp); r_image.cpp then creates its textures
+// from the main thread.
+extern bool g_bspWorldLoading;

@@ -172,8 +172,9 @@ char *__cdecl R_ParseSunLight(SunLightParseParams *params, char *text)
     float out; // [esp+888h] [ebp-824h] BYREF
     float v33; // [esp+88Ch] [ebp-820h] BYREF
     float v34; // [esp+890h] [ebp-81Ch] BYREF
-    char nptr; // [esp+894h] [ebp-818h] BYREF
-    _BYTE v36[3]; // [esp+895h] [ebp-817h] BYREF
+    // One 2056-byte buffer in the 32-bit code (ebp-818h..ebp-10h), which Hex-Rays split into a char and v36; each
+    // key's value is copied into it (I_strncpyz 2048), so as a single char it overwrote the stack on a 64-bit build.
+    char nptr[2056]; // [esp+894h] [ebp-818h] BYREF
     float v37; // [esp+109Ch] [ebp-10h]
     float in; // [esp+10A0h] [ebp-Ch] BYREF
     float v39; // [esp+10A4h] [ebp-8h] BYREF
@@ -223,13 +224,13 @@ char *__cdecl R_ParseSunLight(SunLightParseParams *params, char *text)
             src = (char *)Com_Parse((const char **)&text);
             if ( !*src || *src == 125 )
                 break;
-            I_strncpyz(&nptr, src, 2048);
+            I_strncpyz(nptr, src, 2048);
             if ( I_stricmp(dest, "newsun") )
             {
                 if ( I_stricmp(dest, "exposure") )
                 {
                     if ( !I_stricmp(dest, "skyboxhdrscale") )
-                        v7 = atof(&nptr);
+                        v7 = atof(nptr);
                     if ( I_stricmp(dest, "ambient") )
                     {
                         if ( I_stricmp(dest, "_color") )
@@ -261,20 +262,20 @@ char *__cdecl R_ParseSunLight(SunLightParseParams *params, char *text)
                                                                             if ( I_stricmp(dest, "treeScatterIntensity") )
                                                                             {
                                                                                 if ( !I_stricmp(dest, "treeScatterAmount") )
-                                                                                    params->treeScatterAmount = atof(&nptr);
+                                                                                    params->treeScatterAmount = atof(nptr);
                                                                             }
                                                                             else
                                                                             {
-                                                                                params->treeScatterIntensity = atof(&nptr);
+                                                                                params->treeScatterIntensity = atof(nptr);
                                                                             }
                                                                         }
                                                                         else
                                                                         {
                                                                             s_world.skyBoxModel = (const char *)Hunk_Alloc(
-                                                                                                                                                        &v36[strlen(&nptr)] - v36 + 1,
+                                                                                                                                                        strlen(nptr) + 1,
                                                                                                                                                         "R_ParseSunLight",
                                                                                                                                                         21);
-                                                                            p_nptr = &nptr;
+                                                                            p_nptr = nptr;
                                                                             skyBoxModel = (char *)s_world.skyBoxModel;
                                                                             do
                                                                             {
@@ -286,73 +287,73 @@ char *__cdecl R_ParseSunLight(SunLightParseParams *params, char *text)
                                                                     }
                                                                     else
                                                                     {
-                                                                        I_strncpyz(params->name, &nptr, 64);
+                                                                        I_strncpyz(params->name, nptr, 64);
                                                                     }
                                                                 }
                                                                 else
                                                                 {
-                                                                    sscanf(&nptr, "%f %f %f", &v21, &v22, &v23);
+                                                                    sscanf(nptr, "%f %f %f", &v21, &v22, &v23);
                                                                 }
                                                             }
                                                             else
                                                             {
-                                                                v15 = atof(&nptr);
+                                                                v15 = atof(nptr);
                                                             }
                                                         }
                                                         else
                                                         {
-                                                            sscanf(&nptr, "%f %f %f", &v18, &v19, &v20);
+                                                            sscanf(nptr, "%f %f %f", &v18, &v19, &v20);
                                                         }
                                                     }
                                                     else
                                                     {
-                                                        v14 = atof(&nptr);
+                                                        v14 = atof(nptr);
                                                     }
                                                 }
                                                 else
                                                 {
-                                                    sscanf(&nptr, "%f %f %f", &in, &v39, &v40);
+                                                    sscanf(nptr, "%f %f %f", &in, &v39, &v40);
                                                 }
                                             }
                                             else
                                             {
-                                                sscanf(&nptr, "%f %f %f", &v9, &v10, &v11);
+                                                sscanf(nptr, "%f %f %f", &v9, &v10, &v11);
                                                 v13 = 1;
                                             }
                                         }
                                         else
                                         {
-                                            v6 = atof(&nptr);
+                                            v6 = atof(nptr);
                                         }
                                     }
                                     else
                                     {
-                                        sscanf(&nptr, "%f %f %f", &out, &v33, &v34);
+                                        sscanf(nptr, "%f %f %f", &out, &v33, &v34);
                                     }
                                 }
                                 else
                                 {
-                                    sscanf(&nptr, "%f %f %f", &v29, &v30, &v31);
+                                    sscanf(nptr, "%f %f %f", &v29, &v30, &v31);
                                 }
                             }
                             else
                             {
-                                v37 = atof(&nptr);
+                                v37 = atof(nptr);
                             }
                         }
                         else
                         {
-                            sscanf(&nptr, "%f %f %f", &v26, &v27, &v28);
+                            sscanf(nptr, "%f %f %f", &v26, &v27, &v28);
                         }
                     }
                     else
                     {
-                        v17 = atof(&nptr);
+                        v17 = atof(nptr);
                     }
                 }
                 else
                 {
-                    v12 = atof(&nptr);
+                    v12 = atof(nptr);
                     if ( v12 < 0.0 )
                     {
                         v12 = 0.0f;
@@ -923,15 +924,15 @@ void __cdecl R_LoadLightmaps(GfxBspLoad *load)
             __debugbreak();
         }
         s_world.draw.lightmapPrimaryTextures = (GfxTexture *)Hunk_Alloc(
-                                                                                                                     4 * s_world.draw.lightmapCount,
+                                                                                                                     sizeof(GfxTexture) * s_world.draw.lightmapCount,
                                                                                                                      "R_LoadLightmaps",
                                                                                                                      21);
         s_world.draw.lightmapSecondaryTextures = (GfxTexture *)Hunk_Alloc(
-                                                                                                                         4 * s_world.draw.lightmapCount,
+                                                                                                                         sizeof(GfxTexture) * s_world.draw.lightmapCount,
                                                                                                                          "R_LoadLightmaps",
                                                                                                                          21);
         s_world.draw.lightmapSecondaryTexturesB = (GfxTexture *)Hunk_Alloc(
-                                                                                                                            4 * s_world.draw.lightmapCount,
+                                                                                                                            sizeof(GfxTexture) * s_world.draw.lightmapCount,
                                                                                                                             "R_LoadLightmaps",
                                                                                                                             21);
     }
@@ -2043,9 +2044,31 @@ void __cdecl R_LoadReflectionProbes(unsigned int bspVersion)
     DiskGfxReflectionProbe *reflectionProbeRawData12; // [esp+8h] [ebp-8h]
     char *reflectionProbeRawData11; // [esp+Ch] [ebp-4h]
 
+    // mod (bspworld): the Mod Tools' version 43 BSPs (asset_viewer) store 0x4009C-byte probes: the origin, the pixels
+    // and the 64-byte colour correction name, without the probe volumes and name the version 45 layout adds. They are
+    // widened to that layout, volumes empty.
+    std::vector<DiskGfxReflectionProbe> widenedProbes;
+    if ( bspVersion > 0xB && bspVersion < 45 )
+    {
+        unsigned int count = 0;
+        const unsigned __int8 *in = (const unsigned __int8 *)Com_GetBspLump(LUMP_REFLECTION_PROBES, 0x4009Cu, &count);
+        widenedProbes.resize(count); // value-initialised in place: one probe is 259 KiB
+        for ( unsigned int p = 0; p < count; ++p, in += 0x4009C )
+        {
+            memcpy(widenedProbes[p].origin, in, sizeof(widenedProbes[p].origin));
+            memcpy(widenedProbes[p].pixels, in + 12, sizeof(widenedProbes[p].pixels));
+            memcpy(widenedProbes[p].colorCorrectionFilename, in + 12 + sizeof(widenedProbes[p].pixels), 64);
+        }
+    }
     if ( bspVersion > 0xB )
     {
-        reflectionProbeRawData = (const DiskGfxReflectionProbe *)Com_GetBspLump(
+        if ( bspVersion < 45 )
+        {
+            reflectionProbeRawData = widenedProbes.data();
+            s_world.draw.reflectionProbeCount = (unsigned int)widenedProbes.size();
+        }
+        else
+            reflectionProbeRawData = (const DiskGfxReflectionProbe *)Com_GetBspLump(
                                                                                                                              LUMP_REFLECTION_PROBES,
                                                                                                                              0x406E0u,
                                                                                                                              &s_world.draw.reflectionProbeCount);
@@ -2055,7 +2078,7 @@ void __cdecl R_LoadReflectionProbes(unsigned int bspVersion)
                                                                                                                         "R_LoadReflectionProbes",
                                                                                                                         21);
         s_world.draw.reflectionProbeTextures = (GfxTexture *)Hunk_Alloc(
-                                                                                                                     4 * s_world.draw.reflectionProbeCount,
+                                                                                                                     sizeof(GfxTexture) * s_world.draw.reflectionProbeCount,
                                                                                                                      "R_LoadReflectionProbes",
                                                                                                                      21);
         R_CreateDummyProbe();
@@ -2075,7 +2098,7 @@ void __cdecl R_LoadReflectionProbes(unsigned int bspVersion)
                                                                                                                         "R_LoadReflectionProbes",
                                                                                                                         21);
         s_world.draw.reflectionProbeTextures = (GfxTexture *)Hunk_Alloc(
-                                                                                                                     4 * s_world.draw.reflectionProbeCount,
+                                                                                                                     sizeof(GfxTexture) * s_world.draw.reflectionProbeCount,
                                                                                                                      "R_LoadReflectionProbes",
                                                                                                                      21);
         reflectionProbeRawData12 = (DiskGfxReflectionProbe *)Hunk_AllocateTempMemory(
@@ -5588,7 +5611,7 @@ unsigned __int8 *R_AllocShadowGeometryHeaderMemory()
     {
         __debugbreak();
     }
-    result = Hunk_Alloc(12 * s_world.primaryLightCount, "R_AllocShadowGeometryHeaderMemory", 21);
+    result = Hunk_Alloc(sizeof(GfxShadowGeometry) * s_world.primaryLightCount, "R_AllocShadowGeometryHeaderMemory", 21);
     s_world.shadowGeom = (GfxShadowGeometry *)result;
     return result;
 }

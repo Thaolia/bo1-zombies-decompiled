@@ -573,14 +573,23 @@ void __cdecl CL_CM_LoadMap(char *mapname)
 {
     int checksum; // [esp+0h] [ebp-4h] BYREF
 
+    // mod (bspworld): a client of a remote server reads the BSP world here; a local server already did
+    const char *bspWorld = useFastFile->current.enabled && !com_sv_running->current.enabled ? Com_BspWorldPath(mapname)
+                                                                                            : nullptr;
+    if ( !com_sv_running->current.enabled )
+        Com_SetWorldFromBsp(bspWorld != nullptr);
     if ( !useFastFile->current.enabled )
         Com_LoadBsp(mapname);
+    else if ( bspWorld )
+        Com_LoadBsp((char *)bspWorld);
     CM_LoadMap(mapname, &checksum);
     if ( !com_sv_running->current.enabled )
     {
         CM_LinkWorld();
         Com_LoadWorld(mapname);
     }
+    if ( bspWorld )
+        Com_UnloadBsp();
 }
 
 void __cdecl CL_ShutdownCGame(int localClientNum)
@@ -987,8 +996,20 @@ int __cdecl LoadWorld(char *mapname)
     int checksum; // [esp+0h] [ebp-4h] BYREF
 
     IsMenuLevel = Com_IsMenuLevel(0);
+    // mod (bspworld): the render world from a compiled BSP, read for this load only (R_LoadWorld picks the BSP path).
+    const char *bspWorld = useFastFile->current.enabled ? Com_BspWorldPath(mapname) : nullptr;
+    if ( bspWorld )
+    {
+        Com_Printf(16, "bspworld: render world of '%s' read from %s\n", mapname, bspWorld);
+        Com_LoadBsp((char *)bspWorld);
+        // The world's surfaces and light regions index the primary lights of their own BSP (R_LoadLightRegions
+        // asserts the counts match): comWorld's lights, water and burnable data come from it too.
+        Com_LoadPrimaryLights();
+        Com_LoadWaterData();
+        Com_LoadBurnableData();
+    }
     R_LoadWorld(mapname, &checksum, 0, IsMenuLevel);
-    if ( !useFastFile->current.enabled )
+    if ( !useFastFile->current.enabled || bspWorld )
         Com_UnloadBsp();
     return checksum;
 }

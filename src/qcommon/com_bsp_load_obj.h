@@ -204,6 +204,15 @@ bool __cdecl Com_BspError();
 char __cdecl Com_CheckVersionLumpCountError(int version);
 void __cdecl Com_LoadBsp(char *filename);
 void __cdecl Com_UnloadBsp();
+// mod (bspworld): '+set bo1_bspworld 1' reads the map's world (collision, entities, lights, path nodes, render world)
+// from its compiled BSP, maps/<map>.d3dbsp, through the engine's own loaders, while scripts and assets still come from
+// its zones; another value names the BSP to read instead (a render-world test on another map). Empty: zones only.
+// The BSP to read for this map's BSP file name, or null when the dvar is empty.
+const char *Com_BspWorldPath(const char *mapBspFilename);
+// Whether the current map's world is read from a BSP: without fastfiles, as retail's tools did, or when the map
+// loaded with Com_BspWorldPath's BSP (Com_SetWorldFromBsp, set by the server's spawn and a remote client's load).
+bool Com_WorldFromBsp();
+void Com_SetWorldFromBsp(bool fromBsp);
 void __cdecl Com_CleanupBsp();
 char *__cdecl Com_EntityString(int *numEntityChars);
 void __cdecl Com_SaveLump(LumpType type, const void *newLump, unsigned int size, ComSaveLumpBehavior behavior);
