@@ -769,6 +769,60 @@ void LogImage(const char *label, const uint8_t *px, uint32_t w, uint32_t h, bool
     Log("IMGEND %s", label);
 }
 
+// The 3D state the frame's command buffer last set, so that BindDraw sends only what changed. Invalid (everything
+// sent again) at each frame's start and after anything else that sets 3D state (BeginPass: targets, viewport,
+// scissor; Clear: scissor) or interposes copies (uploads, blits, present).
+struct BoundState
+{
+    bool valid = false;
+    const Shader *vertex = nullptr, *pixel = nullptr;
+    DkRasterizerState raster = {};
+    DkColorState colorState = {};
+    DkColorWriteState colorWrite = {};
+    DkDepthStencilState depthStencil = {};
+    DkBlendState blend = {};
+    bool rasterSet = false, colorStateSet = false, colorWriteSet = false, depthStencilSet = false, blendSet = false;
+    bool biasSet = false;
+    float biasConstant = 0.0f, biasSlope = 0.0f;
+    DkVtxAttribState attribs[MAX_ATTRIBS] = {};
+    uint32_t attribCount = ~0u;
+    DkVtxBufferState vbs[MAX_STREAMS] = {};
+    uint32_t streamCount = ~0u;
+    DkGpuAddr vbAddr[MAX_STREAMS] = {};
+    uint32_t vbSize[MAX_STREAMS] = {};
+    DkGpuAddr vsUbo = 0, psUbo = 0;
+    uint32_t vsUboSize = 0, psUboSize = 0;
+    DkResHandle textures[MAX_TEXTURES] = {};
+    bool texturesSet = false;
+    DkViewport viewport = {};
+    DkScissor scissor = {};
+    bool viewportSet = false, scissorSet = false;
+    bool stencilSet = false;
+    uint8_t stencilWrite = 0, stencilRef = 0, stencilRead = 0;
+    float blendConst[4] = {};
+    bool blendConstSet = false;
+    DkIdxFormat idxFormat = DkIdxFormat_Uint16;
+    DkGpuAddr idxAddr = 0;
+};
+BoundState s_bound;
+uint32_t s_shaderBinds = 0; // logged with Present: shader binds against draws shows what the cache saves
+
+void InvalidateBound()
+{
+    s_bound.valid = false;
+}
+
+// Whether `next` differs from the copy in `last` (then `last` takes it). A struct's padding may differ between two
+// logically equal states: that only costs a redundant bind.
+template <typename T> bool Changed(T *last, const T *next, bool *set)
+{
+    if (*set && !std::memcmp(last, next, sizeof(T)))
+        return false;
+    std::memcpy(last, next, sizeof(T));
+    *set = true;
+    return true;
+}
+
 void BeginFrame(Swapchain *s)
 {
     if (s->recording)
@@ -821,6 +875,7 @@ void BeginFrame(Swapchain *s)
     s_uboNext = 0;
     s_frameStageBase = slot * kFrameStageSize;
     s_frameStageNext = 0;
+    InvalidateBound();
     // Since the last frame the CPU rewrote descriptors (an upload repoints a texture from the placeholder to its
     // image), texel data (uploads) and the uniform ring / dynamic buffers: drop the GPU caches that could hold the old
     // contents before this frame reads them.
@@ -1129,6 +1184,7 @@ void UploadTexture(gb::Texture *handle, uint8_t level, uint8_t layer, const Box 
             t->uploaded = true;
         }
         dkCmdBufBarrier(cmd, DkBarrier_Full, invalidate);
+        InvalidateBound();
         s_frameStageNext += stageBytes;
         ++s_inFrameUploads;
         return;
@@ -1620,6 +1676,7 @@ void BeginPass(const PassDesc &desc)
     if (dbg)
         Log("  BeginPass: binding %u color + %s depth", colorCount, depthPtr ? "a" : "no");
     dkCmdBufBindRenderTargets(s->cmd, colorPtrs, colorCount, depthPtr);
+    InvalidateBound();
     if (dbg)
         Log("  BeginPass: RT bound; setting viewport/scissor");
 
@@ -1697,6 +1754,7 @@ void Clear(const Rect *rects, uint32_t count, bool color, bool depth, bool stenc
             count ? "" : " (whole)", color, depth, stencil, rgba[0], rgba[1], rgba[2], rgba[3]);
     // Only these rects, whatever the last draw's scissor was: each rect (or the whole attachment, with none) becomes
     // the scissor that clips the clear. The next draw sets its own scissor again.
+    InvalidateBound();
     const Rect whole = {0, 0, s_passW, s_passH};
     const uint32_t n = count ? count : 1;
     for (uint32_t r = 0; r < n; ++r)
@@ -1760,29 +1818,72 @@ void BindDraw(const DrawState &state)
                     t->uploaded ? "" : " NOT-UPLOADED", sm ? sm->descId : -1);
             }
 
-    const DkShader *shaders[2] = {&p->vertex->shader, &p->pixel->shader};
-    dkCmdBufBindShaders(cmd, DkStageFlag_GraphicsMask, shaders, 2);
+    // Only what differs from the last draw is sent (s_bound): each bind is GPU work too, and the profile showed the
+    // GPU's frame time climbing with the draw count (Call of the Dead, 720p: ~14 ms at 250 draws, ~30 ms at 6 300).
+    BoundState &b = s_bound;
+    if (!b.valid)
+    {
+        b = BoundState();
+        b.valid = true;
+    }
+    if (b.vertex != p->vertex || b.pixel != p->pixel)
+    {
+        const DkShader *shaders[2] = {&p->vertex->shader, &p->pixel->shader};
+        dkCmdBufBindShaders(cmd, DkStageFlag_GraphicsMask, shaders, 2);
+        b.vertex = p->vertex;
+        b.pixel = p->pixel;
+        ++s_shaderBinds;
+    }
     if (dbg)
         Log("    BindDraw: shaders bound (attribs %u streams %u)", p->attribCount, p->streamCount);
-    dkCmdBufBindRasterizerState(cmd, &p->raster);
-    if (p->raster.depthBiasEnableMask)
+    if (Changed(&b.raster, &p->raster, &b.rasterSet))
+        dkCmdBufBindRasterizerState(cmd, &p->raster);
+    if (p->raster.depthBiasEnableMask && (!b.biasSet || b.biasConstant != p->biasConstant || b.biasSlope != p->biasSlope))
+    {
         dkCmdBufSetDepthBias(cmd, p->biasConstant, 0.0f, p->biasSlope);
-    dkCmdBufBindColorState(cmd, &p->colorState);
-    dkCmdBufBindColorWriteState(cmd, &p->colorWrite);
-    dkCmdBufBindDepthStencilState(cmd, &p->depthStencil);
-    dkCmdBufBindBlendState(cmd, 0, &p->blend);
-    dkCmdBufBindVtxAttribState(cmd, p->attribs, p->attribCount);
+        b.biasSet = true;
+        b.biasConstant = p->biasConstant;
+        b.biasSlope = p->biasSlope;
+    }
+    if (Changed(&b.colorState, &p->colorState, &b.colorStateSet))
+        dkCmdBufBindColorState(cmd, &p->colorState);
+    if (Changed(&b.colorWrite, &p->colorWrite, &b.colorWriteSet))
+        dkCmdBufBindColorWriteState(cmd, &p->colorWrite);
+    if (Changed(&b.depthStencil, &p->depthStencil, &b.depthStencilSet))
+        dkCmdBufBindDepthStencilState(cmd, &p->depthStencil);
+    if (Changed(&b.blend, &p->blend, &b.blendSet))
+        dkCmdBufBindBlendState(cmd, 0, &p->blend);
+    if (b.attribCount != p->attribCount ||
+        std::memcmp(b.attribs, p->attribs, sizeof(DkVtxAttribState) * p->attribCount))
+    {
+        dkCmdBufBindVtxAttribState(cmd, p->attribs, p->attribCount);
+        b.attribCount = p->attribCount;
+        std::memcpy(b.attribs, p->attribs, sizeof(DkVtxAttribState) * p->attribCount);
+    }
 
+    const uint32_t streams = p->streamCount < MAX_STREAMS ? p->streamCount : MAX_STREAMS;
     DkVtxBufferState vbs[MAX_STREAMS] = {};
-    for (uint32_t i = 0; i < p->streamCount && i < MAX_STREAMS; ++i)
+    for (uint32_t i = 0; i < streams; ++i)
         vbs[i].stride = state.vertices[i].stride;
-    dkCmdBufBindVtxBufferState(cmd, vbs, p->streamCount);
-    for (uint32_t i = 0; i < p->streamCount && i < MAX_STREAMS; ++i)
+    if (b.streamCount != p->streamCount || std::memcmp(b.vbs, vbs, sizeof(vbs)))
+    {
+        dkCmdBufBindVtxBufferState(cmd, vbs, p->streamCount);
+        b.streamCount = p->streamCount;
+        std::memcpy(b.vbs, vbs, sizeof(vbs));
+    }
+    for (uint32_t i = 0; i < streams; ++i)
     {
         const Buffer *vb = static_cast<const Buffer *>(state.vertices[i].buffer);
         if (vb)
         {
-            dkCmdBufBindVtxBuffer(cmd, i, vb->gpu + state.vertices[i].offset, vb->size - state.vertices[i].offset);
+            const DkGpuAddr addr = vb->gpu + state.vertices[i].offset;
+            const uint32_t size = vb->size - state.vertices[i].offset;
+            if (b.vbAddr[i] != addr || b.vbSize[i] != size)
+            {
+                dkCmdBufBindVtxBuffer(cmd, i, addr, size);
+                b.vbAddr[i] = addr;
+                b.vbSize[i] = size;
+            }
             MarkRead(vb);
         }
     }
@@ -1790,11 +1891,27 @@ void BindDraw(const DrawState &state)
         Log("    BindDraw: vtx bound; binding UBOs");
 
     if (const Buffer *vc = static_cast<const Buffer *>(state.vertexConstants.buffer))
-        dkCmdBufBindUniformBuffer(cmd, DkStage_Vertex, 0, vc->gpu + state.vertexConstants.offset,
-                                  AlignUp(state.vertexConstants.size, DK_UNIFORM_BUF_ALIGNMENT));
+    {
+        const DkGpuAddr addr = vc->gpu + state.vertexConstants.offset;
+        const uint32_t size = AlignUp(state.vertexConstants.size, DK_UNIFORM_BUF_ALIGNMENT);
+        if (b.vsUbo != addr || b.vsUboSize != size)
+        {
+            dkCmdBufBindUniformBuffer(cmd, DkStage_Vertex, 0, addr, size);
+            b.vsUbo = addr;
+            b.vsUboSize = size;
+        }
+    }
     if (const Buffer *pc = static_cast<const Buffer *>(state.pixelConstants.buffer))
-        dkCmdBufBindUniformBuffer(cmd, DkStage_Fragment, 1, pc->gpu + state.pixelConstants.offset,
-                                  AlignUp(state.pixelConstants.size, DK_UNIFORM_BUF_ALIGNMENT));
+    {
+        const DkGpuAddr addr = pc->gpu + state.pixelConstants.offset;
+        const uint32_t size = AlignUp(state.pixelConstants.size, DK_UNIFORM_BUF_ALIGNMENT);
+        if (b.psUbo != addr || b.psUboSize != size)
+        {
+            dkCmdBufBindUniformBuffer(cmd, DkStage_Fragment, 1, addr, size);
+            b.psUbo = addr;
+            b.psUboSize = size;
+        }
+    }
 
     if (dbg)
         Log("    BindDraw: UBOs bound; binding textures");
@@ -1806,24 +1923,44 @@ void BindDraw(const DrawState &state)
         const Sampler *smp = static_cast<const Sampler *>(state.textures[i].sampler);
         handles[i] = dkMakeTextureHandle(tex ? tex->descId : 0, smp ? smp->descId : 0);
     }
-    dkCmdBufBindTextures(cmd, DkStage_Fragment, 0, handles, MAX_TEXTURES);
+    if (!b.texturesSet || std::memcmp(b.textures, handles, sizeof(handles)))
+    {
+        dkCmdBufBindTextures(cmd, DkStage_Fragment, 0, handles, MAX_TEXTURES);
+        std::memcpy(b.textures, handles, sizeof(handles));
+        b.texturesSet = true;
+    }
     if (dbg)
         Log("    BindDraw: textures bound; viewport/scissor");
 
     const DkViewport vp = {state.viewport.x,        state.viewport.y,        state.viewport.width,
                            state.viewport.height,   state.viewport.minDepth, state.viewport.maxDepth};
-    dkCmdBufSetViewports(cmd, 0, &vp, 1);
+    if (Changed(&b.viewport, &vp, &b.viewportSet))
+        dkCmdBufSetViewports(cmd, 0, &vp, 1);
     // deko3d always scissors. With the pipeline's scissor test off the rect means nothing (the frontend fills it
     // from D3D9's scissor rect regardless, which an earlier clipped draw may have left small), so cover the pass.
     const DkScissor sc = p->scissorTest ? DkScissor{uint32_t(state.scissor.x < 0 ? 0 : state.scissor.x),
                                                     uint32_t(state.scissor.y < 0 ? 0 : state.scissor.y),
                                                     state.scissor.width, state.scissor.height}
                                         : DkScissor{0, 0, s_passW, s_passH};
-    dkCmdBufSetScissors(cmd, 0, &sc, 1);
-    if (p->depthStencil.stencilTestEnable)
+    if (Changed(&b.scissor, &sc, &b.scissorSet))
+        dkCmdBufSetScissors(cmd, 0, &sc, 1);
+    if (p->depthStencil.stencilTestEnable &&
+        (!b.stencilSet || b.stencilWrite != p->stencilWriteMask || b.stencilRef != state.stencilRef ||
+         b.stencilRead != p->stencilReadMask))
+    {
         dkCmdBufSetStencil(cmd, DkFace_FrontAndBack, p->stencilWriteMask, state.stencilRef, p->stencilReadMask);
-    dkCmdBufSetBlendConst(cmd, state.blendConstant[0], state.blendConstant[1], state.blendConstant[2],
-                          state.blendConstant[3]);
+        b.stencilSet = true;
+        b.stencilWrite = p->stencilWriteMask;
+        b.stencilRef = state.stencilRef;
+        b.stencilRead = p->stencilReadMask;
+    }
+    if (!b.blendConstSet || std::memcmp(b.blendConst, state.blendConstant, sizeof(b.blendConst)))
+    {
+        dkCmdBufSetBlendConst(cmd, state.blendConstant[0], state.blendConstant[1], state.blendConstant[2],
+                              state.blendConstant[3]);
+        std::memcpy(b.blendConst, state.blendConstant, sizeof(b.blendConst));
+        b.blendConstSet = true;
+    }
     if (dbg)
         Log("    BindDraw: done");
 }
@@ -1863,7 +2000,12 @@ void DrawIndexed(const DrawState &state, Primitive primitive, uint32_t indexCoun
     BindDraw(state);
     const Buffer *ib = static_cast<const Buffer *>(state.indices);
     const DkIdxFormat idx = ib->type == BufferType::Index32 ? DkIdxFormat_Uint32 : DkIdxFormat_Uint16;
-    dkCmdBufBindIdxBuffer(s->cmd, idx, ib->gpu);
+    if (s_bound.idxAddr != ib->gpu || s_bound.idxFormat != idx)
+    {
+        dkCmdBufBindIdxBuffer(s->cmd, idx, ib->gpu);
+        s_bound.idxAddr = ib->gpu;
+        s_bound.idxFormat = idx;
+    }
     MarkRead(ib);
     if (s_frameTrace && (s_passIdx == 4 || s_passIdx >= 23))
     {
@@ -1914,9 +2056,9 @@ void Present(gb::Swapchain *swapchain, gb::Texture *image)
     if (s_dbgPresent < 8 || (s_dbgPresent % 16) == 0)
     {
         Log("Present #%d at %us: %d draws total so far, %u buffer renames, %u blocks (%.1f MB), heap %.1f MB, "
-            "uploads %u in frame %u batched",
+            "uploads %u in frame %u batched, %u shader binds",
             s_dbgPresent, secs, s_drawTotal, s_renames, s_blocksLive, double(s_blockBytes) / double(1 << 20), HeapMB(),
-            s_inFrameUploads, s_syncUploads);
+            s_inFrameUploads, s_syncUploads, s_shaderBinds);
         if (s_gpuFrames || s_waitFrames)
             Log("gpu %.1f ms avg %.1f max over %u frames; cpu waited for the gpu %.1f ms avg %.1f max; "
                 "%u upload batches",
@@ -2097,6 +2239,7 @@ void Blit(gb::Texture *srcHandle, uint8_t srcLevel, uint8_t srcLayer, const Rect
     // A depth buffer written by a copy no longer matches what Zcull recorded for it.
     dkCmdBufBarrier(s->cmd, DkBarrier_Full,
                     DkInvalidateFlags_Image | (IsDepthFormat(dst->desc.format) ? DkInvalidateFlags_Zcull : 0u));
+    InvalidateBound();
 }
 void ReadTexture(gb::Texture *, uint8_t, uint8_t, const Box &, void *, uint32_t) {}
 
