@@ -194,7 +194,32 @@ def read_mtl(path, images):
                 if not os.path.exists(dds):
                     dds = os.path.join(images, os.path.basename(line[7:]))
                 maps[name] = dds
+    # A model dumped from another zone (TranZit's gump zones) can list a material without its map_Kd although the
+    # material's JSON names its colour map and the image was dumped (7 674 placements drawn white: dry corn, rubble,
+    # pipes): the JSON's base colour map, as the OAT dumper picks it, fills in
+    with open(path, encoding="latin-1") as f:
+        names = [line[7:].rstrip("\n") for line in f if line.startswith("newmtl ")]
+    for name in names:
+        if name not in maps:
+            dds = material_colour(os.path.dirname(images), name, images)
+            if dds:
+                maps[name] = dds
     return maps
+
+
+def material_colour(dump, material, images):
+    """The DDS of a BO2 material's base colour map from OAT's material JSON (the first sampler named as
+    GfxWorldObjDumperT6 picks them), None when there is none or its image was not dumped."""
+    try:
+        with open(os.path.join(dump, "materials", material + ".json"), encoding="latin-1") as f:
+            textures = {t.get("name"): t.get("image") for t in json.load(f).get("textures", [])}
+    except (OSError, ValueError, AttributeError):
+        return None
+    for sampler in ("colorMap", "Diffuse_Map", "Color_Map", "radiantDiffuseMap"):
+        image = textures.get(sampler)
+        if image and os.path.exists(os.path.join(images, image + ".dds")):
+            return os.path.join(images, image + ".dds")
+    return None
 
 
 def image_name(dds_path):
@@ -652,8 +677,10 @@ def main(argv=None):
         if e.get("classname") == "script_brushmodel" and e.get("targetname") in STANDING_BMODELS:
             index = add_bmodel(e)
             if index >= 0:
+                # BO2's script turns the bridge sections to their script_angles (10 and 350 degrees of pitch: the
+                # bridge sags in a V, as the world collision under it does); drawn level, a player walked under it
                 instances.append((index, [float(v) for v in e["origin"].split()],
-                                  angles_to_axes(e.get("angles", "0 0 0")), 1.0))
+                                  angles_to_axes(e.get("script_angles", e.get("angles", "0 0 0"))), 1.0))
                 standing += 1
     if bmodels:
         print(f"brush models: {sum(1 for n, i in model_index.items() if n.startswith('bmodel') and i >= 0)} drawn "

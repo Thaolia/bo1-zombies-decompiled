@@ -477,6 +477,7 @@ class SoloView(RowsView):
                 self.choose("start_points", "Points de départ",
                             [(n, _points(n), H.ROW_HELP["start_points"]) for n in START_POINT_CHOICES])),
         ]
+        rows += [Row("start_power", "Courant dès le départ", _yes(p["start_power"]), self.toggle("start_power"))]
         no_machines = "sans machines à atouts (noperks) : rien à donner" if p["noperks"] else None
         rows += [Row("start_perk", f"Atout : {label}", _yes(key in p["start_perks"]), self.toggle_perk(key),
                      disabled=no_machines) for key, label in START_PERKS]

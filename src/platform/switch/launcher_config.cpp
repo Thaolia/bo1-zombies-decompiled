@@ -175,6 +175,13 @@ void Apply(LauncherSettings *s, const std::string &key, const std::string &value
             if (value == kBackendNames[i])
                 s->backend = LauncherBackend(i);
     }
+    else if (key == "start_power")
+        ParseBool(value, &s->startPower);
+    else if (key == "resolution")
+    {
+        if (value == "480" || value == "720")
+            s->height = std::atoi(value.c_str());
+    }
     else if (key == "maxfps")
     {
         if (value == "30" || value == "60")
@@ -239,6 +246,8 @@ std::string Launcher_FormatSettings(const LauncherSettings &s)
     out += "start_points=" + std::to_string(s.startPoints) + "\n";
     out += "start_perks=" + Launcher_StartPerkList(s) + "\n";
     out += std::string("backend=") + kBackendNames[s.backend] + "\n";
+    out += std::string("start_power=") + (s.startPower ? "1" : "0") + "\n";
+    out += "resolution=" + std::to_string(s.height) + "\n";
     out += "maxfps=" + std::to_string(s.maxFps) + "\n";
     out += std::string("shadows=") + (s.shadows ? "1" : "0") + "\n";
     out += std::string("fpscounter=") + (s.fpsCounter ? "1" : "0") + "\n";
@@ -265,13 +274,18 @@ std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::strin
     line += std::string(" +set bo1_testclient_god ") + (s.god && !join ? "1" : "0");
     // The dedicated server stacks mods/zinfo for all its players itself (FS_ModStackNames), and decides its players'
     // start. Before the extra, so a launch_extra.cfg that sets its own fs_mods wins. mods/admin gives the start kit.
-    const bool kit = !join && (s.startPoints > 0 || s.startPerks != 0);
+    const bool kit = !join && (s.startPoints > 0 || s.startPerks != 0 || s.startPower);
     if (!join && (s.tabInfo || kit))
         line += std::string(" +set fs_mods") + (s.tabInfo ? " zinfo" : "") + (kit ? " admin" : "");
+    if (kit && s.startPower)
+        line += " +set zm_startpower 1";
     if (kit && s.startPoints > 0)
         line += " +set zm_startpoints " + std::to_string(s.startPoints);
     if (kit && s.startPerks != 0)
         line += " +set zm_startperks " + Launcher_StartPerkList(s);
+    // The game runs windowed on the console (r_fullscreen 0), so r_customMode sizes its back buffer; the swapchain
+    // takes that size and the console's compositor scales the frame to the screen.
+    line += std::string(" +set r_fullscreen 0 +set r_customMode ") + (s.height == 480 ? "854x480" : "1280x720");
     line += " +set com_maxfps " + std::to_string(s.maxFps);
     line += std::string(" +set sm_enable ") + (s.shadows ? "1" : "0");
     line += std::string(" +set bo1_fpscounter ") + (s.fpsCounter ? "1" : "0");

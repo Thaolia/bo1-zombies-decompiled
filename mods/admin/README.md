@@ -66,6 +66,10 @@ The game is made for 4; past that `_admin.gsc` gives a player what the first 4 g
 
 - `zm_startpoints <n>`: every player's points once they first spawn on a map (0, the default, keeps the game's own).
 - `zm_startperks "<perks>"`: perks every player gets at that time, e.g. `"jugg revive"` or `"all"`.
+- `zm_startpower 1`: the map's power comes on as the first player spawns. The map's own switch trigger is used
+  (`use_elec_switch`, `use_master_switch` on Verruckt, `use_power_switch` on Der Riese, and a MapKit layout's
+  switch), so everything the map does when the power comes on runs; a map without one but with a `power_on` flag
+  gets the flag set.
 - `zm_jip_mode immediate|nextround`: a player who joins a game in progress plays at once (the default) or spectates
   until the round ends.
 - `zm_debug_revive 1`: while a player is down, logs each test of `maps\_laststand::can_revive` / `is_reviving` for

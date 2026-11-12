@@ -30,6 +30,8 @@ ROW_HELP = {
     "quickrestart": "Après la fin de partie, R relance la même map avec les mêmes réglages.",
     "start_points": "Les points de chaque joueur à son arrivée sur la map, au lieu des 500 du jeu (mod admin, "
                     "zm_startpoints). Solo seulement : un serveur décide pour ses joueurs.",
+    "start_power": "Le courant est mis à l'arrivée du premier joueur (mod admin, zm_startpower) : les machines, le "
+                   "Pack-a-Punch et les portes électriques marchent tout de suite. Sans effet sur une map sans courant.",
     "start_perk": "Un atout donné gratuitement à l'arrivée sur la map (mod admin, zm_startperks). Seulement s'il a "
                   "sa machine sur cette map : Kino et Five n'ont que Juggernog, Quick Revive, Speed Cola et Double "
                   "Tap.",

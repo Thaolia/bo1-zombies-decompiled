@@ -508,6 +508,19 @@ TranZit goes through the same tools, with what its size and its bus needed:
   normal packed once (524 000 of 1.47 million: 18 s), the client reuses the server's import when the file and cuts
   are the same (0.45 s). A Windows client's load went from about 150 to 120 s, most of the rest being the zones.
 
+The user's second TranZit run (2026-11-12):
+- **White objects.** A model dumped from a gump zone can list a material without its `map_Kd` although the material's
+  JSON names its colour map and the image was dumped: 7 674 prop placements were drawn white (dry corn, rubble, pipes,
+  the bus station's pillar and sink). `bo2_mesh.py` now falls back to the JSON's base colour map (`colorMap`,
+  `Diffuse_Map`, `Color_Map`, `radiantDiffuseMap`, as OAT's world dumper picks it): 91 placements left without a map,
+  527 images instead of 220.
+- **Walking under the bridge.** BO2's script turns the two `bridge_section` brush models to their `script_angles`
+  (pitch 10 and 350: the bridge sags in a V, and the world collision under it has that V). They were drawn level, so
+  the deck the player saw stood above the one they walked on. Drawn with `script_angles`, the deck and the collision
+  match: a player dropped at the middle lands on the deck (z -62, the V's bottom), shots `br_walk2` / `br_side`.
+- **Power from the start.** mods/admin's `zm_startpower 1` uses the map's power switch trigger as the first player
+  spawns (ZmClient's Solo view and the Switch start menu, "Départ"): TranZit's MapKit switch came on at 2.6 s.
+
 ### Running it
 
 On the session's machine (paths to adapt), with OAT built as `tools/bo2/oat/README.md` says:
