@@ -3149,6 +3149,13 @@ void __cdecl G_UpdateClientLinkInfo(gentity_s *ent)
                                                      + (float)(entParent->s.lerp.apos.trDelta[1] * entParent->s.lerp.apos.trDelta[1]))
                                      + (float)(entParent->s.lerp.apos.trDelta[2] * entParent->s.lerp.apos.trDelta[2])) != 0.0 )
                 {
+#if defined(__SWITCH__)
+                    // Printed every server frame while such a parent moves (Call of the Dead: ~30 lines a second for
+                    // the whole game), and each console line is a flushed SD write there: the first three, then one
+                    // per thousand.
+                    static unsigned int s_movingNoClientWarnings;
+                    if ( ++s_movingNoClientWarnings <= 3 || s_movingNoClientWarnings % 1000 == 0 )
+#endif
                     Com_PrintWarning(
                         15,
                         "Ent #%i of type %i is SVF_NOCLIENT, but has children and seems to be moving.    There is a potential optimization here.\n",
