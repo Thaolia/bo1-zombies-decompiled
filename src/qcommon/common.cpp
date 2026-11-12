@@ -1657,6 +1657,24 @@ void __cdecl Com_ExecStartupConfigs(int localClientNum, const char *configFile)
     if ( Com_SafeMode() )
         Cbuf_AddText(localClientNum, "exec safemode_mp.cfg\n");
 
+#if defined(__SWITCH__)
+    // Retail default_mp_controls.cfg sets gpad_enabled 0 (the PC starts on keyboard and mouse), and only a profile's
+    // apply turns the pad back on and runs its stick and button configs (GamerProfile_UpdateDvarsFromProfile,
+    // GamerProfile_ExecControllerBindings). The console boots straight into +devmap, where no profile is applied:
+    // on an SD card without config.cfg the sticks were dead and no pad button was bound. Done after the player's
+    // config, so a config.cfg saved with gpad_enabled 0 cannot turn the pad off; the stick and button configs chosen
+    // in the game's options are kept.
+    {
+        const char *sticks = Dvar_GetString("gpad_sticksConfig");
+        const char *buttons = Dvar_GetString("gpad_buttonsConfig");
+        Cbuf_AddText(localClientNum, "set gpad_enabled 1\n");
+        Cbuf_AddText(localClientNum,
+                     va("exec %s\n", strstr(sticks, "thumbstick_") == sticks ? sticks : "thumbstick_default"));
+        Cbuf_AddText(localClientNum,
+                     va("exec %s\n", strstr(buttons, "buttons_") == buttons ? buttons : "buttons_default"));
+    }
+#endif
+
     Cbuf_Execute(localClientNum, Com_LocalClient_GetControllerIndex(localClientNum));
 }
 
