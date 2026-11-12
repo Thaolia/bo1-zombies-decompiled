@@ -753,3 +753,9 @@ and the images are the player's own extraction and stay out of the repository.
 `tools/make_dist.sh --bo2 <run> windows` puts that extraction into a package, the layout under `mods/mapkit/layouts/`
 and the files under `mods/mapkit/imports/`. ZmClient's Solo view then offers "Mapkit : Nuketown (Black Ops II)", which
 starts `+set fs_game mods/mapkit +set bo1_mod_mapkit bo2_zm_nuked +devmap zombie_pentagon`.
+
+The native Nuketown goes with it when the `--bo2` folder also holds `usermaps/zombie_bo2nuked/zombie_bo2nuked.ff`
+(the OAT Linker zone after `ffconv`), `main/maps/zombie_bo2nuked.d3dbsp`, `main/images/bo2_*.iwi` and the layout
+`bo2_zm_nuked_bsp.json` (`bo2_bsp.py`, "Props, gameplay and lighting on the native world"). ZmClient offers
+"Mapkit : Nuketown native (Black Ops II, monde BSP)" only when the zone and the BSP are in the package, and adds
+`+set bo1_mod_zones zombie_bo2nuked +set bo1_bspworld maps/zombie_bo2nuked.d3dbsp` to the line.

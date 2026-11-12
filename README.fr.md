@@ -159,7 +159,8 @@ tiennent (les zombies n'y montent pas, et ses props ne sont pas encore éclairé
 Nuketown tourne aussi comme une map BO1 native (expérimental, branche `bspnuked`) : `tools/bo2/bo2_bsp.py` écrit
 son monde, ses props, sa collision et la lumière précalculée de BO2 dans une BSP de BO1, et
 `+set bo1_bspworld maps/zombie_bo2nuked.d3dbsp` y joue le gameplay Nuketown de MapKit (l'auto-test passe 106
-vérifications sur 106 ; les modèles ne sont pas encore éclairés).
+vérifications sur 106 ; les modèles ne sont pas encore éclairés). `make_dist.sh --bo2` l'empaquette et la vue Solo de
+ZmClient la propose sous « Mapkit : Nuketown native (Black Ops II, monde BSP) ».
 
 
 ## Paquets prêts à copier
