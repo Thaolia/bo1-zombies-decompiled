@@ -32,8 +32,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import d3dbsp  # noqa: E402
 from bo2_layout import read_entities  # noqa: E402
+from bo2_bsp_props import PropModels, place_props, prop_collision  # noqa: E402
 from bo2_mesh import (FLAG_ALPHA_TEST, FLAG_BLEND, FLAG_DECAL, blend_flags, dds_to_iwi, image_name,  # noqa: E402
                       read_mtl, read_obj, skipped)
+from bo2_props_collision import PROP_CONTENTS  # noqa: E402
 
 TEMPLATES = {0: "global_white", FLAG_ALPHA_TEST: "mtl_theater_poster_1", FLAG_DECAL: "decal_glue",
              FLAG_BLEND: "decal_glue"}
@@ -103,6 +105,8 @@ def main(argv=None):
     parser.add_argument("--out", required=True)
     parser.add_argument("--collision", help="a BO2COL2 file (default: the dump's)")
     parser.add_argument("--name", default="zombie_bo2nuked", help="the BO1 map's name (a zombie_ name)")
+    parser.add_argument("--models", help="OAT's dump of the zone's xmodels and materials with --model-format GLTF: "
+                                         "adds the placed props (bo2_bsp_props.py)")
     args = parser.parse_args(argv)
     if not args.name.startswith("zombie_"):
         sys.exit("--name must start with zombie_ (a zombies level)")
@@ -213,6 +217,9 @@ def main(argv=None):
     for v, i in used.items():
         coll_verts[i] = verts[v]
     bsp.add_collision_triangles(coll_verts, coll_tris)
+    prop_stats = None
+    if args.models:
+        prop_stats = prop_collision(bsp, args.dump, base, col_material(PROP_CONTENTS, 0), len(coll_verts))
 
     # Entities: the worldspawn (its sun) and the player start; the gameplay step adds the rest
     ents = read_entities(base + ".ents")
@@ -223,6 +230,11 @@ def main(argv=None):
         if e.get("classname") == "info_player_start":
             bsp.add_entity(classname="info_player_start", origin=e["origin"], angles=e.get("angles", "0 0 0"))
             break
+    props, placed = None, (0, 0)
+    if args.models:
+        props = PropModels(args.models, images, os.path.join(os.path.dirname(os.path.normpath(args.templates)), "mc"),
+                           raw, out_images)
+        placed = place_props(bsp, base, props)
 
     bsp_path = os.path.join(args.out, args.name + ".d3dbsp")
     bsp.write(bsp_path)
@@ -239,6 +251,8 @@ def main(argv=None):
         f.write(f"rawfile,maps/{args.name}.gsc\n")
         for name in zone_materials:
             f.write(f"material,wc/{name}\n")
+        for line in props.zone_lines() if props else []:
+            f.write(line + "\n")
 
     nodes, leafs, leafbrushes, partitions, aabbs = bsp.tree_stats
     print(f"{bsp_path}: {len(zone_materials)} materials, {tri_total} triangles in {len(bsp.soups)} surfaces "
@@ -246,6 +260,14 @@ def main(argv=None):
           f"the engine cannot take); {world_brushes} brushes, {len(coll_tris)} terrain triangles in {partitions} "
           f"partitions ({submodel_brushes} submodel brushes left for later, {no_contents} contentless triangles); "
           f"tree {nodes} nodes, {leafs} leaves, {leafbrushes} leaf brushes, {aabbs} leaf partitions")
+    if props:
+        boxes, tri_props, tri_count, fallback = prop_stats
+        print(f"props: {placed[0]} placements as static models ({placed[1]} left out), "
+              f"{sum(1 for m in props.models.values() if m)} xmodels, "
+              f"{sum(1 for m in props.materials.values() if m)} materials; collision: {boxes} boxes, {tri_props} "
+              f"meshes as {tri_count} triangles, {fallback} meshes as boxes (no collision vertices left)")
+        for note in props.notes[:20]:
+            print("  " + note)
     if no_map:
         print("without a colour map: " + ", ".join(no_map[:20]) + (" ..." if len(no_map) > 20 else ""))
     return 0
