@@ -35,7 +35,14 @@ namespace
 constexpr unsigned kFbCount = 2;
 constexpr uint32_t kCmdMemSize = 16 << 20;  // a map frame records many draws
 constexpr uint32_t kCodeChunk = 4 << 20;    // shader code pool grows in 4 MiB blocks
-constexpr uint32_t kUboRingSize = 16 << 20; // per-frame uniform memory, bump-allocated
+// Per-frame uniform memory, bump-allocated. Each draw whose constants changed takes a full 4112-byte block (D3D9's
+// 256 registers + the fixup): 16 MiB held ~4 080 of them, and Call of the Dead's heavy frames needed ~1 300 more, drawn
+// with another draw's constants. 48 MiB holds ~12 200.
+constexpr uint32_t kUboRingSize = 48 << 20;
+// Frames the GPU may still run while the next one is recorded. With one, the first draw of every frame waited for the
+// previous frame's GPU work, so a frame cost its CPU recording plus its GPU time; with two they overlap. Each slot has
+// its own command memory, fence, uniform ring and upload staging.
+constexpr unsigned kFramesInFlight = 2;
 
 DkDevice s_device;
 DkQueue s_queue;
@@ -498,10 +505,12 @@ struct Swapchain : gb::Swapchain
     DkMemBlock fbMem = nullptr;
     DkImage fb[kFbCount] = {};
     DkSwapchain sc = nullptr;
-    DkMemBlock cmdMem = nullptr;
-    DkCmdBuf cmd = nullptr;
-    DkFence fence = {};
-    bool submitted = false;
+    DkMemBlock cmdMem[kFramesInFlight] = {};
+    DkCmdBuf cmds[kFramesInFlight] = {};
+    DkFence fences[kFramesInFlight] = {};
+    bool submitted[kFramesInFlight] = {};
+    unsigned slot = 0;   // the slot being recorded, or last recorded
+    DkCmdBuf cmd = nullptr; // cmds[slot]
     bool recording = false;
     uint16_t width = 0, height = 0;
 };
@@ -509,9 +518,32 @@ struct Swapchain : gb::Swapchain
 Swapchain *s_swapchain = nullptr;
 
 // Frame serials: the frame being recorded (or last recorded), and the last one the GPU is known to have finished
-// (BeginFrame waits for the previous frame). Memory the engine frees waits in s_pendingFree until that point.
+// (BeginFrame waits for the frame that last used its slot). Memory the engine frees waits in s_pendingFree, tagged
+// with the frame being recorded then, until the GPU is past that frame.
 uint32_t s_frameSerial = 0, s_completedSerial = 0;
-std::vector<Range> s_pendingFree;
+struct PendingFree
+{
+    uint32_t serial;
+    Range range;
+};
+std::vector<PendingFree> s_pendingFree;
+
+void FreeLater(const Range &r)
+{
+    s_pendingFree.push_back({s_frameSerial, r});
+}
+
+// Releases what the GPU is past (everything with `all`).
+void ReleaseCompleted(bool all)
+{
+    size_t kept = 0;
+    for (const PendingFree &f : s_pendingFree)
+        if (all || f.serial <= s_completedSerial)
+            Release(f.range);
+        else
+            s_pendingFree[kept++] = f;
+    s_pendingFree.resize(kept);
+}
 uint32_t s_renames = 0; // buffer renames so far (logged with Present)
 
 void MarkRead(const Buffer *b)
@@ -521,12 +553,21 @@ void MarkRead(const Buffer *b)
 }
 
 // Per-frame uniform memory (bump, reset each frame), wrapped in one persistent Buffer the frontend's UniformSlice
-// points into.
+// points into: one kUboRingSize ring per frame slot, the slot's at s_uboBase.
 DkMemBlock s_uboMem = nullptr;
 uint8_t *s_uboCpu = nullptr;
 DkGpuAddr s_uboGpu = 0;
-uint32_t s_uboNext = 0;
+uint32_t s_uboBase = 0, s_uboNext = 0;
+uint32_t s_uboOverflows = 0; // uniform allocations refused this frame (the ring was full): logged with Present
 Buffer s_uboBuffer;
+
+// Uploads recorded into the frame being recorded: one staging ring per frame slot, the slot's at s_frameStageBase.
+constexpr uint32_t kFrameStageSize = 16 << 20;
+DkMemBlock s_frameStageMem = nullptr;
+uint8_t *s_frameStageCpu = nullptr;
+DkGpuAddr s_frameStageGpu = 0;
+uint32_t s_frameStageBase = 0, s_frameStageNext = 0;
+uint32_t s_inFrameUploads = 0, s_syncUploads = 0; // logged with Present
 
 // Texture descriptor pools: each Texture and Sampler gets a persistent id (assigned at creation) that a draw turns
 // into a handle with dkMakeTextureHandle. Id 0 is a white 1x1 placeholder image / default sampler, used for a null
@@ -556,7 +597,7 @@ DkImageSwizzle MapSwizzle(Source s)
 
 // `swizzle` (sampled textures only): how the shader's channels read the stored ones -- the contract's way of serving
 // D3DFMT_L8 / A8 / A8L8 from R8 / RG8 (gfx_backend.h).
-void WriteImageDesc(uint32_t id, const DkImage *img, const Swizzle *swizzle = nullptr)
+void MakeImageDesc(DkImageDescriptor *desc, const DkImage *img, const Swizzle *swizzle)
 {
     DkImageView view;
     dkImageViewDefaults(&view, img);
@@ -567,17 +608,50 @@ void WriteImageDesc(uint32_t id, const DkImage *img, const Swizzle *swizzle = nu
         view.swizzle[2] = MapSwizzle(swizzle->b);
         view.swizzle[3] = MapSwizzle(swizzle->a);
     }
-    dkImageDescriptorInitialize(reinterpret_cast<DkImageDescriptor *>(s_imgPoolCpu) + id, &view, false, false);
+    dkImageDescriptorInitialize(desc, &view, false, false);
 }
 
-// Texture upload: a staging buffer the pixels are repacked into (tight, no row padding), copied into the image on a
-// dedicated command buffer. Synchronous for now (submit + wait per upload); batch if load time bites.
+void WriteImageDesc(uint32_t id, const DkImage *img, const Swizzle *swizzle = nullptr)
+{
+    MakeImageDesc(reinterpret_cast<DkImageDescriptor *>(s_imgPoolCpu) + id, img, swizzle);
+}
+
+// Texture upload outside a frame (the load, before frames flow): the pixels are repacked into a staging buffer (tight,
+// no row padding) and the copies batched on a dedicated command buffer, submitted and waited for once per batch
+// (FlushUploads) instead of once per upload: when the staging or the batch is full, and before anything that may
+// read the textures is submitted.
 constexpr uint32_t kStageCap = 32 << 20;
-constexpr uint32_t kUpCmdSize = 64 << 10;
+constexpr uint32_t kUpCmdSize = 256 << 10;
+constexpr uint32_t kUpBatchMax = 128; // copies per batch, well within kUpCmdSize
 DkMemBlock s_stageMem = nullptr, s_upCmdMem = nullptr;
 uint8_t *s_stageCpu = nullptr;
 DkGpuAddr s_stageGpu = 0;
 DkCmdBuf s_upCmd = nullptr;
+uint32_t s_stageNext = 0, s_upPending = 0, s_upFlushes = 0;
+
+// GPU time of each frame: a timestamp report as the frame starts and one before it is presented (16 bytes each: a
+// value, then the GPU timestamp in ticks of 384/625 ns), read once the slot's fence has passed. With the time
+// BeginFrame waited for that fence, it tells a GPU-bound frame from a CPU-bound one.
+DkMemBlock s_timerMem = nullptr;
+const volatile uint64_t *s_timerCpu = nullptr;
+DkGpuAddr s_timerGpu = 0;
+uint64_t s_gpuNsSum = 0, s_gpuNsMax = 0, s_waitNsSum = 0, s_waitNsMax = 0;
+uint32_t s_gpuFrames = 0, s_waitFrames = 0;
+
+// Submits the batched uploads and waits for them: the staging they read becomes free.
+void FlushUploads()
+{
+    if (!s_upPending)
+        return;
+    // Later work samples the images and reads the descriptors the batch repointed.
+    dkCmdBufBarrier(s_upCmd, DkBarrier_Full, DkInvalidateFlags_Image | DkInvalidateFlags_Descriptors);
+    dkQueueSubmitCommands(s_queue, dkCmdBufFinishList(s_upCmd));
+    WaitQueue("upload");
+    dkCmdBufClear(s_upCmd); // resets recording; the memory added once at init stays
+    s_upPending = 0;
+    s_stageNext = 0;
+    ++s_upFlushes;
+}
 
 std::unordered_map<std::string, Pipeline *> s_pipelines;
 std::unordered_map<std::string, Sampler *> s_samplers;
@@ -699,29 +773,54 @@ void BeginFrame(Swapchain *s)
 {
     if (s->recording)
         return;
+    // The frame about to be recorded reuses the slot of the frame kFramesInFlight before it: wait for that one only,
+    // so the GPU runs the previous frame while this one is recorded.
+    const uint32_t serial = s_frameSerial + 1;
+    const unsigned slot = serial % kFramesInFlight;
     bool idle = true;
-    if (s->submitted)
+    if (s->submitted[slot])
     {
         // A finite wait so a GPU fault degrades (the frame proceeds, logging continues) instead of freezing the app
         // on an infinite wait, which is how a bad draw used to look like a hang.
-        const DkResult r = dkFenceWait(&s->fence, 2000000000); // 2 s
+        const uint64_t waitStart = armGetSystemTick();
+        const DkResult r = dkFenceWait(&s->fences[slot], 2000000000); // 2 s
+        const uint64_t waitNs = armTicksToNs(armGetSystemTick() - waitStart);
+        s_waitNsSum += waitNs;
+        s_waitNsMax = waitNs > s_waitNsMax ? waitNs : s_waitNsMax;
+        ++s_waitFrames;
         if (r != DkResult_Success)
-            Log("fence wait result %d (GPU may have faulted on the previous frame), queue %s", int(r),
+            Log("fence wait result %d (GPU may have faulted on an earlier frame), queue %s", int(r),
                 dkQueueIsInErrorState(s_queue) ? "in error state" : "not in error state");
         idle = r == DkResult_Success;
+        if (idle && s_timerCpu)
+        {
+            const volatile uint64_t *report = s_timerCpu + slot * 4; // start {value, ticks}, end {value, ticks}
+            const uint64_t start = report[1], end = report[3];
+            if (end > start)
+            {
+                const uint64_t ns = (end - start) * 625 / 384;
+                s_gpuNsSum += ns;
+                s_gpuNsMax = ns > s_gpuNsMax ? ns : s_gpuNsMax;
+                ++s_gpuFrames;
+            }
+        }
     }
-    // Only once the previous frame is known finished: its stores become free and the memory freed meanwhile goes.
-    if (idle)
+    // Only once that frame is known finished (and every frame before it, the queue runs in order): stores it read
+    // become free and the memory freed up to it goes.
+    if (idle && serial >= kFramesInFlight)
     {
-        s_completedSerial = s_frameSerial;
-        for (const Range &m : s_pendingFree)
-            Release(m);
-        s_pendingFree.clear();
+        s_completedSerial = serial - kFramesInFlight;
+        ReleaseCompleted(false);
     }
-    ++s_frameSerial;
+    s_frameSerial = serial;
+    s->slot = slot;
+    s->cmd = s->cmds[slot];
     dkCmdBufClear(s->cmd);
-    dkCmdBufAddMemory(s->cmd, s->cmdMem, 0, kCmdMemSize);
+    dkCmdBufAddMemory(s->cmd, s->cmdMem[slot], 0, kCmdMemSize);
+    s_uboBase = slot * kUboRingSize;
     s_uboNext = 0;
+    s_frameStageBase = slot * kFrameStageSize;
+    s_frameStageNext = 0;
     // Since the last frame the CPU rewrote descriptors (an upload repoints a texture from the placeholder to its
     // image), texel data (uploads) and the uniform ring / dynamic buffers: drop the GPU caches that could hold the old
     // contents before this frame reads them.
@@ -731,6 +830,8 @@ void BeginFrame(Swapchain *s)
     // Bind the descriptor pools for the whole frame; every draw's textures index into them by id.
     dkCmdBufBindImageDescriptorSet(s->cmd, s_imgDescGpu, kImgPoolCap);
     dkCmdBufBindSamplerDescriptorSet(s->cmd, s_smpDescGpu, kSmpPoolCap);
+    if (s_timerGpu)
+        dkCmdBufReportCounter(s->cmd, DkCounter_Timestamp, s_timerGpu + slot * 32);
     s->recording = true;
 }
 } // namespace
@@ -748,10 +849,15 @@ bool Init()
     }
     DkQueueMaker queueMaker; // graphics + compute + scratch, as the defaults
     dkQueueMakerDefaults(&queueMaker, s_device);
-    // Zcull (the coarse per-tile depth cull) is off while the console's per-warp blue specks in the lit pass are
-    // investigated: they looked like culled tiles, but turning Zcull off did not remove them (docs/PORTING.md).
-    // Turn it back on, and measure, once they are understood.
-    queueMaker.flags |= DkQueueFlags_DisableZcull;
+    // Zcull (the coarse per-tile depth cull) was off while the console's per-warp blue specks were investigated; they
+    // came from uam's dual issue (UseMesaSchedule), not from Zcull. It is on again, which the depth prepass profits
+    // from most; sdmc:/switch/bo1zm/no_zcull turns it off, to compare or if culled tiles ever show.
+    if (FILE *f = std::fopen("sdmc:/switch/bo1zm/no_zcull", "rb"))
+    {
+        std::fclose(f);
+        queueMaker.flags |= DkQueueFlags_DisableZcull;
+    }
+    Log("Zcull %s", (queueMaker.flags & DkQueueFlags_DisableZcull) ? "off (no_zcull)" : "on");
     s_queue = dkQueueCreate(&queueMaker);
     if (!s_queue)
     {
@@ -775,6 +881,7 @@ void Shutdown()
 {
     if (s_queue)
     {
+        FlushUploads();
         dkQueueWaitIdle(s_queue);
         dkQueueDestroy(s_queue);
         s_queue = nullptr;
@@ -782,9 +889,7 @@ void Shutdown()
     for (DkMemBlock b : s_codeBlocks)
         FreeBlock(b);
     s_codeBlocks.clear();
-    for (const Range &m : s_pendingFree)
-        Release(m);
-    s_pendingFree.clear();
+    ReleaseCompleted(true);
     ReleasePools();
     s_codeOffset = 0;
     if (s_device)
@@ -842,7 +947,7 @@ void DestroyBuffer(gb::Buffer *buffer)
         return;
     // Recorded or running work may still read it: free the memory once the GPU is past this frame.
     for (const BufferStore &store : b->stores)
-        s_pendingFree.push_back(store.mem);
+        FreeLater(store.mem);
     delete b;
 }
 
@@ -947,8 +1052,9 @@ void DestroyTexture(gb::Texture *texture)
     Texture *t = static_cast<Texture *>(texture);
     if (!t)
         return;
+    FlushUploads(); // a batched copy may still target its memory
     if (t->mem.mem) // recorded or running work may still sample it: free once the GPU is past this frame
-        s_pendingFree.push_back(t->mem);
+        FreeLater(t->mem);
     delete t;
 }
 
@@ -965,10 +1071,30 @@ void UploadTexture(gb::Texture *handle, uint8_t level, uint8_t layer, const Box 
     const uint32_t total = rowBytes * rows * depth;
     if (total == 0 || total > kStageCap)
         return;
+    // While a frame is recorded, the copy goes into it, in order with its draws, from the slot's staging ring: no wait
+    // for the GPU. Before, every upload submitted and waited for the queue to go idle (the previous frame included),
+    // which stalled the render thread on each texture the game streamed in.
+    constexpr uint32_t kStageAlign = 512;
+    const uint32_t stageBytes = AlignUp(total, kStageAlign);
+    // The game uploads between one Present and the next frame's first draw too: once frames are flowing, that upload
+    // opens the next frame (BeginFrame only starts recording; the draws then carry on in it).
+    if (Swapchain *s = s_swapchain; s && !s->recording &&
+                                    std::any_of(s->submitted, s->submitted + kFramesInFlight, [](bool b) { return b; }))
+        BeginFrame(s);
+    if (stageBytes > kStageCap)
+        return;
+    const bool inFrame = s_swapchain && s_swapchain->recording && s_frameStageCpu &&
+                         s_frameStageNext + stageBytes <= kFrameStageSize;
+    if (!inFrame && s_stageNext + stageBytes > kStageCap)
+        FlushUploads();
+    uint8_t *const stageCpu =
+        inFrame ? s_frameStageCpu + s_frameStageBase + s_frameStageNext : s_stageCpu + s_stageNext;
+    const DkGpuAddr stageGpu =
+        inFrame ? s_frameStageGpu + s_frameStageBase + s_frameStageNext : s_stageGpu + s_stageNext;
     // Repack tightly into the staging buffer (drop the source's row/slice padding), as the GL backend does.
     for (uint32_t z = 0; z < depth; ++z)
         for (uint32_t y = 0; y < rows; ++y)
-            std::memcpy(s_stageCpu + (size_t(z) * rows + y) * rowBytes,
+            std::memcpy(stageCpu + (size_t(z) * rows + y) * rowBytes,
                         static_cast<const uint8_t *>(data) + size_t(z) * slicePitch + size_t(y) * rowPitch, rowBytes);
 
     static int updbg = 0;
@@ -982,20 +1108,52 @@ void UploadTexture(gb::Texture *handle, uint8_t level, uint8_t layer, const Box 
     view.mipLevelOffset = level;
     view.layerOffset = layer;
     const DkImageRect rect = {box.x, box.y, box.z, box.width, box.height, depth};
-    const DkCopyBuf srcBuf = {s_stageGpu, 0, 0}; // tightly packed -> row length / image height = the region's
-    // The staging block is reused at the same address and the CPU just rewrote it: drop the GPU's L2 copy of the
-    // previous upload's data.
-    dkCmdBufBarrier(s_upCmd, DkBarrier_None, DkInvalidateFlags_L2Cache);
-    dkCmdBufCopyBufferToImage(s_upCmd, &srcBuf, &view, &rect, 0);
-    dkQueueSubmitCommands(s_queue, dkCmdBufFinishList(s_upCmd));
-    WaitQueue("upload");
-    dkCmdBufClear(s_upCmd); // reset recording for the next upload (keeps the memory added once at init)
-
-    if (!t->uploaded) // now it has real pixels: point its descriptor at its own image instead of the placeholder
+    const DkCopyBuf srcBuf = {stageGpu, 0, 0}; // tightly packed -> row length / image height = the region's
+    if (inFrame)
     {
-        WriteImageDesc(t->descId, &t->image, &t->desc.swizzle);
+        // The staging ring's L2 lines are dropped by BeginFrame's barrier, which runs after these CPU writes.
+        // Draws recorded earlier may sample the image: they finish before the copy writes it, later ones see it.
+        DkCmdBuf cmd = s_swapchain->cmd;
+        dkCmdBufBarrier(cmd, DkBarrier_Full, 0);
+        dkCmdBufCopyBufferToImage(cmd, &srcBuf, &view, &rect, 0);
+        uint32_t invalidate = DkInvalidateFlags_Image;
+        if (!t->uploaded)
+        {
+            // Its descriptor still points at the placeholder, and draws recorded earlier, or a frame the GPU still
+            // runs, read it: repoint it in order, after the copy, instead of from the CPU now.
+            DkImageDescriptor desc;
+            MakeImageDesc(&desc, &t->image, &t->desc.swizzle);
+            dkCmdBufPushData(cmd, s_imgDescGpu + uint64_t(t->descId) * sizeof(DkImageDescriptor), &desc,
+                             sizeof(desc));
+            invalidate |= DkInvalidateFlags_Descriptors;
+            t->uploaded = true;
+        }
+        dkCmdBufBarrier(cmd, DkBarrier_Full, invalidate);
+        s_frameStageNext += stageBytes;
+        ++s_inFrameUploads;
+        return;
+    }
+    ++s_syncUploads;
+    if (!s_upPending)
+    {
+        // The staging block is reused at the same addresses and the CPU rewrote it: drop the GPU's L2 copy of the
+        // previous batch's data. Work submitted earlier may still sample these images: it finishes first.
+        dkCmdBufBarrier(s_upCmd, DkBarrier_Full, DkInvalidateFlags_L2Cache);
+    }
+    dkCmdBufCopyBufferToImage(s_upCmd, &srcBuf, &view, &rect, 0);
+    if (!t->uploaded)
+    {
+        // Point its descriptor at its own image once the copy has run (FlushUploads' barrier), not from the CPU now:
+        // a frame the GPU still runs may read it.
+        DkImageDescriptor desc;
+        MakeImageDesc(&desc, &t->image, &t->desc.swizzle);
+        dkCmdBufPushData(s_upCmd, s_imgDescGpu + uint64_t(t->descId) * sizeof(DkImageDescriptor), &desc,
+                         sizeof(desc));
         t->uploaded = true;
     }
+    s_stageNext += stageBytes;
+    if (++s_upPending >= kUpBatchMax)
+        FlushUploads();
 }
 
 const gb::Sampler *GetSampler(const SamplerDesc &desc)
@@ -1322,17 +1480,30 @@ gb::Swapchain *CreateSwapchain(const SwapchainDesc &desc)
         return nullptr;
     }
 
-    s->cmdMem = MakeBlock(kCmdMemSize, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached);
-    DkCmdBufMaker cbMaker;
-    dkCmdBufMakerDefaults(&cbMaker, s_device);
-    s->cmd = dkCmdBufCreate(&cbMaker);
+    for (unsigned i = 0; i < kFramesInFlight; ++i)
+    {
+        s->cmdMem[i] = MakeBlock(kCmdMemSize, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached);
+        DkCmdBufMaker cbMaker;
+        dkCmdBufMakerDefaults(&cbMaker, s_device);
+        s->cmds[i] = dkCmdBufCreate(&cbMaker);
+    }
+    s->cmd = s->cmds[0];
+    s_timerMem = MakeBlock(kFramesInFlight * 32, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached);
+    s_timerCpu = static_cast<const volatile uint64_t *>(dkMemBlockGetCpuAddr(s_timerMem));
+    s_timerGpu = dkMemBlockGetGpuAddr(s_timerMem);
 
-    // Uniform ring (bump per frame).
-    s_uboMem = MakeBlock(kUboRingSize, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached);
+    // Uniform rings (bump per frame), one per frame slot.
+    s_uboMem = MakeBlock(kFramesInFlight * kUboRingSize, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached);
     s_uboCpu = static_cast<uint8_t *>(dkMemBlockGetCpuAddr(s_uboMem));
     s_uboGpu = dkMemBlockGetGpuAddr(s_uboMem);
     s_uboBuffer.gpu = s_uboGpu;
-    s_uboBuffer.size = kUboRingSize;
+    s_uboBuffer.size = kFramesInFlight * kUboRingSize;
+
+    // Upload staging for the frame being recorded, one ring per frame slot.
+    s_frameStageMem =
+        MakeBlock(kFramesInFlight * kFrameStageSize, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached);
+    s_frameStageCpu = static_cast<uint8_t *>(dkMemBlockGetCpuAddr(s_frameStageMem));
+    s_frameStageGpu = dkMemBlockGetGpuAddr(s_frameStageMem);
 
     // Placeholder 1x1 texture (contents left as-is) + its image/sampler descriptors, bound to every slot for now.
     DkImageLayoutMaker dlm;
@@ -1385,12 +1556,14 @@ void DestroySwapchain(gb::Swapchain *swapchain)
     if (!s)
         return;
     dkQueueWaitIdle(s_queue);
-    if (s->cmd)
-        dkCmdBufDestroy(s->cmd);
+    for (unsigned i = 0; i < kFramesInFlight; ++i)
+        if (s->cmds[i])
+            dkCmdBufDestroy(s->cmds[i]);
     if (s->sc)
         dkSwapchainDestroy(s->sc);
-    if (s->cmdMem)
-        FreeBlock(s->cmdMem);
+    for (unsigned i = 0; i < kFramesInFlight; ++i)
+        if (s->cmdMem[i])
+            FreeBlock(s->cmdMem[i]);
     if (s->fbMem)
         FreeBlock(s->fbMem);
     if (s_swapchain == s)
@@ -1549,8 +1722,11 @@ UniformSlice AllocUniforms(const void *data, uint32_t size)
     if (dbg < 8)
         Log("AllocUniforms #%d size %u", dbg++, size);
     if (!s_uboMem || s_uboNext + AlignUp(size, DK_UNIFORM_BUF_ALIGNMENT) > kUboRingSize)
+    {
+        ++s_uboOverflows;
         return {};
-    const uint32_t offset = s_uboNext;
+    }
+    const uint32_t offset = s_uboBase + s_uboNext;
     std::memcpy(s_uboCpu + offset, data, size);
     s_uboNext += AlignUp(size, DK_UNIFORM_BUF_ALIGNMENT);
     return {&s_uboBuffer, offset, size};
@@ -1736,8 +1912,27 @@ void Present(gb::Swapchain *swapchain, gb::Texture *image)
         firstNs = nowNs;
     const uint32_t secs = uint32_t((nowNs - firstNs) / 1000000000ull);
     if (s_dbgPresent < 8 || (s_dbgPresent % 16) == 0)
-        Log("Present #%d at %us: %d draws total so far, %u buffer renames, %u blocks (%.1f MB), heap %.1f MB",
-            s_dbgPresent, secs, s_drawTotal, s_renames, s_blocksLive, double(s_blockBytes) / double(1 << 20), HeapMB());
+    {
+        Log("Present #%d at %us: %d draws total so far, %u buffer renames, %u blocks (%.1f MB), heap %.1f MB, "
+            "uploads %u in frame %u batched",
+            s_dbgPresent, secs, s_drawTotal, s_renames, s_blocksLive, double(s_blockBytes) / double(1 << 20), HeapMB(),
+            s_inFrameUploads, s_syncUploads);
+        if (s_gpuFrames || s_waitFrames)
+            Log("gpu %.1f ms avg %.1f max over %u frames; cpu waited for the gpu %.1f ms avg %.1f max; "
+                "%u upload batches",
+                s_gpuFrames ? double(s_gpuNsSum) / s_gpuFrames / 1e6 : 0.0, double(s_gpuNsMax) / 1e6, s_gpuFrames,
+                s_waitFrames ? double(s_waitNsSum) / s_waitFrames / 1e6 : 0.0, double(s_waitNsMax) / 1e6, s_upFlushes);
+        s_gpuNsSum = s_gpuNsMax = s_waitNsSum = s_waitNsMax = 0;
+        s_gpuFrames = s_waitFrames = 0;
+    }
+    if (s_uboOverflows)
+    {
+        static unsigned logged = 0;
+        if (logged < 16 || logged % 256 == 0)
+            Log("uniform ring full: %u draws of this frame lost their constants", s_uboOverflows);
+        ++logged;
+        s_uboOverflows = 0;
+    }
     ++s_dbgPresent;
     // Debug: trace every pass of one world frame (armed here, so it covers the next frame from its first pass).
     if (s_frameTrace)
@@ -1784,17 +1979,20 @@ void Present(gb::Swapchain *swapchain, gb::Texture *image)
             s_dumpPending = true;
         }
     }
+    if (s_timerGpu)
+        dkCmdBufReportCounter(s->cmd, DkCounter_Timestamp, s_timerGpu + s->slot * 32 + 16);
+    FlushUploads(); // a batch recorded while this frame was: it goes first, as the frame may sample its textures
     const DkCmdList list = dkCmdBufFinishList(s->cmd);
     dkQueueSubmitCommands(s_queue, list);
-    dkQueueSignalFence(s_queue, &s->fence, true);
+    dkQueueSignalFence(s_queue, &s->fences[s->slot], true);
     dkQueuePresentImage(s_queue, s->sc, slot);
-    s->submitted = true;
+    s->submitted[s->slot] = true;
     s->recording = false;
 
     if (s_dumpPending)
     {
         s_dumpPending = false;
-        if (dkFenceWait(&s->fence, 2000000000) == DkResult_Success && s_dumpMem)
+        if (dkFenceWait(&s->fences[s->slot], 2000000000) == DkResult_Success && s_dumpMem)
         {
             char path[64];
             snprintf(path, sizeof(path), "frame at %u s", s_dumpLabel);
@@ -1821,7 +2019,7 @@ void Present(gb::Swapchain *swapchain, gb::Texture *image)
     if (s_passCapPending)
     {
         s_passCapPending = false;
-        if (dkFenceWait(&s->fence, 2000000000) == DkResult_Success && s_passCapMem)
+        if (dkFenceWait(&s->fences[s->slot], 2000000000) == DkResult_Success && s_passCapMem)
         {
             const uint8_t *base = static_cast<const uint8_t *>(dkMemBlockGetCpuAddr(s_passCapMem));
             for (const PassCap &pc : s_passCaps)
@@ -1844,16 +2042,17 @@ void WaitIdle()
     static int n = 0;
     if (n < 8)
         Log("WaitIdle #%d enter", n++);
-    if (!s_queue || !WaitQueue("WaitIdle"))
+    if (!s_queue)
+        return;
+    FlushUploads();
+    if (!WaitQueue("WaitIdle"))
         return;
     // Everything submitted has run. Unless a frame is being recorded (its commands may reference memory freed during
     // it), the memory waiting for the GPU can go now.
     if (!(s_swapchain && s_swapchain->recording))
     {
         s_completedSerial = s_frameSerial;
-        for (const Range &m : s_pendingFree)
-            Release(m);
-        s_pendingFree.clear();
+        ReleaseCompleted(true);
     }
 }
 
@@ -1895,7 +2094,9 @@ void Blit(gb::Texture *srcHandle, uint8_t srcLevel, uint8_t srcLayer, const Rect
     else
         dkCmdBufBlitImage(s->cmd, &srcView, &from, &dstView, &to,
                           filter == Filter::Linear ? DkBlitFlag_FilterLinear : DkBlitFlag_FilterNearest, 0);
-    dkCmdBufBarrier(s->cmd, DkBarrier_Full, DkInvalidateFlags_Image);
+    // A depth buffer written by a copy no longer matches what Zcull recorded for it.
+    dkCmdBufBarrier(s->cmd, DkBarrier_Full,
+                    DkInvalidateFlags_Image | (IsDepthFormat(dst->desc.format) ? DkInvalidateFlags_Zcull : 0u));
 }
 void ReadTexture(gb::Texture *, uint8_t, uint8_t, const Box &, void *, uint32_t) {}
 

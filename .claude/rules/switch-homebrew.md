@@ -280,6 +280,12 @@ it for plain C/C++ projects. Each rule cost at least one build/test round trip t
   freezing on a fault, wait on such a fence in 2 s steps, log each step, and give up only when
   `dkQueueIsInErrorState` says the queue faulted: Ryujinx can keep a healthy queue busy for seconds while it
   translates shaders, and memory the caller reuses after a wait must be idle for real.
+- Keep two frames in flight: one command buffer, fence, uniform ring and staging ring per slot, and wait in
+  `BeginFrame` only for the frame that used the slot. With one, the first draw of each frame waited for the previous
+  frame's GPU work and a frame cost CPU + GPU time; a profile shows it as a fat first pass (BO1's depth prepass held
+  20-36 ms of it). Record texture uploads into the frame (copy, barrier, descriptor via `dkCmdBufPushData` on a first
+  upload) instead of submit-and-wait per upload. Count uniform-ring overflows: a full ring silently draws with another
+  draw's constants (BO-Zombies_switch, 2026-11-12).
 - Never give each texture or buffer its own `DkMemBlock`: the console refuses new blocks past ~1330 live
   (`dkMemBlockCreate` → `DkResult_Fail` → abort `2359-0001`, measured twice at 1331/1332 blocks holding only 296 MB),
   while Ryujinx has no such limit (2860 blocks on the BO1 menu, 11 210 in a map, both fine there). Each block is an
