@@ -93,6 +93,11 @@ it for plain C/C++ projects. Each rule cost at least one build/test round trip t
   the system handles, still work) and the applet messages go unserviced. Without SDL video, pump SDL's events
   yourself (game controllers need no video), call `appletMainLoop()` once a frame minding the never-again rule above,
   and log when a controller opens, so a silent pad shows in the log (BO-Zombies_switch, 2026-10-26).
+- A PC game ported to the console may switch its pad on only from a saved profile or an options menu (BO1:
+  retail `default_mp_controls.cfg` sets `gpad_enabled 0`, the profile's apply turns it on and binds the buttons). An
+  app that boots straight into a level never runs that path: on a fresh SD card the sticks and buttons were dead
+  while `gamepad: opened` was logged. Enable the pad and run its bind configs after the startup configs, and check the
+  pad's enable dvar in the log's dvar dump (BO-Zombies_switch, 2026-11-12).
 - SDL2-switch's `SDL_GameController` names the face buttons by position, as on an Xbox pad: its A is the Joy-Con's
   bottom button (labelled B), its X the left one (labelled Y). A game whose prompts name a letter ("press X") must map
   by the printed labels (SDL A→B, B→A, X→Y, Y→X), which also puts menu confirm on the right-hand A as on Nintendo's
