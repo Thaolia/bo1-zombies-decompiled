@@ -49,6 +49,14 @@ ROW_HELP = {
     "difficulty": "Nightmare : George, un astronaute, des zombies napalm et hurleurs, des chiens... dès la manche 1. "
                   "Hell : plusieurs de chaque à la fois. Kino et Five seulement ; charge trois maps de plus (démarrage "
                   "plus lent).",
+    "bo2_weapons": "Les armes de Black Ops II (HAMR, AN-94, DSR-50, Ray Gun Mark II...) et leur version Pack-a-Punch, "
+                   "dans la boîte (mod bo2weapons). Leur mod.ff se construit depuis votre propre Black Ops II "
+                   "(docs/BO2_WEAPONS.md) et se pose dans mods/bo2weapons/. Les armes au mur restent celles de la "
+                   "map. Un joueur qui rejoint un serveur avec ces armes doit avoir le même mod.ff (vue Jouer, mode "
+                   "Rejoindre : « Armes de Black Ops II »).",
+    "join_bo2_weapons": "À cocher pour rejoindre un serveur qui a les armes de Black Ops II (mod bo2weapons) : le jeu "
+                        "charge alors le même mods/bo2weapons/mod.ff. Sans lui, l'entrée sur ce serveur échoue "
+                        "et le jeu revient au menu avec un message (arme manquante).",
     "window": "Sans bordure : une fenêtre de la taille de l'écran (comme Play.bat). Fenêtre : la taille ci-dessous. "
               "Plein écran : à la résolution de config.cfg (vue Config du jeu, F5).",
     "window_size": "La taille de la fenêtre en mode Fenêtre, LARGEURxHAUTEUR.",
@@ -67,6 +75,14 @@ ROW_HELP = {
                  "les dans le pare-feu pour des joueurs d'autres machines.",
     "host_password": "Le mot de passe rcon du serveur local, partagé avec ZmAdmin (son fichier servers.json) : "
                      "ZmAdmin administre le serveur que ZmClient a lancé.",
+}
+
+BO2_WEAPON_HELP = {
+    0: "les armes de la map seulement",
+    1: "les armes de Black Ops II s'ajoutent à celles de la map (bo2weapons_box 0)",
+    2: "la boîte ne donne plus que les armes de Black Ops II, plus les armes spéciales de la map : Ray Gun, "
+       "Thundergun, Wunderwaffe, singe, Gersh... (bo2weapons_box 1)",
+    3: "la boîte ne donne plus que les armes de Black Ops II (bo2weapons_box 2)",
 }
 
 VIEW_HELP = {

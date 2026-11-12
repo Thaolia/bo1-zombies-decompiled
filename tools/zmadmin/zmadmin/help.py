@@ -117,10 +117,29 @@ SETTINGS_HELP = {
         "Mods chargés",
         "Les mods du dossier mods/ chargés avec la map, séparés par des espaces. Le serveur ajoute toujours",
         "mods/admin (les commandes zm_*), inutile de le cocher.",
+        "bo2weapons (armes de Black Ops II) ne marche que si le serveur a été lancé avec : son mod.ff se charge au",
+        "démarrage ; le retirer remet la boîte d'origine.",
         "Valeurs : cocher les mods avec Espace, ou les taper si le serveur est distant.",
         "Effet : appliqué par zm_mods, qui recharge la map tout de suite : la partie en cours est perdue.",
     ),
+    "bo2weapons_box": (
+        "Boîte avec les armes de Black Ops II",
+        "Seulement sur un serveur lancé avec les armes de Black Ops II (mods/bo2weapons dans fs_mods dès le",
+        "lancement : leur mod.ff ne se charge qu'au démarrage) : ce que la boîte donne. Les armes au mur restent",
+        "celles de la map.",
+        "Valeurs : 0 les armes de la map et celles de BO2 ; 1 celles de BO2 et les armes spéciales de la map (Ray Gun,",
+        "Thundergun, singe...) ; 2 celles de BO2 seulement. Défaut : 0.",
+        "Effet : au prochain chargement de map. Sauvegarder propose alors zm_reset (la partie recommence).",
+    ),
 }
+
+# The local server's launch choice when the folder has mods/bo2weapons/mod.ff: -1 none, else bo2weapons_box
+BO2_BOX_CHOICES = [
+    (-1, "Sans armes de Black Ops II", "le serveur garde les armes de la map"),
+    (0, "Armes BO2 dans la boîte, avec celles de la map", "bo2weapons_box 0"),
+    (1, "Seulement les armes BO2 + les armes spéciales de la map", "bo2weapons_box 1 : Ray Gun, Thundergun, singe..."),
+    (2, "Seulement les armes BO2", "bo2weapons_box 2"),
+]
 
 PLAYER_ACTIONS = [
     ("g", "god", "zm_god", "Invincible : aucun dégât. Appuyer encore l'enlève. Gardé d'une map à l'autre."),

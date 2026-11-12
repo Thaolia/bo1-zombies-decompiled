@@ -12,7 +12,8 @@ from . import gamesetup
 from . import help as H
 from .dirbrowser import FolderDialog, start_folder
 from .gamecfg import BY_NAME, SETTINGS, valid_bind_key, validate
-from .profile import (DEFAULT_PORT, MAP_LABELS, START_PERKS, START_POINT_CHOICES, check_extra, map_installed, map_label, nightmare_available,
+from .profile import (BO2_WEAPON_CHOICES, DEFAULT_PORT, MAP_LABELS, START_PERKS, bo2_weapons_available,
+                      bo2_weapons_installed, START_POINT_CHOICES, check_extra, map_installed, map_label, nightmare_available,
                       parse_size, quote_command, resolve_map, solo_maps, specials_available, valid_host, valid_name,
                       valid_password)
 
@@ -217,6 +218,10 @@ class PlayView(RowsView):
         elif mode == "join":
             target = f"{p['join_host']}:{p['join_port']}" if p["join_host"] else "(aucun : vue Serveurs, F2)"
             rows.append(Row("server", "Serveur", target, self.app.edit_join_target))
+            rows.append(Row("join_bo2_weapons", "Armes de Black Ops II", _yes(p["join_bo2_weapons"]),
+                            self.toggle("join_bo2_weapons"),
+                            disabled=None if bo2_weapons_installed(app.root) else
+                            "pas de mods/bo2weapons/mod.ff : à construire depuis votre Black Ops II"))
         else:
             rows.append(Row("host_map", "Map du serveur local", MAP_LABELS.get(p["host_map"], p["host_map"]),
                             self.choose("host_map", "Map du serveur local",
@@ -224,6 +229,7 @@ class PlayView(RowsView):
             rows.append(Row("host_port", "Port du serveur local", str(p["host_port"]),
                             self.ask("host_port", "Port du serveur local", "Port", "3074 par défaut",
                                      lambda t: _int(t, 1, 65535))))
+            rows.append(bo2_row(self, "host_bo2_weapons", app.root, local_running=app.local.running()))
         rows.append(Row("name", "Nom du joueur", p["name"] or "(celui de config.cfg)",
                         self.ask("name", "Nom du joueur", "Nom", "vide : celui de config.cfg", _name)))
         return rows
@@ -472,6 +478,7 @@ class SoloView(RowsView):
             Row("zinfo", "Compteur de zombies (Tab)", _yes(p["zinfo"]), self.toggle("zinfo")),
             Row("noperks", "Sans machines à atouts", _yes(p["noperks"]), self.toggle("noperks")),
             Row("quickrestart", "R relance après la fin", _yes(p["quickrestart"]), self.toggle("quickrestart")),
+            bo2_row(self, "bo2_weapons", root, bsp=bsp),
             section("Départ"),
             Row("start_points", "Points de départ", _points(p["start_points"]),
                 self.choose("start_points", "Points de départ",
@@ -520,6 +527,24 @@ class SoloView(RowsView):
             put(scr, y + 1 + i, 3, line, color(C_DIM), width=width - 4)
 
 
+def bo2_row(view, key, root, bsp=None, local_running=False):
+    """The BO2 weapons row (solo: bo2_weapons, local server: host_bo2_weapons), greyed without mods/bo2weapons/mod.ff,
+    on Dead Ops Arcade, or while the local server runs (it took its mods when it started)."""
+    labels = dict(BO2_WEAPON_CHOICES)
+    if not bo2_weapons_installed(root):
+        why = "pas de mods/bo2weapons/mod.ff : à construire depuis votre Black Ops II (docs/BO2_WEAPONS.md)"
+    elif bsp is not None and not bo2_weapons_available(bsp):
+        why = "Dead Ops Arcade n'a pas de boîte"
+    elif local_running:
+        why = "le serveur local tourne déjà : il a pris ses mods au lancement"
+    else:
+        why = None
+    return Row(key, "Armes de Black Ops II", labels[view.p[key]],
+               view.choose(key, "Armes de Black Ops II", [(v, label, H.BO2_WEAPON_HELP[v])
+                                                          for v, label in BO2_WEAPON_CHOICES]),
+               disabled=why, help_text=H.ROW_HELP["bo2_weapons"])
+
+
 # ------------------------------------------------------------------------------------------------------------ Launch
 class LaunchView(RowsView):
     name, title = "launch", "Lancement"
@@ -561,6 +586,7 @@ class LaunchView(RowsView):
                 self.choose("host_map", "Map du serveur local", self.app.host_maps())),
             Row("host_port", "Port", str(p["host_port"]),
                 self.ask("host_port", "Port du serveur local", "Port", "3074 par défaut", lambda t: _int(t, 1, 65535))),
+            bo2_row(self, "host_bo2_weapons", app.root, local_running=app.local.running()),
             Row("host_password", "Mot de passe rcon", "•" * len(password) if password else "(aucun dossier)",
                 self.edit_password, disabled=None if app.dist else "pas de dossier du jeu"),
         ]

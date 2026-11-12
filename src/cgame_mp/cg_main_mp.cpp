@@ -2893,6 +2893,12 @@ void __cdecl CG_FreeClientEntityCaches(int localClientNum)
     }
 }
 
+// mod: CG_Init compiled the remote server's scripts (CGScr_LoadScriptsAndAnims) and has not freed them yet. An
+// ERR_DROP between the two (a weapon this client lacks: "Weapon index mismatch") left them loaded, and the main menu's
+// own server then asserted on compiling its scripts (!gScrParserGlob[inst].opcodeLookup): CG_ShutdownOnceForAllClients
+// frees them.
+static bool cg_remoteServerScripts;
+
 void __cdecl CG_Init(int localClientNum, int serverMessageNum, int serverCommandSequence, int clientNum)
 {
     unsigned __int16 t; // [esp+1Ch] [ebp-64h]
@@ -3070,6 +3076,7 @@ void __cdecl CG_Init(int localClientNum, int serverMessageNum, int serverCommand
         if ( !com_sv_running->current.enabled )
         {
             CGScr_LoadScriptsAndAnims();
+            cg_remoteServerScripts = true;
             loaded_server_scripts = 1;
         }
         Scr_InitSystem(SCRIPTINSTANCE_CLIENT, 1);
@@ -3112,6 +3119,7 @@ void __cdecl CG_Init(int localClientNum, int serverMessageNum, int serverCommand
         // ends, so keep the count; CG_ShutdownOnceForAllClients clears it.
         const unsigned int clientTrees = gScrAnimPub[SCRIPTINSTANCE_SERVER].xanim_num[0];
         Scr_FreeScripts(SCRIPTINSTANCE_SERVER, 1u);
+        cg_remoteServerScripts = false;
         if ( Com_IsSPLevel() )
         {
             gScrAnimPub[SCRIPTINSTANCE_SERVER].xanim_num[0] = clientTrees;
@@ -4045,6 +4053,11 @@ void __cdecl CG_ShutdownOnceForAllClients()
     Scr_FreeEntityList(SCRIPTINSTANCE_CLIENT);
     if ( !com_sv_running->current.enabled )
     {
+        if ( cg_remoteServerScripts ) // mod: CG_Init dropped before freeing them (see cg_remoteServerScripts)
+        {
+            Scr_FreeScripts(SCRIPTINSTANCE_SERVER, 1u);
+            cg_remoteServerScripts = false;
+        }
         Scr_ShutdownGameStrings(SCRIPTINSTANCE_SERVER);
         gScrAnimPub[SCRIPTINSTANCE_SERVER].xanim_num[0] = 0; // zombies: the tree count CG_Init kept (see there)
     }
