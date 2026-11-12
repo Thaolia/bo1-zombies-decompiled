@@ -3,15 +3,18 @@
 
 The engine reads such a file for a map's world when bo1_bspworld is set (docs/BO2_MAPS.md, "native maps"). This
 writer covers what a map without baked lighting needs:
-- axial brushes for collision, each drawing the faces asked for;
-- triangle meshes drawn as world surfaces (no collision, use brushes for that);
-- one cell holding every surface, a one-node tree, no portals: everything is drawn from everywhere;
+- brushes for collision: axial boxes drawing the faces asked for, or any convex shape (add_collision_brush);
+- collision triangles (terrain), one per partition;
+- triangle meshes drawn as world surfaces (no collision of their own);
+- a k-d tree over the brushes and partitions for the collision;
+- one cell holding every surface, no portals: everything is drawn from everywhere;
 - one lightmap without pixels, which the engine fills with white (lit world materials refuse a surface without a
   lightmap; the sky takes none, index 31), an empty light grid, no reflection probe (the engine adds its dummy), a sun
   primary light from the worldspawn keys;
 - the entity string.
 
-Library use: build a Bsp, add_material / add_brush / add_mesh / add_entity, then write(path).
+Library use: build a Bsp, add_material / add_brush / add_collision_brush / add_collision_triangles / add_mesh /
+add_entity, then write(path).
 Command line: `d3dbsp.py room OUT.d3dbsp` writes the test room (a floor, four walls and a sky box).
 """
 import math
@@ -300,8 +303,9 @@ class Bsp:
         tris, verts, indices = [], [], []
         for mat, sv, si in soups:
             sky = self.materials[mat][1] & 0x4
-            tris.append(struct.pack("<HBBBBBxhxxiIHHi", mat, LIGHTMAP_NONE if sky else 0, 0, 0 if sky else 1, 0, 0 if sky else 1,
-                                    0 if sky else 1, 0, len(verts), len(sv), len(si), len(indices)))
+            lit = 0 if sky else 1
+            tris.append(struct.pack("<HBBBBBxhxxiIHHi", mat, LIGHTMAP_NONE if sky else 0, 0, lit, 0, lit, lit, 0,
+                                    len(verts), len(sv), len(si), len(indices)))
             verts.extend(sv)
             indices.extend(si)
         if len(indices) and max(indices) > 0xFFFF:
