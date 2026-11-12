@@ -842,6 +842,9 @@ BOOL CloseHandle(HANDLE hObject);
 BOOL DuplicateHandle(HANDLE hSourceProcessHandle, HANDLE hSourceHandle, HANDLE hTargetProcessHandle,
                      LPHANDLE lpTargetHandle, DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwOptions);
 LPSTR GetCommandLineA(void);
+#if defined(__SWITCH__)
+void Bo1_SetCommandLine(const char *commandLine); // launch.cfg's arguments, before WinMain (switch_main.cpp)
+#endif
 BOOL SetEnvironmentVariableA(LPCSTR lpName, LPCSTR lpValue);
 void ExitProcess(UINT uExitCode);
 BOOL TerminateProcess(HANDLE hProcess, UINT uExitCode);

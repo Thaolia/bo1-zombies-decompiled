@@ -3755,6 +3755,10 @@ void DB_Init()
         g_poolSize[ASSET_TYPE_IMPACT_FX] = POOLSIZE_IMPACTFX_MOD;
         g_poolSize[ASSET_TYPE_RAWFILE] = POOLSIZE_RAWFILE_MOD;
         g_poolSize[ASSET_TYPE_STRINGTABLE] = POOLSIZE_STRINGTABLE_MOD;
+        // the streaming loops follow the image pool; r_stream.cpp's static initialiser saw no command line on the
+        // Switch (launch.cfg is read later)
+        s_streamImageParts = STREAM_MAX_IMAGE_PARTS_MOD;
+        s_streamImageWords = s_streamImageParts / 32;
     }
 
     for (type = ASSET_TYPE_XMODELPIECES; type < ASSET_TYPE_COUNT; ++type)

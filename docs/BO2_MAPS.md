@@ -204,6 +204,15 @@ Pack-a-Punch. It now runs on the BSP world instead of its own mesh and collision
   checks on the BSP world, as on the MapKit mesh: every door and debris (their doorway links cut, then given back),
   the four perks, the seven wall buys, the box, Pack-a-Punch, the ten zones, and a zombie out of each of the 36 risers
   reaching the player.
+- `bo1_bspworld <path>` gives that BSP to the level only, never to the front end (`frontend`, `menu_*`). The console
+  boots through the front end before its `+devmap`, which then read Nuketown's BSP without Nuketown's zone:
+  `R_CheckValidStaticModel: could not find xmodel 'default_static_model'` on Ryujinx. A `+devmap` from the command
+  line, as on Linux and Windows, skips the front end.
+- On the Switch, `GetCommandLineA` read `/proc/self/cmdline`, which the console does not have: the command line was
+  empty, so `bo1_mod_zones` never raised the asset pools, the asset entries, the physical memory or the streamed image
+  parts there (Nuketown's 333 xmodels: "Exceeded limit of 1000 'xmodel' assets"). It now returns `launch.cfg`'s
+  arguments, which `switch_main` hands over before `WinMain`; `DB_InitXAssets` sets the streamed image parts with
+  the pools, since `r_stream.cpp`'s static initialiser runs before `launch.cfg` is read.
 - `PickAabbSplitPlane` (`universal/aabbtree.cpp`) never returned: its sweep ends when the next distance reaches
   `FLT_MAX`, which the decompiled code compared with the double literal `3.4028235e38`, slightly above it. Only a world
   read from a BSP builds that tree (`R_GenerateHighmipAabbs`), and Five's high-mip images gave it 34 static models.
