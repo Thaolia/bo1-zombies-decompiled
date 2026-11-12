@@ -3,6 +3,7 @@
 #include <xanim/xmodel.h>
 #include <qcommon/threads.h>
 #include "rb_resource.h"
+#include "r_bsp.h"
 #include "r_dvars.h"
 #include "rb_logfile.h"
 #include "r_image_load_common.h"
@@ -414,7 +415,7 @@ void __cdecl Image_Create2DTexture_PC(
     if ( (imageFlags & 0x100) != 0 )
         memPool = D3DPOOL_SYSTEMMEM;
     R_HeadlessClientPool(&memPool, &usage);
-    if ( !Sys_IsRenderThread()
+    if ( !Sys_IsRenderThread() && !g_bspWorldLoading // mod (bspworld): see r_bsp.cpp
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_image.cpp",
                     675,
@@ -500,7 +501,7 @@ void __cdecl Image_Create3DTexture_PC(
     image->depth = depth;
     image->mapType = 4;
     Image_GetUsage(imageFlags, imageFormat);
-    if ( !Sys_IsRenderThread()
+    if ( !Sys_IsRenderThread() && !g_bspWorldLoading // mod (bspworld): see r_bsp.cpp
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_image.cpp",
                     717,
@@ -570,7 +571,7 @@ void __cdecl Image_CreateCubeTexture_PC(
     image->mapType = 5;
     if ( !gfxMetrics.canMipCubemaps )
         mipmapCount = 1;
-    if ( !Sys_IsRenderThread()
+    if ( !Sys_IsRenderThread() && !g_bspWorldLoading // mod (bspworld): see r_bsp.cpp
         && !Assert_MyHandler(
                     "C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_image.cpp",
                     754,

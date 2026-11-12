@@ -6,6 +6,7 @@
 #include "com_bsp.h"
 #include "md4.h"
 #include <database/db_registry.h>
+#include <universal/dvar.h>
 
 const char *connectionString_126[11] =
 {
@@ -354,6 +355,14 @@ char __cdecl Com_CheckVersionLumpCountError(int version)
         return 1;
     }
     return 0;
+}
+
+const char *Com_BspWorldPath()
+{
+    static const dvar_s *dvar = _Dvar_RegisterString(
+        "bo1_bspworld", (char *)"", 0,
+        "mod: a compiled BSP (maps/<name>.d3dbsp) the map's render world is read from; empty = the map's own zone");
+    return dvar && dvar->current.string && *dvar->current.string ? dvar->current.string : nullptr;
 }
 
 void __cdecl Com_LoadBsp(char *filename)

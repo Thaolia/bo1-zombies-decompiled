@@ -204,6 +204,9 @@ bool __cdecl Com_BspError();
 char __cdecl Com_CheckVersionLumpCountError(int version);
 void __cdecl Com_LoadBsp(char *filename);
 void __cdecl Com_UnloadBsp();
+// mod (bspworld): the compiled BSP '+set bo1_bspworld maps/<name>.d3dbsp' names, or null when the dvar is empty. With
+// one, the map's render world is read from that BSP (r_bsp_load_obj.cpp) while everything else comes from its zones.
+const char *Com_BspWorldPath();
 void __cdecl Com_CleanupBsp();
 char *__cdecl Com_EntityString(int *numEntityChars);
 void __cdecl Com_SaveLump(LumpType type, const void *newLump, unsigned int size, ComSaveLumpBehavior behavior);

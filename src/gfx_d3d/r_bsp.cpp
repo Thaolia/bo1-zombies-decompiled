@@ -2,6 +2,7 @@
 #include "r_mapkit_mesh.h"
 #include <universal/com_memory.h>
 #include "r_bsp_load_obj.h"
+#include <qcommon/com_bsp_load_obj.h>
 #include "r_dvars.h"
 #include "rb_light.h"
 #include "r_world_lod.h"
@@ -175,7 +176,7 @@ void __cdecl R_LoadWorld(char *name, int *checksum, int savegame, int location)
         __debugbreak();
     }
     R_InitLightVisHistory(name);
-    if ( useFastFile->current.enabled )
+    if ( useFastFile->current.enabled && !Com_IsBspLoaded() ) // mod (bspworld): a loaded BSP is the world's source
         R_SetWorldPtr_FastFile(name);
     else
         R_SetWorldPtr_LoadObj(name);
@@ -252,6 +253,11 @@ void R_InitDynamicData()
     R_InitStaticModelLighting();
 }
 
+// mod (bspworld): with fastfiles, the BSP world loads from CG_Init on the main thread, while the render thread draws
+// the loading screen. Its lightmap and probe textures are created there too (Image_Create*_PC accept it while this
+// is set): the device serialises the calls (D3DCREATE_MULTITHREADED on Windows, the d3d9emu device lock elsewhere).
+bool g_bspWorldLoading;
+
 void __cdecl R_SetWorldPtr_LoadObj(const char *name)
 {
     if ( rgp.world
@@ -259,7 +265,9 @@ void __cdecl R_SetWorldPtr_LoadObj(const char *name)
     {
         __debugbreak();
     }
+    g_bspWorldLoading = useFastFile->current.enabled;
     rgp.world = R_LoadWorldInternal(name);
+    g_bspWorldLoading = false;
     if ( !rgp.world
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_bsp.cpp", 317, 0, "%s", "rgp.world") )
     {

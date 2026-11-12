@@ -2043,9 +2043,31 @@ void __cdecl R_LoadReflectionProbes(unsigned int bspVersion)
     DiskGfxReflectionProbe *reflectionProbeRawData12; // [esp+8h] [ebp-8h]
     char *reflectionProbeRawData11; // [esp+Ch] [ebp-4h]
 
+    // mod (bspworld): the Mod Tools' version 43 BSPs (asset_viewer) store 0x4009C-byte probes: the origin, the pixels
+    // and the 64-byte colour correction name, without the probe volumes and name the version 45 layout adds. They are
+    // widened to that layout, volumes empty.
+    std::vector<DiskGfxReflectionProbe> widenedProbes;
+    if ( bspVersion > 0xB && bspVersion < 45 )
+    {
+        unsigned int count = 0;
+        const unsigned __int8 *in = (const unsigned __int8 *)Com_GetBspLump(LUMP_REFLECTION_PROBES, 0x4009Cu, &count);
+        widenedProbes.resize(count); // value-initialised in place: one probe is 259 KiB
+        for ( unsigned int p = 0; p < count; ++p, in += 0x4009C )
+        {
+            memcpy(widenedProbes[p].origin, in, sizeof(widenedProbes[p].origin));
+            memcpy(widenedProbes[p].pixels, in + 12, sizeof(widenedProbes[p].pixels));
+            memcpy(widenedProbes[p].colorCorrectionFilename, in + 12 + sizeof(widenedProbes[p].pixels), 64);
+        }
+    }
     if ( bspVersion > 0xB )
     {
-        reflectionProbeRawData = (const DiskGfxReflectionProbe *)Com_GetBspLump(
+        if ( bspVersion < 45 )
+        {
+            reflectionProbeRawData = widenedProbes.data();
+            s_world.draw.reflectionProbeCount = (unsigned int)widenedProbes.size();
+        }
+        else
+            reflectionProbeRawData = (const DiskGfxReflectionProbe *)Com_GetBspLump(
                                                                                                                              LUMP_REFLECTION_PROBES,
                                                                                                                              0x406E0u,
                                                                                                                              &s_world.draw.reflectionProbeCount);

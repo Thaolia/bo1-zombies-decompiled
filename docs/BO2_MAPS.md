@@ -22,6 +22,23 @@ sources (`map_source\zombie_*.map`), but **no Radiant and no map compiler** (`co
 released them for BO1. A BO1 map cannot be compiled from new geometry. Their `steam_launch_mods.cmd` also creates
 junctions inside the retail game folder (and its `clean` mode deletes folders there): it is not used.
 
+### Update (2026-11-12): the linker is stubbed, the engine's BSP loader is not
+
+The Mod Tools' `raw/maps/` holds two compiled BO1 BSPs (`asset_viewer.d3dbsp`, `effectsEd_box.d3dbsp`: `IBSP`
+version 43, a table of (lump id, size) pairs, the lumps 4-aligned after it) and `zone_source/` the retail zombie map
+CSVs (`col_map_sp,maps/zombie_theater.d3dbsp`). But `linker_pc.exe` cannot build a map: its `Com_LoadBsp` (0x401940)
+and `Path_LoadPathsInternal` only raise "Not allowed at this time!", so Treyarch shipped no way to make a BO1 map.
+
+The decompiled engine still has the whole BSP loader (`com_bsp_load_obj.cpp`, `cm_load_obj.cpp`,
+`r_bsp_load_obj.cpp`, `pathnode_load_obj.cpp`; lump ids in `com_bsp_load_obj.h`), used when `useFastFile` is 0. The
+`bspworld` branch reads a map's render world from a BSP with fastfiles on: `+set bo1_bspworld maps/<name>.d3dbsp`
+(`LoadWorld`, `cl_cgame_mp.cpp`) loads the BSP, its primary lights, water and burnable data into `comWorld`, builds the
+`GfxWorld` from it on the main thread (`g_bspWorldLoading` lets `Image_Create*_PC` create the lightmap and probe
+textures there) and unloads it. With `asset_viewer.d3dbsp` on Kino every load step passes (materials, lights,
+lightmaps, light grid, surfaces, cull groups, AABB trees, cells, portals, nodes, entities, probes; version 43 probes
+are widened to the version 45 layout) and the game starts; it then stops on Kino's brush model `*8`, which the test
+BSP does not have. Next: the collision, entities and path nodes from the same BSP, then a BSP of our own.
+
 ## What comes out of `zm_nuked`
 
 With [OpenAssetTools](https://github.com/Laupetin/OpenAssetTools) 0.34.0 (GPL v3) and a world dumper written for it
