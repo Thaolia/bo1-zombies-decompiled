@@ -55,8 +55,8 @@ ROW_HELP = {
                    "map. Un joueur qui rejoint un serveur avec ces armes doit avoir le même mod.ff (vue Jouer, mode "
                    "Rejoindre : « Armes de Black Ops II »).",
     "join_bo2_weapons": "À cocher pour rejoindre un serveur qui a les armes de Black Ops II (mod bo2weapons) : le jeu "
-                        "charge alors le même mods/bo2weapons/mod.ff. Sans lui, le jeu s'arrête en entrant sur ce "
-                        "serveur (« Weapon index mismatch »).",
+                        "charge alors le même mods/bo2weapons/mod.ff. Sans lui, l'entrée sur ce serveur échoue "
+                        "et le jeu revient au menu avec un message (arme manquante).",
     "window": "Sans bordure : une fenêtre de la taille de l'écran (comme Play.bat). Fenêtre : la taille ci-dessous. "
               "Plein écran : à la résolution de config.cfg (vue Config du jeu, F5).",
     "window_size": "La taille de la fenêtre en mode Fenêtre, LARGEURxHAUTEUR.",

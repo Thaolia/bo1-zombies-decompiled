@@ -47,8 +47,9 @@ zones is skipped, and the map then stays retail.
   (`+set fs_mods bo2weapons +set bo2weapons_box N`); the Settings view edits `bo2weapons_box` (next map load, Save
   offers `zm_reset`). `mod.ff` loads at start-up only: adding `bo2weapons` later with `zm_mods` gives no weapon, and a
   `server.cfg` that sets `fs_mods` replaces the line's.
-- **Clients of a server** that has them must load the same `mod.ff` (`+set fs_mods bo2weapons`), or the game stops
-  when it enters (`Weapon index mismatch`, the weapons' indices come from the server).
+- **Clients of a server** that has them must load the same `mod.ff` (`+set fs_mods bo2weapons`): a client without it
+  drops back to the menu on entering, with "The server uses weapon '...', which this game does not have" (the weapons'
+  indices come from the server), and `cl_autoConnect` stops. A client that loads them can join a server without them.
 - **Packages**: `tools/make_dist.sh --bo2 DIR` copies `DIR/mods/bo2weapons/mod.ff` (ffconv's 64-bit one) and `images/`
   into the windows and linux packages.
 
@@ -170,9 +171,10 @@ The HAMR (proof of concept):
 
 ## Not done yet
 
-- Joining, with `+set fs_mods bo2weapons` on the client, checked once (win64 dedicated server and client, Five,
-  box mode 2): the client entered and was given the upgraded DSR-50. Not checked: a client that loads `mod.ff` and
-  joins a server without the weapons; the box opened in play.
+- Joining (win64 dedicated server and client, Five): a client with `+set fs_mods bo2weapons` joined a server with
+  them (box mode 2) and was given the upgraded DSR-50; it also joined a retail server and played; a client without
+  them on a server with them dropped with the message above and went back to the menu. Not checked: the box opened in
+  play.
 - Linux and the Switch: not run. On the Switch, `mod.ff` needs `ffconv --abi aarch64`, and `mods/` reaches the SD
   card with the package. The 193 images (116 MB) may weigh on the console's memory.
 - The box and the Pack-a-Punch machine in play: checked only through `give`. PaP camo on the models is not seen yet.

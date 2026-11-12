@@ -48,7 +48,7 @@ The base is `Play.bat` / `play.sh`'s: `bo1_zombies 1`, `fs_b` and `fs_h` the fol
 `cl_allowWanConnect 1` and `cl_autoConnect <address>` (it retries while a local server is still loading), and never
 set god mode or mods: the server decides. The one exception is Black Ops II's weapons: a client of a server that has
 them must load the same `mod.ff` (`+set fs_mods bo2weapons`, the Play view's "Armes de Black Ops II" in Join mode, and
-the local server's own choice in host mode), or it stops on entering (`Weapon index mismatch`).
+the local server's own choice in host mode), or it goes back to the menu on entering, with a message naming the missing weapon.
 
 Two engine limits are checked before a launch: `Com_ParseCommandLine` cuts the line at **every** `+` (so no value
 may contain one, the folder's path included) and keeps 64 pieces, the text before the first `+` being one: ZmClient

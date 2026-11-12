@@ -61,7 +61,7 @@ START_POINT_CHOICES = (0, 1000, 2500, 5000, 10000, 25000, 50000, 100000)
 # mods/bo2weapons (docs/BO2_WEAPONS.md): the player's own Black Ops II weapons, in mods/bo2weapons/mod.ff, which the
 # engine loads when fs_mods names the mod (DB_FindModZone). Choice 0 is off; 1 to 3 are the script's bo2weapons_box 0
 # to 2. A client joining a server that has them loads the same mod.ff (join_bo2_weapons), or the weapons' indices do not
-# match and the game stops with "Weapon index mismatch".
+# match: the game goes back to the menu on entering, naming the missing weapon (cg_weapons.cpp).
 BO2_WEAPON_CHOICES = ((0, "non"), (1, "dans la boîte, avec celles de la map"),
                       (2, "seules dans la boîte, + armes spéciales de la map"), (3, "seules dans la boîte"))
 START_PERKS = (("jugg", "Juggernog"), ("revive", "Quick Revive"), ("speed", "Speed Cola"), ("doubletap", "Double Tap"),

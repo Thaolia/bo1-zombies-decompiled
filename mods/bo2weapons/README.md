@@ -33,7 +33,7 @@ Without `mod.ff` the scripts skip each weapon and the map stays retail: `games_m
 1 or 2 `bo2weapons: box mode 2, 23 map weapons out of the box` (Five).
 
 A player who joins a server that has the weapons loads the same `mod.ff` (`+set fs_mods bo2weapons`), or the game
-stops when it enters (`Weapon index mismatch`).
+goes back to the menu when it enters ("The server uses weapon ..., which this game does not have").
 
 ## What differs from Black Ops II
 

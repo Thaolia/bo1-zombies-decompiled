@@ -8,6 +8,7 @@
 #include <bgame/bg_perks.h>
 #include <ui_mp/ui_gametype_variants_mp.h>
 #include <cgame_mp/cg_main_mp.h>
+#include <database/db_registry.h>
 #include <bgame/bg_mantle.h>
 #include <client/splitscreen.h>
 #include <client_mp/cl_cgame_mp.h>
@@ -7295,6 +7296,19 @@ void __cdecl CG_SetupWeaponConfigString(int configStringIndex)
                 return;
             }
             Com_Error(ERR_DROP, "Weapon variant count mismatch for '%s'", weapVariantDef->szInternalName);
+        }
+        // mod: a weapon of the server's that no loaded zone of this client holds (a mod's mod.ff the server loaded,
+        // Black Ops II's weapons): say what to load rather than "index mismatch"
+        const XAssetEntryPoolEntry *missing = DB_FindXAssetEntry(ASSET_TYPE_WEAPON, token);
+        if ( !missing || !missing->entry.zoneIndex )
+        {
+            // every new attempt would fail the same way: cl_autoConnect stops, the menu keeps the message
+            if ( Dvar_FindVar("cl_autoConnect") )
+                Dvar_SetStringByName("cl_autoConnect", "");
+            Com_Error(ERR_DROP,
+                      "The server uses weapon '%s', which this game does not have: start it with the server's mods. "
+                      "For Black Ops II's weapons, ZmClient's \"Armes de Black Ops II\" (+set fs_mods bo2weapons).",
+                      token);
         }
         Com_Error(ERR_DROP, "Weapon index mismatch for '%s'", token);
     }
