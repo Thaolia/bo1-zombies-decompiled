@@ -486,8 +486,15 @@ Un fichier launch.cfg posé à côté de BO1Zombies.exe est ajouté à la ligne 
     +set cl_autoConnect 192.168.1.20:3074
     +set cl_allowWanConnect 1        (pour un serveur hors du réseau local)
 
-Prérequis : Windows 10 ou 11 en 64 bits. Si le jeu ne démarre pas faute de DLL, installez le « Visual C++
-Redistributable 2015-2022 (x64) » et le « DirectX End-User Runtime » (juin 2010) de Microsoft.
+PRÉREQUIS   Windows 10 ou 11 en 64 bits. Rien d'autre à installer : le dossier contient déjà le runtime Visual C++
+            (msvcp140, vcruntime140, vcruntime140_1) et les deux DLL de DirectX absentes d'un Windows neuf
+            (d3dx9_43, xinput1_3) ; Windows fournit le reste (Direct3D 9, DirectSound, réseau).
+            - Le pilote de la carte graphique (NVIDIA, AMD ou Intel) doit être installé : avec la « Carte vidéo
+              de base Microsoft », Direct3D 9 tourne en logiciel et le jeu rame.
+            - Les .exe ne sont pas signés : si SmartScreen affiche « Windows a protégé votre ordinateur »,
+              cliquez sur « Informations complémentaires » puis « Exécuter quand même ».
+            - Si le jeu ne démarre pas faute de DLL, installez le « Visual C++ Redistributable 2015-2022 (x64) »
+              et le « DirectX End-User Runtime » (juin 2010) de Microsoft.
 
 EOF
     bo2_note >> "$d/LISEZMOI.txt"
