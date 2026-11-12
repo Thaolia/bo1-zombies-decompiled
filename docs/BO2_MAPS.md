@@ -55,8 +55,47 @@ The load-obj paths had never run in the 64-bit port; they held the usual 32-bit 
 which then overwrote the collision nodes with its 511 constraint sentinels), five `GfxTexture` arrays (4 per lightmap
 or probe), and two Hex-Rays-split stack buffers (`className[7]` + 61 bytes in `DynEnt_LoadEntities`, `char nptr` + 3
 bytes taking 2048-byte values in the world parameters) that GCC placed apart. `LoadRopeParams` also kept a script
-string reference on every targetname (SL_CheckLeaks at quit): they are released with the collision. Next: a BSP of our
-own.
+string reference on every targetname (SL_CheckLeaks at quit): they are released with the collision.
+
+### A BSP of our own (2026-11-12)
+
+`tools/bo2/d3dbsp.py` writes a world BSP without Radiant or cod2map, in the Mod Tools' version 43 layout. It is a
+library (`Bsp`: `add_material`, `add_brush`, `add_mesh`, `add_entity`, `write`) and `d3dbsp.py room OUT.d3dbsp`
+writes a test room: a 2 048-unit floor, four 512-unit walls and a sky box. What it writes, and why that is enough:
+
+| Part | Written | The loader then |
+|---|---|---|
+| Collision | axial brushes (six bound sides, no plane sides), their 8 corners; one node splitting the world in z, two leaves listing the brushes that reach into them | builds its own brush trees inside each leaf (`CMod_LoadLeafBrushNodes`) |
+| Render surfaces | one triangle soup per material and mesh piece (16-bit counts), clockwise front faces (front normal = `(c - a) x (b - a)`, checked on `asset_viewer`), planar UVs, tangent/binormal as the compiler writes them | sorts them, builds the static surface data |
+| Visibility | one cell holding every surface (one AABB tree), no portals, every leaf in cell 0 | draws everything from everywhere (the render tree collapses to the cell) |
+| Lightmaps | lightmap index 0 on lit surfaces, 31 on the sky, no `LIGHTBYTES` lump | fills the one lightmap with white ("No Lightmap found"); a lit world material refuses a surface without one (`Com_ERROR: ... doesn't have a lightmap`) |
+| Light grid | an empty grid (one row, no entries, no colours) | `R_InitEmptyLightGrid` |
+| Lights | primary light 0 empty, 1 the sun from the worldspawn's `sundirection`; light regions present, 0 hulls each | |
+| Probes, water, burnable | none, empty headers | adds its dummy probe |
+| Brush edges | none | only the compiler uses them |
+
+The surfaces take retail BO1 world materials, and the map's zone must hold them: `material,wc/<name>` lines in its
+zone source, which `linker_pc` builds from the Mod Tools' `raw/materials/` with the images copied from the player's
+own `.iwd` files into the tool copy's `raw/images/` (never into the repository). The test room uses
+`eb_art_floor_concrete_tile_dirty`, `cub_art_plaster_white_brick` and `sky_day`.
+
+Lit world materials reached two more 32-bit sizes: `GfxShadowGeometry` (12 bytes, 24 on x64, crash in
+`R_AddShadowSurfaceToPrimaryLight`) and `GfxAabbTree` (40, 48 on x64, in the static model tree of
+`r_staticmodel_load_obj.cpp`, whose children's offsets are signed and now read as such). `codediff` against the
+32-bit build: both files identical.
+
+The room, `+set bo1_bspworld 1 +devmap zombie_bsptest`, with a scripted walk (`bo1_clientCommands`: forward 8 s,
+left 8 s, then a drop from z 300):
+
+| Build | Positions | Picture |
+|---|---|---|
+| Linux x64 (GL, llvmpipe) | (0 0 60), (1008 0 60), (1008 1008 60): the walls stop the player at 1024 minus the player's radius | floor and walls textured |
+| win64-msvc (D3D9, `headless.ps1 -Client`) | the same three | the same, brighter (the white lightmap) |
+| Switch (deko3d, Ryujinx) | the same three; clean exit at `bo1_autoquit` | |
+
+Still wrong, all lighting: the sky draws as a flat colour (orange in D3D9, blue or orange in GL), and the view model is
+cyan (the empty light grid lights models with nothing). They wait for the lighting step (a real light grid, lightmaps
+baked from BO2's).
 
 ## What comes out of `zm_nuked`
 
