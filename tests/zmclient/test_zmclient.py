@@ -207,6 +207,23 @@ class CommandLine(unittest.TestCase):
             line = " ".join(P.build_command(p, "x", tmp))
             self.assertIn("+set fs_game mods/mapkit +set bo1_mod_mapkit bo2_zm_nuked", line)
             self.assertTrue(line.endswith("+devmap zombie_pentagon"), line)
+            # the native Nuketown is offered only when its zone and its BSP are in the package
+            with open(os.path.join(layouts, "bo2_zm_nuked_bsp.json"), "w") as f:
+                json.dump({"name": "bo2_zm_nuked_bsp", "base": "zombie_pentagon", "edits": []}, f)
+            P.mapkit_layouts.cache_clear()
+            self.assertNotIn("bo2_zm_nuked_bsp", [m[3] for m in P.solo_maps(tmp)])
+            p["map"] = "mapkit:bo2_zm_nuked_bsp"
+            self.assertTrue(any("zombie_bo2nuked.d3dbsp" in w for w in P.problems(p, tmp)))
+            os.makedirs(os.path.join(tmp, "usermaps", "zombie_bo2nuked"))
+            open(os.path.join(tmp, "usermaps", "zombie_bo2nuked", "zombie_bo2nuked.ff"), "w").close()
+            os.makedirs(os.path.join(tmp, "main", "maps"))
+            open(os.path.join(tmp, "main", "maps", "zombie_bo2nuked.d3dbsp"), "w").close()
+            self.assertIn("Mapkit : Nuketown native (Black Ops II, monde BSP)",
+                          [m[1] for m in P.solo_maps(tmp) if m[3] == "bo2_zm_nuked_bsp"])
+            line = " ".join(P.build_command(p, "x", tmp))
+            self.assertIn("+set bo1_mod_mapkit bo2_zm_nuked_bsp ", line)
+            self.assertIn("+set bo1_mod_zones zombie_bo2nuked +set bo1_bspworld maps/zombie_bo2nuked.d3dbsp ", line)
+            self.assertTrue(line.endswith("+devmap zombie_pentagon"), line)
 
     def test_bo2_weapons(self):
         with tempfile.TemporaryDirectory() as tmp:

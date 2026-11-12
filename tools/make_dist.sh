@@ -19,10 +19,11 @@
 #   --no-game-data   windows and linux packages without any file of the game, in BO1Zombies_<platform>_nodata/:
 #                    the player installs them from their own Black Ops with ZmClient (Installation view)
 #   --bo2 DIR        your own Black Ops II extraction: its maps (docs/BO2_MAPS.md, "Running it": DIR/mods/mapkit/
-#                    layouts/bo2_*.json and DIR/mods/mapkit/imports/), its weapons (docs/BO2_WEAPONS.md: the 64-bit
-#                    DIR/mods/bo2weapons/mod.ff and DIR/mods/bo2weapons/images/), either or both. They go into the
-#                    windows and linux packages, where ZmClient's Solo view offers them ("Mapkit : Nuketown (Black
-#                    Ops II)", "Armes de Black Ops II"); game data, so not with --no-game-data
+#                    layouts/bo2_*.json and DIR/mods/mapkit/imports/; a native map also DIR/usermaps/<zone>/,
+#                    DIR/main/maps/<zone>.d3dbsp and DIR/main/images/bo2_*.iwi), its weapons (docs/BO2_WEAPONS.md:
+#                    the 64-bit DIR/mods/bo2weapons/mod.ff and DIR/mods/bo2weapons/images/), either or both. They
+#                    go into the windows and linux packages, where ZmClient's Solo view offers them ("Mapkit :
+#                    Nuketown (Black Ops II)", "Armes de Black Ops II"); game data, so not with --no-game-data
 #   --jobs N         parallel jobs                                   default: the CPU count
 #
 # What it builds when needed (unless --no-build): the win64-msvc preset (Visual Studio, from WSL), the Linux and
@@ -329,6 +330,12 @@ bo2_data() { # <dest>
     if [ $BO2_MAPS = 1 ]; then
         rsync -a --include='bo2_*.json' --exclude='*' "$BO2/mods/mapkit/layouts/" "$1/mods/mapkit/layouts/"
         rsync -a "$BO2/mods/mapkit/imports/" "$1/mods/mapkit/imports/"
+        # a map with a world of its own (tools/bo2/bo2_bsp.py): its zone, its BSP and its colour maps
+        if [ -d "$BO2/usermaps" ] && ls "$BO2"/main/maps/*.d3dbsp > /dev/null 2>&1; then
+            rsync -a "$BO2/usermaps/" "$1/usermaps/"
+            rsync -a --include='*.d3dbsp' --exclude='*' "$BO2/main/maps/" "$1/main/maps/"
+            rsync -a --include='bo2_*.iwi' --exclude='*' "$BO2/main/images/" "$1/main/images/"
+        fi
     fi
     if [ $BO2_WEAPONS = 1 ]; then
         rsync -a "$BO2/mods/bo2weapons/mod.ff" "$1/mods/bo2weapons/"
@@ -341,6 +348,9 @@ bo2_note() {
     [ -n "$BO2" ] || return 0
     if [ $BO2_MAPS = 1 ]; then
         echo "NUKETOWN    zmclient, vue Solo : « Mapkit : Nuketown (Black Ops II) », tirée de votre propre Black Ops II."
+        if ls "$BO2"/main/maps/*.d3dbsp > /dev/null 2>&1; then
+            echo "            « Mapkit : Nuketown native (Black Ops II, monde BSP) » : la même, sur son propre monde BO1."
+        fi
     fi
     if [ $BO2_WEAPONS = 1 ]; then
         echo "ARMES BO2   zmclient, vue Solo : « Armes de Black Ops II » (ou zmadmin au lancement du serveur), tirées"

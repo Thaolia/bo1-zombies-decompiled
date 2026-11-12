@@ -98,7 +98,8 @@ through the depot, diner, farm, power station and town and carries the players s
 it, and its props are still unlit). See `docs/BO2_MAPS.md`.
 Nuketown also runs as a native BO1 map (experimental, branch `bspnuked`): `tools/bo2/bo2_bsp.py` writes its world,
 props, collision and BO2's baked light into a BO1 BSP, and `+set bo1_bspworld maps/zombie_bo2nuked.d3dbsp` plays
-MapKit's Nuketown gameplay on it (the self-test passes 106 of 106 checks; models are not lit yet).
+MapKit's Nuketown gameplay on it (the self-test passes 106 of 106 checks; models are not lit yet). `make_dist.sh --bo2`
+packages it and ZmClient's Solo view offers it as "Mapkit : Nuketown native (Black Ops II, monde BSP)".
 
 ## Packages
 

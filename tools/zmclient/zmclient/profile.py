@@ -42,10 +42,15 @@ MAPKIT_LABELS = {
     # docs/BO2_MAPS.md: the player's own extraction of Black Ops II's Nuketown, which make_dist.sh --bo2 packages
     "bo2_zm_nuked": "Nuketown (Black Ops II)",
     "bo2_zm_transit": "TranZit (Black Ops II)",
+    # the same Nuketown on a world of its own BSP (tools/bo2/bo2_bsp.py): BO2's props, lightmaps and sky
+    "bo2_zm_nuked_bsp": "Nuketown native (Black Ops II, monde BSP)",
 }
 # the zones a layout's assets come from beside Five's (bo1_mod_zones): TranZit's Stamin-Up machine and bottle are
 # Ascension's (_mapkit.gsc mapkit_marathon_perk)
 MAPKIT_ZONES = {"bo2_zm_transit": "zombie_cosmodrome"}
+# a layout played on a world of its own BSP (docs/BO2_MAPS.md, "Props, gameplay and lighting on the native world"):
+# its zone usermaps/<zone>/<zone>.ff (bo1_mod_zones) and its world main/maps/<zone>.d3dbsp (bo1_bspworld)
+MAPKIT_BSP_WORLDS = {"bo2_zm_nuked_bsp": "zombie_bo2nuked"}
 NIGHTMARE_MAPS = ("zombie_pentagon", "zombie_theater")
 AIM_DVARS = (("aim_assist", "bo1_aimassist"), ("aim_slowdown", "aim_slowdown_enabled"),
              ("aim_lockon", "aim_lockon_enabled"), ("aim_autoaim", "aim_autoaim_enabled"))
@@ -232,10 +237,21 @@ def mapkit_layouts(dist_root):
                  + [l for l in out if l[0] not in MAPKIT_LABELS])
 
 
+def bsp_world_files(layout, dist_root):
+    """The files a BSP-world layout needs that the package lacks (empty for any other layout)."""
+    zone = MAPKIT_BSP_WORLDS.get(layout)
+    if not zone:
+        return []
+    need = (os.path.join("usermaps", zone, zone + ".ff"), os.path.join("main", "maps", zone + ".d3dbsp"))
+    return [f for f in need if not (dist_root and os.path.isfile(os.path.join(dist_root, f)))]
+
+
 def solo_maps(dist_root):
     """(value, label, bsp, layout or None) of every map the Solo view offers."""
     maps = [(bsp, label, bsp, None) for bsp, label, _ in BASE_MAPS]
     for layout, base in mapkit_layouts(dist_root):
+        if bsp_world_files(layout, dist_root):
+            continue
         label = MAPKIT_LABELS.get(layout, layout)
         maps.append((f"mapkit:{layout}", f"Mapkit : {label}", base, layout))
     return maps
@@ -344,8 +360,11 @@ def solo_mod_flags(p, dist_root=None):
             if p["zinfo"] or p["noperks"]:
                 a += (" +set fs_mods mapkit" + (" zinfo" if p["zinfo"] else "")
                       + (" noperks +set noperks 1" if p["noperks"] else ""))
-        if layout in MAPKIT_ZONES:
-            a += " +set bo1_mod_zones " + MAPKIT_ZONES[layout]
+        zones = [z for z in (MAPKIT_ZONES.get(layout), MAPKIT_BSP_WORLDS.get(layout)) if z]
+        if zones:
+            a += " +set bo1_mod_zones " + " ".join(zones)
+        if layout in MAPKIT_BSP_WORLDS:
+            a += f" +set bo1_bspworld maps/{MAPKIT_BSP_WORLDS[layout]}.d3dbsp"
     elif p["horde"]:
         specials = specials_available(bsp, layout)
         a += " " + horde_flags(**horde_opts, napalm=p["horde_napalm"] and specials, sonic=p["horde_sonic"] and specials)
@@ -452,6 +471,12 @@ def problems(p, dist_root=None):
         if not map_installed(bsp, dist_root):
             out.append(f"{MAP_LABELS.get(bsp, bsp)} n'est pas installée (pas de zone {bsp}.ff : votre Black Ops "
                        "n'a pas ce DLC)")
+    if p["mode"] == "solo":
+        layout = resolve_map(p["map"], dist_root)[1]
+        missing = bsp_world_files(layout, dist_root) if layout else []
+        if missing:
+            out.append(f"{MAPKIT_LABELS.get(layout, layout)} : il manque {', '.join(missing)} (votre extraction de "
+                       "Black Ops II, docs/BO2_MAPS.md)")
     if wants_bo2_weapons(p, dist_root) and not bo2_weapons_installed(dist_root):
         out.append("armes de Black Ops II : pas de mods/bo2weapons/mod.ff (à construire depuis votre Black Ops II, "
                    "docs/BO2_WEAPONS.md)")
