@@ -209,6 +209,8 @@ void __cdecl Com_UnloadBsp();
 // its zones; another value names the BSP to read instead (a render-world test on another map). Empty: zones only.
 // The BSP to read for this map's BSP file name, or null when the dvar is empty.
 const char *Com_BspWorldPath(const char *mapBspFilename);
+// Whether bo1_bspworld is set (a startup '+set' is already known when the hunk is sized).
+bool Com_BspWorldRequested();
 // Whether the current map's world is read from a BSP: without fastfiles, as retail's tools did, or when the map
 // loaded with Com_BspWorldPath's BSP (Com_SetWorldFromBsp, set by the server's spawn and a remote client's load).
 bool Com_WorldFromBsp();

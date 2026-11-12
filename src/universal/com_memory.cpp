@@ -9,6 +9,7 @@
 #include <qcommon/common.h>
 #include <qcommon/mem_track.h>
 #include <gfx_d3d/r_reflection_probe.h>
+#include <qcommon/com_bsp_load_obj.h>
 #include <qcommon/cmd.h>
 #include <database/db_registry.h>
 #include <gfx_d3d/r_image.h>
@@ -167,7 +168,12 @@ void Com_InitHunkMemory()
     //if (useFastFile->current.enabled)
     //    s_hunkTotal = 0xF00000;
 
-    if (IsFastFileLoad())
+    if (IsFastFileLoad() && Com_BspWorldRequested())
+    {
+        // mod (bspworld): a world read from a BSP lives in the hunk (Nuketown's took it from the usual 15 MB to 27.4)
+        s_hunkTotal = 0x4000000;
+    }
+    else if (IsFastFileLoad())
     {
         //s_hunkTotal = IsDedicatedServer() ? 0xF00000 : 0x500000;
         s_hunkTotal = 0xF00000; // im just gonna give it the higher cap

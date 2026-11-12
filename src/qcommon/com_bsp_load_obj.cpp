@@ -365,6 +365,11 @@ static const char *Com_BspWorldDvar()
     return dvar && dvar->current.string && *dvar->current.string ? dvar->current.string : nullptr;
 }
 
+bool Com_BspWorldRequested()
+{
+    return Com_BspWorldDvar() != nullptr;
+}
+
 const char *Com_BspWorldPath(const char *mapBspFilename)
 {
     const char *value = Com_BspWorldDvar();
