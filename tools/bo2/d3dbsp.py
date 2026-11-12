@@ -54,6 +54,7 @@ LUMP_MODELS = 0x25
 LUMP_ENTITIES = 0x27
 LUMP_PRIMARY_LIGHTS = 0x2B
 NO_PRIMARY_LIGHT, SUN_PRIMARY_LIGHT = 0, 1  # the BSP's primary lights: none, then the sun
+LIGHT_SPOT, LIGHT_OMNI = 2, 3                # ComPrimaryLight::type
 LUMP_LIGHTGRIDHEADER = 0x2C
 LUMP_LIGHTGRIDROWS = 0x2D
 LUMP_WATERHEADER = 0x34
@@ -88,6 +89,7 @@ class Bsp:
         self.entities = []           # list of dicts, worldspawn first
         self.sun_color = (0.875, 0.875, 0.875)
         self.light_grid = None       # set_light_grid: (mins, maxs, entries, colours)
+        self.lights = []             # add_primary_light: the primary lights after "none" and the sun
 
     def add_material(self, name, surface_flags=SURF_DEFAULT, content_flags=CONTENTS_SOLID):
         for i, m in enumerate(self.materials):
@@ -136,6 +138,23 @@ class Bsp:
             raise ValueError("more than 65536 collision vertices")
         self.coll_verts.extend(tuple(map(float, v)) for v in verts)
         self.coll_tris.extend((a + base, b + base, c + base, m) for a, b, c, m in tris)
+
+    # A spot (LIGHT_SPOT) or omni (LIGHT_OMNI) primary light, index 2 onward, as a retail map's (Kino's spots, read
+    # from its zone): attenuation (1, 0, 0), falloff from 0 to the radius, the colour as its specular colour too, the
+    # white_light definition. The world's lightmaps already hold its light; models take it from the light grid's
+    # entries that name it. No shadow map (canUseShadowMap 0): a console cannot afford one per lamp.
+    def add_primary_light(self, kind, origin, direction, color, radius, cos_outer=0.0, cos_inner=0.0, roundness=0.0,
+                          a_ab_b=(0.0, 0.0, 0.0, 0.0), cull_dist=0):
+        if kind not in (LIGHT_SPOT, LIGHT_OMNI):
+            raise ValueError("a spot or an omni light")
+        if len(self.lights) + 2 > 0xFF:
+            raise ValueError("at most 255 primary lights")
+        self.lights.append(struct.pack(
+            "<BBhb3x3f3f3f3f3f3f3f7fi4f4f4f4f4f64s", kind, 0, int(cull_dist), 0, *direction, *origin, *color, *color,
+            1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, float(radius), 0.0, 0.0, float(cos_outer),
+            float(cos_inner), 0, 1.0, 0.0, float(roundness), 0.0, *a_ab_b, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, b"white_light"))
+        return len(self.lights) + 1
 
     # The light grid models are lit from (R_GetLightingAtPoint): points every 32 units across, 64 up, from -131072.
     # mins / maxs are grid coordinates (inclusive); entries one (colour index, primary light index) per point, x-major
@@ -359,8 +378,11 @@ class Bsp:
         sun_dir = angle_vectors(sd[0], sd[1])
         none_light = bytes(0x10C)
         sun = struct.pack("<BBhb3x3f3f3f", 1, 0, 0, 0, *sun_dir, 0.0, 0.0, 0.0, *self.sun_color)
-        lumps[LUMP_PRIMARY_LIGHTS] = none_light + sun + bytes(0x10C - len(sun))
-        lumps[LUMP_LIGHTREGIONS] = bytes(2)
+        lumps[LUMP_PRIMARY_LIGHTS] = none_light + sun + bytes(0x10C - len(sun)) + b"".join(self.lights)
+        if not self.lights:
+            lumps[LUMP_LIGHTREGIONS] = bytes(2)
+        # With lamps, no light regions: without them (hasLightRegions false) a model takes the primary light its light
+        # grid entry names (R_GetLightingAtPoint), where regions would replace it by the caller's nearest light.
 
         if self.light_grid:
             _write_light_grid(lumps, *self.light_grid)

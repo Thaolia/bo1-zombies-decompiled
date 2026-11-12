@@ -222,14 +222,16 @@ def main(argv=None):
     # Model lighting: a light grid over the play area (its zones) from BO2's light, and the sun on the same scale
     grid = None
     if world_light and baked:
+        bsp.sun_color = bo2_bsp_light.bake_sun_colour(world_light)
+        light_index = {world_light.sun_index: d3dbsp.SUN_PRIMARY_LIGHT}
+        light_index.update(bo2_bsp_light.add_lamps(bsp, world_light))
         zones = zone_edits(read_entities(base + ".ents"), Collision(args.collision or base + ".collision.bin").submodels)
         if zones:
             grid = bo2_bsp_light.light_grid(world_light, bake_tris, [min(z["mins"][k] for z in zones) for k in range(3)],
                                             [max(z["maxs"][k] for z in zones) for k in range(3)],
-                                            d3dbsp.SUN_PRIMARY_LIGHT, d3dbsp.NO_PRIMARY_LIGHT)
+                                            light_index, d3dbsp.NO_PRIMARY_LIGHT)
         if grid:
             bsp.set_light_grid(*grid)
-        bsp.sun_color = bo2_bsp_light.bake_sun_colour(world_light)
 
     # Collision: the world's brushes and terrain (owner 0); submodels (doors) wait for the gameplay step
     col_path = args.collision or base + ".collision.bin"
@@ -346,7 +348,8 @@ def main(argv=None):
         g_mins, g_maxs, g_entries, g_colours = grid
         print(f"light grid: {g_maxs[0] - g_mins[0] + 1} x {g_maxs[1] - g_mins[1] + 1} x {g_maxs[2] - g_mins[2] + 1} "
               f"points, {len(g_colours)} colours, {sum(1 for e in g_entries if e[1] == d3dbsp.SUN_PRIMARY_LIGHT)} "
-              f"in the sun; sun colour {', '.join(f'{c:.2f}' for c in bsp.sun_color)}")
+              f"in the sun, {sum(1 for e in g_entries if e[1] > d3dbsp.SUN_PRIMARY_LIGHT)} under a lamp ({len(bsp.lights)} "
+              f"lamps); sun colour {', '.join(f'{c:.2f}' for c in bsp.sun_color)}")
     print(f"{bsp_path}: {len(zone_materials)} materials, {tri_total} triangles in {len(bsp.soups)} surfaces "
           f"({skipped_names} materials left out, {len(no_map)} without a colour map, {len(bad_image)} with an image "
           f"the engine cannot take); {world_brushes} brushes, {len(coll_tris)} terrain triangles in {partitions} "

@@ -235,6 +235,13 @@ Pack-a-Punch. It now runs on the BSP world instead of its own mesh and collision
   around it (a bus or a rock lit from the floor its own shadow darkens came out black) and at least 0.12; the sun
   primary light where most of those floors see BO2's sun. BO1's sun takes BO2's sun colour over the reference
   (0.56, 0.73, 0.75), so sunlit ground and a model facing the sun match.
+- The lamps: BO2's 16 spots and cube-lit lamps (`<map>.d3dbsp.lights.csv`) are the BSP's primary lights 2 to 17
+  (`bo2_bsp_light.add_lamps`, `d3dbsp.add_primary_light`: spots stay spots, the lamps become omni lights, colours
+  over the reference, no shadow map, `white_light` as Kino's spots, read from its zone). The lightmaps already hold
+  their light; a light grid point takes the primary light of its floor in BO2 (the sun or a lamp) when that light
+  reaches it, by majority over the floors around it: 1 255 points sit under a lamp, the houses' and the garage's.
+  The BSP then has no light regions: with them (`hasLightRegions`), the engine replaces a grid entry's lamp by the
+  caller's nearest light (`R_GetLightingAtPoint`).
 - The sky: BO2's sky model (`skybox_dlc0_zm_nuketown`) is the worldspawn's `skyboxmodel`, which BO1 draws around the
   viewer, its material a copy of `zombie_theater`'s `mtl_skybox_zombie_theater` (`mc_sky_cubemap_hdr`) with BO2's
   cube map.
