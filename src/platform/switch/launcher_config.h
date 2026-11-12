@@ -63,8 +63,10 @@ struct LauncherSettings
     bool tabInfo = true; // mods/zinfo: zombies alive / left this round beside the Tab scoreboard
     int startPoints = 0;           // one of kLauncherStartPoints
     unsigned startPerks = 0;       // bit i: kLauncherPerks[i]
+    bool startPower = false;       // mods/admin's zm_startpower: the map's power switch used at the start
     LauncherBackend backend = LAUNCHER_BACKEND_DEKO3D;
-    int maxFps = 60; // 30 or 60
+    int height = 720; // 720 or 480: the game's frame (r_customMode), which the console scales to the screen
+    int maxFps = 60;  // 30 or 60
     bool shadows = true;
     bool fpsCounter = true;
     LauncherTexFilter texFilter = LAUNCHER_TEXFILTER_ANISO16;

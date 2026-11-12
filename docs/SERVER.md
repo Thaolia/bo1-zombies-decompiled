@@ -227,7 +227,8 @@ Typed in the server's console, run from `server.cfg`, or sent over rcon once the
 | `zm_mods "<mods>"` | sets `fs_mods` (quoted, `""` for none) and loads the current map again with it; alone, prints it |
 
 Settings, in `server.cfg` or on the command line: `zm_startpoints <n>` (every player's points once they first spawn on
-a map; 0 keeps the game's own), `zm_startperks "<perks>"` (perks every player gets then, e.g. `"jugg revive"`),
+a map; 0 keeps the game's own), `zm_startperks "<perks>"` (perks every player gets then, e.g. `"jugg revive"`), `zm_startpower 1` (the map's power
+switch used as the first player spawns),
 `zm_jip_mode immediate|nextround` (a player who joins a game in progress, below) and `zm_debug_revive 1` (while a player is down, logs `admin: revive debug: ...` lines with each test of the game's
 revive for every other player: distance, alive, down, touching the revive trigger, facing, sight and bullet traces,
 use button, the result).

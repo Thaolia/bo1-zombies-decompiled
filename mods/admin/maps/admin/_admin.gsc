@@ -8,9 +8,9 @@
 // starting with "admin: ", which the server also prints to its console.
 //
 // Dvars read here: zm_startpoints (points each player starts with, 0 = the game's own), zm_startperks (perks each
-// player starts with: names or "all"), zm_jip_mode (a player who joins a game in progress: "immediate" plays at once,
-// "nextround" spectates until the round ends) and zm_debug_revive (1: while a player is down, log why each other
-// player can or cannot revive them).
+// player starts with: names or "all"), zm_startpower (1: the power comes on as the first player spawns), zm_jip_mode
+// (a player who joins a game in progress: "immediate" plays at once, "nextround" spectates until the round ends) and
+// zm_debug_revive (1: while a player is down, log why each other player can or cannot revive them).
 //
 // A dedicated server's players come in one by one, while the retail game sets up its players once, when
 // "all_players_connected" is set (maps\_load_common): as soon as the players connected at that time are in. A player
@@ -580,6 +580,7 @@ admin_start_kit()
 	// after the game's own start points (maps\_zombiemode sets them once all players are connected)
 	wait( 1 );
 	admin_log( self admin_who() + " is character " + self.entity_num + ", model " + self.model );
+	self admin_start_power();
 	points = GetDvarInt( #"zm_startpoints" );
 	if ( points > 0 )
 	{
@@ -589,6 +590,47 @@ admin_start_kit()
 	if ( perks != "" )
 	{
 		self admin_give_perks( perks, "start perks" );
+	}
+}
+
+
+// zm_startpower: the map's power switch is used for the first player who spawns, so that everything the map does when
+// the power comes on runs (lever, lights, perk machines, electric doors): use_elec_switch (Kino, Five, Ascension,
+// Call of the Dead, Moon, MapKit layouts), use_master_switch (Verruckt), use_power_switch (Der Riese). A map with
+// none of them but a power_on flag (Shangri-La's two levers) gets the flag set.
+admin_start_power()
+{
+	if ( GetDvarInt( #"zm_startpower" ) != 1 || IsDefined( level.admin_start_power ) )
+	{
+		return;
+	}
+	level.admin_start_power = true;
+	names = [];
+	names[0] = "use_elec_switch";
+	names[1] = "use_master_switch";
+	names[2] = "use_power_switch";
+	used = 0;
+	for ( n = 0; n < names.size; n++ )
+	{
+		trigs = GetEntArray( names[n], "targetname" );
+		for ( t = 0; t < trigs.size; t++ )
+		{
+			trigs[t] notify( "trigger", self );
+			used++;
+		}
+	}
+	if ( used > 0 )
+	{
+		admin_log( "start power: " + used + " power switch triggers used for " + self admin_who() );
+	}
+	else if ( IsDefined( level.flag ) && IsDefined( level.flag[ "power_on" ] ) )
+	{
+		flag_set( "power_on" );
+		admin_log( "start power: power_on set (no power switch trigger)" );
+	}
+	else
+	{
+		admin_log( "start power: this map has no power" );
 	}
 }
 

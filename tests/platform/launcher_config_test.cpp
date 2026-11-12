@@ -34,6 +34,7 @@ bool SameSettings(const LauncherSettings &a, const LauncherSettings &b)
            a.aimLockon == b.aimLockon && a.aimAutoaim == b.aimAutoaim && a.god == b.god && a.tabInfo == b.tabInfo && a.backend == b.backend &&
            a.maxFps == b.maxFps && a.shadows == b.shadows && a.fpsCounter == b.fpsCounter &&
            a.texFilter == b.texFilter && a.startPoints == b.startPoints && a.startPerks == b.startPerks &&
+           a.startPower == b.startPower && a.height == b.height &&
            std::memcmp(&a.pad, &b.pad, sizeof(a.pad)) == 0;
 }
 } // namespace
@@ -48,7 +49,8 @@ int main()
 
     CheckLine(Launcher_BuildLaunchLine(defaults, ""),
               "+set bo1_zombies 1 +set bo1_aimassist 1 +set aim_slowdown_enabled 1 +set aim_lockon_enabled 1"
-              " +set aim_autoaim_enabled 0 +set bo1_testclient_god 0 +set fs_mods zinfo +set com_maxfps 60"
+              " +set aim_autoaim_enabled 0 +set bo1_testclient_god 0 +set fs_mods zinfo +set r_fullscreen 0"
+              " +set r_customMode 1280x720 +set com_maxfps 60"
               " +set sm_enable 1 +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0"
               " +devmap zombie_theater",
               "the default line, with the Tab zombie counter");
@@ -61,12 +63,14 @@ int main()
     custom.tabInfo = false;
     custom.backend = LAUNCHER_BACKEND_GL;
     custom.maxFps = 30;
+    custom.height = 480;
     custom.shadows = false;
     custom.fpsCounter = false;
     custom.texFilter = LAUNCHER_TEXFILTER_BILINEAR;
     CheckLine(Launcher_BuildLaunchLine(custom, "+set bo1_frameperf 200"),
               "+set bo1_zombies 1 +set bo1_aimassist 0 +set aim_slowdown_enabled 1 +set aim_lockon_enabled 1"
-              " +set aim_autoaim_enabled 1 +set bo1_testclient_god 1 +set com_maxfps 30 +set sm_enable 0"
+              " +set aim_autoaim_enabled 1 +set bo1_testclient_god 1 +set r_fullscreen 0"
+              " +set r_customMode 854x480 +set com_maxfps 30 +set sm_enable 0"
               " +set bo1_fpscounter 0 +set r_texFilterAnisoMax 1 +set r_texFilterMipMode 2 +set bo1_frameperf 200"
               " +devmap zombie_moon",
               "a custom line, with the extra arguments before +devmap");
@@ -84,7 +88,7 @@ int main()
     Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(defaults)), defaults),
           "menu.cfg round-trips the defaults");
 
-    const LauncherSettings bad = Launcher_ParseSettings("map=zombie_nowhere\r\nmaxfps=45\nshadows=yes\n"
+    const LauncherSettings bad = Launcher_ParseSettings("map=zombie_nowhere\r\nmaxfps=45\nshadows=yes\nresolution=1080\n"
                                                         "backend=vulkan\ntexfilter=aniso3\nunknown=1\nno equals sign\n");
     Check(SameSettings(bad, defaults), "unknown maps, invalid values and unknown keys keep the defaults");
 
@@ -110,7 +114,8 @@ int main()
     join.god = true;
     CheckLine(Launcher_BuildLaunchLine(join, "+set bo1_frameperf 200"),
               "+set bo1_zombies 1 +set bo1_aimassist 1 +set aim_slowdown_enabled 1 +set aim_lockon_enabled 1"
-              " +set aim_autoaim_enabled 0 +set bo1_testclient_god 0 +set com_maxfps 60 +set sm_enable 1"
+              " +set aim_autoaim_enabled 0 +set bo1_testclient_god 0 +set r_fullscreen 0"
+              " +set r_customMode 1280x720 +set com_maxfps 60 +set sm_enable 1"
               " +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0 +set name Switch1"
               " +set bo1_frameperf 200 +set cl_allowWanConnect 1 +set cl_autoConnect 192.168.1.20:29070",
               "a join: the game's menu, then cl_autoConnect, no +devmap, no local god mode, no fs_mods (the server's)");
@@ -121,7 +126,8 @@ int main()
     noServer.god = true;
     CheckLine(Launcher_BuildLaunchLine(noServer, ""),
               "+set bo1_zombies 1 +set bo1_aimassist 1 +set aim_slowdown_enabled 1 +set aim_lockon_enabled 1"
-              " +set aim_autoaim_enabled 0 +set bo1_testclient_god 1 +set fs_mods zinfo +set com_maxfps 60"
+              " +set aim_autoaim_enabled 0 +set bo1_testclient_god 1 +set fs_mods zinfo +set r_fullscreen 0"
+              " +set r_customMode 1280x720 +set com_maxfps 60"
               " +set sm_enable 1 +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0"
               " +devmap zombie_theater",
               "a join without a server address starts the solo game");
@@ -147,6 +153,15 @@ int main()
     kitJoin.serverHost = "192.168.1.20";
     Check(Launcher_BuildLaunchLine(kitJoin, "").find("zm_start") == std::string::npos,
           "a join leaves the start to the server");
+    LauncherSettings power;
+    power.tabInfo = false;
+    power.startPower = true;
+    const std::string powerLine = Launcher_BuildLaunchLine(power, "");
+    Check(powerLine.find(" +set fs_mods admin +set zm_startpower 1 +set r_fullscreen 0 ") != std::string::npos &&
+              Launcher_BuildLaunchLine(defaults, "").find("zm_startpower") == std::string::npos,
+          "the start power alone stacks mods/admin and sets zm_startpower, off by default");
+    Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(power)), power),
+          "menu.cfg round-trips the start power");
     const LauncherSettings kitParsed =
         Launcher_ParseSettings("start_points=1234\nstart_perks= mule , nope,jugg\n");
     Check(kitParsed.startPoints == 0 && kitParsed.startPerks == ((1u << 7) | 1u),

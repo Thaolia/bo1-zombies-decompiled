@@ -71,6 +71,7 @@ DEFAULTS = {
     "quickrestart": True,
     "start_points": 0,                  # one of START_POINT_CHOICES
     "start_perks": [],                  # names of START_PERKS
+    "start_power": False,               # mods/admin's zm_startpower: the power switch used at the start
     "horde": False,
     "horde_max": 128,
     "horde_round": 1,
@@ -314,8 +315,10 @@ def solo_mod_flags(p, dist_root=None):
     if p["quickrestart"]:
         a += " +set bo1_mod_quickrestart 1"
     argv = a.split()
-    if p["start_points"] or p["start_perks"]:
+    if p["start_points"] or p["start_perks"] or p["start_power"]:
         add_admin_mod(argv, bool(layout) and not p["horde"])
+        if p["start_power"]:
+            argv += ["+set", "zm_startpower", "1"]
         if p["start_points"]:
             argv += ["+set", "zm_startpoints", str(p["start_points"])]
         if p["start_perks"]:

@@ -110,6 +110,7 @@ enum Item
     ITEM_TABINFO,
     ITEM_KIT,
     ITEM_BACKEND,
+    ITEM_RESOLUTION,
     ITEM_MAXFPS,
     ITEM_SHADOWS,
     ITEM_TEXFILTER,
@@ -130,6 +131,7 @@ enum Item
     ITEM_PAD_BACK,
     // Start kit view: the points, one line per perk (kLauncherPerks order), back.
     ITEM_KIT_POINTS,
+    ITEM_KIT_POWER,
     ITEM_KIT_PERK_FIRST,
     ITEM_KIT_PERK_LAST = ITEM_KIT_PERK_FIRST + 7,
     ITEM_KIT_BACK,
@@ -166,10 +168,11 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_MAIN, 16, "Compteur zombies", "Zombies en vie et restants dans la manche, a cote du tableau des scores."},
     {VIEW_MAIN, 17, "Depart", "A: points et atouts donnes a l'arrivee sur la map (partie solo)."},
     {VIEW_MAIN, 19, "Rendu", "deko3d: le plus rapide. OpenGL: l'ancien chemin, plus lent."},
-    {VIEW_MAIN, 20, "Limite de FPS", "30: plus stable et plus econome en batterie. 60: plus fluide."},
-    {VIEW_MAIN, 21, "Ombres", "Ombres dynamiques. Les couper fait gagner des FPS."},
-    {VIEW_MAIN, 22, "Filtre de texture", "Nettete des textures au loin. 16x: le plus net. Bilineaire: le plus leger."},
-    {VIEW_MAIN, 23, "Compteur FPS", "Compteur de FPS et de batterie en haut a droite."},
+    {VIEW_MAIN, 20, "Resolution", "480p: image moins nette mais plus de FPS. 720p: la resolution de l'ecran."},
+    {VIEW_MAIN, 21, "Limite de FPS", "30: plus stable et plus econome en batterie. 60: plus fluide."},
+    {VIEW_MAIN, 22, "Ombres", "Ombres dynamiques. Les couper fait gagner des FPS."},
+    {VIEW_MAIN, 23, "Filtre de texture", "Nettete des textures au loin. 16x: le plus net. Bilineaire: le plus leger."},
+    {VIEW_MAIN, 24, "Compteur FPS", "Compteur de FPS et de batterie en haut a droite."},
     {VIEW_MAIN, 25, "Touches manette", "A: choisir le bouton de chaque action du jeu (tirer, viser, sauter...)."},
     {VIEW_MAIN, 26, "Manettes", "A: ecran de la Switch pour connecter ou changer de manette."},
     {VIEW_MAIN, 35, "DEMARRER", "Lance la partie avec ces reglages (aussi: bouton +)."},
@@ -185,10 +188,11 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_PAD, 23, "Reinitialiser", "A: remet les touches du jeu d'origine."},
     {VIEW_PAD, 25, "RETOUR", "Revient au menu (aussi: bouton B)."},
     {VIEW_KIT, 6, "Points de depart", "Gauche/Droite: les points a l'arrivee sur la map, au lieu des 500 du jeu."},
+    {VIEW_KIT, 7, "Courant", "Oui: le courant de la map est mis des l'arrivee (portes, atouts, Pack-a-Punch)."},
 #define KIT_PERK(row) {VIEW_KIT, row, nullptr, "Gauche/Droite ou A: atout gratuit a l'arrivee, si la map a sa machine."}
-    KIT_PERK(8), KIT_PERK(9), KIT_PERK(10), KIT_PERK(11), KIT_PERK(12), KIT_PERK(13), KIT_PERK(14), KIT_PERK(15),
+    KIT_PERK(9), KIT_PERK(10), KIT_PERK(11), KIT_PERK(12), KIT_PERK(13), KIT_PERK(14), KIT_PERK(15), KIT_PERK(16),
 #undef KIT_PERK
-    {VIEW_KIT, 17, "RETOUR", "Revient au menu (aussi: bouton B)."},
+    {VIEW_KIT, 18, "RETOUR", "Revient au menu (aussi: bouton B)."},
 };
 static_assert(ITEM_KIT_PERK_LAST - ITEM_KIT_PERK_FIRST + 1 == 8, "one kit line per kLauncherPerks entry");
 static_assert(sizeof(kItems) / sizeof(kItems[0]) == ITEM_COUNT, "one kItems line per Item");
@@ -197,7 +201,7 @@ const int kControllerFirstRow = 27;
 const int kControllerMaxRows = 8; // handheld + players 1-7: the rows up to DEMARRER
 const int kPadInfoRow = 28;
 const int kNetInfoRow = 17;
-const int kKitInfoRow = 19;
+const int kKitInfoRow = 20;
 const int kHelpRow = 37;
 const int kStatusRow = 38;
 const int kFooterRow = 40;
@@ -266,17 +270,23 @@ std::string ValueText(const LauncherSettings &s, int item)
         int perks = 0;
         for (int i = 0; i < kLauncherPerkCount; ++i)
             perks += (s.startPerks >> i) & 1;
-        if (!s.startPoints && !perks)
+        if (!s.startPoints && !perks && !s.startPower)
             return "Celui du jeu";
         std::string text = s.startPoints ? std::to_string(s.startPoints) + " points" : "500 points";
         if (perks)
             text += ", " + std::to_string(perks) + (perks > 1 ? " atouts" : " atout");
+        if (s.startPower)
+            text += ", courant";
         return text;
     }
     case ITEM_KIT_POINTS:
         return s.startPoints ? std::to_string(s.startPoints) : "Ceux du jeu (500)";
     case ITEM_BACKEND:
         return s.backend == LAUNCHER_BACKEND_DEKO3D ? "deko3d" : "OpenGL";
+    case ITEM_KIT_POWER:
+        return YesNo(s.startPower);
+    case ITEM_RESOLUTION:
+        return s.height == 480 ? "480p" : "720p";
     case ITEM_MAXFPS:
         return std::to_string(s.maxFps);
     case ITEM_SHADOWS:
@@ -338,6 +348,12 @@ void Change(LauncherSettings *s, int item, int dir)
         break;
     case ITEM_BACKEND:
         s->backend = s->backend == LAUNCHER_BACKEND_DEKO3D ? LAUNCHER_BACKEND_GL : LAUNCHER_BACKEND_DEKO3D;
+        break;
+    case ITEM_KIT_POWER:
+        s->startPower = !s->startPower;
+        break;
+    case ITEM_RESOLUTION:
+        s->height = s->height == 720 ? 480 : 720;
         break;
     case ITEM_MAXFPS:
         s->maxFps = s->maxFps == 60 ? 30 : 60;

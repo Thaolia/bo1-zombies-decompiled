@@ -36,10 +36,11 @@ Au lancement, un menu texte s'ouvre avant le jeu. On y choisit :
 - l'aim assist : activé ou non, avec ralentissement, verrouillage et visée auto ;
 - le compteur de zombies à côté du tableau des scores (mod zinfo : zombies en vie et restants dans la manche),
   activé par défaut ;
-- le **départ** : un écran pour les points (de 1 000 à 100 000, au lieu des 500 du jeu) et les atouts donnés à
-  l'arrivée sur la map en solo (mod admin). Un atout n'est donné que si la map a sa machine ;
-- le rendu (deko3d ou OpenGL), la limite de FPS (30 ou 60), les ombres, le filtre de texture et le compteur
-  FPS/batterie ;
+- le **départ** : un écran pour les points (de 1 000 à 100 000, au lieu des 500 du jeu), le courant mis dès le
+  départ et les atouts donnés à l'arrivée sur la map en solo (mod admin). Un atout n'est donné que si la map a sa
+  machine ;
+- le rendu (deko3d ou OpenGL), la résolution (720p, ou 480p pour plus de FPS : la console agrandit l'image à
+  l'écran), la limite de FPS (30 ou 60), les ombres, le filtre de texture et le compteur FPS/batterie ;
 - les **touches de la manette** : un écran liste chaque action du jeu (tirer, viser, sauter, recharger, grenade,
   couteau, sprint…) avec le bouton de la Switch qui la fait ; gauche/droite change le bouton, et l'action qui l'avait
   prend l'ancien, si bien qu'aucune action ne reste sans bouton. « Réinitialiser » remet les touches du jeu. Les
@@ -102,6 +103,7 @@ Commandes admin, tapées dans la console du serveur (ou en rcon avec `tools/serv
 - `zm_round <n>`, `zm_reset` (relance la map), `zm_map <map>`, `zm_mods "<mods>"` (change `fs_mods` et relance) ;
 - `zm_admin` liste les joueurs et leur état ;
 - réglages `zm_startpoints <n>` et `zm_startperks "<perks>"` : points et perks de départ de chaque joueur ;
+  `zm_startpower 1` : le courant de la map est mis dès l'arrivée du premier joueur ;
 - `zm_jip_mode immediate|nextround` : un joueur qui rejoint une partie en cours joue tout de suite (par défaut, près
   des autres joueurs, avec les points de départ), ou reste spectateur jusqu'à la fin du round.
 - `set sv_maxclients <n>` (dans `server.cfg`, avant la map ; 4 par défaut, 32 au plus) : plus de 4 joueurs. Le jeu n'a
@@ -133,7 +135,7 @@ ne renvoie pas son log en rcon : à distance, les réponses `admin:` du mod ne s
 Lanceur du client : `tools/zmclient` (même famille de programme, `zmclient` / `zmclient.exe` dans les paquets). Vues
 Jouer, Serveurs (favoris et serveurs du réseau local, avec leur état en direct), Solo (map, horde, nightmare/hell,
 noperks, maps mapkit, zinfo, relance rapide : les drapeaux du lanceur `tools/mod-launcher.hta`, à l'identique ; points
-et atouts de départ, donnés par le mod admin),
+et atouts de départ, courant dès le départ, donnés par le mod admin),
 Lancement (nom, fenêtre, aide à la visée, serveur local), Config du jeu (`players/config.cfg` : souris, manette, FOV,
 résolution, graphismes, touches), Dvars libres, Installation et Journal. Trois façons de jouer : en solo, en
 rejoignant un serveur, ou en lançant le serveur du dossier puis en le rejoignant (ZmAdmin l'administre ensuite avec

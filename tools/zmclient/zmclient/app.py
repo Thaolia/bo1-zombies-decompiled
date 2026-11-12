@@ -133,6 +133,8 @@ class App:
             parts.append(f"{p['start_points']} points")
         if p["start_perks"]:
             parts.append(f"{len(p['start_perks'])} atout" + ("s" if len(p["start_perks"]) > 1 else ""))
+        if p["start_power"]:
+            parts.append("courant")
         return ", ".join(parts) or "aucun"
 
     def command(self):
