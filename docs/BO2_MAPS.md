@@ -227,7 +227,21 @@ Pack-a-Punch. It now runs on the BSP world instead of its own mesh and collision
   light goes into the first half of BO1's lightmap; the second half and the sun visibility stay 0, since BO2's sun is
   already in it. A fourth, white lightmap serves the lit surfaces BO2 drew without one.
 - Models: a world without a light grid now takes MapKit's flat ground lighting. The empty grid lit every model with
-  one stray colour (cyan).
+  one stray colour (cyan). That flat grey plus BO1's sun drew Nuketown's props nearly white in D3D9.
+- The light grid (`bo2_bsp_light.light_grid`, written by `d3dbsp.set_light_grid` as the version 43 loader reads it):
+  a point every 32 units across and 64 up over the zones plus 1 024 units (199 x 123 x 25 on Nuketown, 2 078
+  colours). Each point takes BO2's light of the floor under it without the sun (the lightmap's first slice plus half
+  its directional second slice) over the same reference as the lightmaps, at least the mean of the floors 64 units
+  around it (a bus or a rock lit from the floor its own shadow darkens came out black) and at least 0.12; the sun
+  primary light where most of those floors see BO2's sun. BO1's sun takes BO2's sun colour over the reference
+  (0.56, 0.73, 0.75), so sunlit ground and a model facing the sun match.
+- The lamps: BO2's 16 spots and cube-lit lamps (`<map>.d3dbsp.lights.csv`) are the BSP's primary lights 2 to 17
+  (`bo2_bsp_light.add_lamps`, `d3dbsp.add_primary_light`: spots stay spots, the lamps become omni lights, colours
+  over the reference, no shadow map, `white_light` as Kino's spots, read from its zone). The lightmaps already hold
+  their light; a light grid point takes the primary light of its floor in BO2 (the sun or a lamp) when that light
+  reaches it, by majority over the floors around it: 1 255 points sit under a lamp, the houses' and the garage's.
+  The BSP then has no light regions: with them (`hasLightRegions`), the engine replaces a grid entry's lamp by the
+  caller's nearest light (`R_GetLightingAtPoint`).
 - The sky: BO2's sky model (`skybox_dlc0_zm_nuketown`) is the worldspawn's `skyboxmodel`, which BO1 draws around the
   viewer, its material a copy of `zombie_theater`'s `mtl_skybox_zombie_theater` (`mc_sky_cubemap_hdr`) with BO2's
   cube map.
