@@ -10,11 +10,12 @@ writer covers what a map without baked lighting needs:
 - one cell holding every surface, no portals: everything is drawn from everywhere;
 - lightmaps (add_lightmap: R_LoadLightmaps' 9 MB records), or else one lightmap without pixels, which the engine
   fills with white (lit world materials refuse a surface without a lightmap; the sky takes none, index 31);
-- an empty light grid, no reflection probe (the engine adds its dummy), a sun primary light from the worldspawn keys;
+- a light grid (set_light_grid) or an empty one, no reflection probe (the engine adds its dummy), a sun primary
+  light from the worldspawn keys;
 - the entity string.
 
 Library use: build a Bsp, add_material / add_brush / add_collision_brush / add_collision_triangles / add_mesh /
-add_entity, then write(path).
+add_entity (set_light_grid, sun_color), then write(path).
 Command line: `d3dbsp.py room OUT.d3dbsp` writes the test room (a floor, four walls and a sky box).
 """
 import math
@@ -52,6 +53,7 @@ LUMP_UINDS = 0x15
 LUMP_MODELS = 0x25
 LUMP_ENTITIES = 0x27
 LUMP_PRIMARY_LIGHTS = 0x2B
+NO_PRIMARY_LIGHT, SUN_PRIMARY_LIGHT = 0, 1  # the BSP's primary lights: none, then the sun
 LUMP_LIGHTGRIDHEADER = 0x2C
 LUMP_LIGHTGRIDROWS = 0x2D
 LUMP_WATERHEADER = 0x34
@@ -85,6 +87,7 @@ class Bsp:
         self.lightmaps = []          # the LIGHTBYTES record of each lightmap (9 MB: R_LoadLightmaps)
         self.entities = []           # list of dicts, worldspawn first
         self.sun_color = (0.875, 0.875, 0.875)
+        self.light_grid = None       # set_light_grid: (mins, maxs, entries, colours)
 
     def add_material(self, name, surface_flags=SURF_DEFAULT, content_flags=CONTENTS_SOLID):
         for i, m in enumerate(self.materials):
@@ -133,6 +136,17 @@ class Bsp:
             raise ValueError("more than 65536 collision vertices")
         self.coll_verts.extend(tuple(map(float, v)) for v in verts)
         self.coll_tris.extend((a + base, b + base, c + base, m) for a, b, c, m in tris)
+
+    # The light grid models are lit from (R_GetLightingAtPoint): points every 32 units across, 64 up, from -131072.
+    # mins / maxs are grid coordinates (inclusive); entries one (colour index, primary light index) per point, x-major
+    # then y then z; colours (r, g, b) linear light, the same in the 56 directions the engine samples.
+    def set_light_grid(self, mins, maxs, entries, colours):
+        count = [maxs[k] - mins[k] + 1 for k in range(3)]
+        if len(entries) != count[0] * count[1] * count[2]:
+            raise ValueError("%d light grid entries for a %r grid" % (len(entries), count))
+        if count[2] > 0xFF or len(colours) > 0xFFFF or not colours:
+            raise ValueError("light grid too tall or too many colours")
+        self.light_grid = (tuple(mins), tuple(maxs), list(entries), list(colours))
 
     def add_lightmap(self, data):
         if len(data) != LIGHTMAP_BYTES:
@@ -348,11 +362,14 @@ class Bsp:
         lumps[LUMP_PRIMARY_LIGHTS] = none_light + sun + bytes(0x10C - len(sun))
         lumps[LUMP_LIGHTREGIONS] = bytes(2)
 
-        # An empty light grid: one row, no entries. The engine then lights models with its default grid colour.
-        lumps[LUMP_LIGHTGRIDHEADER] = struct.pack("<6HIIH", 0, 0, 0, 0, 0, 0, 0, 1, 0)
-        lumps[LUMP_LIGHTGRIDROWS] = b""
-        lumps[LUMP_LIGHTGRIDENTRIES] = b""
-        lumps[LUMP_LIGHTGRIDCOLORS] = b""
+        if self.light_grid:
+            _write_light_grid(lumps, *self.light_grid)
+        else:
+            # An empty light grid: one row, no entries. The engine then lights models with its default grid colour.
+            lumps[LUMP_LIGHTGRIDHEADER] = struct.pack("<6HIIH", 0, 0, 0, 0, 0, 0, 0, 1, 0)
+            lumps[LUMP_LIGHTGRIDROWS] = b""
+            lumps[LUMP_LIGHTGRIDENTRIES] = b""
+            lumps[LUMP_LIGHTGRIDCOLORS] = b""
 
         # No water and no burnable area: the compiler's empty headers.
         lumps[LUMP_WATERHEADER] = struct.pack("<iiiiHH", 0x7FFFFFFF, 0x7FFFFFFF, -0x80000000, -0x80000000, 0xFFFF, 0)
@@ -413,6 +430,33 @@ def _surface_tree(soups):
 LEAF_BRUSHES = 24
 TREE_DEPTH = 28
 SPLIT_KEEP = 0.8
+
+
+def _write_light_grid(lumps, mins, maxs, entries, colours):
+    """The four light grid lumps as the version 43 loader reads them (R_LoadLightGridHeader, R_LoadLightGridRowData,
+    R_LoadLightGridEntries, R_LoadLightGridColors) and R_GetLightGridSampleEntryQuad looks them up: one row per x, each
+    a 12-byte GfxLightGridRow (colStart, colCount, zStart, zCount, firstEntry) then blocks of (columns <= 255, height,
+    zBase) whose entries run column by column, bottom to top, padded to 4 bytes; the header holds the bounds, the
+    row and column axes (x, y) and each row's offset in 4-byte units. Every row covers the whole y and z range."""
+    cols, height = maxs[1] - mins[1] + 1, maxs[2] - mins[2] + 1
+    rows, starts, first = bytearray(), [], 0
+    for _ in range(maxs[0] - mins[0] + 1):
+        if len(rows) // 4 > 0xFFFE:
+            raise ValueError("light grid row data past 16-bit offsets")
+        starts.append(len(rows) // 4)
+        rows += struct.pack("<4HI", mins[1], cols, mins[2], height, first)
+        left = cols
+        while left:
+            run = min(left, 0xFF)
+            rows += bytes((run, height, 0))
+            left -= run
+        rows += bytes(-len(rows) % 4)
+        first += cols * height
+    lumps[LUMP_LIGHTGRIDHEADER] = struct.pack("<6HII", *mins, *maxs, 0, 1) + struct.pack("<%dH" % len(starts), *starts)
+    lumps[LUMP_LIGHTGRIDROWS] = bytes(rows)
+    lumps[LUMP_LIGHTGRIDENTRIES] = b"".join(struct.pack("<HBB", c, p, 0) for c, p in entries)
+    lumps[LUMP_LIGHTGRIDCOLORS] = b"".join(
+        struct.pack("<168H", *([min(max(int(round(v * 1024.0)), 0), 0xFFFF) for v in colour] * 56)) for colour in colours)
 
 
 def _build_tree(boxes, mins, maxs, plane):

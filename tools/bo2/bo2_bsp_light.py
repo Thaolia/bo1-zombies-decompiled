@@ -9,6 +9,10 @@ covered neighbours' light (a few passes), so bilinear sampling at a triangle's e
 A BO1 lightmap (R_LoadLightmaps) is two 512 x 512 halves of float RGBA, whose luminances the world shaders combine,
 and a 1024 x 1024 L8 sun visibility for the sun the shaders add. The baked light already holds BO2's sun, so it goes
 whole into the first half, the second half and the sun visibility stay 0.
+
+Models take their light from a light grid instead (light_grid): every point takes BO2's light of the floor under it,
+without the sun, and the sun primary light where BO2's sun reaches that floor; BO1's sun then has BO2's sun colour on
+the same scale (bake_sun_colour).
 """
 import numpy as np
 
@@ -93,3 +97,143 @@ def white_lightmap_bytes():
     rgba = np.zeros((SIZE, SIZE, 4), np.float32)
     rgba[..., :3] = 1.0
     return rgba.tobytes() + bytes(SIZE * SIZE * 16) + bytes(1024 * 1024)
+
+
+GRID_ORIGIN = -131072.0
+GRID_XY, GRID_Z = 32.0, 64.0       # the engine's light grid spacing (rb_light.cpp)
+GRID_PAD = 1024.0                  # beyond the play area (the rocks and houses at its edge)
+GRID_ABOVE = 192.0                 # grid points above the highest floor
+FLOOR_REACH = 24.0                 # a floor counts for a point this far above it (a point inside a step)
+FLOOR_NORMAL_Z = 0.5               # a triangle this flat is a floor
+COLOUR_STEP = 1.0 / 64.0           # light grid colours are quantised to this
+SMOOTH_RADIUS = 2                  # columns on each side a point's light is averaged over (64 units)
+AMBIENT_MIN = 0.12                 # the darkest ambient light, as the lightmaps' LIGHT_FLOOR: BO2 lifts its shade
+
+
+def light_grid(world_light, triangles, play_mins, play_maxs, sun_index, none_index):
+    """BO1's light grid over the play area (play_mins / play_maxs, world units) from BO2's light. Each point takes
+    the light of the floor under it, BO2's lightmap there without the sun: its first slice plus half its second (the
+    second is directional light, which a model takes from every side), divided by world_light.reference as the
+    lightmaps are; the sun comes from BO1's sun primary light, whose colour bake_sun_colour gives, wherever BO2's sun
+    reaches that floor (sun_index; none_index elsewhere). Each point then takes at least the mean of the floors
+    around it, and AMBIENT_MIN; a point with no floor below takes that mean (colour 0, the median, without one).
+    triangles: as bake's. Returns (mins, maxs, entries, colours) for D3dBsp.set_light_grid."""
+    ref = world_light.reference
+    cells = {}
+    for index, primary, corners in triangles:
+        lightmap = world_light.lightmaps.get(index)
+        normal = outward_normal(*(c[0] for c in corners))
+        if lightmap is None or normal is None or normal[2] < FLOOR_NORMAL_Z:
+            continue
+        xs = [c[0][0] for c in corners]
+        ys = [c[0][1] for c in corners]
+        if max(xs) < play_mins[0] - GRID_PAD or min(xs) > play_maxs[0] + GRID_PAD \
+                or max(ys) < play_mins[1] - GRID_PAD or min(ys) > play_maxs[1] + GRID_PAD:
+            continue
+        for gx in range(int((min(xs) - GRID_ORIGIN) // GRID_XY), int((max(xs) - GRID_ORIGIN) // GRID_XY) + 1):
+            for gy in range(int((min(ys) - GRID_ORIGIN) // GRID_XY), int((max(ys) - GRID_ORIGIN) // GRID_XY) + 1):
+                cells.setdefault((gx, gy), []).append((lightmap, primary, corners))
+    if not cells:
+        return None
+
+    def floors_at(x, y, candidates):
+        out = []
+        for lightmap, primary, ((p0, t0), (p1, t1), (p2, t2)) in candidates:
+            area = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (p1[1] - p0[1])
+            if abs(area) < 1e-6:
+                continue
+            w1 = ((x - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (y - p0[1])) / area
+            w2 = ((p1[0] - p0[0]) * (y - p0[1]) - (x - p0[0]) * (p1[1] - p0[1])) / area
+            w0 = 1.0 - w1 - w2
+            if min(w0, w1, w2) < -1e-4:
+                continue
+            z = w0 * p0[2] + w1 * p1[2] + w2 * p2[2]
+            u = w0 * t0[0] + w1 * t1[0] + w2 * t2[0]
+            v = w0 * t0[1] + w1 * t1[1] + w2 * t2[1]
+            out.append((z, lightmap, primary, u, v))
+        out.sort(key=lambda f: f[0])
+        return out
+
+    def floor_light(lightmap, primary, u, v):
+        s0, s1, s2 = (lightmap.sample(u, v, k) for k in range(3))
+        a0, a1 = 1.0 / (s0[3] + 1e-6), 1.0 / (s1[3] + 1e-6)
+        colour = [(s0[k] * a0 + 0.5 * s1[k] * a1) / ref[k] for k in range(3)]
+        return colour, float(primary == world_light.sun_index and s2[3] >= 0.5)
+
+    mins = [int((play_mins[k] - GRID_PAD - GRID_ORIGIN) // GRID_XY) for k in range(2)]
+    maxs = [int((play_maxs[k] + GRID_PAD - GRID_ORIGIN) // GRID_XY) + 1 for k in range(2)]
+    columns = {}
+    low, high = None, None
+    for gx in range(mins[0], maxs[0] + 1):
+        for gy in range(mins[1], maxs[1] + 1):
+            x, y = GRID_ORIGIN + gx * GRID_XY, GRID_ORIGIN + gy * GRID_XY
+            # a point on a cell's corner: the triangles of the four cells around it
+            floors = floors_at(x, y, [t for c in ((gx, gy), (gx - 1, gy), (gx, gy - 1), (gx - 1, gy - 1))
+                                      for t in cells.get(c, ())])
+            if floors:
+                columns[(gx, gy)] = floors
+                low = floors[0][0] if low is None else min(low, floors[0][0])
+                high = floors[-1][0] if high is None else max(high, floors[-1][0])
+    if low is None:
+        return None
+    zmin = int((low - GRID_ORIGIN) // GRID_Z)
+    zmax = min(int((high + GRID_ABOVE - GRID_ORIGIN) // GRID_Z) + 1, zmin + 254)
+    shape = (maxs[0] - mins[0] + 1, maxs[1] - mins[1] + 1, zmax - zmin + 1)
+    light = np.full(shape + (3,), np.nan, np.float32)
+    sun = np.zeros(shape, np.float32)
+    cache = {}
+    for (gx, gy), floors in columns.items():
+        if not (mins[0] <= gx <= maxs[0] and mins[1] <= gy <= maxs[1]):
+            continue
+        for gz in range(zmin, zmax + 1):
+            z = GRID_ORIGIN + gz * GRID_Z
+            below = [f for f in floors if f[0] <= z + FLOOR_REACH]
+            if not below:
+                continue
+            f = below[-1]
+            key = (gx, gy, f[0])
+            if key not in cache:
+                cache[key] = floor_light(f[1], f[2], f[3], f[4])
+            colour, sunlit = cache[key]
+            light[gx - mins[0], gy - mins[1], gz - zmin] = colour
+            sun[gx - mins[0], gy - mins[1], gz - zmin] = sunlit
+    # A model's lighting origin often lies over the floor its own shadow darkens (a bus, a truck, a rock): each point
+    # takes at least the mean of the floors around it (SMOOTH_RADIUS columns), and the sun where most of them have it.
+    # Points without a floor of their own take that mean too, so the edges of the area are not black.
+    have = ~np.isnan(light[..., 0])
+    filled = np.where(have[..., None], light, 0.0)
+    total = np.zeros_like(filled)
+    count = np.zeros(shape, np.float32)
+    sun_total = np.zeros(shape, np.float32)
+    r = SMOOTH_RADIUS
+    padded = np.pad(filled, ((r, r), (r, r), (0, 0), (0, 0)))
+    padded_have = np.pad(have.astype(np.float32), ((r, r), (r, r), (0, 0)))
+    padded_sun = np.pad(sun, ((r, r), (r, r), (0, 0)))
+    for dx in range(2 * r + 1):
+        for dy in range(2 * r + 1):
+            total += padded[dx:dx + shape[0], dy:dy + shape[1]]
+            count += padded_have[dx:dx + shape[0], dy:dy + shape[1]]
+            sun_total += padded_sun[dx:dx + shape[0], dy:dy + shape[1]]
+    mean = total / np.maximum(count, 1.0)[..., None]
+    default = np.median(light[have], axis=0) if have.any() else np.full(3, 0.5, np.float32)
+    out = np.where(have[..., None], np.maximum(light, mean), np.where(count[..., None] > 0, mean, default))
+    out = np.clip(np.maximum(out, AMBIENT_MIN), 0.0, 31.0)
+    out = np.round(out / COLOUR_STEP) * COLOUR_STEP
+    sunlit = np.where(count > 0, sun_total * 2 > count, True)
+
+    default = tuple(float(c) for c in np.round(np.maximum(default, AMBIENT_MIN) / COLOUR_STEP) * COLOUR_STEP)
+    colours, colour_index, entries = [default], {default: 0}, []
+    for gx in range(shape[0]):
+        for gy in range(shape[1]):
+            for gz in range(shape[2]):
+                colour = tuple(float(c) for c in out[gx, gy, gz])
+                if colour not in colour_index:
+                    colour_index[colour] = len(colours)
+                    colours.append(colour)
+                entries.append((colour_index[colour], sun_index if sunlit[gx, gy, gz] else none_index))
+    return (mins[0], mins[1], zmin), (maxs[0], maxs[1], zmax), entries, colours
+
+
+def bake_sun_colour(world_light):
+    """BO1's sun colour on the lightmaps' scale: BO2's sun diffuse colour over world_light.reference."""
+    return tuple(world_light.sun_diffuse[k] / world_light.reference[k] for k in range(3))
