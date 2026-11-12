@@ -5611,7 +5611,7 @@ unsigned __int8 *R_AllocShadowGeometryHeaderMemory()
     {
         __debugbreak();
     }
-    result = Hunk_Alloc(12 * s_world.primaryLightCount, "R_AllocShadowGeometryHeaderMemory", 21);
+    result = Hunk_Alloc(sizeof(GfxShadowGeometry) * s_world.primaryLightCount, "R_AllocShadowGeometryHeaderMemory", 21);
     s_world.shadowGeom = (GfxShadowGeometry *)result;
     return result;
 }

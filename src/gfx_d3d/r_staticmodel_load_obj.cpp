@@ -139,7 +139,7 @@ void __cdecl R_SortGfxAabbTree(GfxWorld *world, GfxAabbTree *tree)
                     ++count;
                 if ( smodelIndexCount )
                     ++count;
-                tree->childrenOffset = Hunk_AllocAlign(40 * count, 4, "R_SortGfxAabbTree", 22) - (unsigned __int8 *)tree;
+                tree->childrenOffset = Hunk_AllocAlign(sizeof(GfxAabbTree) * count, 4, "R_SortGfxAabbTree", 22) - (unsigned __int8 *)tree;
                 if ( tree->surfaceCount )
                 {
                     childTreeb = (GfxAabbTree *)((char *)&tree[tree->childCount++] + tree->childrenOffset);
@@ -462,14 +462,17 @@ void __cdecl R_AddStaticModelToAabbTree_r(GfxWorld *world, GfxAabbTree *tree, in
         {
             if ( childIndexa >= tree->childCount )
             {
-                newChildren = Hunk_AllocAlign(40 * (tree->childCount + 1), 4, "R_AddStaticModelToAabbTree_r", 22);
+                newChildren = Hunk_AllocAlign(sizeof(GfxAabbTree) * (tree->childCount + 1), 4, "R_AddStaticModelToAabbTree_r", 22);
                 children = (unsigned __int8 *)tree + tree->childrenOffset;
-                memcpy(newChildren, children, 40 * tree->childCount);
+                memcpy(newChildren, children, sizeof(GfxAabbTree) * tree->childCount);
                 tree->childrenOffset = newChildren - (unsigned __int8 *)tree;
+                // The offset is signed: read as unsigned, a child before its parent lands 4 GiB away on x64.
                 for ( childIndexb = 0; childIndexb < tree->childCount; ++childIndexb )
-                    *(unsigned int *)&newChildren[40 * childIndexb + 36] = &children[40 * childIndexb
-                                                                                                                                     + *(unsigned int *)&children[40 * childIndexb + 36]]
-                                                                                                                 - &newChildren[40 * childIndexb];
+                    *(int *)&newChildren[sizeof(GfxAabbTree) * childIndexb + offsetof(GfxAabbTree, childrenOffset)]
+                        = (int)(&children[(ptrdiff_t)(sizeof(GfxAabbTree) * childIndexb)
+                                          + *(int *)&children[sizeof(GfxAabbTree) * childIndexb
+                                                              + offsetof(GfxAabbTree, childrenOffset)]]
+                                - &newChildren[sizeof(GfxAabbTree) * childIndexb]);
                 childTreea = (GfxAabbTree *)((char *)&tree[tree->childCount++] + tree->childrenOffset);
                 childTreea->mins[0] = smodelInst->mins[0];
                 childTreea->mins[1] = smodelInst->mins[1];
