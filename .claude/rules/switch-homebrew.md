@@ -25,6 +25,10 @@ it for plain C/C++ projects. Each rule cost at least one build/test round trip t
 
 ## Platform behaviour (libnx)
 
+- There is no `/proc` on the console: a posix shim that builds `GetCommandLineA` from `/proc/self/cmdline` returns an
+  empty string there, silently, and every check of the command line fails (BO1's `bo1_mod_zones` pool, memory and
+  stream sizes stayed retail: "Exceeded limit of 1000 'xmodel' assets"). Hand the launch arguments to the shim before
+  `WinMain`, and set again what a static initialiser read before that (BO-Zombies_switch, 2026-11-12).
 - Run in **application mode** (title override: hold R while launching a game); applet mode
   (album) gives a fraction of the memory. Detect it with `appletGetAppletType()` and refuse
   cleanly instead of crashing later.
