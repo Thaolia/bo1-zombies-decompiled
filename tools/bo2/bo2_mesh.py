@@ -270,8 +270,10 @@ def dds_to_iwi(src, dst, multiply=False):
     count = mips if mips == full else 1
     # DDS stores face by face, largest mip first; the engine reads mip by mip, smallest first, each mip's faces in order
     body = b"".join(faces[f][level] for level in reversed(range(count)) for f in range(len(faces)))
-    total = 48 + len(body)
-    header = b"IWi" + struct.pack("<BBB3hf8i", 13, fmt, flags, width, height, 1, 0.0, *([total] * 8))
+    # fileSizeForPicmip[p]: the file without its p largest levels (stored last), as the engine and OAT read it
+    level_size = [sum(len(faces[f][level]) for f in range(len(faces))) for level in range(count)]
+    sizes = [48 + sum(level_size[min(p, count - 1):]) for p in range(8)]
+    header = b"IWi" + struct.pack("<BBB3hf8i", 13, fmt, flags, width, height, 1, 0.0, *sizes)
     with open(dst, "wb") as f:
         f.write(header + body)
     return True
