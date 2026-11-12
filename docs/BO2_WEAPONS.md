@@ -1,9 +1,11 @@
 # Black Ops II weapons in BO1 Zombies
 
-Status (2026-11-12): the HAMR (`hamr_zm`, Pack-a-Punch `hamr_upgraded_zm`) works on the win64 build on Five. It is in
-the box, and the view model, firing, reloading, ADS, world model and Pack-a-Punch weapon were checked with D3D9 client
-screenshots. It runs with no engine change, through a mod (`mods/bo2weapons`) and its `mod.ff`, which is built from
-the player's own BO2 install. Like the maps (`docs/BO2_MAPS.md`), nothing extracted is committed or packaged.
+Status (2026-11-12): the 36 classic box weapons of BO2's six zombie maps (Nuketown, TranZit, Die Rise, Mob of the
+Dead, Buried, Origins) and their 36 Pack-a-Punch versions work on the win64 build on Five. They are in the box, and
+each was given and shot in first person on D3D9 client screenshots. The HAMR, the first one (proof of concept), was
+also checked firing, reloading, aiming and in third person. They run with no engine change, through a mod
+(`mods/bo2weapons`) and its `mod.ff`, which is built from the player's own BO2 install. Like the maps
+(`docs/BO2_MAPS.md`), nothing extracted is committed or packaged.
 
 ## Route
 
@@ -15,34 +17,57 @@ BO2 zone --OAT Unlinker (T6)--> weapon file, xmodel JSON + glTF, xanim, material
 mods/bo2weapons/mod.ff + mods/bo2weapons/images/*.iwi + the mod's scripts --> the weapon in the box
 ```
 
-The engine loads `<fs_h>/<fs_game>/mod.ff` at start-up (`DB_ModFileExists`, the retail mod route), so `fs_game` must be
-`mods/bo2weapons`. `mods/bo2weapons/maps/bo2weapons/_bo2weapons.gsc` runs from the `_zombiemode_ffotd::main_start`
-hook, which comes before `maps\_zombiemode_weapons::init()` on every zombie map. It adds each weapon that a loaded
-zone holds (`bo1_mapkit_weaponloaded`) with `include_zombie_weapon` and `add_zombie_weapon`, the calls the map scripts
-make for retail weapons, chained through `level._zombie_custom_add_weapons`. A weapon missing from the zones is
-skipped, and the map then stays retail.
+The engine loads `<fs_h>/<fs_game>/mod.ff` at start-up (`DB_ModFileExists`, the retail mod route), so `fs_game` must
+be `mods/bo2weapons`. `mods/bo2weapons/maps/bo2weapons/_bo2weapons.gsc` runs from the `_zombiemode_ffotd::main_start`
+hook, which comes before `maps\_zombiemode_weapons::init()` on every zombie map. It reads the weapon list from
+`mp/bo2weapons.csv` in `mod.ff` (name, Pack-a-Punch name, VO type; written by the converter) and adds each weapon that
+a loaded zone holds (`bo1_mapkit_weaponloaded`) with `include_zombie_weapon` and `add_zombie_weapon`, the calls the
+map scripts make for retail weapons, chained through `level._zombie_custom_add_weapons`. A weapon missing from the
+zones is skipped, and the map then stays retail.
 
 ## What the converter does (`tools/bo2/bo2_weapon.py`)
 
-- **Weapon file.** T5 takes 739 of T6's 1 027 keys, and the BO1 reference weapon (`hk21_zm` for the HAMR) gives the
-  others. The text values that name assets BO1 cannot get (fx, sounds, tracers, reticles, accuracy graphs) also come
-  from the reference: 36 values for the HAMR. BO2's models, animations and HUD icons are shipped. The keys only T6
-  has (288: attachments, camo, crawl, anti-quickscope...) are dropped.
+- **Weapon file.** T5 takes 739 of T6's 1 027 keys, and the BO1 reference weapon gives the others. With `--all` the
+  reference comes from the weapon's class and fire type (`reference_for`): machine gun → `hk21_zm`, SMG → `mp5k_zm`,
+  automatic rifle → `commando_zm`, burst → `m16_zm`, semi-automatic → `m14_zm`, rifle with a scope overlay →
+  `l96a1_zm`, shotguns → `spas_zm` / `ithaca_zm`, revolvers → `python_zm`, pistols → `cz75_zm`, dual wield →
+  `cz75dw_zm` / `cz75lh_zm`, projectile pistol (Ray Gun Mark II) → `ray_gun_zm`, launchers → `m72_law_zm` /
+  `china_lake_zm`; the Pack-a-Punch version takes the reference's `_upgraded_zm`. A weapon's linked weapons
+  (`altWeapon`, `DualWieldWeapon`: the Five-seven's left-hand twin) ship with it. The text values that name assets BO1
+  cannot get (fx, sounds, tracers, reticles, accuracy graphs) also come from the reference: 36 values for the HAMR.
+  BO2's models, animations and HUD icons are shipped. The keys only T6 has (288: attachments, camo, crawl,
+  anti-quickscope...) are dropped.
 - **Attached models.** BO2 attaches the HAMR's magazine as a separate model (`attachViewModel7` /
   `attachWorldModel7`). BO1 has no attached models, so each LOD of the magazine is merged into the gun's glTF. Its
   bones become children of the gun's root bone at the slot's offset. BO2's reload animations move `tag_clip`, which
   BO1 also keeps under `j_gun`. The magazine's two surfaces share one vertex buffer, so each accessor is moved once.
+- **Enumerations.** A BO2 value that T5 does not know in a field whose BO1 value is an enumeration (`dwlefthand`,
+  `pistol spread`) takes the reference's value (`T5_ENUM_VALUES`, from OAT's `WeaponStrings.h`): the Linker refuses it.
+- **Accuracy graphs.** An actor firing a weapon with no "AI vs AI" graph ends the game (`No 'AI vs AI' accuracy graph
+  for weapon 'ak47_zm'`); BO1's box weapons have none, so an empty one takes BO1's `smg.accu`, copied into the project.
 - **Materials.** Each opaque lit BO2 material becomes a copy of BO1's `mc/mtl_t5_weapon_law`
   (`mc_l_sm_r0c0n0s0sc0x0_clrdtl_hero`: colour, normal, specular and colour detail, with no environment map), filled
   with BO2's colour, normal and specular maps. The colour detail slot keeps BO1's `weapon_camo_off`, the slot that
   Pack-a-Punch camo uses. BO2's normal maps are BC5 (X red, Y green), while BO1's are DXT5 with X in alpha and Y in
   red, green and blue (measured on `t5_weapon_hk21_n`). They are decoded and recompressed with ImageMagick. The HUD
   icon is a copy of `hud_hk21`.
+- **Scope glass and glowing sight parts.** A BO2 material whose main pass blends (scope lenses, the Type 25's and the
+  RPG's see-through parts) becomes a copy of BO1's `mc/mtl_t5_weapon_longscope_lens` (`mc_l_sm_b0c0n0s0_hero`: lit,
+  blended over the scene). An emissive one (camera region `emissive*` or an `unlit` techset: tritium dots, the M32's
+  reticle, sight glows) becomes a copy of `mc/mtl_weapon_scope_colt3x20_crosshair` (`mc_effect_hero`, colour + scene
+  x (1 - alpha)); when BO2 draws it "one one" (additive), its colour map's alpha is set to 0 so BO1 adds it too
+  (`*_add` images). Before this, both were dropped and the scopes were empty tubes. BO2's slot names vary with the
+  techset (`Color_Map`, `SpecularAndGloss`, `Specular_Color_Map`); a material with no normal map takes
+  `$identitynormalmap`. The LSAT's ammo counter (`mc_sw4_3d_digits_ammo`) is still dropped: BO2 draws its digits from
+  the ammo count, and a fixed texture would show every digit.
+- **Several zones.** `--dump` is repeated, one per BO2 zone, and each asset comes from the first dump holding it.
+  An image streamed from an `.ipak` is not in OAT's dump (24 of them): its material keeps the template's image.
 - **Colour.** BO2 shades weapons as metals: the HAMR's tan receiver is in its specular map, and its colour map is dark
   grey (mean 47). BO1 shows mostly the colour map, so the HAMR came out black, even with `r_fullbright 1`. The colour
   map BO1 gets is (BO2's colour + its specular colour) x 1.8 (`write_lit_colour`; `--specular-mix`, `--colour-gain`),
-  judged against the user's BO2 screenshot and brightened at their request (x1.8: +23 % on the weapon in Five's war room). The rail's ridges stay dark: they are dark in both of BO2's maps, and their tan look in BO2
-  comes from its reflections, which BO1's shading does not have.
+  judged against the user's BO2 screenshot and brightened at their request (x1.8: +23 % on the weapon in Five's war
+  room). The rail's ridges stay dark: they are dark in both of BO2's maps, and their tan look in BO2 comes from its
+  reflections, which BO1's shading does not have.
 - **Iron sights.** The weapon file's `hideTags` is cleared. BO2 hides `tag_sights_off` (the folding front post and
   the rear drum sight) only when an optic is mounted, while BO1 hid them always: no sights in hip fire or ADS.
 - **Emblem surfaces.** The player's emblem and the clan tag are dropped. BO2 fills them only for a custom emblem, while
@@ -63,21 +88,26 @@ Paths are those of this machine. OAT must be built with both patches (`tools/bo2
 
     D=~/bo2tools/dump; Z="/mnt/c/Program Files (x86)/Steam/steamapps/common/Call of Duty Black Ops II/zone/all"
     U=~/bo2tools/oat-src/build/bin/Release_x64/Unlinker; L=~/bo2tools/oat-src/build/bin/Release_x64/Linker
-    # BO2: the weapons, their models, anims, materials and images
-    $U --include-assets weapon,xmodel,xanim,material --model-format GLTF -o $D/weapons/?zone? "$Z/zm_nuked.ff"
-    $U --include-assets image --image-format DDS -o $D/weapons/?zone? "$Z/zm_nuked.ff"
-    # BO1: the reference weapons, their anims and the material templates (one folder holding weapons/, xanim/, materials/)
+    ZM="zm_nuked zm_transit zm_highrise zm_prison zm_buried zm_tomb"
+    # BO2: the weapons, their models, anims, materials and images, then the weapons' names (the install's language)
+    for z in $ZM; do
+      $U --include-assets weapon,xmodel,xanim,material --model-format GLTF -o $D/weapons/?zone? "$Z/$z.ff"
+      $U --include-assets image --image-format DDS -o $D/weapons/?zone? "$Z/$z.ff"
+    done
+    $U --include-assets localize -o $D/loc/?zone? "$Z"/fr_*.ff        # en_*.ff for English
+    # BO1: the reference weapons, their anims and accuracy graphs, the material templates (one folder)
     B=<BO1 install>/zone/Common
     $U --include-assets weapon,xanim -o $D/bo1/?zone? "$B/common_zombie.ff"
     $U --include-assets material -o $D/bo1mat/?zone? "$B/common_zombie.ff"
-    mkdir -p $D/bo1ref; ln -s $D/bo1/common_zombie/{weapons,xanim} $D/bo1mat/common_zombie/materials $D/bo1ref/
-    # convert, then link
-    tools/bo2/bo2_weapon.py --dump $D/weapons/zm_nuked --bo1 $D/bo1ref --out ~/bo2tools/wmod \
-        --weapon hamr_zm:hk21_zm --weapon hamr_upgraded_zm:hk21_upgraded_zm \
-        --string "WEAPON_HAMR=HAMR" --string "ZMWEAPON_HAMR_UPGRADED=SLDG HAMR" \
-        --string "ZOMBIE_WEAPON_HAMR=Hold ^3[{+activate}]^7 to buy HAMR [Cost: &&1]"
+    mkdir -p $D/bo1ref; ln -s $D/bo1/common_zombie/{weapons,xanim,accuracy} $D/bo1mat/common_zombie/materials $D/bo1ref/
+    # convert every box weapon (about an hour, mostly ImageMagick), then link
+    tools/bo2/bo2_weapon.py --all $(for z in $ZM; do echo --dump $D/weapons/$z; done) \
+        --bo1 $D/bo1ref --localize $D/loc --out ~/bo2tools/wmod
     cd ~/bo2tools/wmod && $L -b . -l $B/code_post_gfx.ff -l $B/common.ff -l $B/common_zombie.ff \
         -l $B/common_zombie_patch.ff -l $B/zombie_pentagon.ff mod      # zone_out/mod/mod.ff
+
+One weapon at a time still works: `--weapon hamr_zm:hk21_zm --weapon hamr_upgraded_zm:hk21_upgraded_zm` and
+`--string KEY=text` for its names, without `--all`.
 
 Then:
 - copy `zone_out/mod/mod.ff` to `mods/bo2weapons/mod.ff` for the 32-bit build;
@@ -86,6 +116,17 @@ Then:
 - start with `+set fs_game mods/bo2weapons +set fs_mods bo2weapons`.
 
 ## Verified (win64-msvc, `tools/headless.ps1 -Client`, Five)
+
+All weapons (`--all`):
+- Converter: 74 weapon files (36 box weapons, their 36 Pack-a-Punch versions, the Five-seven's two left-hand twins),
+  93 xmodels, 739 xanims, 183 materials (136 lit, 6 glass, 6 emissive, 35 HUD), 193 images (116 MB of `.iwi`). Linker:
+  0 errors; `mod.ff` 9.5 MB; `ffconv --verify`: the narrowed zone gives the 32-bit body back.
+- `games_mp.log`: `bo2weapons: 36 weapons in the box`.
+- `give` then a screenshot for each of the 72 (six batches of 12 through `bo1_clientCommands`, which keeps only about
+  4 096 characters): every weapon drawn in first person with its textures, the lenses of the DSR-50, Barrett, SVU and
+  Ballista, the Type 25's and M32's sights. The last screenshot of a batch was sometimes lost (taken again).
+
+The HAMR (proof of concept):
 
 - `games_mp.log`: `bo2weapons: hamr_zm in the box`.
 - `give hamr_zm` + `give ammo`: 125/375. Firing with a muzzle flash, then a reload (122 → 125/372, magazine out, the
@@ -103,13 +144,15 @@ Then:
 ## Not done yet
 
 - Linux and the Switch: not run. On the Switch, `mod.ff` needs `ffconv --abi aarch64`, and `mods/` reaches the SD
-  card with the package.
-- The box and the Pack-a-Punch machine in play: checked only through `give` (registration logged, upgrade weapon
-  loaded). PaP camo on the merged model is not seen yet.
-- Sounds are BO1's (the HK21's). BO2's sound banks cannot be linked for T5.
-- The other weapons: same procedure with `--weapon <bo2>:<bo1 reference>`. Expect new cases where materials are blended
-  or alpha-tested, or where a weapon carries attachments (scopes): the converter stops on them with a message.
-- Scripted weapons (Jet Gun, staffs, Blundergat, Slowgun, tomahawk) need their BO2 logic rewritten in BO1 GSC.
+  card with the package. The 193 images (116 MB) may weigh on the console's memory.
+- The box and the Pack-a-Punch machine in play: checked only through `give`. PaP camo on the models is not seen yet.
+- Sounds are those of the BO1 reference weapon. BO2's sound banks cannot be linked for T5, and a BO2 notetrack sound
+  with no BO1 equivalent stays silent (249 notes in the converter's output).
+- The LSAT's ammo counter is dropped; 24 images streamed from `.ipak`s keep the template's image.
+- The Five-seven's left gun, in dual wield, is barely visible.
+- Scripted weapons (Jet Gun, staffs, Blundergat, Slowgun, Sliquifier, tomahawk, ballistic knife), equipment, the
+  shields and Origins' extended-clip / stalker copies are left out (`SKIP`, or not a primary weapon). Weapons BO1
+  already has under the same name (`m14_zm`, `mp5k_zm`, `ray_gun_zm`...) keep BO1's.
 - `mod.ff` only loads when `fs_game` is `mods/bo2weapons`. Stacking it with MapKit (whose `fs_game` is
   `mods/mapkit`) would need the engine to load the `mod.ff` of every `fs_mods` folder.
 
