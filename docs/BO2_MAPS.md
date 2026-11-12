@@ -97,6 +97,64 @@ Still wrong, all lighting: the sky draws as a flat colour (orange in D3D9, blue 
 cyan (the empty light grid lights models with nothing). They wait for the lighting step (a real light grid, lightmaps
 baked from BO2's).
 
+### Nuketown's world as a native map (2026-11-12)
+
+`tools/bo2/bo2_bsp.py <dump> zm_nuked --templates <BO1 wc/ materials> --out <folder>` turns OAT's dump of `zm_nuked`
+into `zombie_bo2nuked`: a world BSP and an OAT Linker (T5) project for its zone.
+
+| Part | From BO2 | In BO1 |
+|---|---|---|
+| Render world | the world OBJ: 130 683 triangles, 463 materials (`caulk`, `nodraw` and shadow materials left out) | one surface per material, the OBJ's winding as is (front `(c - a) x (b - a)`: 87 % of the play area's near-horizontal area faces up) |
+| Materials | each material's colour map and its blend state (`bo2_mesh.py`'s `blend_flags`) | `wc/bo2w_<name>`: a copy of a BO1 world material from `zombie_theater` (OAT's Unlinker), with the colour map swapped: `global_white` (`wc_l_sm_r0c0`) for opaque, `mtl_theater_poster_1` (`wc_l_sm_t0c0x0`) alpha-tested, `decal_glue` (`wc_l_sm_b0c0x0`) for decals and glass. 109 colour maps as external `.iwi` (`main/images/`, 28 MB); the techniquesets come with the zone (Linker `-l zombie_theater.ff`) |
+| Collision brushes | the clipMap's 7 357 world brushes with their 33 971 non-axial sides | the same brushes, corners computed; one BSP material per (contents, surface flags) pair |
+| Terrain | 24 359 collision triangles | BO1's own collision triangles, one per partition |
+| Tree | | a k-d tree over brushes and partitions: 3 786 leaves |
+| Entities | the worldspawn's sun, the player start | the same; gameplay entities wait for the gameplay step |
+
+The zone (`zombie_bo2nuked.ff`, 70 KB: 463 materials, 109 image headers, 3 techniquesets, the level script) is linked by
+OAT's Linker, converted by `ffconv --verify` like any zone, and loaded from `usermaps/zombie_bo2nuked/`. Treyarch's
+linker always adds an empty rawfile named after the zone, its build report, which `G_PrintFastFileErrors` asserts on:
+the project adds it.
+
+Formats and limits met on the way:
+- **Planes are 16-bit** (`CMod_LoadPlanes`: 65 536 at most). Terrain as 16-unit prisms, as MapKit's import does it,
+  needs five planes per triangle: 120 000. The terrain is BO1's own collision triangles instead.
+- **Brushes are 16-bit too** (`cm.numBrushes`): the props' collision (`bo2_props_collision.py`, step 3) does not fit
+  as brushes. It will need the props as collision triangles or as models.
+- **A partition is a convex hull for the physics.** Player and actor movement runs through the physics
+  (`gjk_partition_t`, `phys_colgeom.cpp`), which collides with a partition as the convex hull of its vertices. With 32
+  triangles per partition the player stood in the air over the street, inside the hulls. With one triangle per
+  partition every drop lands on BO2's ground: (0, 0) at -43 (render ground -43), (0, -376) at -66 (-65), (-600, 150)
+  at -54 (-57), (-300, -700) at -60 (-60), and (600, -600) on a solid low wall at 34.
+- **A leaf's first collision AABB is 16-bit.** 76 368 references to partitions do not fit, so each leaf gets one root
+  per collision material (they come first in the lump), with the leaf's partitions as children.
+- **The world lives in the hunk** when it comes from a BSP. With `bo1_bspworld` set the hunk is 64 MB instead of
+  15 MB. Nuketown used 27.4 MB (26.6 on the Switch), logged as `bspworld: hunk ... MB used after the render world`.
+
+Verified, `+set bo1_bspworld 1 +devmap zombie_bo2nuked`, the drops above on each build:
+
+| Build | Result |
+|---|---|
+| Linux x64 (GL, llvmpipe) | the five drops; screenshots at the player start and down the street: houses, garages, the shelter at the end, the backdrop |
+| win64-msvc (D3D9, `headless.ps1 -Client`) | the same positions; the same views, brighter (the white lightmap) |
+| Switch (deko3d, Ryujinx) | the same positions to a tenth of a unit; clean exit at `bo1_autoquit` (88 s). With a Windows build running beside it, Ryujinx took minutes to close after `CL_Shutdown`, on Kino too and with this morning's NRO (3 min 40): load, not the map |
+| win32-msvc | builds |
+
+Build it (paths of this machine; the output is the player's own game data, kept out of the repository):
+
+    U=~/bo2tools/oat-src/build/bin/Release_x64/Unlinker; L=~/bo2tools/oat-src/build/bin/Release_x64/Linker
+    B="<BO1 install>/zone/Common"; D=~/bo2tools/dump
+    $U --include-assets material -o $D/bo1wmat/?zone? "$B/zombie_theater.ff"     # the BO1 templates, once
+    tools/bo2/bo2_bsp.py $D/zm_nuked zm_nuked --templates $D/bo1wmat/zombie_theater/materials/wc --out $OUT
+    cd $OUT/linker && $L -b . -l "$B/code_post_gfx.ff" -l "$B/common.ff" -l "$B/common_zombie.ff" \
+        -l "$B/zombie_theater.ff" zombie_bo2nuked                                   # zone_out/zombie_bo2nuked/
+    ffconv --verify zombie_bo2nuked.ff <game>/usermaps/zombie_bo2nuked/zombie_bo2nuked.ff
+    cp $OUT/zombie_bo2nuked.d3dbsp <game>/main/maps/; cp $OUT/images/*.iwi <game>/main/images/
+
+Not done yet: the props (cars, fences, furniture: step 3), the gameplay entities (spawners, windows, wall buys,
+doors, the box, perks: step 4), the lighting (step 5: BO2's lightmaps, a light grid, the sky). A dark quad lies in the
+street at the player start (a BO2 shadow decal drawn with the blended template); it waits for the lighting.
+
 ## What comes out of `zm_nuked`
 
 With [OpenAssetTools](https://github.com/Laupetin/OpenAssetTools) 0.34.0 (GPL v3) and a world dumper written for it
