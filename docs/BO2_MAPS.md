@@ -137,7 +137,7 @@ Verified, `+set bo1_bspworld 1 +devmap zombie_bo2nuked`, the drops above on each
 |---|---|
 | Linux x64 (GL, llvmpipe) | the five drops; screenshots at the player start and down the street: houses, garages, the shelter at the end, the backdrop |
 | win64-msvc (D3D9, `headless.ps1 -Client`) | the same positions; the same views, brighter (the white lightmap) |
-| Switch (deko3d, Ryujinx) | the same positions to a tenth of a unit |
+| Switch (deko3d, Ryujinx) | the same positions to a tenth of a unit; clean exit at `bo1_autoquit` (88 s). With a Windows build running beside it, Ryujinx took minutes to close after `CL_Shutdown`, on Kino too and with this morning's NRO (3 min 40): load, not the map |
 | win32-msvc | builds |
 
 Build it (paths of this machine; the output is the player's own game data, kept out of the repository):
