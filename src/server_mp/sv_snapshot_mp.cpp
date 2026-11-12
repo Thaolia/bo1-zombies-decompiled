@@ -2494,7 +2494,7 @@ void __cdecl SV_AddEntitiesVisibleFromPoint(float *org, int clientNum, snapshotE
     }
     leafnum = CM_PointLeafnum(org);
     clientcluster = CM_LeafCluster(leafnum);
-    if (clientcluster >= 0 && !CM_Mapkit_Empty()) // mod: mapkit empty base - no retail PVS
+    if (clientcluster >= 0 && !CM_Mapkit_WorldEmpty()) // mod: mapkit empty base - no retail PVS
         clientpvs = CM_ClusterPVS(clientcluster);
     else
         clientpvs = 0;
@@ -2657,7 +2657,7 @@ void __cdecl SV_AddCachedEntitiesVisibleFromPoint(
                         __debugbreak();
                     }
                 }
-                if ( (v14->r.svFlags & 0x18) != 0 || CM_Mapkit_Empty() ) // mod: mapkit empty base
+                if ( (v14->r.svFlags & 0x18) != 0 || CM_Mapkit_WorldEmpty() ) // mod: mapkit empty base
                     goto LABEL_20;
                 v15 = CM_BoxLeafnums(v14->r.absmin, v14->r.absmax, list, 128, &lastLeaf);
                 if ( v15 )

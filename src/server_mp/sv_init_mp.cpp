@@ -678,6 +678,10 @@ void __cdecl    SV_SpawnServer(int controllerIndex, char *server, int mapIsPrelo
     else if ( bspWorld )
     {
         Com_Printf(15, "bspworld: world of '%s' read from %s\n", filename, bspWorld);
+        // The BSP's static models name xmodels of the zones, bo1_mod_zones' too, queued just before and still
+        // loading here: a model lookup then waits while the level zone links its clipMap over the world being built
+        // (cm.numStaticModels became the base map's mid-load).
+        DB_SyncXAssets();
         Com_LoadBsp((char *)bspWorld);
     }
     if ( G_OnlyConnectingPaths() )

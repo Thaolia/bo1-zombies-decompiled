@@ -2,6 +2,7 @@
 #include "cm_trace.h"
 #include "cm_load.h"
 #include "common.h"
+#include "com_bsp_load_obj.h"
 #include <universal/com_files.h>
 #include <universal/dvar.h>
 #include <win32/win_shared.h>
@@ -1541,6 +1542,11 @@ static float s_nodeVisRange; // layout "nodeVisRange": node pairs farther apart 
 bool CM_Mapkit_Empty()
 {
     return s_empty && s_editsNode >= 0;
+}
+
+bool CM_Mapkit_WorldEmpty()
+{
+    return CM_Mapkit_Empty() && !Com_WorldFromBsp();
 }
 
 float CM_Mapkit_NodeVisRange()

@@ -558,10 +558,11 @@ void __cdecl R_CalcModelLighting(
     {
         __debugbreak();
     }
-    if (CM_Mapkit_Empty())
+    if (CM_Mapkit_WorldEmpty() || !rgp.world->lightGrid.entryCount)
     {
-        // mod: mapkit empty base - no retail light grid: flat ground lighting (the retail ground patch path,
-        // colorsCount 0 fills every sample), sun primary light. Approximated, not from the exe.
+        // mod: mapkit empty base, or a world without a light grid (a BSP of tools/bo2/d3dbsp.py): flat ground
+        // lighting (the retail ground patch path, colorsCount 0 fills every sample), sun primary light. Approximated,
+        // not from the exe; the empty grid lit every model with one stray colour (cyan).
         unsigned __int8 flat[4] = { 128, 128, 128, 255 };
         // mapkit-fix-3 mood lighting: a "light" edit containing the lighting origin scales the grey per channel
         float tint[3];

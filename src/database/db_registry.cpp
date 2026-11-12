@@ -2520,6 +2520,18 @@ const char *DB_GetModExtraZones()
     return g_modExtraZones;
 }
 
+// mod: whether a zone name is one of bo1_mod_zones' (exact, unlike DB_IsModExtraZone's match on a loaded zone)
+static bool DB_IsModExtraZoneName(const char *zoneName)
+{
+    char token[64];
+    for ( int i = 0; DB_GetModExtraZoneName(i, token, sizeof(token)); ++i )
+    {
+        if ( !I_stricmp(token, zoneName) )
+            return true;
+    }
+    return false;
+}
+
 static bool DB_IsModExtraZone(unsigned int zoneIndex)
 {
     char token[64];
@@ -4508,6 +4520,15 @@ void __cdecl DB_ModXFileHandle(const char *zoneName, void **zoneFile, FF_DIR *zo
             String = Dvar_GetString("fs_usermapDir");
             v4 = va("%s\\%s", String, zoneName);
             DB_BuildOSPath_ForUsermap(v4, 0x100u, filename);
+            *zoneFile = CreateFileA(filename, 0x80000000, 1u, 0, 3u, 0x60000000u, 0);
+            if ( *zoneFile != (void *)-1 )
+                *zoneDir = FFD_USER_MAP;
+        }
+        // mod: a bo1_mod_zones zone found nowhere else is a user map's own zone, usermaps/<zone>/<zone>.ff (a map
+        // built by tools/bo2/bo2_bsp.py brought onto a MapKit base, docs/BO2_MAPS.md)
+        if ( *zoneFile == (void *)-1 && DB_IsModExtraZoneName(zoneName) )
+        {
+            DB_BuildOSPath_FromSource(zoneName, FFD_USER_MAP, 0x100u, filename);
             *zoneFile = CreateFileA(filename, 0x80000000, 1u, 0, 3u, 0x60000000u, 0);
             if ( *zoneFile != (void *)-1 )
                 *zoneDir = FFD_USER_MAP;

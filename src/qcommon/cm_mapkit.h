@@ -30,6 +30,10 @@ bool CM_NoPerks_NearMachine(const float *origin, float radius);
 bool CM_Mapkit_Active();
 // layout "empty": true = the retail world (draw, sky, collision, static models, pathnodes) is off; the layout is the map
 bool CM_Mapkit_Empty();
+// Whether the empty base leaves no world at all: true unless the world comes from a BSP (bo1_bspworld), whose render
+// world, static models, collision and lighting then stand in for the retail ones while the layout still supplies the
+// level script, entities and pathnodes (CM_Mapkit_Empty).
+bool CM_Mapkit_WorldEmpty();
 // the layout's "nodeVisRange" on an empty base (0: every node pair gets its sight trace, as retail)
 float CM_Mapkit_NodeVisRange();
 // empty base: the level entity string = retail worldspawn + the layout's spawn/ent edits (CM_EntityString)

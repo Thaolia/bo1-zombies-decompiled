@@ -24,6 +24,7 @@ from bo2_props_collision import BOX_MAX, LIGHTS, MIN_HALF, PLAY_PAD, box_like, c
 
 MODEL_TEMPLATES = {0: "mtl_dest_glo_paper_01", FLAG_ALPHA_TEST: "mtl_filament", FLAG_DECAL: "mtl_theater_paper_scrawl",
                    FLAG_BLEND: "mtl_theater_paper_scrawl"}
+SKY_TEMPLATE = "mtl_skybox_zombie_theater"  # mc_sky_cubemap_hdr: a cube map, BO2's sky models draw theirs the same way
 COLLISION_VERTS = 0x10000
 MODEL_FALLBACK = "mc/" + MODEL_TEMPLATES[0]  # a name for a glTF material entry no surface uses any more
 
@@ -72,7 +73,7 @@ class PropModels:
         self.raw = raw
         self.out_images = out_images
         self.templates = {}
-        for flag, name in MODEL_TEMPLATES.items():
+        for flag, name in list(MODEL_TEMPLATES.items()) + [("sky", SKY_TEMPLATE)]:
             with open(os.path.join(templates_dir, name + ".json"), encoding="utf-8") as f:
                 self.templates[flag] = json.load(f)
         self.materials = {}   # BO2 material -> zone material or None
@@ -88,6 +89,8 @@ class PropModels:
         dds = None if skipped(bo2) else colour_dds(self.dump, bo2, self.images)
         if dds:
             flags, multiply = blend_flags(self.dump, bo2)
+            if self.is_sky(bo2):
+                flags, multiply = "sky", False
             image = image_name(dds) + ("_mul" if multiply else "")
             iwi = os.path.join(self.out_images, image + ".iwi")
             if os.path.exists(iwi) or dds_to_iwi(dds, iwi, multiply):
@@ -106,6 +109,13 @@ class PropModels:
                 self.notes.append(f"material {bo2}: image the engine cannot take")
         self.materials[bo2] = result
         return result
+
+    def is_sky(self, bo2):
+        try:
+            with open(os.path.join(self.dump, "materials", bo2 + ".json"), encoding="latin-1") as f:
+                return "sky" in json.load(f).get("techniqueSet", "")
+        except (OSError, ValueError):
+            return False
 
     def model(self, bo2):
         """The zone's xmodel for a BO2 xmodel, None when it has nothing left to draw."""

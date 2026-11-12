@@ -8,6 +8,7 @@
 #include <gfx_d3d/r_dvars.h>
 #include "pathnode_load_obj.h"
 #include <qcommon/com_bsp_load_obj.h>
+#include <qcommon/cm_mapkit.h>
 #include <qcommon/cm_world.h>
 #include <win32/win_main.h>
 #include "actor_navigation.h"
@@ -780,7 +781,8 @@ void __cdecl GScr_AddFieldsForPathnode()
 
 void __cdecl Scr_FreePathnode(pathnode_t *node)
 {
-    if ( Com_WorldFromBsp() )
+    // mod: a MapKit layout's nodes hold user-1 string references, as a zone world's do (Path_Shutdown)
+    if ( Com_WorldFromBsp() && !CM_Mapkit_Empty() )
         Scr_FreePathnodeFields(node);
 
     iassert(!node->dynamic.pOwner.isDefined());
@@ -1009,7 +1011,9 @@ void __cdecl Path_Shutdown()
     pathnode_t *nodea; // [esp+4h] [ebp-4h]
 
     Path_ShutdownBadPlaces();
-    if ( !Com_WorldFromBsp() )
+    // mod: on a MapKit empty base every node is the layout's, its strings user-1 references (SL_GetString,
+    // g_mapkit_path.cpp): they are cleared, not released, as on a zone world, even when the world comes from a BSP
+    if ( !Com_WorldFromBsp() || CM_Mapkit_Empty() )
     {
         for ( node = gameWorldCurrent->path.nodes; node != &gameWorldCurrent->path.nodes[g_path.actualNodeCount]; ++node )
         {

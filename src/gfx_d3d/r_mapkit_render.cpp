@@ -94,7 +94,7 @@ void __cdecl R_Mapkit_GenerateVerts(const float *vieworg)
         // mc/pent_art_wall_wood07_dark; the same wall with a concrete material drew lit, run mk19.)
         float lightOrigin[3] = { box->lightOrigin[0], box->lightOrigin[1], box->lightOrigin[2] };
         const float pointHalf[3] = { 1.0f, 1.0f, 1.0f };
-        unsigned int primaryLightIndex = CM_Mapkit_Empty() ? 0 : R_GetNonSunPrimaryLightForBox(0, lightOrigin, pointHalf);
+        unsigned int primaryLightIndex = CM_Mapkit_WorldEmpty() ? 0 : R_GetNonSunPrimaryLightForBox(0, lightOrigin, pointHalf);
         if (!primaryLightIndex)
             primaryLightIndex = rgp.world->sunPrimaryLightIndex;
         unsigned int lightHandle = R_AllocModelLighting_PrimaryLight(lightOrigin, primaryLightIndex, 0, &s_mkLighting[b], &s_mkLightingInfo[b]);

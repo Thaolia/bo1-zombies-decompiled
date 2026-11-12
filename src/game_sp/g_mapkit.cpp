@@ -448,7 +448,7 @@ void G_Mapkit_f_dump()
     out += "],\n\"brushes\":[";
     int n = 0;
     // empty base: the retail brushes are still in cm but none of them collide (the world is off): not drawn
-    const unsigned int retailBrushes = CM_Mapkit_Empty() ? 0u : cm.numBrushes;
+    const unsigned int retailBrushes = CM_Mapkit_WorldEmpty() ? 0u : cm.numBrushes;
     for (unsigned int i = 0; i < retailBrushes; ++i)
     {
         const cbrush_t *b = &cm.brushes[i];

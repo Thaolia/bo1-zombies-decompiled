@@ -609,7 +609,7 @@ void __cdecl CM_AddStaticModelToNode(cStaticModel_s *staticModel, unsigned __int
 
 unsigned int CM_LinkAllStaticModels()
 {
-    if (CM_Mapkit_Empty()) // mod: mapkit empty base - no retail static models in the world sectors
+    if (CM_Mapkit_WorldEmpty()) // mod: mapkit empty base - no retail static models in the world sectors
         return 0;
     unsigned int result; // eax
     cStaticModel_s *staticModel; // [esp+0h] [ebp-8h]

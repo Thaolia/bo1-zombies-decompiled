@@ -4759,7 +4759,7 @@ void __cdecl R_AddWorldSurfacesDpvs(const GfxViewParms *viewParms, int cameraCel
         {
             __debugbreak();
         }
-        if (!CM_Mapkit_Empty()) // mod: mapkit empty base has no retail sky
+        if (!CM_Mapkit_WorldEmpty()) // mod: mapkit empty base has no retail sky
             R_AddSkySurfacesDpvs(dpvsView->frustumPlanes, dpvsView->frustumPlaneCount - 1);
     }
     if ( r_vc_makelog->current.integer )
