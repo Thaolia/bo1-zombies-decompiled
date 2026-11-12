@@ -5,6 +5,7 @@
 
 #include "d3d9emu_host.h"
 #include "shader_pack.h"
+#include <platform/load_profile.h>
 
 #include <cstdio>
 #include <cstring>
@@ -184,12 +185,21 @@ gb::Shader *CreatePackedShader(gb::Stage stage, uint64_t hash)
         return nullptr;
     }
     std::string text;
-    if (!pack.Read(*entry, text))
+    bool read;
+    {
+        const Bo1LoadScope profile(BO1_LOAD_SHADER_READ);
+        read = pack.Read(*entry, text);
+    }
+    if (!read)
     {
         WarnOnce(key, "d3d9emu: cannot read shader %016llx from shaders.pack", static_cast<unsigned long long>(hash));
         return nullptr;
     }
-    gb::Shader *shader = gb::CreateShader(stage, hash, text.data(), uint32_t(text.size()));
+    gb::Shader *shader;
+    {
+        const Bo1LoadScope profile(BO1_LOAD_SHADER_CREATE);
+        shader = gb::CreateShader(stage, hash, text.data(), uint32_t(text.size()));
+    }
     if (!shader)
         WarnOnce(key, "d3d9emu: the backend refused shader %016llx", static_cast<unsigned long long>(hash));
     return shader;

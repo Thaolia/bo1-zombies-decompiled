@@ -7,6 +7,7 @@
 #endif
 
 #include "win32_handles.h"
+#include <platform/load_profile.h>
 
 #include <direct.h>
 #include <io.h>
@@ -482,7 +483,11 @@ BOOL ReadFileEx(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPOVE
         Bo1_SetLastError(file ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return FALSE;
     }
-    const ssize_t done = ReadAll(file->fd, lpBuffer, nNumberOfBytesToRead, OverlappedOffset(lpOverlapped));
+    ssize_t done;
+    {
+        const Bo1LoadScope profile(BO1_LOAD_READ);
+        done = ReadAll(file->fd, lpBuffer, nNumberOfBytesToRead, OverlappedOffset(lpOverlapped));
+    }
     if (done < 0)
     {
         Bo1_SetLastError(Bo1_ErrorFromErrno(errno));
