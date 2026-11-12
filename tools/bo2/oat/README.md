@@ -28,17 +28,25 @@ licence, the **GNU GPL v3**, not part of this repository's engine code. See `doc
   `<map>.d3dbsp.lights.csv` (type, colour, direction, origin, radius, cone, attenuation...), the lights a world
   surface's `primaryLightIndex` names; `tools/bo2/bo2_worldlight.py` bakes the lamps from it.
 - `ObjWriterT6.patch`: registers the four dumpers in `src/ObjWriting/Game/T6/ObjWriterT6.cpp`.
+- `ImageLoaderExternalT5.patch`: makes OAT's Linker write a BO1 (T5) image read from `images/<name>.iwi` the way BO1
+  loads one: category `IMG_CATEGORY_LOAD_FROM_FILE`, load definition (flags, D3D format, level count) and the card
+  memory that `Image_GetCardMemoryAmount` computes. Without it the image comes out with format 0 and BO1 stops on
+  `unhandled case: 0` (`r_image_load_common.cpp`). `tools/bo2/bo2_weapon.py` needs it (`docs/BO2_WEAPONS.md`).
 
 ## Build (Linux / WSL)
 
     git clone --branch v0.34.0 https://github.com/Laupetin/OpenAssetTools.git oat-src
     cp -r tools/bo2/oat/src/. oat-src/src/
     git -C oat-src apply "$PWD/tools/bo2/oat/ObjWriterT6.patch"
+    git -C oat-src apply "$PWD/tools/bo2/oat/ImageLoaderExternalT5.patch"
     cd oat-src && PREMAKE_NO_PROMPT=1 ./generate.sh        # downloads premake (SHA-256 checked) and the submodules
     make -C build config=release_x64 UnlinkerCli -j8        # build/bin/Release_x64/Unlinker
+    make -C build config=release_x64 LinkerCli -j8          # build/bin/Release_x64/Linker (BO2 weapons)
 
 premake gathers the source files when it generates the makefiles: a file added later needs `./premake5
 --file=../premake5.lua gmake` again from `build/`, or the link misses it (`undefined reference to vtable`).
+After editing a `.template` file (the image loader patch is one), run `make` twice: the first run regenerates
+`build/src/.../*T5.cpp` but compiles the old object, so the Linker keeps the old behaviour without any error.
 
 ## Use
 

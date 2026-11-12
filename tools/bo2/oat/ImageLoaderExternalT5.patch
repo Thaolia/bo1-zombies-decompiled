@@ -1,0 +1,50 @@
+diff --git a/src/ObjLoading/Image/ImageLoaderExternal.cpp.template b/src/ObjLoading/Image/ImageLoaderExternal.cpp.template
+index 4502eb5..05cd319 100644
+--- a/src/ObjLoading/Image/ImageLoaderExternal.cpp.template
++++ b/src/ObjLoading/Image/ImageLoaderExternal.cpp.template
+@@ -45,6 +45,7 @@
+ #include "Image/ImageLoaderCommon.h"
+ #include "Utils/Logging/Log.h"
+ 
++#include <algorithm>
+ #include <cstring>
+ 
+ using namespace GAME;
+@@ -94,6 +95,37 @@ namespace
+ #endif
+ 
+             image->texture.loadDef = m_memory.Alloc<GfxImageLoadDef>();
++#ifdef FEATURE_T5
++            // BO1 (Load_Texture, Image_LoadFromFile) reads an image without pixels in the zone from images/<name>.iwi
++            // only as IMG_CATEGORY_LOAD_FROM_FILE, and checks its card memory against the load definition
++            {
++                const auto noMips = !texture->HasMipMaps();
++                const auto type = texture->GetTextureType();
++                image->category = IMG_CATEGORY_LOAD_FROM_FILE;
++                image->mapType = type == TextureType::T_CUBE ? MAPTYPE_CUBE : (type == TextureType::T_3D ? MAPTYPE_3D : MAPTYPE_2D);
++                auto* loadDef = image->texture.loadDef;
++                loadDef->flags = static_cast<char>((loadingResult.m_meta.m_no_picmip ? iwi13::IMG_FLAG_NOPICMIP : 0)
++                                                   | (noMips ? iwi13::IMG_FLAG_NOMIPMAPS : 0)
++                                                   | (type == TextureType::T_CUBE ? iwi13::IMG_FLAG_CUBEMAP : 0)
++                                                   | (type == TextureType::T_3D ? iwi13::IMG_FLAG_VOLMAP : 0));
++                loadDef->format = static_cast<int>(texture->GetFormat()->GetD3DFormat());
++                loadDef->levelCount = static_cast<char>(noMips ? 1 : texture->GetMipMapCount());
++                loadDef->resourceSize = 0;
++                unsigned w = image->width, h = image->height, d = image->depth;
++                size_t memory = 0;
++                for (;;)
++                {
++                    memory += texture->GetFormat()->GetSizeOfMipLevel(0, w, h, d) * (type == TextureType::T_CUBE ? 6u : 1u);
++                    if (noMips || w + h + d <= 3)
++                        break;
++                    w = std::max(1u, w >> 1);
++                    h = std::max(1u, h >> 1);
++                    d = std::max(1u, d >> 1);
++                }
++                image->cardMemory.platform[0] = static_cast<int>(memory);
++                image->cardMemory.platform[1] = static_cast<int>(memory);
++            }
++#endif
+ 
+             return AssetCreationResult::Success(context.AddAsset<AssetImage>(assetName, image));
+         }
