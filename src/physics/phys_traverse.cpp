@@ -160,7 +160,7 @@ void colgeom_visitor_t::intersect_box(float *mn, float *mx, int mask)
     CM_MapkitImport_VisitBox(mn, mx, mask, [](const cbrush_t *brush, void *self) {
         ((colgeom_visitor_t *)self)->visit(brush);
     }, this);
-    if (CM_Mapkit_Empty()) // mod: mapkit empty base - the layout boxes are the whole world
+    if (CM_Mapkit_WorldEmpty()) // mod: mapkit empty base - the layout boxes are the whole world
         return;
 
     if (!ll.count)

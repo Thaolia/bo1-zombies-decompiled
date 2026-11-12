@@ -2327,15 +2327,17 @@ mapkit_test_kill( zombie, player, reason )
 	zombie DoDamage( zombie.health + 100, zombie.origin, player );
 }
 
-// An imported map (a "collision" edit: another game's map, docs/BO2_MAPS.md) has props a player collides with but its
-// node graph does not know: the test client, which walks straight from node to node, climbs a ramp onto a deck and
-// stays there. On such a map it is put on the floor at its goal first; the checks then test purchases and zombies
-// reaching the player, not the walk (MapKit's own layouts keep walking).
+// An imported map (a "collision" edit, or a layout on a world read from our own BSP, bo1_bspworld: another game's map,
+// docs/BO2_MAPS.md) has props a player collides with but its node graph does not know: the test client, which walks
+// straight from node to node, climbs a ramp onto a deck and stays there. On such a map it is put on the floor at its
+// goal first; the checks then test purchases and zombies reaching the player, not the walk (MapKit's own layouts keep
+// walking).
 mapkit_imported()
 {
 	if ( !IsDefined( level.mapkit_imported ) )
 	{
-		level.mapkit_imported = false;
+		bsp = GetDvar( "bo1_bspworld" );
+		level.mapkit_imported = bsp != "" && bsp != "0";
 		for ( i = 0; i < bo1_mapkit_editcount(); i++ )
 		{
 			if ( bo1_mapkit_get( i, "kind" ) == "collision" )

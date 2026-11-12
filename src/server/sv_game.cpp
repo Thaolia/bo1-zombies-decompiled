@@ -224,7 +224,7 @@ bool __cdecl SV_inSnapshot(const float *origin, int iEntityNum)
         return 1;
     if ( (ent->r.svFlags & 1) != 0 )
         return 0;
-    if ( (ent->r.svFlags & 0x18) != 0 || CM_Mapkit_Empty() ) // mod: mapkit empty base - no retail PVS
+    if ( (ent->r.svFlags & 0x18) != 0 || CM_Mapkit_WorldEmpty() ) // mod: mapkit empty base - no retail PVS
         return 1;
     svEnt = SV_SvEntityForGentity(ent);
     leafnum = CM_PointLeafnum(origin);

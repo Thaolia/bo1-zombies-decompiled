@@ -1,6 +1,7 @@
 #include <qcommon/cm_mapkit.h>
 #include <qcommon/cm_load.h>
 #include <qcommon/common.h>
+#include <qcommon/com_bsp_load_obj.h>
 #include <game/g_bsp.h>
 #include <game/pathnode.h>
 #include <game_mp/g_main_mp.h>
@@ -123,8 +124,8 @@ void G_Mapkit_f_graphcheck()
     // mod (bo2 maps): on another game's map (a "collision" edit) zones also join through windows and traversals (BO2's
     // zombies climb into Nuketown's houses through their windows), so the zones stay connected whatever the door does.
     // What the blocker must do is cut the links through its own doorway: none crosses its box while it is closed, and
-    // its purchase gives them back.
-    bool imported = false;
+    // its purchase gives them back. A layout on a world built from another game's map (bo1_bspworld) is one too.
+    bool imported = Com_WorldFromBsp() && CM_Mapkit_Empty();
     for (int i = 0; i < CM_Mapkit_EditCount() && !imported; ++i)
     {
         const char *kind = "";
@@ -448,7 +449,7 @@ void G_Mapkit_f_dump()
     out += "],\n\"brushes\":[";
     int n = 0;
     // empty base: the retail brushes are still in cm but none of them collide (the world is off): not drawn
-    const unsigned int retailBrushes = CM_Mapkit_Empty() ? 0u : cm.numBrushes;
+    const unsigned int retailBrushes = CM_Mapkit_WorldEmpty() ? 0u : cm.numBrushes;
     for (unsigned int i = 0; i < retailBrushes; ++i)
     {
         const cbrush_t *b = &cm.brushes[i];

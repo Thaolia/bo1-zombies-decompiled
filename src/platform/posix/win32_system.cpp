@@ -450,11 +450,27 @@ BOOL GetVersionExA(LPOSVERSIONINFOA lpVersionInformation)
 
 // ---- process
 
+#if defined(__SWITCH__)
+// The console has no /proc: the command line is launch.cfg's, which switch_main hands over before WinMain. Static
+// initialisers that ask earlier see it empty (r_stream.cpp's is set again by DB_InitXAssets).
+static char s_switchCommandLine[1024];
+
+void Bo1_SetCommandLine(const char *commandLine)
+{
+    snprintf(s_switchCommandLine, sizeof(s_switchCommandLine), "%s", commandLine ? commandLine : "");
+}
+
+LPSTR GetCommandLineA(void)
+{
+    return s_switchCommandLine;
+}
+#else
 LPSTR GetCommandLineA(void)
 {
     static std::string *commandLine = new std::string(ReadCommandLine());
     return &(*commandLine)[0];
 }
+#endif
 
 BOOL SetEnvironmentVariableA(LPCSTR lpName, LPCSTR lpValue)
 {

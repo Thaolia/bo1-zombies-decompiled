@@ -121,7 +121,7 @@ int __cdecl CM_PointContents(const float *p, unsigned int model)
     }
     // mod: mapkit boxes are part of the world
     const int mapkitContents = model ? 0 : CM_Mapkit_PointContents(p);
-    if ( !model && CM_Mapkit_Empty() ) // mod: mapkit empty base - no retail world contents
+    if ( !model && CM_Mapkit_WorldEmpty() ) // mod: mapkit empty base - no retail world contents
         return mapkitContents;
     if ( model )
         leaf = &CM_ClipHandleToModel(model)->leaf;

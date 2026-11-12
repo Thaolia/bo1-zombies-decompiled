@@ -8,9 +8,9 @@ writer covers what a map without baked lighting needs:
 - triangle meshes drawn as world surfaces (no collision of their own);
 - a k-d tree over the brushes and partitions for the collision;
 - one cell holding every surface, no portals: everything is drawn from everywhere;
-- one lightmap without pixels, which the engine fills with white (lit world materials refuse a surface without a
-  lightmap; the sky takes none, index 31), an empty light grid, no reflection probe (the engine adds its dummy), a sun
-  primary light from the worldspawn keys;
+- lightmaps (add_lightmap: R_LoadLightmaps' 9 MB records), or else one lightmap without pixels, which the engine
+  fills with white (lit world materials refuse a surface without a lightmap; the sky takes none, index 31);
+- an empty light grid, no reflection probe (the engine adds its dummy), a sun primary light from the worldspawn keys;
 - the entity string.
 
 Library use: build a Bsp, add_material / add_brush / add_collision_brush / add_collision_triangles / add_mesh /
@@ -23,8 +23,10 @@ import sys
 
 BSP_VERSION = 43
 LIGHTMAP_NONE = 31
+LIGHTMAP_BYTES = 9437184
 
 LUMP_MATERIALS = 0x00
+LUMP_LIGHTBYTES = 0x01
 LUMP_LIGHTGRIDENTRIES = 0x02
 LUMP_LIGHTGRIDCOLORS = 0x03
 LUMP_PLANES = 0x04
@@ -80,6 +82,7 @@ class Bsp:
         self.soups = []              # [material, verts, indices]: verts are packed DiskGfxVertex
         self.coll_verts = []         # collision triangles' vertices
         self.coll_tris = []          # (a, b, c, material)
+        self.lightmaps = []          # the LIGHTBYTES record of each lightmap (9 MB: R_LoadLightmaps)
         self.entities = []           # list of dicts, worldspawn first
         self.sun_color = (0.875, 0.875, 0.875)
 
@@ -131,6 +134,14 @@ class Bsp:
         self.coll_verts.extend(tuple(map(float, v)) for v in verts)
         self.coll_tris.extend((a + base, b + base, c + base, m) for a, b, c, m in tris)
 
+    def add_lightmap(self, data):
+        if len(data) != LIGHTMAP_BYTES:
+            raise ValueError("a lightmap is %d bytes" % LIGHTMAP_BYTES)
+        if len(self.lightmaps) >= 30:
+            raise ValueError("at most 30 lightmaps (index 31 is none)")
+        self.lightmaps.append(data)
+        return len(self.lightmaps) - 1
+
     def _add_box_face(self, mins, maxs, axis, side, normal, material, tex_scale):
         u_axis, v_axis = [(1, 2), (0, 2), (0, 1)][axis]
         d = maxs[axis] if side else mins[axis]
@@ -147,7 +158,10 @@ class Bsp:
         self.add_mesh(material, corners, [i for t in tri for i in t], normals=[normal] * 4, tex_scale=tex_scale)
 
     # Triangles wind clockwise seen from the front, as D3D and the Mod Tools' compiler do.
-    def add_mesh(self, material, positions, indices, normals=None, uvs=None, colors=None, tex_scale=128.0):
+    # lightmap: the surface's lightmap (add_lightmap's index; 0 = the engine's white one when the BSP stores none),
+    # lmap_uvs its coordinates per vertex.
+    def add_mesh(self, material, positions, indices, normals=None, uvs=None, colors=None, tex_scale=128.0,
+                 lightmap=0, lmap_uvs=None):
         if len(indices) % 3:
             raise ValueError("index count not a multiple of 3")
         if normals is None:
@@ -161,7 +175,8 @@ class Bsp:
             else:
                 uv = (_dot(p, tangent) / tex_scale, -_dot(p, binormal) / tex_scale)
             c = colors[i] if colors is not None else (255, 255, 255, 255)
-            verts.append(struct.pack("<3f3f4B2f2f3f3f", *p, *n, *c, *uv, 0.0, 0.0, *tangent, *binormal))
+            luv = lmap_uvs[i] if lmap_uvs is not None else (0.0, 0.0)
+            verts.append(struct.pack("<3f3f4B2f2f3f3f", *p, *n, *c, *uv, *luv, *tangent, *binormal))
         # Split into soups that fit the 16-bit counts, triangles kept whole.
         start = 0
         while start < len(indices):
@@ -178,7 +193,7 @@ class Bsp:
                         soup_verts.append(verts[i])
                     soup_indices.append(remap[i])
                 pos += 3
-            self.soups.append([material, soup_verts, soup_indices])
+            self.soups.append([material, soup_verts, soup_indices, lightmap])
             start = pos
 
     def bounds(self):
@@ -186,7 +201,7 @@ class Bsp:
         for bmin, bmax, *_ in self.brushes:
             mins = [min(a, b) for a, b in zip(mins, bmin)]
             maxs = [max(a, b) for a, b in zip(maxs, bmax)]
-        for _, verts, _ in self.soups:
+        for _, verts, _, _ in self.soups:
             for v in verts:
                 p = struct.unpack_from("<3f", v)
                 mins = [min(a, b) for a, b in zip(mins, p)]
@@ -298,23 +313,26 @@ class Bsp:
         lumps[LUMP_LEAFBRUSHES] = struct.pack("<%di" % len(leafbrushes), *leafbrushes)
         self.tree_stats = (len(nodes), len(leafs), len(leafbrushes), len(partitions), len(aabbs))
 
-        # Surfaces sorted by material, as the compiler leaves them.
-        soups = sorted(self.soups, key=lambda s: s[0])
+        # Surfaces in the order of their AABB tree's leaves (each node covers a contiguous range), by material within
+        # a leaf.
+        soups, aabb_nodes = _surface_tree(self.soups)
         tris, verts, indices = [], [], []
-        for mat, sv, si in soups:
+        for mat, sv, si, lmap in soups:
             sky = self.materials[mat][1] & 0x4
             lit = 0 if sky else 1
-            tris.append(struct.pack("<HBBBBBxhxxiIHHi", mat, LIGHTMAP_NONE if sky else 0, 0, lit, 0, lit, lit, 0,
+            tris.append(struct.pack("<HBBBBBxhxxiIHHi", mat, LIGHTMAP_NONE if sky else lmap, 0, lit, 0, lit, lit, 0,
                                     len(verts), len(sv), len(si), len(indices)))
             verts.extend(sv)
             indices.extend(si)
         if len(indices) and max(indices) > 0xFFFF:
             raise ValueError("index out of range")
         lumps[LUMP_TRIANGLES] = b"".join(tris)
+        if self.lightmaps:
+            lumps[LUMP_LIGHTBYTES] = b"".join(self.lightmaps)
         lumps[LUMP_DRAWVERTS] = b"".join(verts)
         lumps[LUMP_DRAWINDICES] = struct.pack("<%dH" % len(indices), *indices)
 
-        lumps[LUMP_AABBTREES] = struct.pack("<3I", 0, len(soups), 0)
+        lumps[LUMP_AABBTREES] = b"".join(struct.pack("<3I", *n) for n in aabb_nodes)
         cell = struct.pack("<3f3fHxxiiiiB", *mins, *maxs, 0, 0, 0, 0, 0, 0)
         lumps[LUMP_CELLS] = cell + bytes(0x70 - len(cell))
         lumps[LUMP_MODELS] = struct.pack("<3f3fHHiiii", *mins, *maxs, 0, len(soups), 0, 0, 0, len(self.brushes))
@@ -340,7 +358,7 @@ class Bsp:
         lumps[LUMP_WATERHEADER] = struct.pack("<iiiiHH", 0x7FFFFFFF, 0x7FFFFFFF, -0x80000000, -0x80000000, 0xFFFF, 0)
         lumps[LUMP_BURNABLEHEADER] = bytes(16)
 
-        order = [LUMP_MATERIALS, LUMP_LIGHTGRIDHEADER, LUMP_LIGHTGRIDROWS, LUMP_LIGHTGRIDENTRIES,
+        order = [LUMP_MATERIALS, LUMP_LIGHTBYTES, LUMP_LIGHTGRIDHEADER, LUMP_LIGHTGRIDROWS, LUMP_LIGHTGRIDENTRIES,
                  LUMP_LIGHTGRIDCOLORS, LUMP_PLANES, LUMP_BRUSHSIDES, LUMP_BRUSHVERTS, LUMP_BRUSHVERTSCOUNTS,
                  LUMP_BRUSHES, LUMP_TRIANGLES, LUMP_DRAWVERTS, LUMP_DRAWINDICES, LUMP_AABBTREES, LUMP_CELLS,
                  LUMP_NODES, LUMP_LEAFS, LUMP_LEAFBRUSHES, LUMP_COLLISIONVERTS, LUMP_COLLISIONTRIS,
@@ -355,6 +373,41 @@ class Bsp:
             out.append(data + bytes(-len(data) & 3))
         with open(path, "wb") as f:
             f.write(b"".join(out))
+
+
+TREE_SURFACES = 8
+
+
+def _surface_tree(soups):
+    """The world surfaces' AABB tree, which the renderer culls with: median splits of the surfaces' centres along their
+    box's longest axis, TREE_SURFACES surfaces at most per leaf. Returns (soups in tree order, [(first surface, surface
+    count, child count)]): a node's children come as one block, the blocks in the order a depth-first walk reaches
+    their parents (R_FinishLoadingAabbTrees_r), each child covering a contiguous part of its parent's range."""
+    boxes = []
+    for _, verts, _, _ in soups:
+        pts = [struct.unpack_from("<3f", v) for v in verts]
+        boxes.append(([min(p[k] for p in pts) for k in range(3)], [max(p[k] for p in pts) for k in range(3)]))
+    order, nodes = [], [None]
+
+    def fill(index, ids):
+        first = len(order)
+        if len(ids) <= TREE_SURFACES:
+            order.extend(sorted(ids, key=lambda i: soups[i][0]))
+            nodes[index] = (first, len(ids), 0)
+            return
+        lo = [min(boxes[i][0][k] for i in ids) for k in range(3)]
+        hi = [max(boxes[i][1][k] for i in ids) for k in range(3)]
+        axis = max(range(3), key=lambda k: hi[k] - lo[k])
+        ids = sorted(ids, key=lambda i: boxes[i][0][axis] + boxes[i][1][axis])
+        half = len(ids) // 2
+        base = len(nodes)
+        nodes.extend([None, None])
+        fill(base, ids[:half])
+        fill(base + 1, ids[half:])
+        nodes[index] = (first, len(ids), 2)
+
+    fill(0, list(range(len(soups))))
+    return [soups[i] for i in order], nodes
 
 
 LEAF_BRUSHES = 24

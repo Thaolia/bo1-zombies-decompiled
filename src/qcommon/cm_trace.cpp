@@ -851,7 +851,7 @@ void __cdecl CM_PositionTest(traceWork_t *tw, trace_t *trace, col_context_t *con
             ++prim;
         }
     }
-    else if ( !trace->allsolid && !CM_Mapkit_Empty() ) // mod: mapkit empty base - no retail leaf brushes
+    else if ( !trace->allsolid && !CM_Mapkit_WorldEmpty() ) // mod: mapkit empty base - no retail leaf brushes
     {
         ll.bounds[0][0] = tw->extents.start.vec.v[0] - tw->size.vec.v[0];
         ll.bounds[0][1] = tw->extents.start.vec.v[1] - tw->size.vec.v[1];
@@ -1787,7 +1787,7 @@ int __cdecl CM_TraceCylinderThroughCylinder(
 
 void __cdecl CM_TraceThroughTree(const traceWork_t *tw, int num, const float *p1_, const float *p2, trace_t *trace)
 {
-    if (num == 0 && CM_Mapkit_Empty()) // mod: mapkit empty base - no retail world collision
+    if (num == 0 && CM_Mapkit_WorldEmpty()) // mod: mapkit empty base - no retail world collision
         return;
     float v5; // [esp+8h] [ebp-70h]
     float v6; // [esp+Ch] [ebp-6Ch]
@@ -2748,7 +2748,7 @@ int __cdecl CM_SightTracePointThroughBrush(const TraceExtents *extents, const cb
 
 int __cdecl CM_SightTraceThroughTree(const traceWork_t *tw, int num, const float *p1_, const float *p2, trace_t *trace)
 {
-    if (num == 0 && CM_Mapkit_Empty()) // mod: mapkit empty base - no retail world collision
+    if (num == 0 && CM_Mapkit_WorldEmpty()) // mod: mapkit empty base - no retail world collision
         return 0;
     float v6; // [esp+8h] [ebp-7Ch]
     float v7; // [esp+Ch] [ebp-78h]

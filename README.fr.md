@@ -156,6 +156,10 @@ Stamin-Up (avec la zone d'Ascension chargée), le Pack-a-Punch et l'interrupteur
 barricades (des planches que les zombies arrachent et que le joueur reconstruit), son pont et son
 bus, qui fait la boucle par le dépôt, le diner, la ferme, la centrale et la ville en emportant les joueurs qui s'y
 tiennent (les zombies n'y montent pas, et ses props ne sont pas encore éclairés). Détails : `docs/BO2_MAPS.md`.
+Nuketown tourne aussi comme une map BO1 native (expérimental, branche `bspnuked`) : `tools/bo2/bo2_bsp.py` écrit
+son monde, ses props, sa collision et la lumière précalculée de BO2 dans une BSP de BO1, et
+`+set bo1_bspworld maps/zombie_bo2nuked.d3dbsp` y joue le gameplay Nuketown de MapKit (l'auto-test passe 106
+vérifications sur 106 ; les modèles ne sont pas encore éclairés).
 
 
 ## Paquets prêts à copier

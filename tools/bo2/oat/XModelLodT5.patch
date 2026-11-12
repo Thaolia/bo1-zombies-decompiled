@@ -1,0 +1,16 @@
+diff --git a/src/ObjLoading/XModel/LoaderXModel.cpp.template b/src/ObjLoading/XModel/LoaderXModel.cpp.template
+index 53fb647..98d7d62 100644
+--- a/src/ObjLoading/XModel/LoaderXModel.cpp.template
++++ b/src/ObjLoading/XModel/LoaderXModel.cpp.template
+@@ -1056,6 +1056,11 @@ namespace
+             lodInfo.lod = static_cast<decltype(XModelLodInfo::lod)>(lodNumber);
+ #endif
+ 
++#if defined(FEATURE_T5)
++            // BO1's static model cache asserts lodInfo[lod].lod == lod (XModelSetSModelCacheForLod)
++            lodInfo.lod = static_cast<decltype(XModelLodInfo::lod)>(lodNumber);
++#endif
++
+             return true;
+         }
+ 

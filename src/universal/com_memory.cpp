@@ -170,8 +170,9 @@ void Com_InitHunkMemory()
 
     if (IsFastFileLoad() && Com_BspWorldRequested())
     {
-        // mod (bspworld): a world read from a BSP lives in the hunk (Nuketown's took it from the usual 15 MB to 27.4)
-        s_hunkTotal = 0x4000000;
+        // mod (bspworld): a world read from a BSP lives in the hunk: Nuketown with its props takes 45.8 MB, and loading
+        // its four lightmaps 37.7 MB more of temporary memory (R_LoadLightmaps, one merged 2048 x 2048 group)
+        s_hunkTotal = 0x6000000;
     }
     else if (IsFastFileLoad())
     {

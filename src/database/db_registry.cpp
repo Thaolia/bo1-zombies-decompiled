@@ -2520,6 +2520,18 @@ const char *DB_GetModExtraZones()
     return g_modExtraZones;
 }
 
+// mod: whether a zone name is one of bo1_mod_zones' (exact, unlike DB_IsModExtraZone's match on a loaded zone)
+static bool DB_IsModExtraZoneName(const char *zoneName)
+{
+    char token[64];
+    for ( int i = 0; DB_GetModExtraZoneName(i, token, sizeof(token)); ++i )
+    {
+        if ( !I_stricmp(token, zoneName) )
+            return true;
+    }
+    return false;
+}
+
 static bool DB_IsModExtraZone(unsigned int zoneIndex)
 {
     char token[64];
@@ -3743,6 +3755,10 @@ void DB_Init()
         g_poolSize[ASSET_TYPE_IMPACT_FX] = POOLSIZE_IMPACTFX_MOD;
         g_poolSize[ASSET_TYPE_RAWFILE] = POOLSIZE_RAWFILE_MOD;
         g_poolSize[ASSET_TYPE_STRINGTABLE] = POOLSIZE_STRINGTABLE_MOD;
+        // the streaming loops follow the image pool; r_stream.cpp's static initialiser saw no command line on the
+        // Switch (launch.cfg is read later)
+        s_streamImageParts = STREAM_MAX_IMAGE_PARTS_MOD;
+        s_streamImageWords = s_streamImageParts / 32;
     }
 
     for (type = ASSET_TYPE_XMODELPIECES; type < ASSET_TYPE_COUNT; ++type)
@@ -4544,6 +4560,15 @@ void __cdecl DB_ModXFileHandle(const char *zoneName, void **zoneFile, FF_DIR *zo
             String = Dvar_GetString("fs_usermapDir");
             v4 = va("%s\\%s", String, zoneName);
             DB_BuildOSPath_ForUsermap(v4, 0x100u, filename);
+            *zoneFile = CreateFileA(filename, 0x80000000, 1u, 0, 3u, 0x60000000u, 0);
+            if ( *zoneFile != (void *)-1 )
+                *zoneDir = FFD_USER_MAP;
+        }
+        // mod: a bo1_mod_zones zone found nowhere else is a user map's own zone, usermaps/<zone>/<zone>.ff (a map
+        // built by tools/bo2/bo2_bsp.py brought onto a MapKit base, docs/BO2_MAPS.md)
+        if ( *zoneFile == (void *)-1 && DB_IsModExtraZoneName(zoneName) )
+        {
+            DB_BuildOSPath_FromSource(zoneName, FFD_USER_MAP, 0x100u, filename);
             *zoneFile = CreateFileA(filename, 0x80000000, 1u, 0, 3u, 0x60000000u, 0);
             if ( *zoneFile != (void *)-1 )
                 *zoneDir = FFD_USER_MAP;

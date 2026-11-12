@@ -322,7 +322,9 @@ bool __cdecl PickAabbSplitPlane(
         else
             v7 = *sortedMins;
         nextDist = v7;
-        while ( nextDist < 3.4028235e38 )
+        // FLT_MAX ends the sweep: the decompiled double literal 3.4028235e38 is above it, so the loop never ended once
+        // nextDist reached FLT_MAX (the retail code compares floats).
+        while ( nextDist < FLT_MAX )
         {
             dist = nextDist;
             nextDist = FLT_MAX;
@@ -334,7 +336,7 @@ bool __cdecl PickAabbSplitPlane(
                 ++prevMinCount;
                 ++minIndex;
             }
-            if ( minIndex < minMaxCount && sortedMins[minIndex] < 3.4028235e38 )
+            if ( minIndex < minMaxCount && sortedMins[minIndex] < FLT_MAX )
                 nextDist = sortedMins[minIndex];
             while ( maxIndex < minMaxCount && sortedMaxs[maxIndex] == dist )
             {

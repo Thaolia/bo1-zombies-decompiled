@@ -374,6 +374,7 @@ int main(int, char **)
     ApplyBackend(backend);
     ApplyPadLayout();
     BootLog("launch args = \"%s\"", args);
+    Bo1_SetCommandLine(args);
     BootLog("entering WinMain");
     const int rc = WinMain(GetModuleHandleA(nullptr), nullptr, args, 10 /* SW_SHOWDEFAULT */);
     BootLog("WinMain returned %d", rc);

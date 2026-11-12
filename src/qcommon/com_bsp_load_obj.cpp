@@ -376,7 +376,19 @@ const char *Com_BspWorldPath(const char *mapBspFilename)
     if ( !value )
         return nullptr;
     if ( strcmp(value, "1") )
+    {
+        // A BSP path stands for the level's world, never the front end's: the console boots through "frontend" before
+        // the +devmap, and the BSP's static models name xmodels its zones do not hold (R_CheckValidStaticModel).
+        char name[64];
+        const char *base = strrchr(mapBspFilename, '/');
+        I_strncpyz(name, base ? base + 1 : mapBspFilename, sizeof(name));
+        char *ext = strrchr(name, '.');
+        if ( ext )
+            *ext = 0;
+        if ( !I_strnicmp(name, "menu_", 5) || !I_stricmp(name, "frontend") )
+            return nullptr;
         return value;
+    }
     // Only a map that has a BSP: the front end and the retail maps keep their zones.
     int h = 0;
     FS_FOpenFileRead(mapBspFilename, &h);

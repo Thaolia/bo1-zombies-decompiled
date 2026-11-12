@@ -2037,9 +2037,9 @@ void R_UpdateFrontEndDvarOptions()
 
     R_SetInputCodeImage(&gfxCmdBufInput, TEXTURE_SRC_CODE_RESOLVED_POST_SUN, gfxRenderTargets[R_RENDERTARGET_RESOLVED_POST_SUN].image);
 
-    rg.drawWorld = r_drawWorld->current.enabled && !CM_Mapkit_Empty(); // mod: mapkit empty base draws no retail world
+    rg.drawWorld = r_drawWorld->current.enabled && !CM_Mapkit_WorldEmpty(); // mod: mapkit empty base draws no retail world
     rg.drawBModels = r_drawBModels->current.enabled;
-    rg.drawSModels = r_drawSModels->current.enabled && !CM_Mapkit_Empty(); // mod: mapkit empty base
+    rg.drawSModels = r_drawSModels->current.enabled && !CM_Mapkit_WorldEmpty(); // mod: mapkit empty base
     rg.drawXModels = r_drawXModels->current.enabled;
 }
 

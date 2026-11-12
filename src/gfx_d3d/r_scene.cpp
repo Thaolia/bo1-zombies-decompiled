@@ -3754,7 +3754,7 @@ void __cdecl R_GenerateSortedDrawSurfs(
         PROF_SCOPED("R_AddWorldSurfacesDpvs");
         // mod: mapkit empty base - camera in no retail cell: every cell is visited with the plain frustum, so
         // entities that happen to sit inside a retail cell are not hidden behind its portals
-        v6 = CM_Mapkit_Empty() ? -1 : R_CellForPoint(viewParmsDpvs->origin);
+        v6 = CM_Mapkit_WorldEmpty() ? -1 : R_CellForPoint(viewParmsDpvs->origin);
         R_AddWorldSurfacesDpvs(viewParmsDpvs, v6);
     }
     {
@@ -3799,7 +3799,7 @@ void __cdecl R_GenerateSortedDrawSurfs(
         Sys_WaitWorkerCmdInternal(&r_dpvs_staticWorkerCmd);
     }
     
-    if (!CM_Mapkit_Empty()) // mod: mapkit empty base has no retail skybox
+    if (!CM_Mapkit_WorldEmpty()) // mod: mapkit empty base has no retail skybox
         R_AddSkyboxModel(viewParmsDraw->origin);
     R_Mapkit_AddMesh(viewParmsDraw->origin); // mod: mapkit "mesh" edit (no-op without one)
 
@@ -3810,7 +3810,7 @@ void __cdecl R_GenerateSortedDrawSurfs(
             R_AddAllBspDrawSurfacesCamera(viewInfo->localClientNum, viewInfo->visibleLights, viewInfo->visibleLightCount);
             if (rgp.world->sunPrimaryLightIndex)
             {
-                if (sm_sunEnable->current.enabled && !CM_Mapkit_Empty()) // mod: mapkit empty base: the sm_sunEnable 0 path
+                if (sm_sunEnable->current.enabled && !CM_Mapkit_WorldEmpty()) // mod: mapkit empty base: the sm_sunEnable 0 path
                 {
                     if (sm_sunAlwaysCastsShadow->current.enabled)
                         Com_BitSetAssert(scene.shadowableLightIsUsed, rgp.world->sunPrimaryLightIndex, 128);
@@ -3862,7 +3862,7 @@ void __cdecl R_GenerateSortedDrawSurfs(
     }
     {
         PROF_SCOPED("draw all dyn ent");
-        if (!CM_Mapkit_Empty()) // mod: mapkit empty base - the base map's dyn-ents (papers, debris) are its world
+        if (!CM_Mapkit_WorldEmpty()) // mod: mapkit empty base - the base map's dyn-ents (papers, debris) are its world
             R_DrawAllDynEnt(viewInfo);
     }
 
