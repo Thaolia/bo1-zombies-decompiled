@@ -109,6 +109,19 @@ FLOOR_NORMAL_Z = 0.5               # a triangle this flat is a floor
 COLOUR_STEP = 1.0 / 64.0           # light grid colours are quantised to this
 SMOOTH_RADIUS = 2                  # columns on each side a point's light is averaged over (64 units)
 AMBIENT_MIN = 0.12                 # the darkest ambient light, as the lightmaps' LIGHT_FLOOR: BO2 lifts its shade
+# The share of its colour a grid point keeps around its luminance. The floors' light without the sun is mostly light
+# bounced off Nuketown's orange ground, and dividing it by the reference (the sunlit ground: BO2's blue sun) turned
+# it orange, 1.8 times more red than blue on average: doors and hedges out of the sun drew orange and brown where the
+# MapKit mesh, lit by BO2's own light of each prop, draws them neutral (measured on screenshots of the same door).
+AMBIENT_SATURATION = 0.0
+LUMA = (0.2126, 0.7152, 0.0722)
+
+
+def desaturate(colours):
+    """colours (..., 3) with AMBIENT_SATURATION of their colour around their luminance."""
+    colours = np.asarray(colours, np.float32)
+    luma = (colours * np.asarray(LUMA, np.float32)).sum(axis=-1, keepdims=True)
+    return luma + AMBIENT_SATURATION * (colours - luma)
 
 
 def light_grid(world_light, triangles, play_mins, play_maxs, light_index, none_index):
@@ -222,12 +235,14 @@ def light_grid(world_light, triangles, play_mins, play_maxs, light_index, none_i
     mean = total / np.maximum(count, 1.0)[..., None]
     default = np.median(light[have], axis=0) if have.any() else np.full(3, 0.5, np.float32)
     out = np.where(have[..., None], np.maximum(light, mean), np.where(count[..., None] > 0, mean, default))
+    out = desaturate(out)
     out = np.clip(np.maximum(out, AMBIENT_MIN), 0.0, 31.0)
     out = np.round(out / COLOUR_STEP) * COLOUR_STEP
     sun = light_index.get(world_light.sun_index, none_index)
     chosen = np.where(count > 0, np.asarray(candidates)[np.argmax(votes, axis=0)], sun)
 
-    default = tuple(float(c) for c in np.round(np.maximum(default, AMBIENT_MIN) / COLOUR_STEP) * COLOUR_STEP)
+    default = np.maximum(desaturate(default), AMBIENT_MIN)
+    default = tuple(float(c) for c in np.round(default / COLOUR_STEP) * COLOUR_STEP)
     colours, colour_index, entries = [default], {default: 0}, []
     for gx in range(shape[0]):
         for gy in range(shape[1]):
@@ -247,7 +262,10 @@ def bake_sun_colour(world_light):
 
 def add_lamps(bsp, world_light):
     """BO2's lamps and spots (<map>.d3dbsp.lights.csv) as the BSP's primary lights: a spot stays a spot, the cube-lit
-    lamps (type 5) become omni lights, their colour over world_light.reference as the lightmaps'. Returns {BO2 index:
+    lamps (type 5) become omni lights, their colour over the reference's luminance. They light the models only (the
+    lightmaps already hold their light), and over the reference channel by channel, as the lightmaps are, BO2's blue
+    sunlit ground turned a warm lamp (16, 10.8, 6.4) into (1.88, 0.68, 0.32): 5.8 times more red than blue, which drew
+    the doors and hedges near a house orange. Over the luminance a lamp keeps BO2's own colour. Returns {BO2 index:
     BSP index}."""
     out = {}
     for index in sorted(world_light.lights):
@@ -255,7 +273,8 @@ def add_lamps(bsp, world_light):
         if lamp["type"] not in (SPOT, OMNI):
             continue
         kind = d3dbsp.LIGHT_SPOT if lamp["type"] == SPOT else d3dbsp.LIGHT_OMNI
-        colour = [lamp[c] / world_light.reference[k] for k, c in enumerate("rgb")]
+        luma = sum(w * r for w, r in zip(LUMA, world_light.reference))
+        colour = [lamp[c] / luma for c in "rgb"]
         out[index] = bsp.add_primary_light(kind, (lamp["x"], lamp["y"], lamp["z"]), (lamp["dx"], lamp["dy"], lamp["dz"]),
                                            colour, lamp["radius"], lamp["cosHalfFovOuter"], lamp["cosHalfFovInner"],
                                            lamp.get("roundness", 0.0), cull_dist=int(lamp.get("cullDist", 0)))

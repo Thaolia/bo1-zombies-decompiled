@@ -26,6 +26,11 @@ from bo2_props_collision import BOX_MAX, LIGHTS, MIN_HALF, PLAY_PAD, box_like, c
 MODEL_TEMPLATES = {0: "mtl_dest_glo_paper_01", FLAG_ALPHA_TEST: "mtl_filament", FLAG_DECAL: "mtl_theater_paper_scrawl",
                    FLAG_BLEND: "mtl_theater_paper_scrawl"}
 SKY_TEMPLATE = "mtl_skybox_zombie_theater"  # mc_sky_cubemap_hdr: a cube map, BO2's sky models draw theirs the same way
+# The sky shader's brightness (cloudsHeights.z: rgb squared times it, Kino's 4). On a world from our BSP the engine's
+# sky multiplier is far higher than on Five's: with 4, 89 % of Nuketown's sky clipped to white (measured on a
+# screenshot looking up from the street; the MapKit mesh, on Five's world, shows the same cube map with no clipped pixel).
+# With 0.5: blue sky and dark clouds, no clipped pixel, mean grey 142.
+SKY_BRIGHTNESS = 0.5
 COLLISION_VERTS = 0x10000
 ROCKS = re.compile(r"rock|rubble")  # piles: a brush per rock instead of triangles
 ROCK_MIN = 16.0  # a stone smaller than this across is stepped over: no brush
@@ -105,6 +110,8 @@ class PropModels:
                 for t in mat["textures"]:
                     if t.get("name") == "colorMap":
                         t["image"] = image
+                if flags == "sky":
+                    self.sky_constants(bo2, mat)
                 path = os.path.join(self.raw, "materials", result + ".json")
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 with open(path, "w", encoding="utf-8") as f:
@@ -113,6 +120,27 @@ class PropModels:
                 self.notes.append(f"material {bo2}: image the engine cannot take")
         self.materials[bo2] = result
         return result
+
+    def sky_constants(self, bo2, mat):
+        """The BO2 sky material's skyBoxRotationSize on its BO1 copy. BO1's skycubemaphdr vertex shader samples the
+        cube map at the view direction turned by (x, y, z) and, when the size (w) is negative, through the origin
+        (-x, -y, -z): Kino's sky is authored for that, w -8000. With Kino's constant BO2's cube map came out upside
+        down, its ground (a grey, grainy backdrop) overhead. BO2's constant keeps the sky up (w 8000) and turns it as
+        BO2 does."""
+        try:
+            with open(os.path.join(self.dump, "materials", bo2 + ".json"), encoding="latin-1") as f:
+                source = {c.get("name"): c for c in json.load(f).get("constants", [])}
+        except (OSError, ValueError):
+            source = {}
+        rotation = source.get("skyBoxRotationSize")
+        if not rotation:
+            self.notes.append(f"material {bo2}: no skyBoxRotationSize, the sky keeps the template's")
+            return
+        for c in mat.get("constants", []):
+            if c.get("name") == "skyBoxRotationSize":
+                c["literal"] = list(rotation["literal"])
+            elif c.get("name") == "cloudsHeights":
+                c["literal"][2] = SKY_BRIGHTNESS
 
     def is_sky(self, bo2):
         try:

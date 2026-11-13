@@ -48,7 +48,9 @@ WEAPONS = {
     "rottweil72_zm": ("ithaca_zm", "t5_weapon_ithaca_world"),  # the Olympia does not load on the Five base
     "m16_zm": ("m16_zm", "t5_weapon_m16a1_world"),
     "ak74u_zm": ("ak74u_zm", "t5_weapon_ak74u_world"),
-    "beretta93r_zm": ("cz75_zm", "t5_weapon_cz75_world"),
+    # the dual CZ75: Five's English zone has no ZOMBIE_WEAPON_CZ75 (the single CZ75 is never a wall weapon in BO1), so
+    # its wall showed the raw key and no "hold to buy" until the first purchase; ZOMBIE_WEAPON_CZ75DW is there
+    "beretta93r_zm": ("cz75dw_zm", "t5_weapon_cz75_world"),
 }
 # BO2 traversal animscript -> the BO1 zombie animscript of the nearest height that the Five base loads
 # (zombie_pentagon.ff, common_zombie.ff). BO1 zombies have no jump up below 222 units: the jump-ups take MapKit's
