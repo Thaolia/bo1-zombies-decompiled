@@ -204,6 +204,14 @@ Pack-a-Punch. It now runs on the BSP world instead of its own mesh and collision
   (`Path_LoadPaths`), found no `LUMP_PATHCONNECTIONS` in ours and erased every link (`Path_ErasePaths`). Zombies then
   could not find a path and the MapKit self-test's client stood still. It now skips that read on a MapKit empty base.
   The self-test's door check treats a layout on a BSP world as an imported map (doorway links, not zone links).
+- The layout's nodes survive a restart (2026-11-13). On a BSP world `Path_Shutdown` (`Path_ShutdownStatic`) and
+  `Path_Init(restart)` set the node count to 0, since retail rebuilds the nodes from the entity string. The layout's
+  nodes are appended on the first load only, so after a game over (`loadgame_continue` -> fast restart)
+  `actualNodeCount` stayed 0. The kd tree still found layout nodes, and the first zombie A* asserted
+  (`pathnode.cpp(1961)`, "705 not in [0, 0)"). This happened on every death on native Nuketown: 4 runs out of 4 with
+  the headless client, which has no god mode. `G_Mapkit_RestorePathnodeCount`, called right after `Path_Init` on a
+  restart, gives the count back: 4 runs out of 4 clean, two of them with a second game over (the zombies reached the
+  player again).
 - MapKit's self-test (`+set mapkit_selftest 1` with the test client, Linux headless, timescale 4) passes 106 of 106
   checks on the BSP world, as on the MapKit mesh: every door and debris (their doorway links cut, then given back),
   the four perks, the seven wall buys, the box, Pack-a-Punch, the ten zones, and a zombie out of each of the 36 risers
