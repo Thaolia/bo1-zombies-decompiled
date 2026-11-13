@@ -138,8 +138,9 @@ jobs:
         run: |
           sudo apt-get update -q
           # mingw-w64: the layout check parses the engine for the win32 and win64 references (layouts.py)
+          # meson, bison, flex, python3-mako: uam.exe (tools/uam/build.sh)
           sudo apt-get install -y -q ninja-build cmake python3 python3-venv libsdl2-dev libncurses-dev mingw-w64 \
-              rsync patchelf
+              rsync patchelf meson bison flex python3-mako
           tools/ci/install_llvm.sh 21
       - name: Build BO1Zombies (Linux)
         run: |
@@ -155,9 +156,12 @@ jobs:
         run: |
           tools/zmadmin/build.sh linux
           tools/zmclient/build.sh linux
+      - name: Build uam.exe (MinGW-w64)
+        run: tools/uam/build.sh
       - name: Collect
         run: |
-          mkdir -p out/linux/Release out/ffconv out/zmadmin/linux out/zmclient/linux
+          mkdir -p out/linux/Release out/ffconv out/zmadmin/linux out/zmclient/linux out/uam/windows
+          cp build/uam/windows/uam.exe build/uam/windows/uam-LICENSE.txt out/uam/windows/
           cp build/linux/Release/BO1Zombies out/linux/Release/
           cp build/ffconv/ffconv.exe out/ffconv/
           cp build/zmadmin/linux/zmadmin out/zmadmin/linux/
@@ -231,7 +235,9 @@ jobs:
           A=artifacts
           # where make_dist.sh looks for each program
           mkdir -p build/win64-msvc/Release build/zmadmin/windows build/zmclient/windows build/zmadmin/linux \
-              build/zmclient/linux build/ffconv work/linux/Release work/switch/Release work/switch/romfs runtimes
+              build/zmclient/linux build/ffconv build/uam/windows work/linux/Release work/switch/Release \
+              work/switch/romfs runtimes
+          cp $A/linux/uam/windows/* build/uam/windows/
           cp $A/windows/win64-msvc/Release/BO1Zombies.exe build/win64-msvc/Release/
           cp $A/windows/zmadmin/windows/zmadmin.exe build/zmadmin/windows/
           cp $A/windows/zmclient/windows/zmclient.exe build/zmclient/windows/

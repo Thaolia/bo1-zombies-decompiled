@@ -2,7 +2,7 @@
 # Build the port and package it as ready-to-copy folders and archives, from a source tree where setup.ps1 has copied
 # the game into build/Release (README.md, "Packages"):
 #   windows  BO1Zombies_windows/   the 64-bit client and dedicated server (Play.bat, Server.bat), zmclient.exe,
-#                                  zmadmin.exe and ffconv.exe
+#                                  zmadmin.exe and ffconv.exe; switch-tools\ (uam.exe, make_dksh_pack.py)
 #   linux    BO1Zombies_linux/     the Linux client and dedicated server (play.sh, server.sh), zmclient, zmadmin,
 #                                  ffconv.exe
 #   switch   BO1Zombies_switch/    an SD card tree: switch/bo1zm/ with the .nro and its data
@@ -31,7 +31,8 @@
 # Switch programs (in --work, on ext4: from /mnt/c every header read waits on 9p), the converted zones when they are
 # missing or older than the converter's sources (ffconv, about 6 minutes, from WSL), shaders.dksh when the
 # shaders.pack it came from changed, ZmAdmin and ZmClient when their sources changed (Nuitka, tools/zmadmin/build.sh,
-# tools/zmclient/build.sh), and ffconv (shipped so that ZmClient converts the player's own zones). The windows package
+# tools/zmclient/build.sh), ffconv (shipped so that ZmClient converts the player's own zones), and uam.exe
+# (tools/uam/build.sh: deko3d's shader compiler for Windows, for a Switch package's shaders.dksh made on Windows). The windows package
 # and the conversion need WSL (they run Windows programs).
 #
 # The packages hold your own game files: keep them for your own devices, never publish them. Those made with
@@ -293,8 +294,22 @@ build_zmclient() { # <linux|windows> <binary>
     tail -1 "$LOGS/zmclient-$1.log"
 }
 
+# uam.exe (tools/uam/build.sh) is built again when its build script is newer than the binary.
+UAM_EXE="$ROOT/build/uam/windows/uam.exe"
+build_uam() {
+    if [ -f "$UAM_EXE" ] && [ ! "$ROOT/tools/uam/build.sh" -nt "$UAM_EXE" ]; then
+        echo "uam.exe up to date"
+        return
+    fi
+    [ "$BUILD" = 1 ] || die "uam.exe is missing or older than tools/uam/build.sh: $UAM_EXE (run without --no-build)"
+    step "windows: building uam.exe (MinGW-w64)"
+    run_logged uam-windows env UAM_WORK="$WORK/uam" "$ROOT/tools/uam/build.sh"
+    tail -1 "$LOGS/uam-windows.log"
+}
+
 if wants windows; then
     [ "$BUILD" = 1 ] && build_windows
+    build_uam
     need "$ROOT/build/win64-msvc/Release/BO1Zombies.exe" "the win64 program"
     build_zmadmin windows "$ROOT/build/zmadmin/windows/zmadmin.exe"
     build_zmclient windows "$ROOT/build/zmclient/windows/zmclient.exe"
@@ -447,6 +462,9 @@ package_windows() {
     cp "$ROOT/build/win64-msvc/Release/BO1Zombies.exe" "$ROOT/build/zmadmin/windows/zmadmin.exe" \
         "$ROOT/build/zmclient/windows/zmclient.exe" "$FFCONV_EXE" "$d/"
     copy_windows_runtimes "$d"
+    mkdir -p "$d/switch-tools"
+    cp "$UAM_EXE" "$ROOT/build/uam/windows/uam-LICENSE.txt" "$ROOT/tools/ffconv/gen/make_dksh_pack.py" \
+        "$d/switch-tools/"
     rsync -a --delete "$ROOT/mods/" "$d/mods/"
     rsync -a "$ROOT/data/main/" "$d/main/"
     if [ "$GAME_DATA" = 1 ]; then game_data "$d" video; bo2_data "$d"; fi
@@ -515,6 +533,10 @@ TAB         en tenant Tab, les zombies en vie et ceux qui restent dans la manche
 ADMIN       zmadmin.exe                      console d'administration du serveur (joueurs, partie, réglages,
             log). Depuis ce dossier, elle lance aussi le serveur avec un mot de passe rcon qu'elle garde.
             zmadmin.exe 192.168.1.20 -p <rcon_password> pilote un serveur distant. ? : aide dans chaque vue.
+SWITCH      switch-tools\uam.exe             le compilateur de shaders de deko3d, pour faire sous Windows le
+            shaders.dksh d'un paquet Switch à partir de votre shaders.pack (Python 3 nécessaire) :
+            python switch-tools\make_dksh_pack.py shaders.pack shaders.dksh --uam switch-tools\uam.exe
+            Copiez ensuite shaders.dksh dans switch\bo1zm\ sur la carte SD, à côté de shaders.pack.
 
 Un fichier launch.cfg posé à côté de BO1Zombies.exe est ajouté à la ligne de commande, par exemple :
     +set cl_autoConnect 192.168.1.20:3074
