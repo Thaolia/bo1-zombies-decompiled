@@ -501,8 +501,10 @@ def _build_tree(boxes, mins, maxs, plane):
         split = math.floor(centres[len(centres) // 2])
         if not lo[axis] < split < hi[axis]:
             split = math.floor((lo[axis] + hi[axis]) / 2.0)
-        front = [i for i in ids if boxes[i][1][axis] > split]
-        back = [i for i in ids if boxes[i][0][axis] < split]
+        # A box touching the plane goes to both sides: a flat one (a level floor's triangle) lying on it would
+        # otherwise reach neither, and the player fell through the floor there.
+        front = [i for i in ids if boxes[i][1][axis] >= split]
+        back = [i for i in ids if boxes[i][0][axis] <= split]
         # A split that leaves either side most of the boxes (large ones crossing it) only multiplies references.
         if max(len(front), len(back)) > SPLIT_KEEP * len(ids):
             return leaf(ids)
