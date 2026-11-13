@@ -190,7 +190,15 @@ Pack-a-Punch. It now runs on the BSP world instead of its own mesh and collision
 
 - `bo2_bsp.py --layout <bo2_zm_nuked.json>` leaves out the brushes inside the layout's cut boxes (the clips at the
   machine spots: 20 brushes) and writes `bo2_zm_nuked_bsp.json`, the layout without its `collision` and `mesh` edits.
-  The doors and debris lose their BO2 props with the mesh: their blockers show MapKit's box instead.
+  Without more, the doors and debris lose their BO2 props with the mesh, and each blocker shows MapKit's box: a plain
+  brown block where a door, a couch or the truck's furniture stood (the user's screenshots, 2026-11-13).
+  `bo2_mesh.py --blockers-only` writes `zm_nuked.blockers.mesh.bin`, the blockers' props alone (15 props of 5 models:
+  doors, couches, armoires, chairs; no world chunk, no placed prop, no sky), and `bo2_bsp.py --blocker-mesh
+  imports/zm_nuked/zm_nuked.blockers.mesh.bin` gives the BSP layout a `mesh` edit of that file and keeps the blockers'
+  `meshGroup`: MapKit draws BO2's doors and furniture until the purchase, as on its own mesh, and the box only collides.
+  `--layout-only` writes that layout without rebuilding the BSP (the same file as a full run). Checked on Windows with
+  the test client: house 2's white door drawn in the doorway (the props there take the BSP's warm model light, as the
+  hedges beside it do), and gone with `mapkit_open_all 1`.
 - `CM_Mapkit_Empty()` meant two things: "the layout supplies the level script, entities and pathnodes" and "there is
   no world". `CM_Mapkit_WorldEmpty()` is the second one, false when the world comes from a BSP. The render, static
   model, collision, physics, PVS, sky and model lighting switches use it.
@@ -792,6 +800,7 @@ starts `+set fs_game mods/mapkit +set bo1_mod_mapkit bo2_zm_nuked +devmap zombie
 
 The native Nuketown goes with it when the `--bo2` folder also holds `usermaps/zombie_bo2nuked/zombie_bo2nuked.ff`
 (the OAT Linker zone after `ffconv`), `main/maps/zombie_bo2nuked.d3dbsp`, `main/images/bo2_*.iwi` and the layout
-`bo2_zm_nuked_bsp.json` (`bo2_bsp.py`, "Props, gameplay and lighting on the native world"). ZmClient offers
+`bo2_zm_nuked_bsp.json` (`bo2_bsp.py`, "Props, gameplay and lighting on the native world"; with `--blocker-mesh`, also
+`mods/mapkit/imports/zm_nuked/zm_nuked.blockers.mesh.bin`). ZmClient offers
 "Mapkit : Nuketown native (Black Ops II, monde BSP)" only when the zone and the BSP are in the package, and adds
 `+set bo1_mod_zones zombie_bo2nuked +set bo1_bspworld maps/zombie_bo2nuked.d3dbsp` to the line.
