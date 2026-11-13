@@ -311,9 +311,19 @@ Nuketown has about 195 000 world vertices before its props).
    own space (BO2's 128-triangle `nodraw` sheet at z 0.2 over the whole map is one, which the player stood on until the
    owner was exported).
 2. **Layout generator** (`tools/bo2/bo2_layout.py <dump> zm_nuked`): 10 zones (a zone's several volumes become one
-   box), 8 spawns, 36 risers, 703 nodes and BO2's 5 254 links between them, 93 traversals, 102 barrier clips, the
+   box), 1 spawn, 36 risers, 703 nodes and BO2's 5 254 links between them, 93 traversals, 102 barrier clips, the
    box, 7 wall buys, 4 perks and Pack-a-Punch. Findings it
    encodes:
+   - **One spawn edit** (2026-11-13), at the centre of BO2's four start points in the first one's zone (the
+     cul-de-sac street), facing their mean yaw. MapKit spreads a spawn edit over the four players, 40 units apart
+     across its facing, and `_zombiemode`'s `coop_player_spawn_placement` puts player *i* on the *i*-th
+     `initial_spawn_points` struct. BO2's 8 points are already one per player, so 8 edits gave 32 points and only the
+     first edit's 4 were used. Their outer ones went into the fences and house walls ("Spawn point entity ... is in
+     solid", 4 of the 32: player 4 of the first edit, at (57, -402), touched a house's player clip; (-310, -359) sat
+     7 units inside `p6_zm_white_fence_64_03`). The doors' unlocked side still comes from all of BO2's start zones. The 6
+     "Spawner ... is in solid" lines are BO2 riser spots below the ground or in a crater: the spawner only holds the
+     zombie until `do_zombie_rise` moves it to its rise spot, and every one of the 36 risers delivers zombies
+     (self-test).
    - BO2's entities are **not on the floor**: its compiler drops pathnodes into its own path data, and the entities
      keep them where the designer put them, 0 to 175 units above it. BO1 links nodes on the floor (`Path_CanLinkNodes`
      ends within 18 units of the target's height): with the raw heights, 0 of 703 nodes linked. Dropped onto the floor

@@ -7,7 +7,8 @@ The dump folder is OAT's output for the zone (it holds maps/mp/<map>.d3dbsp.ents
 an "empty" Five base with the BO2 map's collision (a "collision" edit, PATH under mods/mapkit, default
 imports/<map>/<map>.collision.bin: copy the .bin there in the run folder) and its gameplay, read from the entities:
   - zones: the info_volume player volumes (the volumes of a zone with several become their union box);
-  - spawn: the initial_spawn_points structs;
+  - spawn: one, at the centre of the initial_spawn_points structs of the first one's zone when they face one way,
+    else on the first (MapKit spreads it over the four players);
   - riser: the riser_location structs (BO2 zombies climb out of the ground), in the zone their targetname names;
   - spawner: the spawn_location structs (TranZit's zombies behind its barricades), in the same way;
   - node: every node_pathnode, dropped onto the floor under it (BO2 keeps them where the designer placed them);
@@ -110,6 +111,7 @@ NODE_REACH = 8.0  # a node may sit this far under the surface it belongs to
 WINDOW_MANTLE = 64.0  # a mantle whose middle lies this close to a boarded window is that window's traversal
 WINDOW_WALL_REACH = 80  # a zbarrier's wall lies within this many units in front of it
 WINDOW_SPAWNER = 128.0  # a spawner added for a window stands this far outside it
+SPAWN_AGREE = 0.9       # start points whose yaws' mean resultant length reaches this face one way (within ~25 deg)
 CELL = 256.0
 
 
@@ -584,10 +586,25 @@ def build(ents, col, name, collision, links_file=None):
         return min(zones, key=lambda z: sum((point[k] - (z["mins"][k] + z["maxs"][k]) / 2) ** 2 for k in range(3)))[
             "name"] if zones else ""
 
-    for e in ents:
-        if e.get("targetname") == "initial_spawn_points":
-            p = vec(e["origin"])
-            edits.append({"kind": "spawn", "origin": p, "yaw": yaw(e), "zone": zone_of(p)})
+    # One spawn edit: MapKit spreads it over the four players, 40 units apart across its facing, and _zombiemode puts
+    # player i on the i-th initial_spawn_points struct, so only the first edit's points were ever used. BO2's points
+    # are one per player already; an edit on each spread four more around it, the outer ones into the fences and
+    # house walls beside them ("Spawn point entity ... is in solid"). The edit stands at the centre of the points in
+    # the first point's zone (Nuketown: the cul-de-sac street between them), facing their mean yaw, when they face
+    # about the same way (SPAWN_AGREE); points around a room (TranZit's depot) keep the first point, the one used so far.
+    starts = [e for e in ents if e.get("targetname") == "initial_spawn_points"]
+    start_zones = {zone_of(vec(e["origin"])) for e in starts}  # every BO2 start zone: the doors' unlocked side
+    if starts:
+        zone = zone_of(vec(starts[0]["origin"]))
+        group = [e for e in starts if zone_of(vec(e["origin"])) == zone]
+        sx = sum(math.sin(math.radians(yaw(e))) for e in group)
+        cx = sum(math.cos(math.radians(yaw(e))) for e in group)
+        if math.hypot(sx, cx) / len(group) >= SPAWN_AGREE:
+            origin = [round(sum(vec(e["origin"])[k] for e in group) / len(group), 2) for k in range(3)]
+            facing = round(math.degrees(math.atan2(sx, cx)) % 360.0, 1)
+        else:
+            origin, facing = vec(starts[0]["origin"]), yaw(starts[0])
+        edits.append({"kind": "spawn", "origin": origin, "yaw": facing, "zone": zone})
 
     risers = 0
     for e in ents:
@@ -794,7 +811,7 @@ def build(ents, col, name, collision, links_file=None):
     edits[1].update(mover)
     if cuts:
         edits[0]["cut"] = cuts
-    edits += blocker_edits(ents, submodels, zones, {e["zone"] for e in edits if e["kind"] == "spawn"})
+    edits += blocker_edits(ents, submodels, zones, start_zones)
     edits += barrier_clips(edits, col)
 
     layout = {"name": name, "base": "zombie_pentagon", "empty": True, "edits": edits}
