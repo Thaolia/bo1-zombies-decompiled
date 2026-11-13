@@ -1040,6 +1040,8 @@ void __cdecl    G_InitGame(int levelTime, int randomSeed, int restart, int regis
     memset(g_timed_radius_damage, 0, sizeof(g_timed_radius_damage));
 
     Path_Init(restart);
+    if (restart)
+        G_Mapkit_RestorePathnodeCount(); // mod: mapkit on a world from a BSP (off = no-op)
 
     level.sentients = g_sentients;
     level.actors = g_actors;

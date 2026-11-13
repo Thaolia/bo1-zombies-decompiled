@@ -16,6 +16,7 @@
 #include "pathnode_load_obj.h"
 #include "g_bsp.h"
 #include <qcommon/cm_mapkit.h>
+#include <qcommon/com_bsp_load_obj.h>
 #include <game_mp/g_main_mp.h>
 #include <qcommon/common.h>
 #include <stdlib.h>
@@ -656,6 +657,19 @@ void G_Mapkit_LinkPathnodes()
     const char *verdict = missed ? "FAIL" : "PASS";
     // G_LogPrintf mirrors mapkit checks to the console and includes this native check in the DONE totals.
     G_LogPrintf("mapkit: check pathnodes %s goal lookup finds %d/%d layout nodes (first miss %d)\n", verdict, found, found + missed, firstMiss);
+}
+
+// On a world from a BSP, Path_Shutdown (Path_ShutdownStatic) and Path_Init(restart) set the node count to 0: retail
+// rebuilds its nodes from their node_* entity-string entries, but the layout's nodes are appended on the first load
+// only. A restart (game over -> loadgame_continue -> fast_restart) then left actualNodeCount at 0 while s_mkNodes,
+// its kd tree and the actors' searches still used the layout's nodes: Path_ConvertIndexToNode asserted at the first
+// zombie A*. The array, its links and visibility are intact (an empty base spawns no node_* entity into them); called
+// right after Path_Init so Path_PreSpawnInitPaths resets their dynamic state, as on a zone world's restart.
+void G_Mapkit_RestorePathnodeCount()
+{
+    if (s_mkFirstAdded < 0 || !gameWorldCurrent || gameWorldCurrent->path.nodes != s_mkNodes || !Com_WorldFromBsp())
+        return;
+    gameWorldCurrent->path.nodeCount = (unsigned int)(s_mkFirstAdded + s_mkAddedCount);
 }
 
 // Path_Shutdown clears every node's target/targetname; retail nodes get them back from their node_* entity-string
