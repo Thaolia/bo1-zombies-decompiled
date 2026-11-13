@@ -2,7 +2,8 @@
 """A BO2 map as a native BO1 map: its world BSP and the OAT Linker (T5) project of its zone.
 
     tools/bo2/bo2_bsp.py <dump folder of the zone> <map name> --templates <BO1 wc/ material JSONs> --out <folder>
-        [--collision <BO2COL2 file>] [--name zombie_bo2nuked]
+        [--collision <BO2COL2 file>] [--name zombie_bo2nuked] [--layout <layout> [--blocker-mesh <path>]]
+    tools/bo2/bo2_bsp.py <dump> <map> --out <folder> --layout <layout> [--blocker-mesh <path>] --layout-only
 
 Reads OAT's dump of the BO2 zone (tools/bo2/oat: the world OBJ and .mtl, the BO2COL2 collision, the entities) and
 writes:
@@ -111,11 +112,35 @@ def read_collision(path):
     return materials, brushes, verts, tris
 
 
+def write_bsp_layout(layout, layout_path, out, blocker_mesh):
+    """<out>/<layout>_bsp.json: the layout for this BSP. The BSP draws and collides the world, so the layout keeps its
+    gameplay edits without its collision and mesh edits. Its door and debris edits keep their meshGroup when
+    blocker_mesh (a path under mods/mapkit) names bo2_mesh.py --blockers-only's file: a mesh edit of that file, with
+    the world mesh edit's other keys, draws BO2's doors and furniture until the purchase; without it each blocker
+    shows MapKit's box."""
+    world_mesh = next((e for e in layout["edits"] if e["kind"] == "mesh"), None)
+    edits = []
+    for e in layout["edits"]:
+        if e["kind"] == "mesh" and blocker_mesh:
+            edits.append(dict(e, file=blocker_mesh))
+        elif e["kind"] not in ("collision", "mesh"):
+            edits.append(e)
+    if not (blocker_mesh and world_mesh):
+        for e in edits:
+            e.pop("meshGroup", None)
+    name = os.path.splitext(os.path.basename(layout_path))[0] + "_bsp.json"
+    os.makedirs(out, exist_ok=True)
+    with open(os.path.join(out, name), "w", encoding="utf-8") as f:
+        json.dump(dict(layout, edits=edits), f, indent=1)
+    return name
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("dump", help="OAT's output folder for the zone")
     parser.add_argument("map", help="the BO2 map's name, e.g. zm_nuked")
-    parser.add_argument("--templates", required=True, help="OAT's dump of a BO1 map zone's materials/wc folder")
+    parser.add_argument("--templates", help="OAT's dump of a BO1 map zone's materials/wc folder (needed but with "
+                                            "--layout-only)")
     parser.add_argument("--out", required=True)
     parser.add_argument("--collision", help="a BO2COL2 file (default: the dump's)")
     parser.add_argument("--name", default="zombie_bo2nuked", help="the BO1 map's name (a zombie_ name)")
@@ -124,7 +149,20 @@ def main(argv=None):
                                          "this BSP (without the collision and mesh edits it replaces)")
     parser.add_argument("--models", help="OAT's dump of the zone's xmodels and materials with --model-format GLTF: "
                                          "adds the placed props (bo2_bsp_props.py)")
+    parser.add_argument("--blocker-mesh", help="the doors' and debris' props for the layout's mesh edit, a path "
+                                               "under mods/mapkit (bo2_mesh.py --blockers-only: imports/<map>/"
+                                               "<map>.blockers.mesh.bin); without it the blockers show MapKit's box")
+    parser.add_argument("--layout-only", action="store_true", help="write <out>/<layout>_bsp.json only (--layout)")
     args = parser.parse_args(argv)
+    if args.layout_only:
+        if not args.layout:
+            sys.exit("--layout-only needs --layout")
+        with open(args.layout, encoding="utf-8") as f:
+            name = write_bsp_layout(json.load(f), args.layout, args.out, args.blocker_mesh)
+        print(f"{os.path.join(args.out, name)} written")
+        return 0
+    if not args.templates:
+        sys.exit("--templates is needed (OAT's dump of a BO1 map zone's materials/wc folder)")
     if not args.name.startswith("zombie_"):
         sys.exit("--name must start with zombie_ (a zombies level)")
     base = os.path.join(args.dump, "maps", "mp", f"{args.map}.d3dbsp")
@@ -316,15 +354,7 @@ def main(argv=None):
     bsp.write(bsp_path)
 
     if layout:
-        # The BSP draws and collides the world: the layout keeps its gameplay edits. A blocker's meshGroup named
-        # props of the mesh edit; without it the blocker shows its own box.
-        edits = [e for e in layout["edits"] if e["kind"] not in ("collision", "mesh")]
-        for e in edits:
-            e.pop("meshGroup", None)
-        variant = dict(layout, edits=edits)
-        name = os.path.splitext(os.path.basename(args.layout))[0] + "_bsp.json"
-        with open(os.path.join(args.out, name), "w", encoding="utf-8") as f:
-            json.dump(variant, f, indent=1)
+        write_bsp_layout(layout, args.layout, args.out, args.blocker_mesh)
 
     with open(os.path.join(raw, "maps", args.name + ".gsc"), "w", encoding="latin-1", newline="\n") as f:
         f.write(GSC)

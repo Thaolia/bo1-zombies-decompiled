@@ -2,7 +2,7 @@
 """The drawable world of a BO2 map for MapKit's "mesh" edit: its world OBJ and its placed props (tools/bo2/oat) cut into
 chunks, and their colour maps as IW images.
 
-    tools/bo2/bo2_mesh.py <dump folder of the zone> <map name> --out <run>/mods/mapkit/imports/<map>
+    tools/bo2/bo2_mesh.py <dump folder of the zone> <map name> --out <run>/mods/mapkit/imports/<map> [--blockers-only]
 
 The props are the static models of <map>.d3dbsp.smodels.csv: one model per BO2 xmodel, with its LODs (model_export/
 OBJs, distances from xmodel/<name>.json), drawn once per placement (a placement BO2 lit gets its own copy with the
@@ -29,6 +29,9 @@ and FAR_CELL beyond it (the distant backdrop), so the view culls them and the li
   u32 groupCount, then per group: char[64] name, u32 count, count x u32 instance: the props a door or debris removes
       when bought (BO2's blockers are script models: their doors and furniture, written as instances above); a group
       is named after its triggers' target, the "meshGroup" of the layout's door or debris edit (bo2_layout.py)
+--blockers-only writes <out>/<map>.blockers.mesh.bin instead, in the same format: the blockers' props and groups only
+(no chunks, no placed props, sky -1), for a native map whose BSP draws the world and the props (bo2_bsp.py
+--blocker-mesh): MapKit then draws BO2's doors and furniture there too, until the purchase.
 The output is the player's own game data: keep it out of the repository. docs/BO2_MAPS.md has the procedure.
 """
 import argparse
@@ -554,14 +557,17 @@ def main(argv=None):
     parser.add_argument("--mover", action="append", default=[],
                         help="an xmodel written without a placement, which the engine draws on a moving layout brush "
                              "model (the mesh edit's moverModel: TranZit's veh_t6_civ_bus_zombie); repeatable")
+    parser.add_argument("--blockers-only", action="store_true",
+                        help="write <map>.blockers.mesh.bin: the blockers' props and their groups only (no world, "
+                             "no placed props, no sky), for a map whose BSP draws the rest (bo2_bsp.py --blocker-mesh)")
     args = parser.parse_args(argv)
     base = os.path.join(args.dump, "maps", "mp", f"{args.map}.d3dbsp")
     images = os.path.join(args.dump, "images")
     colour = read_mtl(base + ".mtl", images)
-    positions, uvs, world = read_obj(base + ".obj")
+    positions, uvs, world = ([], [], []) if args.blockers_only else read_obj(base + ".obj")
     groups = {}
     # BO2's lightmaps as the world's vertex colours (bo2_worldlight.py); without the dump's worldlight files, white
-    world_light = read_world_light(base)
+    world_light = None if args.blockers_only else read_world_light(base)
     if world_light:
         corners, info = world_light
         if len(corners) != len(positions):
@@ -580,7 +586,7 @@ def main(argv=None):
         print(f"world light: reference {', '.join(f'{r:.2f}' for r in world_light.reference)}; {stats['splits']} "
               f"triangle splits, {stats['unlit']} triangles without a lightmap; "
               f"{sum(len(t) for t in groups.values())} triangles")
-    else:
+    elif not args.blockers_only:
         print("world light: no worldlight.bin in the dump (rerun tools/bo2/oat's Unlinker): world unlit")
         for material, faces in world:
             groups.setdefault(material, []).extend(
@@ -636,7 +642,7 @@ def main(argv=None):
 
     row_instance = {}
     with open(base + ".smodels.csv", encoding="latin-1") as f:
-        for row_index, row in enumerate(csv.DictReader(f)):
+        for row_index, row in enumerate([] if args.blockers_only else csv.DictReader(f)):
             name = row["model"]
             if add_model(name) < 0:
                 continue
@@ -675,7 +681,7 @@ def main(argv=None):
 
     # brush models that always stand: TranZit's bridge (two sections, walked on, never drawn before)
     standing = 0
-    for e in ents:
+    for e in [] if args.blockers_only else ents:
         if e.get("classname") == "script_brushmodel" and e.get("targetname") in STANDING_BMODELS:
             index = add_bmodel(e)
             if index >= 0:
@@ -715,14 +721,16 @@ def main(argv=None):
         remap = {old: new for new, old in enumerate(used)}
         models = [models[old] for old in used]
         instances = [(remap[model],) + tuple(rest) for model, *rest in instances]
-    print(f"baked light: {lit_placements} placed models lit" if light else
-          "baked light: no smodellight.bin or worldlight.bin in the dump (rerun tools/bo2/oat's Unlinker): props unlit")
+    if not args.blockers_only:
+        print(f"baked light: {lit_placements} placed models lit" if light else
+              "baked light: no smodellight.bin or worldlight.bin in the dump (rerun tools/bo2/oat's Unlinker): props "
+              "unlit")
 
     # the sky: the worldspawn's skybox model, one more model (no placement: the engine draws it around the viewer)
     sky, sky_materials = -1, set()
     worldspawn = next((e for e in read_entities(base + ".ents") if e.get("classname") == "worldspawn"), {})
     sky_name = worldspawn.get("skyboxmodel", "")
-    if sky_name:
+    if sky_name and not args.blockers_only:
         lods = read_lods(args.dump, sky_name)[:1]
         if lods:
             for material, dds in read_mtl(os.path.join(exports, sky_name + ".mtl"), images).items():
@@ -784,7 +792,8 @@ def main(argv=None):
             radius = max(math.dist(origin, p) for p in pts)
             chunks.append((origin, radius, part))
 
-    out_bin = os.path.join(args.out, f"{args.map}.mesh.bin")
+    out_bin = os.path.join(args.out, f"{args.map}.blockers.mesh.bin" if args.blockers_only
+                           else f"{args.map}.mesh.bin")
     tris = verts = surf_count = 0
     model_tris_total = [0]
     with open(out_bin, "wb") as f:
