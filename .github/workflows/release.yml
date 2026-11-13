@@ -137,8 +137,10 @@ jobs:
       - name: Packages
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q clang ninja-build cmake python3 python3-clang python3-venv libsdl2-dev \
-              libncurses-dev mingw-w64 rsync patchelf
+          # mingw-w64: the layout check parses the engine for the win32 and win64 references (layouts.py)
+          sudo apt-get install -y -q ninja-build cmake python3 python3-venv libsdl2-dev libncurses-dev mingw-w64 \
+              rsync patchelf
+          tools/ci/install_llvm.sh 21
       - name: Build BO1Zombies (Linux)
         run: |
           cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang \
@@ -173,16 +175,20 @@ jobs:
     runs-on: ubuntu-24.04
     container: devkitpro/devkita64:latest
     steps:
-      - name: Packages
+      - name: Git
         run: |
           apt-get update -q
-          # mingw-w64: the layout check parses the engine for the win32 and win64 references (layouts.py)
-          apt-get install -y -q git python3 python3-clang clang cmake ninja-build rsync mingw-w64
-          dkp-pacman -Syu --noconfirm
-          dkp-pacman -S --noconfirm --needed switch-sdl2 deko3d
+          apt-get install -y -q git
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - name: Packages
+        run: |
+          # mingw-w64: the layout check parses the engine for the win32 and win64 references (layouts.py)
+          apt-get install -y -q python3 cmake ninja-build rsync mingw-w64
+          tools/ci/install_llvm.sh 21
+          dkp-pacman -Syu --noconfirm
+          dkp-pacman -S --noconfirm --needed switch-sdl2 deko3d
       - uses: actions/download-artifact@v5
         with:
           name: dxsdk
