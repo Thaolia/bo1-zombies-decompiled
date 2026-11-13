@@ -25,6 +25,9 @@
 #include "unzip.h"
 //#include "com_fileaccess.h"
 #include <universal/com_fileaccess.h>
+#if !defined(_WIN32)
+#include <platform/load_profile.h>
+#endif
 #include <malloc.h>
 #include <string.h>
 
@@ -1104,6 +1107,9 @@ extern int unzReadCurrentFile  (unzFile file, void *buf, unsigned len)
             // Removing this line is accurate to COD4 (and BLOPS)
 			//if (s->cur_file_info.compressed_size == pfile_in_zip_read_info->rest_read_compressed)
 
+#if !defined(_WIN32)
+			const Bo1LoadScope storage(BO1_LOAD_IWD_STORAGE);
+#endif
 			if (ZIP_fseek(pfile_in_zip_read_info->file,
 					  pfile_in_zip_read_info->pos_in_zipfile + 
 						 pfile_in_zip_read_info->byte_before_the_zipfile,2)!=0)

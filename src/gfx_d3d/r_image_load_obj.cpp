@@ -695,6 +695,9 @@ char __cdecl _Image_LoadFromFileWithReader(
     int picmip; // [esp+90h] [ebp-8h]
     int readSize; // [esp+94h] [ebp-4h]
 
+#if !defined(_WIN32)
+    const Bo1LoadScope profile(BO1_LOAD_IMAGE_WORK);
+#endif
     streamedMipLevels = 0;
     if ( !image
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_image_load_obj.cpp", 1485, 0, "%s", "image") )
@@ -723,7 +726,14 @@ char __cdecl _Image_LoadFromFileWithReader(
     }
     if ( Com_sprintf(filepath, 0x40u, "%s%s%s", "images/", image->name, ".iwi") >= 0 )
     {
+#if !defined(_WIN32)
+        {
+            const Bo1LoadScope open(BO1_LOAD_IMAGE_OPEN);
+            fileSize = OpenFileRead(filepath, &fileHandle);
+        }
+#else
         fileSize = OpenFileRead(filepath, &fileHandle);
+#endif
         if ( fileSize >= 0 )
         {
             if ( (unsigned int)fileSize < 0x30
@@ -767,7 +777,15 @@ char __cdecl _Image_LoadFromFileWithReader(
                         }
                         readSize = fileHeader.fileSizeForPicmip[picmip > 0] - 48;
                         imageData = Image_AllocTempMemory(readSize);
+#if !defined(_WIN32)
+                        {
+                            const Bo1LoadScope read(BO1_LOAD_IMAGE_READ);
+                            v4 = FS_Read(imageData, readSize, fileHandle);
+                        }
+                        g_bo1ImageBytes += v4 + 48u;
+#else
                         v4 = FS_Read(imageData, readSize, fileHandle);
+#endif
                         if ( v4 == readSize )
                         {
                             FS_FCloseFile(fileHandle);

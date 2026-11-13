@@ -386,6 +386,8 @@ extern "C" int _putenv(const char *envstring);
 // (FS_ReplaceSeparators), and opens in text mode (CR LF read as LF, LF written as CR LF) unless the mode says 'b'.
 // Engine code opening such a path calls this instead on posix; the platform layer defines it (win32_files.cpp).
 extern "C" FILE *bo1_fopen(const char *path, const char *mode);
+// After a rename outside the platform layer: the layer forgets the directory listings it caches (win32_files.cpp).
+extern "C" void bo1_paths_changed(void);
 // The MSVC CRT's error reporting switches. This C library always reports to stderr and never shows a dialog, which is
 // what the engine selects with them, so they only keep and return the setting (msvc_crt.cpp).
 #define _OUT_TO_DEFAULT 0

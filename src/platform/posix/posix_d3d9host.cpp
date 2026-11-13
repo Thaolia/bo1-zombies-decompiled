@@ -126,7 +126,9 @@ bool SaveFile(const char *path, const void *data, size_t size)
     if (!file)
         return false;
     const bool written = fwrite(data, 1, size, file) == size;
-    return fclose(file) == 0 && written;
+    const bool closed = fclose(file) == 0;
+    Bo1_PathsChanged();
+    return closed && written;
 }
 
 void Log(const char *line)

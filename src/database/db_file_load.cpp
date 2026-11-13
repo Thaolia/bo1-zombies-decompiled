@@ -539,11 +539,15 @@ void __cdecl DB_LoadXFileInternal()
             ms[k] = Bo1_LoadTake(Bo1LoadKind(k), &n[k]);
         Com_Printf(10,
                    "load profile '%s': zone reads %.0f ms (%u), inflate %.0f ms (%u), shader pack reads %.0f ms (%u), "
-                   "shader creation %.0f ms (%u), image files %.0f ms (%u), texture uploads %.0f ms (%u)\n",
+                   "shader creation %.0f ms (%u), image files %.0f ms (%u, own work %.0f ms: open %.0f ms, read %.0f ms "
+                   "for %.1f MB; iwd storage reads %.0f ms (%u)), texture uploads %.0f ms (%u), loading screen %.0f ms (%u frames)\n",
                    g_load.filename, ms[BO1_LOAD_READ], n[BO1_LOAD_READ], ms[BO1_LOAD_INFLATE], n[BO1_LOAD_INFLATE],
                    ms[BO1_LOAD_SHADER_READ], n[BO1_LOAD_SHADER_READ], ms[BO1_LOAD_SHADER_CREATE],
                    n[BO1_LOAD_SHADER_CREATE], ms[BO1_LOAD_IMAGE_FILE], n[BO1_LOAD_IMAGE_FILE],
-                   ms[BO1_LOAD_TEXTURE_UPLOAD], n[BO1_LOAD_TEXTURE_UPLOAD]);
+                   ms[BO1_LOAD_IMAGE_WORK], ms[BO1_LOAD_IMAGE_OPEN], ms[BO1_LOAD_IMAGE_READ],
+                   double(g_bo1ImageBytes.exchange(0)) / (1024.0 * 1024.0), ms[BO1_LOAD_IWD_STORAGE],
+                   n[BO1_LOAD_IWD_STORAGE], ms[BO1_LOAD_TEXTURE_UPLOAD],
+                   n[BO1_LOAD_TEXTURE_UPLOAD], ms[BO1_LOAD_SCREEN], n[BO1_LOAD_SCREEN]);
     }
 #endif
     if ( (g_load.flags & 1) != 0 )

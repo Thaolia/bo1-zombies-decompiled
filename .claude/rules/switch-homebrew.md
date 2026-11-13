@@ -29,6 +29,11 @@ it for plain C/C++ projects. Each rule cost at least one build/test round trip t
   empty string there, silently, and every check of the command line fails (BO1's `bo1_mod_zones` pool, memory and
   stream sizes stayed retail: "Exceeded limit of 1000 'xmodel' assets"). Hand the launch arguments to the shim before
   `WinMain`, and set again what a static initialiser read before that (BO-Zombies_switch, 2026-11-12).
+- A case-insensitive path shim (Windows code on a case-sensitive FS) must not list a directory per missing file: the
+  console's SD makes every `stat`/`readdir` an IPC, and an engine that probes each search path directory for each
+  asset spent 21-25 ms per image that way (BO1: 41 of 45 s of Five's images on Ryujinx). Cache each directory's
+  listing once, clear it on every create/delete/rename, fail a lookup absent from a cached listing without I/O, and
+  measure an open separately from its reads before blaming decompression (BO-Zombies_switch, 2026-11-13).
 - Run in **application mode** (title override: hold R while launching a game); applet mode
   (album) gives a fraction of the memory. Detect it with `appletGetAppletType()` and refuse
   cleanly instead of crashing later.

@@ -16,11 +16,18 @@ enum Bo1LoadKind
     BO1_LOAD_SHADER_CREATE,  // backend shader creation
     BO1_LOAD_IMAGE_FILE,     // Image_LoadFromFile: iwd read, decode and upload together
     BO1_LOAD_TEXTURE_UPLOAD, // texture uploads to the backend (inside the image loads, and from the zone itself)
+    BO1_LOAD_IMAGE_WORK,     // the image file's own work on the render thread (read, decode, upload), inside the
+                             // above: the rest of BO1_LOAD_IMAGE_FILE is the wait for the render thread
+    BO1_LOAD_SCREEN,         // loading screen frames the render thread draws between resource requests
+    BO1_LOAD_IMAGE_OPEN,     // the image file's lookup and open (FS_FOpenFileRead: the search path, the iwd entry)
+    BO1_LOAD_IMAGE_READ,     // the image file's reads (FS_Read: the iwd's inflate and the storage reads)
+    BO1_LOAD_IWD_STORAGE,    // seeks and reads of iwd files (unzReadCurrentFile's 16 KB blocks), any file of an iwd
     BO1_LOAD_KINDS
 };
 
 inline std::atomic<uint64_t> g_bo1LoadNs[BO1_LOAD_KINDS];
 inline std::atomic<uint32_t> g_bo1LoadCount[BO1_LOAD_KINDS];
+inline std::atomic<uint64_t> g_bo1ImageBytes; // bytes the image files' reads returned
 
 inline uint64_t Bo1_LoadNowNs()
 {
