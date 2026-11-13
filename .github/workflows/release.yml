@@ -251,25 +251,27 @@ jobs:
           ls -l runtimes
           WINDOWS_RUNTIMES="$PWD/runtimes" tools/make_dist.sh --no-build --no-game-data --archive none \
               --work "$PWD/work" --out "$PWD/dist" windows linux switch
-      - name: One archive with the three packages
-        id: archive
+      - name: One archive per platform
         env:
           TAG: ${{ inputs.tag }}
         run: |
           case "$TAG" in *[!A-Za-z0-9._-]*|"") echo "tag: letters, digits, '.', '_' or '-' only"; exit 1 ;; esac
-          name="BO1Zombies_$TAG.zip"
           cd dist
-          zip -q -r -y "$name" BO1Zombies_windows_nodata BO1Zombies_linux_nodata BO1Zombies_switch_nodata
-          ls -l "$name"
-          echo "file=dist/$name" >> "$GITHUB_OUTPUT"
+          for platform in windows linux switch; do
+              zip -q -r -y "BO1Zombies_${TAG}_$platform.zip" "BO1Zombies_${platform}_nodata"
+          done
+          ls -l *.zip
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: BO1 Zombies ${{ inputs.tag }}
+          name: BO1 Zombies Enhanced edition version ${{ inputs.tag }}
           prerelease: ${{ inputs.prerelease }}
-          files: ${{ steps.archive.outputs.file }}
+          files: |
+            dist/BO1Zombies_${{ inputs.tag }}_windows.zip
+            dist/BO1Zombies_${{ inputs.tag }}_linux.zip
+            dist/BO1Zombies_${{ inputs.tag }}_switch.zip
           body: |
             Windows, Linux and Switch builds of the port, from ${{ github.sha }}.
 

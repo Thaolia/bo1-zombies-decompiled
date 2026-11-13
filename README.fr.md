@@ -199,8 +199,9 @@ décrit. Les paquets contiennent vos propres fichiers de jeu : gardez-les pour v
 
 ### Release sur GitHub
 
-`.github/workflows/release.yml` compile les trois programmes sur les machines de GitHub et publie une release avec une
-archive des trois paquets `_nodata`. Elle ne se lance qu'à la main : Actions, « Release », « Run workflow », avec le
+`.github/workflows/release.yml` compile les trois programmes sur les machines de GitHub et publie une release, « BO1 Zombies
+Enhanced edition version <tag> », avec une archive par plateforme (`BO1Zombies_<tag>_windows.zip`, `_linux`,
+`_switch`), chacune le paquet `_nodata`. Elle ne se lance qu'à la main : Actions, « Release », « Run workflow », avec le
 tag à créer (par exemple `v0.1.0`). Elle télécharge le SDK DirectX de juin 2010 chez Microsoft, compile `win64-msvc`,
 ZmClient et ZmAdmin (Nuitka) sous Windows, le programme Linux, `ffconv.exe` et ZmClient/ZmAdmin Linux sous Ubuntu, le
 `.nro` dans le conteneur `devkita64` de devkitPro, puis empaquette le tout avec
