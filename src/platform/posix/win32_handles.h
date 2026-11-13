@@ -126,6 +126,8 @@ FILETIME Bo1_FileTimeFromUnix(time_t seconds, long nanoseconds);
 void Bo1_CaptureContext(CONTEXT *context, const ucontext_t *uc);
 // Windows path to a POSIX one: backslashes become slashes.
 std::string Bo1_PosixPath(const char *path);
+// Forgets the directory listings Bo1_PosixPath caches: call it after changing the file system outside this layer.
+void Bo1_PathsChanged();
 // Runs the completion routines ReadFileEx queued on this thread (an alertable wait does it). Returns how many ran.
 int Bo1_RunQueuedCompletions();
 void Bo1_QueueCompletion(LPOVERLAPPED_COMPLETION_ROUTINE routine, DWORD error, DWORD bytes, LPOVERLAPPED overlapped);

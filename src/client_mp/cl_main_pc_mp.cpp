@@ -1304,7 +1304,11 @@ void __cdecl CL_WWWDownload()
             cls.download = 0;
             FS_BuildOSPath((char *)fs_homepath->current.string, 0, cls.originalDownloadName, to_ospath);
             remove(to_ospath);
-            if ( rename(cls.downloadTempName, to_ospath) )
+            const int renameFailed = rename(cls.downloadTempName, to_ospath);
+#if !defined(_WIN32)
+            bo1_paths_changed(); // the platform layer caches directory listings
+#endif
+            if ( renameFailed )
             {
                 FS_CopyFile(cls.downloadTempName, to_ospath);
                 remove(cls.downloadTempName);

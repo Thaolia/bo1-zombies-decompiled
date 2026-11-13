@@ -106,7 +106,11 @@ void __cdecl FS_SV_Rename(char *from, char *to, char *dir)
     FS_BuildOSPath((char *)basepath, dir, to, to_ospath);
     if ( fs_debug->current.integer )
         Com_Printf(10, "FS_SV_Rename: %s --> %s\n", from_ospath, to_ospath);
-    if ( rename(from_ospath, to_ospath) )
+    const int renameFailed = rename(from_ospath, to_ospath);
+#if !defined(_WIN32)
+    bo1_paths_changed(); // the platform layer caches directory listings
+#endif
+    if ( renameFailed )
     {
         FS_CopyFile(from_ospath, to_ospath);
         FS_Remove(from_ospath);

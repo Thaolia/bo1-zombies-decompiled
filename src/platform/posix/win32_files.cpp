@@ -23,7 +23,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // fopencookie's seek callback takes off_t* on newlib (Switch, without __LARGE64_FILES) but off64_t* on glibc; the
@@ -272,31 +274,48 @@ Bo1Find::~Bo1Find()
         closedir(dir);
 }
 
-// A directory entry of `dir` whose name equals `name` ignoring case, or empty when there is none.
-static std::string MatchIgnoringCase(const std::string &dir, const std::string &name)
+// Each directory's entries, listed once: lower-case name -> name on disk (empty map: no such directory). Resolving a
+// path then needs no stat and no listing: on the console's SD each costs an IPC, and the engine's search path looks
+// for every image in every directory of fs_game, the mods and main before its iwds. Listing a directory again for
+// every missing file cost 21-25 ms per image (41 s of Five's 45 s of image files on Ryujinx, 2026-11-13). Every
+// change this layer makes to the file system clears the cache (Bo1_PathsChanged); a file another writer creates is
+// still found under its exact name (Bo1_PosixPath keeps a component it cannot match as given).
+namespace
 {
-    DIR *d = opendir(dir.empty() ? "." : dir.c_str());
-    if (!d)
-        return std::string();
-    std::string found;
-    for (dirent *e = readdir(d); e; e = readdir(d))
-    {
-        if (!strcasecmp(e->d_name, name.c_str()))
-        {
-            found = e->d_name;
-            break;
-        }
-    }
-    closedir(d);
-    return found;
+std::mutex s_dirMutex;
+std::unordered_map<std::string, std::unordered_map<std::string, std::string>> s_dirCache;
+
+std::string LowerCase(const std::string &name)
+{
+    std::string out = name;
+    for (char &c : out)
+        c = (char)tolower((unsigned char)c);
+    return out;
 }
 
-// The engine spells paths as Windows' case-insensitive file system accepts them; a case-sensitive one (ext4, the
-// Switch SD) does not. Convert '\\' to '/', then resolve each existing component to its real case as Windows would
-// (e.g. the engine's `zone/Common` to the `zone/common` on disk). A component that does not exist is kept as given,
-// so a new file or directory keeps its intended case. The exact path is tried first, so a matching case costs one
-// stat and nothing lists a directory.
-std::string Bo1_PosixPath(const char *path)
+// The real name of `name` in `dir`, or empty when the directory holds no such entry. s_dirMutex held.
+std::string CachedMatch(const std::string &dir, const std::string &name)
+{
+    auto it = s_dirCache.find(dir);
+    if (it == s_dirCache.end())
+    {
+        std::unordered_map<std::string, std::string> entries;
+        // a device's root ("sdmc:") is listed as "sdmc:/"
+        const std::string listed = dir.empty() ? "." : dir.back() == ':' ? dir + "/" : dir;
+        if (DIR *d = opendir(listed.c_str()))
+        {
+            for (dirent *e = readdir(d); e; e = readdir(d))
+                entries.emplace(LowerCase(e->d_name), e->d_name);
+            closedir(d);
+        }
+        it = s_dirCache.emplace(dir, std::move(entries)).first;
+    }
+    const auto found = it->second.find(LowerCase(name));
+    return found == it->second.end() ? std::string() : found->second;
+}
+
+// Bo1_PosixPath's work: also whether every component was found.
+std::string ResolvePath(const char *path, bool *exists)
 {
     std::string converted = path;
     for (char &c : converted)
@@ -304,8 +323,8 @@ std::string Bo1_PosixPath(const char *path)
         if (c == '\\')
             c = '/';
     }
-    struct stat st;
-    if (converted.empty() || lstat(converted.c_str(), &st) == 0)
+    *exists = true;
+    if (converted.empty())
         return converted;
     // The root to resolve from: a POSIX-absolute path starts with '/', and a devoptab device ("sdmc:/...",
     // "romfs:/...", libnx/newlib) with its "name:" prefix, which never starts with '/'. Everything else is relative
@@ -313,17 +332,23 @@ std::string Bo1_PosixPath(const char *path)
     // Sys_ListFiles builds for the iwd scan), mangling "sdmc:" and leaving SD directory listings empty.
     std::string result;
     size_t i = 0;
+    bool relative = false;
     const size_t colon = converted.find(':');
     if (colon != std::string::npos && colon < converted.find('/'))
     {
         result = converted.substr(0, colon + 1);
         i = colon + 1;
     }
+    else if (converted[0] == '/')
+    {
+        result = "/";
+    }
     else
     {
-        result = converted[0] == '/' ? "/" : ".";
+        result = ".";
+        relative = true;
     }
-    bool stopped = false;
+    std::lock_guard<std::mutex> lock(s_dirMutex);
     for (; i < converted.size();)
     {
         while (i < converted.size() && converted[i] == '/')
@@ -334,32 +359,58 @@ std::string Bo1_PosixPath(const char *path)
         const std::string comp = converted.substr(i, slash == std::string::npos ? std::string::npos : slash - i);
         i = slash == std::string::npos ? converted.size() : slash;
         const std::string sep = result.back() == '/' ? "" : "/";
-        if (!stopped)
+        if (*exists)
         {
-            const std::string candidate = result + sep + comp;
-            if (lstat(candidate.c_str(), &st) == 0)
-            {
-                result = candidate;
-                continue;
-            }
-            const std::string match = MatchIgnoringCase(result, comp);
+            const std::string match = comp == "." || comp == ".." ? comp : CachedMatch(result, comp);
             if (!match.empty())
             {
                 result = result + sep + match;
                 continue;
             }
-            stopped = true;
+            *exists = false;
         }
         result = result + sep + comp;
     }
-    return result;
+    // a relative path stays relative, as the engine gave it
+    return relative && result.compare(0, 2, "./") == 0 ? result.substr(2) : result;
+}
+} // namespace
+
+// The engine spells paths as Windows' case-insensitive file system accepts them; a case-sensitive one (ext4, the
+// Switch SD) does not. Convert '\\' to '/', then resolve each existing component to its real case as Windows would
+// (e.g. the engine's `zone/Common` to the `zone/common` on disk). A component that does not exist is kept as given,
+// so a new file or directory keeps its intended case.
+std::string Bo1_PosixPath(const char *path)
+{
+    bool exists;
+    return ResolvePath(path, &exists);
+}
+
+void Bo1_PathsChanged()
+{
+    std::lock_guard<std::mutex> lock(s_dirMutex);
+    s_dirCache.clear();
 }
 
 extern "C" {
 
+void bo1_paths_changed(void)
+{
+    Bo1_PathsChanged();
+}
+
 FILE *bo1_fopen(const char *path, const char *mode)
 {
-    const std::string posixPath = Bo1_PosixPath(path);
+    bool exists;
+    const std::string posixPath = ResolvePath(path, &exists);
+    const bool writes = strpbrk(mode, "wa+") != nullptr;
+    if (writes)
+        Bo1_PathsChanged();
+    else if (!exists)
+    {
+        errno = ENOENT;
+        return nullptr;
+    }
     if (strchr(mode, 'b'))
         return fopen(posixPath.c_str(), mode);
     std::string binaryMode;
@@ -417,7 +468,15 @@ HANDLE CreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD, LPSECURITY_A
         Bo1_SetLastError(ERROR_INVALID_PARAMETER);
         return INVALID_HANDLE_VALUE;
     }
-    const std::string path = Bo1_PosixPath(lpFileName);
+    bool exists;
+    const std::string path = ResolvePath(lpFileName, &exists);
+    if (flags & (O_CREAT | O_TRUNC) || write)
+        Bo1_PathsChanged();
+    else if (!exists)
+    {
+        Bo1_SetLastError(ERROR_FILE_NOT_FOUND);
+        return INVALID_HANDLE_VALUE;
+    }
     const bool existed = access(path.c_str(), F_OK) == 0;
     const int fd = open(path.c_str(), flags, 0666);
     if (fd < 0)
@@ -551,6 +610,7 @@ DWORD GetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh)
 
 BOOL DeleteFileA(LPCSTR lpFileName)
 {
+    Bo1_PathsChanged();
     if (unlink(Bo1_PosixPath(lpFileName).c_str()))
     {
         Bo1_SetLastError(Bo1_ErrorFromErrno(errno));
@@ -561,6 +621,7 @@ BOOL DeleteFileA(LPCSTR lpFileName)
 
 BOOL CreateDirectoryA(LPCSTR lpPathName, LPSECURITY_ATTRIBUTES)
 {
+    Bo1_PathsChanged();
     if (mkdir(Bo1_PosixPath(lpPathName).c_str(), 0777))
     {
         Bo1_SetLastError(errno == ENOENT ? ERROR_PATH_NOT_FOUND : Bo1_ErrorFromErrno(errno));
@@ -571,6 +632,7 @@ BOOL CreateDirectoryA(LPCSTR lpPathName, LPSECURITY_ATTRIBUTES)
 
 BOOL RemoveDirectoryA(LPCSTR lpPathName)
 {
+    Bo1_PathsChanged();
     if (rmdir(Bo1_PosixPath(lpPathName).c_str()))
     {
         Bo1_SetLastError(Bo1_ErrorFromErrno(errno));
@@ -760,6 +822,7 @@ int _findclose(intptr_t handle)
 
 int _mkdir(const char *dirname)
 {
+    Bo1_PathsChanged();
     return mkdir(Bo1_PosixPath(dirname).c_str(), 0777);
 }
 

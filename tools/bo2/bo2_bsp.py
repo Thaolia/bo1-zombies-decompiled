@@ -32,7 +32,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import d3dbsp  # noqa: E402
-from bo2_layout import read_entities  # noqa: E402
+from bo2_layout import Collision, read_entities, zone_edits  # noqa: E402
 from bo2_bsp_props import PropModels, place_props, prop_collision  # noqa: E402
 from bo2_mesh import (FLAG_ALPHA_TEST, FLAG_BLEND, FLAG_DECAL, blend_flags, dds_to_iwi, image_name,  # noqa: E402
                       read_mtl, read_obj, skipped)
@@ -219,6 +219,20 @@ def main(argv=None):
         bsp.add_lightmap(bo2_bsp_light.lightmap_bytes(baked[lmap]) if lmap in baked
                          else bo2_bsp_light.white_lightmap_bytes())
 
+    # Model lighting: a light grid over the play area (its zones) from BO2's light, and the sun on the same scale
+    grid = None
+    if world_light and baked:
+        bsp.sun_color = bo2_bsp_light.bake_sun_colour(world_light)
+        light_index = {world_light.sun_index: d3dbsp.SUN_PRIMARY_LIGHT}
+        light_index.update(bo2_bsp_light.add_lamps(bsp, world_light))
+        zones = zone_edits(read_entities(base + ".ents"), Collision(args.collision or base + ".collision.bin").submodels)
+        if zones:
+            grid = bo2_bsp_light.light_grid(world_light, bake_tris, [min(z["mins"][k] for z in zones) for k in range(3)],
+                                            [max(z["maxs"][k] for z in zones) for k in range(3)],
+                                            light_index, d3dbsp.NO_PRIMARY_LIGHT)
+        if grid:
+            bsp.set_light_grid(*grid)
+
     # Collision: the world's brushes and terrain (owner 0); submodels (doors) wait for the gameplay step
     col_path = args.collision or base + ".collision.bin"
     cmats, brushes, verts, tris = read_collision(col_path)
@@ -330,6 +344,12 @@ def main(argv=None):
     nodes, leafs, leafbrushes, partitions, aabbs = bsp.tree_stats
     print(f"lightmaps: {len(lightmap_of)} ({len(baked)} baked from BO2's, reference "
           f"{', '.join(f'{r:.2f}' for r in world_light.reference) if world_light else '-'})")
+    if grid:
+        g_mins, g_maxs, g_entries, g_colours = grid
+        print(f"light grid: {g_maxs[0] - g_mins[0] + 1} x {g_maxs[1] - g_mins[1] + 1} x {g_maxs[2] - g_mins[2] + 1} "
+              f"points, {len(g_colours)} colours, {sum(1 for e in g_entries if e[1] == d3dbsp.SUN_PRIMARY_LIGHT)} "
+              f"in the sun, {sum(1 for e in g_entries if e[1] > d3dbsp.SUN_PRIMARY_LIGHT)} under a lamp ({len(bsp.lights)} "
+              f"lamps); sun colour {', '.join(f'{c:.2f}' for c in bsp.sun_color)}")
     print(f"{bsp_path}: {len(zone_materials)} materials, {tri_total} triangles in {len(bsp.soups)} surfaces "
           f"({skipped_names} materials left out, {len(no_map)} without a colour map, {len(bad_image)} with an image "
           f"the engine cannot take); {world_brushes} brushes, {len(coll_tris)} terrain triangles in {partitions} "

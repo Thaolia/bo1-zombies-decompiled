@@ -33,8 +33,12 @@ The decompiled engine still has the whole BSP loader (`com_bsp_load_obj.cpp`, `c
 `r_bsp_load_obj.cpp`, `pathnode_load_obj.cpp`; lump ids in `com_bsp_load_obj.h`), used when `useFastFile` is 0. The
 `bspworld` branch reads a map's render world from a BSP with fastfiles on: `+set bo1_bspworld maps/<name>.d3dbsp`
 (`LoadWorld`, `cl_cgame_mp.cpp`) loads the BSP, its primary lights, water and burnable data into `comWorld`, builds the
-`GfxWorld` from it on the main thread (`g_bspWorldLoading` lets `Image_Create*_PC` create the lightmap and probe
-textures there) and unloads it. With `asset_viewer.d3dbsp` on Kino every load step passes (materials, lights,
+`GfxWorld` from it on the main thread and unloads it. Its lightmap and probe textures and its world vertex buffer
+are made on the render thread (`Image_Generate2D_OnRenderThread`, `Image_GenerateCube_OnRenderThread`,
+`RB_Resource_LoadVertexBuffer`, each followed by `RB_Resource_Flush`): the zombies device is not
+`D3DCREATE_MULTITHREADED` (`r_multithreaded_device 0`), and creating them from the main thread while the render
+thread presented the loading screen froze the game now and then at "Loading nodes and leafs" (2026-11-13: Present
+waited forever inside `d3d9.dll` holding `CRITSECT_DBHASH`, the main thread waited for that lock). With `asset_viewer.d3dbsp` on Kino every load step passes (materials, lights,
 lightmaps, light grid, surfaces, cull groups, AABB trees, cells, portals, nodes, entities, probes; version 43 probes
 are widened to the version 45 layout) and the game starts; it then stops on Kino's brush model `*8`, which the test
 BSP does not have.
@@ -200,6 +204,14 @@ Pack-a-Punch. It now runs on the BSP world instead of its own mesh and collision
   (`Path_LoadPaths`), found no `LUMP_PATHCONNECTIONS` in ours and erased every link (`Path_ErasePaths`). Zombies then
   could not find a path and the MapKit self-test's client stood still. It now skips that read on a MapKit empty base.
   The self-test's door check treats a layout on a BSP world as an imported map (doorway links, not zone links).
+- The layout's nodes survive a restart (2026-11-13). On a BSP world `Path_Shutdown` (`Path_ShutdownStatic`) and
+  `Path_Init(restart)` set the node count to 0, since retail rebuilds the nodes from the entity string. The layout's
+  nodes are appended on the first load only, so after a game over (`loadgame_continue` -> fast restart)
+  `actualNodeCount` stayed 0. The kd tree still found layout nodes, and the first zombie A* asserted
+  (`pathnode.cpp(1961)`, "705 not in [0, 0)"). This happened on every death on native Nuketown: 4 runs out of 4 with
+  the headless client, which has no god mode. `G_Mapkit_RestorePathnodeCount`, called right after `Path_Init` on a
+  restart, gives the count back: 4 runs out of 4 clean, two of them with a second game over (the zombies reached the
+  player again).
 - MapKit's self-test (`+set mapkit_selftest 1` with the test client, Linux headless, timescale 4) passes 106 of 106
   checks on the BSP world, as on the MapKit mesh: every door and debris (their doorway links cut, then given back),
   the four perks, the seven wall buys, the box, Pack-a-Punch, the ten zones, and a zombie out of each of the 36 risers
@@ -227,7 +239,21 @@ Pack-a-Punch. It now runs on the BSP world instead of its own mesh and collision
   light goes into the first half of BO1's lightmap; the second half and the sun visibility stay 0, since BO2's sun is
   already in it. A fourth, white lightmap serves the lit surfaces BO2 drew without one.
 - Models: a world without a light grid now takes MapKit's flat ground lighting. The empty grid lit every model with
-  one stray colour (cyan).
+  one stray colour (cyan). That flat grey plus BO1's sun drew Nuketown's props nearly white in D3D9.
+- The light grid (`bo2_bsp_light.light_grid`, written by `d3dbsp.set_light_grid` as the version 43 loader reads it):
+  a point every 32 units across and 64 up over the zones plus 1 024 units (199 x 123 x 25 on Nuketown, 2 078
+  colours). Each point takes BO2's light of the floor under it without the sun (the lightmap's first slice plus half
+  its directional second slice) over the same reference as the lightmaps, at least the mean of the floors 64 units
+  around it (a bus or a rock lit from the floor its own shadow darkens came out black) and at least 0.12; the sun
+  primary light where most of those floors see BO2's sun. BO1's sun takes BO2's sun colour over the reference
+  (0.56, 0.73, 0.75), so sunlit ground and a model facing the sun match.
+- The lamps: BO2's 16 spots and cube-lit lamps (`<map>.d3dbsp.lights.csv`) are the BSP's primary lights 2 to 17
+  (`bo2_bsp_light.add_lamps`, `d3dbsp.add_primary_light`: spots stay spots, the lamps become omni lights, colours
+  over the reference, no shadow map, `white_light` as Kino's spots, read from its zone). The lightmaps already hold
+  their light; a light grid point takes the primary light of its floor in BO2 (the sun or a lamp) when that light
+  reaches it, by majority over the floors around it: 1 255 points sit under a lamp, the houses' and the garage's.
+  The BSP then has no light regions: with them (`hasLightRegions`), the engine replaces a grid entry's lamp by the
+  caller's nearest light (`R_GetLightingAtPoint`).
 - The sky: BO2's sky model (`skybox_dlc0_zm_nuketown`) is the worldspawn's `skyboxmodel`, which BO1 draws around the
   viewer, its material a copy of `zombie_theater`'s `mtl_skybox_zombie_theater` (`mc_sky_cubemap_hdr`) with BO2's
   cube map.
@@ -285,9 +311,19 @@ Nuketown has about 195 000 world vertices before its props).
    own space (BO2's 128-triangle `nodraw` sheet at z 0.2 over the whole map is one, which the player stood on until the
    owner was exported).
 2. **Layout generator** (`tools/bo2/bo2_layout.py <dump> zm_nuked`): 10 zones (a zone's several volumes become one
-   box), 8 spawns, 36 risers, 703 nodes and BO2's 5 254 links between them, 93 traversals, 102 barrier clips, the
+   box), 1 spawn, 36 risers, 703 nodes and BO2's 5 254 links between them, 93 traversals, 102 barrier clips, the
    box, 7 wall buys, 4 perks and Pack-a-Punch. Findings it
    encodes:
+   - **One spawn edit** (2026-11-13), at the centre of BO2's four start points in the first one's zone (the
+     cul-de-sac street), facing their mean yaw. MapKit spreads a spawn edit over the four players, 40 units apart
+     across its facing, and `_zombiemode`'s `coop_player_spawn_placement` puts player *i* on the *i*-th
+     `initial_spawn_points` struct. BO2's 8 points are already one per player, so 8 edits gave 32 points and only the
+     first edit's 4 were used. Their outer ones went into the fences and house walls ("Spawn point entity ... is in
+     solid", 4 of the 32: player 4 of the first edit, at (57, -402), touched a house's player clip; (-310, -359) sat
+     7 units inside `p6_zm_white_fence_64_03`). The doors' unlocked side still comes from all of BO2's start zones. The 6
+     "Spawner ... is in solid" lines are BO2 riser spots below the ground or in a crater: the spawner only holds the
+     zombie until `do_zombie_rise` moves it to its rise spot, and every one of the 36 risers delivers zombies
+     (self-test).
    - BO2's entities are **not on the floor**: its compiler drops pathnodes into its own path data, and the entities
      keep them where the designer put them, 0 to 175 units above it. BO1 links nodes on the floor (`Path_CanLinkNodes`
      ends within 18 units of the target's height): with the raw heights, 0 of 703 nodes linked. Dropped onto the floor

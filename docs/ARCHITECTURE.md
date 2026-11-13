@@ -203,9 +203,12 @@ time.
     alone at no address reserves too, as PMem allocates); `VirtualQuery` reports the regions `Z_VirtualFree` walks;
   - files: paths arrive with `\` separators (`FS_ReplaceSeparators`) and are converted at the boundary;
     `ReadFileEx` reads at once and queues the completion; directory searches match case-insensitively, as Windows
-    does; `bo1_fopen` (the engine's `FileWrapper_Open`) adds MSVC's text mode; `GetModuleFileNameA` returns a `\`
-    path, which the engine takes apart; `GetCommandLineA` reads `/proc/self/cmdline`, since static initialisers ask
-    for it before `main()`;
+    does; `Bo1_PosixPath` resolves a path's case from directory listings it caches (cleared on every change the
+    layer makes, and by `bo1_paths_changed()` after an engine `rename`), and a read of a file absent from a listed
+    directory fails without I/O; `bo1_fopen` (the engine's `FileWrapper_Open`) adds MSVC's text mode;
+    `GetModuleFileNameA` returns a `\` path, which the engine takes apart; `GetCommandLineA` reads
+    `/proc/self/cmdline`, since static initialisers ask for it before `main()` (on the Switch, which has no `/proc`,
+    `launch.cfg`'s arguments, which `switch_main` hands over before `WinMain`);
   - crashes: `SetUnhandledExceptionFilter` installs signal handlers that hand SIGSEGV, SIGBUS, SIGILL, SIGFPE and
     SIGTRAP (`__debugbreak`) to the filter as the matching `EXCEPTION_RECORD` with the registers, then end with the
     signal's default action (a core dump); `RaiseException` goes through the filter too. The headless filter's stack

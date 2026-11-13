@@ -106,6 +106,7 @@ int CM_Mapkit_GetField(int edit, const char *key, const char **str, float *vec);
 // game side (game/g_mapkit_path.cpp): layout pathnodes appended to PathData and linked, G_InitGame first load only
 void G_Mapkit_AppendPathnodes();
 void G_Mapkit_LinkPathnodes();
+void G_Mapkit_RestorePathnodeCount(); // restart of a world from a BSP: the layout nodes back in PathData's count
 void G_Mapkit_RestorePathnodeStrings(); // restart: the layout nodes' target/targetname again
 int G_Mapkit_FirstAddedNode();
 int G_Mapkit_AddedNodeCount();

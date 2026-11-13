@@ -437,7 +437,7 @@ GfxImage *__cdecl R_GenerateReflectionImageFromRawData(
     {
         __debugbreak();
     }
-    Image_GenerateCube(reflectionImage, pixels, probeHighMipSize, imageFormat, mipLevel);
+    Image_GenerateCube_OnRenderThread(reflectionImage, pixels, probeHighMipSize, imageFormat, mipLevel);
     return reflectionImage;
 }
 

@@ -38,6 +38,11 @@
 #include "r_streamalloc.h"
 #include "r_stream.h"
 #include "rb_resource.h"
+#if !defined(_WIN32)
+#include <platform/load_profile.h>
+// The loading screen's frame interval while a load keeps the render thread busy (15 frames a second)
+static const int LOAD_SCREEN_MSEC = 66;
+#endif
 #include <client_mp/cl_scrn_mp.h>
 #include "rb_compositing.h"
 #include <ui/ui_main_pc.h>
@@ -5895,14 +5900,35 @@ void     RB_RenderThread(unsigned int threadContext)
                 __debugbreak();
             }
             r_glob.isRenderingRemoteUpdate = 1;
+#if !defined(_WIN32)
+            // posix/Switch: the loading screen at most every LOAD_SCREEN_MSEC. Once the database is ready (a level
+            // load), RB_Resource_Update serves only the requests already queued, then the loop drew a frame (which waits
+            // for the display) and slept 6 ms: the main thread, which queues one image file and waits for it, got one
+            // image per frame, 17 ms each on the console whatever its size. Between frames the loop now waits for the
+            // next request (RB_Resource_AllocEntry sets the event) and serves it at once.
+            int lastScreenTime = Sys_Milliseconds() - LOAD_SCREEN_MSEC;
+#endif
             do
             {
                 R_StreamAlloc_Lock();
                 R_StreamUpdate_ProcessFileCallbacks();
                 R_StreamAlloc_Unlock();
                 RB_Resource_Update(8);
+#if !defined(_WIN32)
+                const int sinceScreen = Sys_Milliseconds() - lastScreenTime;
+                if ( sinceScreen < LOAD_SCREEN_MSEC )
+                {
+                    if ( Sys_IsDatabaseReady() )
+                        Sys_WaitResourcesQueuedEvent(LOAD_SCREEN_MSEC - sinceScreen);
+                    continue;
+                }
+#endif
                 if ( Sys_TryEnterCriticalSection(CRITSECT_DBHASH) )
                 {
+#if !defined(_WIN32)
+                    const Bo1LoadScope profile(BO1_LOAD_SCREEN);
+                    lastScreenTime = Sys_Milliseconds();
+#endif
                     SCR_UpdateScreen();
                     Sys_LeaveCriticalSection(CRITSECT_DBHASH);
                     if ( Sys_IsDatabaseReady() )
