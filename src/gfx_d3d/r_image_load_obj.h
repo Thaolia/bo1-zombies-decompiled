@@ -52,6 +52,18 @@ void __cdecl Image_GenerateCube(
                 int edgeLen,
                 _D3DFORMAT imageFormat,
                 unsigned int mipCount);
+void __cdecl Image_Generate2D_OnRenderThread(
+                GfxImage *image,
+                unsigned __int8 *pixels,
+                int width,
+                int height,
+                _D3DFORMAT imageFormat);
+void __cdecl Image_GenerateCube_OnRenderThread(
+                GfxImage *image,
+                const unsigned __int8 *(*pixels)[15],
+                int edgeLen,
+                _D3DFORMAT imageFormat,
+                unsigned int mipCount);
 void __cdecl Image_LoadWhite(GfxImage *image);
 void __cdecl Image_LoadSolid(
                 GfxImage *image,
