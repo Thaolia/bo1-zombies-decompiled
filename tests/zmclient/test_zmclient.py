@@ -405,6 +405,94 @@ class CommandLine(unittest.TestCase):
             self.assertEqual(cli_main(["--dist", dist.root, "--config", cfg, "--play"]), 1)   # no game files
 
 
+class SplitScreen(unittest.TestCase):
+    @staticmethod
+    def sets(argv):
+        """The +set dvar value pairs of a command line, the last one winning."""
+        return {argv[i + 1]: argv[i + 2] for i in range(len(argv) - 2) if argv[i] == "+set"}
+
+    def test_off_and_solo_give_one_window(self):
+        p = P.Profile()
+        self.assertFalse(P.split_on(p))
+        p["split"] = "kbm_pad"
+        self.assertFalse(P.split_on(p))              # solo is a listen server of one player
+        self.assertNotIn("bo1_splitInput", P.build_command(p, "x", "/g"))
+        with self.assertRaises(ValueError):
+            P.build_command(p, "x", "/g", player=2)
+
+    def test_modes_and_layouts(self):
+        expected_inputs = {"kbm_pad": ("kbm", "pad0"), "pad_pad": ("pad0", "pad1")}
+        expected_rects = {"side": ("0,0,0.5,1", "0.5,0,0.5,1"), "stack": ("0,0,1,0.5", "0,0.5,1,0.5")}
+        for mode, split, layout in itertools.product(("host", "join"), expected_inputs, expected_rects):
+            p = P.Profile()
+            p["mode"], p["join_host"], p["host_port"] = mode, "10.0.0.5", 3080
+            p["split"], p["split_layout"], p["name"] = split, layout, "Alpha"
+            self.assertTrue(P.split_on(p))
+            for player in (1, 2):
+                argv = P.build_command(p, "x", "/g", player=player)
+                d = self.sets(argv)
+                case = (mode, split, layout, player)
+                self.assertEqual(d["bo1_splitInput"], expected_inputs[split][player - 1], case)
+                self.assertEqual(d["r_borderlessRect"], expected_rects[layout][player - 1], case)
+                self.assertEqual((d["r_fullscreen"], d["r_borderless"], d["vid_xpos"], d["vid_ypos"]),
+                                 ("0", "1", "0", "0"), case)
+                self.assertEqual(d["fs_b"], "/g", case)
+                self.assertEqual(d["fs_h"], "/g" if player == 1 else os.path.join("/g", "split2"), case)
+                self.assertEqual(d["name"], "Alpha" if player == 1 else "Joueur2", case)
+                self.assertEqual(d["cl_autoConnect"], "127.0.0.1:3080" if mode == "host" else "10.0.0.5:3074", case)
+                self.assertEqual(d.get("snd_menu_master"), None if player == 1 else "0", case)
+                self.assertNotIn("r_customMode", d, case)
+                self.assertNotIn("devmap", argv, case)
+                self.assertTrue(all(" " not in a for a in argv[1:]), case)   # a blank would split a +set
+
+    def test_player2_name_and_sound(self):
+        p = P.Profile()
+        p["mode"], p["split"], p["name2"], p["split_sound2"] = "host", "pad_pad", "Bravo", True
+        d = self.sets(P.build_command(p, "x", "/g", player=2))
+        self.assertEqual((d["name"], d["snd_menu_master"]), ("Bravo", "1"))
+        p["name2"] = "has space"
+        with self.assertRaisesRegex(ValueError, "joueur 2"):
+            P.build_command(p, "x", "/g")
+        p["split"] = "off"
+        P.build_command(p, "x", "/g")                # player 2's name only matters with a split screen
+
+    def test_command_count_limit(self):
+        p = P.Profile()
+        p["mode"], p["split"] = "host", "kbm_pad"
+        argv = P.build_command(p, "x", "/g", player=2)
+        room = P.MAX_COMMAND_LINES - sum(1 for a in argv[1:] if a.startswith("+"))
+        p["extra"] = [{"on": True, "text": f"set e{i} 1"} for i in range(room)]
+        P.build_command(p, "x", "/g", player=2)
+        p["extra"].append({"on": True, "text": "set one_more 1"})
+        with self.assertRaisesRegex(ValueError, "63"):
+            P.build_command(p, "x", "/g", player=2)
+
+    def test_profile_values_are_checked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "profile.json")
+            with open(path, "w") as f:
+                json.dump({"split": "three", "split_layout": "diagonal", "split_sound2": "yes", "name2": 2}, f)
+            q = P.Profile(path)
+            self.assertEqual((q["split"], q["split_layout"], q["split_sound2"], q["name2"]),
+                             ("off", "side", False, ""))
+
+    def test_cli_print_cmd_gives_both_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dist = make_dist(os.path.join(tmp, "pkg"))
+            cfg = os.path.join(tmp, "cfg")
+            p = P.Profile(os.path.join(cfg, "profile.json"))
+            p["mode"], p["join_host"], p["split"] = "join", "10.0.0.5", "pad_pad"
+            p.save()
+            out = subprocess.run([sys.executable, os.path.join(TOOLS, "zmclient", "main.py"), "--dist", dist.root,
+                                  "--config", cfg, "--print-cmd"], capture_output=True, text=True)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            lines = out.stdout.strip().splitlines()
+            self.assertEqual(len(lines), 2, out.stdout)
+            self.assertIn("+set bo1_splitInput pad0", lines[0])
+            self.assertIn("+set bo1_splitInput pad1", lines[1])
+            self.assertIn(os.path.join(dist.root, "split2"), lines[1])
+
+
 class ConfigFile(unittest.TestCase):
     TEXT = ('// generated by Call of Duty, do not modify\nunbindall\nbind TAB "+scores"\nbind F "+activate"\n'
             'seta cg_blood "1"\nseta sensitivity "5"\ncon_hidechannel *\n')
@@ -739,6 +827,23 @@ class ClientProcess(unittest.TestCase):
             while again.running() and time.monotonic() < deadline:
                 time.sleep(0.05)
             self.assertFalse(again.running())
+
+    def test_player2_is_tracked_apart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dist = make_dist(os.path.join(tmp, "pkg"), exe_source=shutil.which("sleep"))
+            os.chmod(dist.exe, 0o755)
+            one, two = Client(dist), Client(dist, 2)
+            two.start([dist.exe, "30"], "")
+            self.assertTrue(os.path.isdir(os.path.join(dist.root, "split2")))   # player 2's fs_h
+            self.assertTrue(Client(dist, 2).running())
+            self.assertFalse(one.running())
+            self.assertFalse(Client(dist).running())
+            self.assertEqual(two.log_candidates()[0], os.path.join(dist.root, "split2", "main", "console_mp.log"))
+            two.kill()
+            deadline = time.monotonic() + 5
+            while two.running() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertFalse(two.running())
 
     def test_log_path_picks_the_newest(self):
         with tempfile.TemporaryDirectory() as tmp:

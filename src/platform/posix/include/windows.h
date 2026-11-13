@@ -721,6 +721,9 @@ static_assert(sizeof(DEVMODEA) == 156, "DEVMODEA must keep the Windows layout");
 #define GWL_EXSTYLE (-20)
 #define WS_POPUP 0x80000000L
 #define WS_VISIBLE 0x10000000L
+#define WS_EX_NOACTIVATE 0x08000000L
+#define SW_SHOWNA 8
+#define SWP_NOACTIVATE 0x0010
 #define HWND_NOTOPMOST ((HWND)(intptr_t)-2)
 #define SM_CXSCREEN 0
 #define SM_CYSCREEN 1

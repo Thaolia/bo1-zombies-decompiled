@@ -15,6 +15,16 @@ from .modflags import horde_flags, nightmare_flags
 
 MODES = ("solo", "join", "host")
 WINDOW_MODES = ("borderless", "window", "fullscreen")
+# Split screen on one PC: two game windows side by side, each a client of the local or the remote server. The engine's
+# bo1_splitInput tells each window its input (kbm: keyboard and mouse; padN: controller N only, focused or not) and
+# r_borderlessRect the part of the monitor it takes (x,y,w,h in fractions of it). Player 2 has its own fs_h (SPLIT2_HOME
+# under the game folder): its own config, profile and log.
+SPLIT_MODES = ("off", "kbm_pad", "pad_pad")
+SPLIT_LAYOUTS = ("side", "stack")
+SPLIT_INPUTS = {"kbm_pad": ("kbm", "pad0"), "pad_pad": ("pad0", "pad1")}
+SPLIT_RECTS = {"side": ("0,0,0.5,1", "0.5,0,0.5,1"), "stack": ("0,0,1,0.5", "0,0.5,1,0.5")}
+SPLIT2_HOME = "split2"
+DEFAULT_NAME2 = "Joueur2"
 DEFAULT_PORT = 3074
 
 # (bsp, label, horde's napalm/shrieker spawner files exist: mods/horde maps/<map>.zombie_temple.ents)
@@ -94,6 +104,10 @@ DEFAULTS = {
     "difficulty": 0,                    # 0 Normal, 1 Nightmare, 2 Hell
     "bo2_weapons": 0,                   # one of BO2_WEAPON_CHOICES
     "name": "",
+    "split": "off",                     # one of SPLIT_MODES
+    "split_layout": "side",             # one of SPLIT_LAYOUTS
+    "split_sound2": False,              # player 2's window plays the sound too (both windows hear the same game)
+    "name2": "",                        # player 2's name; empty: DEFAULT_NAME2
     "window": "borderless",
     "window_size": "1280x720",
     "fps_counter": False,
@@ -188,6 +202,10 @@ class Profile:
             self.data["mode"] = DEFAULTS["mode"]
         if self.data["window"] not in WINDOW_MODES:
             self.data["window"] = DEFAULTS["window"]
+        if self.data["split"] not in SPLIT_MODES:
+            self.data["split"] = DEFAULTS["split"]
+        if self.data["split_layout"] not in SPLIT_LAYOUTS:
+            self.data["split_layout"] = DEFAULTS["split_layout"]
         if self.data["scene_models"] not in SCENE_MODEL_CHOICES:
             self.data["scene_models"] = DEFAULTS["scene_models"]
         for key in ("bo2_weapons", "host_bo2_weapons"):
@@ -423,6 +441,24 @@ def window_flags(p):
     return ["+set", "r_fullscreen", "0", "+set", "r_borderless", "1", "+set", "vid_xpos", "0", "+set", "vid_ypos", "0"]
 
 
+def split_on(p):
+    """Two windows: split screen chosen, and a server to join (solo is a listen server of one player)."""
+    return p["split"] != "off" and p["mode"] != "solo"
+
+
+def split_flags(p, player):
+    """Window and input of one split screen window (player 1 or 2): a borderless window on its part of the primary
+    monitor, and its input."""
+    rect = SPLIT_RECTS[p["split_layout"]][player - 1]
+    return ["+set", "r_fullscreen", "0", "+set", "r_borderless", "1", "+set", "r_borderlessRect", rect,
+            "+set", "vid_xpos", "0", "+set", "vid_ypos", "0",
+            "+set", "bo1_splitInput", SPLIT_INPUTS[p["split"]][player - 1]]
+
+
+def split_home(dist_root):
+    return os.path.join(dist_root, SPLIT2_HOME)
+
+
 def add_scene_models(argv, count):
     """Raises the renderer's models per frame to count: r_mod_sceneModels, and a model lighting pool of count + 1024
     (the retail pool, which DObjs and dyn models share; measured on Nuketown at 4096: none refused). A larger pool the
@@ -457,6 +493,8 @@ def problems(p, dist_root=None):
     out = []
     if p["name"] and not valid_name(p["name"]):
         out.append("nom du joueur : 1 à 15 lettres, chiffres, « _ », « - » ou « . »")
+    if split_on(p) and p["name2"] and not valid_name(p["name2"]):
+        out.append("nom du joueur 2 : 1 à 15 lettres, chiffres, « _ », « - » ou « . »")
     if p["mode"] == "join":
         if not valid_host(p["join_host"]):
             out.append("adresse du serveur absente ou invalide (vue Serveurs, F2)")
@@ -492,16 +530,21 @@ def problems(p, dist_root=None):
     return out
 
 
-def build_command(p, exe, dist_root, launch_cfg=""):
-    """The client's argv. launch_cfg: the text of the launch.cfg next to the program, which the engine puts before
-    the command line; it only counts towards the 63-command limit here. Raises ValueError when the line is unusable."""
+def build_command(p, exe, dist_root, launch_cfg="", player=1):
+    """The client's argv; player 2 is the second window of a split screen (split_on). launch_cfg: the text of the
+    launch.cfg next to the program, which the engine puts before the command line; it only counts towards the
+    63-command limit here. Raises ValueError when the line is unusable."""
     issues = problems(p, dist_root)
     if issues:
         raise ValueError(issues[0])
-    argv = [exe, "+set", "bo1_zombies", "1", "+set", "fs_b", dist_root, "+set", "fs_h", dist_root,
+    if player == 2 and not split_on(p):
+        raise ValueError("pas d'écran partagé")
+    home = split_home(dist_root) if player == 2 else dist_root
+    argv = [exe, "+set", "bo1_zombies", "1", "+set", "fs_b", dist_root, "+set", "fs_h", home,
             "+set", "logfile", "2", "+set", "bo1_mod_sharedconfig", "1"]
-    if p["name"]:
-        argv += ["+set", "name", p["name"]]
+    name = (p["name2"] or DEFAULT_NAME2) if player == 2 else p["name"]
+    if name:
+        argv += ["+set", "name", name]
     if p["mode"] == "solo":
         # a listen server bound to loopback, as Play.bat: no firewall question and nobody else can join
         argv += ["+set", "net_ip", "127.0.0.1"]
@@ -511,7 +554,12 @@ def build_command(p, exe, dist_root, launch_cfg=""):
         argv += solo_mod_flags(p, dist_root)
     elif wants_bo2_weapons(p, dist_root):
         add_bo2_weapons(argv)
-    argv += window_flags(p)
+    if split_on(p):
+        argv += split_flags(p, player)
+        if player == 2:
+            argv += ["+set", "snd_menu_master", "1" if p["split_sound2"] else "0"]
+    else:
+        argv += window_flags(p)
     add_scene_models(argv, p["scene_models"])
     if p["fps_counter"]:
         argv += ["+set", "bo1_fpscounter", "1"]

@@ -18,7 +18,7 @@ from .browser import Browser
 from .client import Client
 from .gamecfg import GameConfig
 from .profile import (BASE_MAPS, DEFAULT_PORT, MAP_LABELS, build_command, fs_game, map_installed, map_label,
-                      solo_mod_flags, valid_host, valid_password)
+                      solo_mod_flags, split_on, valid_host, valid_password)
 from .views import ConfigView, ExtraView, LaunchView, LogView, PlayView, ServersView, SetupView, SoloView
 
 STOP_TIMEOUT = 15.0
@@ -35,6 +35,7 @@ class App:
         self.dist = dist
         self.root = dist.root if dist else None
         self.client = Client(dist) if dist else None
+        self.client2 = Client(dist, 2) if dist else None     # a split screen's second window
         self.local = LocalServer(dist) if dist else None
         # the local server's rcon password lives in ZmAdmin's servers.json, so ZmAdmin administers what ZmClient starts
         self.admin_config = AdminConfig(admin_config_dir)
@@ -49,6 +50,7 @@ class App:
         self.stopping = None        # deadline of a local server stop
         self.quit_after_stop = False
         self.client_was_running = bool(self.client and self.client.running())
+        self.client2_was_running = bool(self.client2 and self.client2.running())
         self.server_was_running = bool(self.local and self.local.running())
         self.logtail = None
         self.log_path = None
@@ -139,8 +141,8 @@ class App:
             parts.append("armes BO2" + ("" if p["bo2_weapons"] == 1 else " seules"))
         return ", ".join(parts) or "aucun"
 
-    def command(self):
-        """(argv, None) or (None, why the line cannot be built)."""
+    def command(self, player=1):
+        """(argv, None) or (None, why the line cannot be built). player 2: a split screen's second window."""
         if not self.dist:
             return None, "pas de dossier du jeu"
         p = self.profile
@@ -149,15 +151,18 @@ class App:
             saved = p["host_port"]
             p["host_port"] = int(self.local.port)
             try:
-                return build_command(p, self.dist.exe, self.root, self.launch_cfg_text()), None
+                return build_command(p, self.dist.exe, self.root, self.launch_cfg_text(), player), None
             except ValueError as e:
                 return None, str(e)
             finally:
                 p["host_port"] = saved
         try:
-            return build_command(p, self.dist.exe, self.root, self.launch_cfg_text()), None
+            return build_command(p, self.dist.exe, self.root, self.launch_cfg_text(), player), None
         except ValueError as e:
             return None, str(e)
+
+    def clients_running(self):
+        return self.client.running() or self.client2.running()
 
     # -------------------------------------------------------------------------------------------- the game
     def launch(self):
@@ -169,14 +174,17 @@ class App:
             self.msg(f"Impossible de lancer : {missing}. Vue Installation (F7).", C_ERR)
             self.show(6)
             return
-        if self.client.running():
-            self.msg(f"Le jeu tourne déjà (PID {self.client.pid}).", C_WARN)
-            return
+        for c in (self.client, self.client2):
+            if c.running():
+                self.msg(f"Le jeu tourne déjà (PID {c.pid}).", C_WARN)
+                return
         p = self.profile
+        split = split_on(p)
         # checked before a local server starts: a line that cannot run must not leave a server behind
         argv, err = self.command()
-        if err:
-            self.msg(f"Impossible de lancer : {err}", C_ERR)
+        argv2, err2 = self.command(2) if split else (None, None)
+        if err or err2:
+            self.msg(f"Impossible de lancer : {err or err2}", C_ERR)
             return
         if p["mode"] == "host" and not self.local.running():
             try:
@@ -191,9 +199,19 @@ class App:
             self.server_was_running = True
             self.msg(f"Serveur local lancé (PID {self.local.pid}) sur le port {p['host_port']}.", C_OK)
         game = fs_game(p, self.root)
+        if split:
+            # player 2 first: the window started last takes the focus, which the keyboard and mouse player needs
+            try:
+                self.client2.start(argv2, game)
+            except (OSError, RuntimeError) as e:
+                self.msg(f"La fenêtre du joueur 2 ne démarre pas : {e}", C_ERR)
+                return
+            self.client2_was_running = True
         try:
             self.client.start(argv, game)
         except (OSError, RuntimeError) as e:
+            if split:
+                self.client2.kill()     # half a split screen is no use
             self.msg(f"Le jeu ne démarre pas : {e}", C_ERR)
             return
         self.client_was_running = True
@@ -201,7 +219,10 @@ class App:
         what = {"solo": map_label(p["map"], self.root),
                 "join": f"rejoint {p['join_host']}:{p['join_port']}",
                 "host": f"rejoint le serveur local ({MAP_LABELS.get(p['host_map'], p['host_map'])})"}[p["mode"]]
-        self.msg(f"Jeu lancé (PID {self.client.pid}) : {what}.", C_OK)
+        if split:
+            self.msg(f"Écran partagé lancé (PID {self.client.pid} et {self.client2.pid}) : {what}.", C_OK)
+        else:
+            self.msg(f"Jeu lancé (PID {self.client.pid}) : {what}.", C_OK)
 
     def join(self, host, port, password):
         p = self.profile
@@ -235,12 +256,17 @@ class App:
              True)], ok))
 
     def stop_client(self):
-        if not self.client or not self.client.running():
+        if not self.client or not self.clients_running():
             self.msg("Le jeu ne tourne pas.", C_INFO)
             return
-        self.open(ConfirmDialog("Arrêter le jeu", ["Fermer le jeu de force ?",
+
+        def kill(_):
+            self.client.kill()
+            self.client2.kill()
+        windows = "les deux fenêtres du jeu" if self.client.running() and self.client2.running() else "le jeu"
+        self.open(ConfirmDialog("Arrêter le jeu", [f"Fermer {windows} de force ?",
                                                    "Une partie en cours est perdue ; config.cfg n'est pas réécrit."],
-                                lambda _: self.client.kill()))
+                                kill))
 
     def follow_log(self, path):
         if path == self.log_path:
@@ -305,6 +331,9 @@ class App:
             # the game rewrote config.cfg as it quit: show its values, unless edits are pending
             if config_view.loaded and not config_view.edits and not config_view.bind_edits:
                 self.gamecfg.load()
+        if self.client2_was_running and not self.client2.running():
+            self.client2_was_running = False
+            self.msg("La fenêtre du joueur 2 s'est fermée.", C_INFO)
         if self.stopping is not None:
             if not self.local.running():
                 self.stopping = None
@@ -324,7 +353,7 @@ class App:
     # ------------------------------------------------------------------------------------------------- setup
     def start_setup(self):
         p = self.profile
-        if self.client.running() or self.local.running():
+        if self.clients_running() or self.local.running():
             self.msg("Fermez le jeu et le serveur local avant d'installer : ils lisent ces fichiers.", C_ERR)
             return
         if not gamesetup.is_install(p["steam_install"]):
@@ -400,6 +429,8 @@ class App:
         if self.dist:
             if self.client.running():
                 parts.append((f"● jeu en cours (PID {self.client.pid})", color(C_OK)))
+            if self.client2.running():
+                parts.append((f"● joueur 2 (PID {self.client2.pid})", color(C_OK)))
             if self.local.running():
                 parts.append((f"● serveur local, port {self.local.port}", color(C_OK)))
             if self.setup_job and not self.setup_job.finished:

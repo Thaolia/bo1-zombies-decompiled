@@ -109,6 +109,7 @@ const dvar_s *bo1_testlostdevice; // zombies L5: see R_RegisterDvars
 const dvar_s *bo1_testlostdevice_close;
 const dvar_s *bo1_testfocusloss; // borderless: see R_RegisterDvars
 const dvar_s *r_borderless; // borderless: BO1Zombies's own (not in the exe), see R_RegisterDvars
+const dvar_s *r_borderlessRect; // split screen: part of the monitor the borderless window takes
 const dvar_s *r_vsync;
 const dvar_s *r_clear;
 const dvar_s *r_clearColor;
@@ -614,6 +615,13 @@ void __cdecl R_RegisterDvars()
         0,
         0x21u,
         "With r_fullscreen 0: full-screen borderless window at the monitor's native resolution (vid_restart to apply)");
+    // split screen: ZmClient gives each of its two windows half of the monitor. Not archived, so a later normal launch
+    // gets the whole monitor back.
+    r_borderlessRect = _Dvar_RegisterString(
+        "r_borderlessRect",
+        "",
+        0,
+        "With r_borderless 1: 'x,y,w,h', the part of the monitor the window takes, in fractions of its size (empty: all)");
     r_gamma = _Dvar_RegisterFloat("r_gamma", 0.89999998, 0.5, 3.0, 1u, "Gamma value");
     if ( r_reflectionProbeGenerate && r_reflectionProbeGenerate->current.enabled )
         Dvar_SetFloat((dvar_s *)r_gamma, 0.89999998);

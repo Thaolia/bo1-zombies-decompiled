@@ -9,6 +9,7 @@
 #include <gfx_d3d/rb_backend.h>
 #include "win_shared.h"
 #include <client_mp/cl_input_mp.h>
+#include <client/cl_console.h>
 
 GamePadButton buttonList[32] =
 {
@@ -216,13 +217,19 @@ void __cdecl IN_Frame()
     // supports one window"), so poll the gamepads directly instead of behind the mouse/foreground checks.
     IN_GamepadsMove();
 #else
+    if ( GPad_SplitPadDevice() >= 0 ) // split screen: the controller's player, focused or not, never the mouse
+    {
+        IN_DeactivateMouse();
+        IN_GamepadsMove();
+        return;
+    }
     if ( s_wmv.mouseInitialized )
     {
         if ( in_appactive )
         {
             IN_ActivateMouse(0);
             IN_MouseMove();
-            if ( IN_IsForegroundWindow() )
+            if ( IN_IsForegroundWindow() && !GPad_SplitKeyboardOnly() ) // split screen: kbm never reads a pad
                 IN_GamepadsMove();
         }
         else
@@ -232,6 +239,19 @@ void __cdecl IN_Frame()
     }
 #endif
 }
+
+#if !defined(__SWITCH__)
+// split screen: the controller's window drops the keyboard and mouse buttons the system gives it while it has the
+// focus, so they never act for its player. The console key and the open console still work, for diagnostics.
+bool __cdecl IN_SplitDropsEvent(sysEventType_t type, int value)
+{
+    if ( (type != SE_KEY && type != SE_CHAR) || GPad_SplitPadDevice() < 0 )
+        return false;
+    if ( Con_IsActive(0) )
+        return false;
+    return !(type == SE_KEY && (value == '`' || value == '~'));
+}
+#endif
 
 void IN_GamepadsMove()
 {

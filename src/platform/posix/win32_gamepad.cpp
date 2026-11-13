@@ -1,8 +1,9 @@
 // The controller layer on posix (the XInput API win32/win_gamepad.cpp polls), on SDL_GameController. The video thread
 // reads the open controller each pump into a snapshot (win32_gamepad.h maps it to XInput values); the XInput entry
-// points, called from the engine's input code on another thread, read the snapshot under a lock. One controller,
-// player 1, as the engine only uses port 0 on this build. A headless run or a machine with no pad reports no device,
-// and the engine runs without a controller as on a PC without one.
+// points, called from the engine's input code on another thread, read the snapshot under a lock. One controller, as
+// the engine only uses port 0 on this build: the first one, or the N-th when the engine asks for device N (split
+// screen, bo1_splitInput). A headless run or a machine with no pad reports no device, and the engine runs without a
+// controller as on a PC without one.
 
 #include "posix_video.h"
 #include "win32_gamepad.h"
@@ -20,6 +21,8 @@ namespace
 std::mutex s_lock;
 SDL_GameController *s_controller = nullptr;
 SDL_JoystickID s_instance = -1;
+DWORD s_wantedDevice = 0; // the XInput user index the engine reads; the pump opens that game controller
+DWORD s_openDevice = 0;
 bool s_connected = false;
 unsigned int s_packet = 0;
 XINPUT_GAMEPAD s_state = {};
@@ -31,12 +34,23 @@ bool s_triedInit = false;
 bool s_reportedNone = false;
 constexpr int kConsoleChannel = 16;
 
-SDL_GameController *OpenFirstController()
+SDL_GameController *OpenNthController(DWORD device)
 {
+    DWORD seen = 0;
     for (int i = 0; i < SDL_NumJoysticks(); ++i)
-        if (SDL_IsGameController(i))
+        if (SDL_IsGameController(i) && seen++ == device)
             return SDL_GameControllerOpen(i);
     return nullptr;
+}
+
+// Under s_lock: false for a device other than the one the pump keeps open, which it then opens instead.
+bool IsWantedDevice(DWORD device)
+{
+    if (device == s_wantedDevice)
+        return true;
+    s_wantedDevice = device;
+    s_connected = false;
+    return false;
 }
 } // namespace
 
@@ -57,26 +71,35 @@ void Bo1_GamepadPump()
     if (!SDL_WasInit(SDL_INIT_GAMECONTROLLER))
         return;
 
-    if (s_controller && !SDL_GameControllerGetAttached(s_controller))
+    DWORD wanted;
     {
-        Com_Printf(kConsoleChannel, "gamepad: controller detached\n");
+        std::lock_guard<std::mutex> lock(s_lock);
+        wanted = s_wantedDevice;
+    }
+    if (s_controller && (!SDL_GameControllerGetAttached(s_controller) || wanted != s_openDevice))
+    {
+        Com_Printf(kConsoleChannel, wanted != s_openDevice ? "gamepad: switching to controller %u\n"
+                                                           : "gamepad: controller detached\n", unsigned(wanted));
         SDL_GameControllerClose(s_controller);
         s_controller = nullptr;
         s_instance = -1;
+        s_reportedNone = false;
     }
     if (!s_controller)
     {
-        s_controller = OpenFirstController();
+        s_controller = OpenNthController(wanted);
+        s_openDevice = wanted;
         if (s_controller)
         {
             s_instance = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(s_controller));
             const char *name = SDL_GameControllerName(s_controller);
-            Com_Printf(kConsoleChannel, "gamepad: opened '%s'\n", name ? name : "?");
+            Com_Printf(kConsoleChannel, "gamepad: opened '%s' (controller %u)\n", name ? name : "?", unsigned(wanted));
             s_reportedNone = false;
         }
         else if (!s_reportedNone)
         {
-            Com_Printf(kConsoleChannel, "gamepad: no game controller (%d joysticks)\n", SDL_NumJoysticks());
+            Com_Printf(kConsoleChannel, "gamepad: no game controller %u (%d joysticks)\n", unsigned(wanted),
+                       SDL_NumJoysticks());
             s_reportedNone = true;
         }
     }
@@ -133,10 +156,10 @@ extern "C" {
 
 DWORD XInputGetState(DWORD dwUserIndex, XINPUT_STATE *pState)
 {
-    if (dwUserIndex != 0 || !pState)
+    if (!pState)
         return ERROR_DEVICE_NOT_CONNECTED;
     std::lock_guard<std::mutex> lock(s_lock);
-    if (!s_connected)
+    if (!IsWantedDevice(dwUserIndex) || !s_connected)
         return ERROR_DEVICE_NOT_CONNECTED;
     pState->dwPacketNumber = s_packet;
     pState->Gamepad = s_state;
@@ -145,10 +168,10 @@ DWORD XInputGetState(DWORD dwUserIndex, XINPUT_STATE *pState)
 
 DWORD XInputSetState(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration)
 {
-    if (dwUserIndex != 0 || !pVibration)
+    if (!pVibration)
         return ERROR_DEVICE_NOT_CONNECTED;
     std::lock_guard<std::mutex> lock(s_lock);
-    if (!s_connected)
+    if (!IsWantedDevice(dwUserIndex) || !s_connected)
         return ERROR_DEVICE_NOT_CONNECTED;
     s_rumbleWanted = true;
     s_rumbleLow = pVibration->wLeftMotorSpeed;
@@ -158,10 +181,10 @@ DWORD XInputSetState(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration)
 
 DWORD XInputGetCapabilities(DWORD dwUserIndex, DWORD, XINPUT_CAPABILITIES *pCapabilities)
 {
-    if (dwUserIndex != 0 || !pCapabilities)
+    if (!pCapabilities)
         return ERROR_DEVICE_NOT_CONNECTED;
     std::lock_guard<std::mutex> lock(s_lock);
-    if (!s_connected)
+    if (!IsWantedDevice(dwUserIndex) || !s_connected)
         return ERROR_DEVICE_NOT_CONNECTED;
     std::memset(pCapabilities, 0, sizeof(*pCapabilities));
     pCapabilities->Type = 1;    // XINPUT_DEVTYPE_GAMEPAD
