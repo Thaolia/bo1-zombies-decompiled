@@ -168,7 +168,7 @@ ZmClient la propose sous « Mapkit : Nuketown native (Black Ops II, monde BSP) �
 ## Paquets prêts à copier
 `tools/make_dist.sh` (bash, depuis WSL) part d'un arbre de sources où `setup.ps1` a copié le jeu. Il produit dans
 `build/dist` un dossier prêt à copier et une archive par plateforme :
-- `BO1Zombies_windows/` (`.zip`) : le client et le serveur 64 bits, `zmclient.exe`, `zmadmin.exe` et `ffconv.exe`. `Play.bat` lance le jeu, `Play.bat net
+- `BO1Zombies_windows/` (`.zip`) : le client et le serveur 64 bits, `zmclient.exe`, `zmadmin.exe`, `ffconv.exe` et `switch-tools\uam.exe` (plus bas). `Play.bat` lance le jeu, `Play.bat net
   <adresse[:port]> [nom]` rejoint un serveur, `Server.bat [map] [port]` lance un serveur. Les DLL d'exécution 64 bits
   sont incluses ;
 - `BO1Zombies_linux/` (`.tar.gz`) : le client et le serveur Linux, `zmclient`, `zmadmin`, `ffconv.exe`, avec `play.sh` (`./play.sh net ...`),
@@ -196,6 +196,11 @@ Sans `--no-build`, le script compile ce qu'il faut, en incrémental :
 
 Autres options : `--out`, `--game`, `--zones`, `--dxsdk`, `--archive auto|zip|tar|none`, `--jobs` ; `--help` les
 décrit. Les paquets contiennent vos propres fichiers de jeu : gardez-les pour vos appareils, ne les publiez pas.
+`switch-tools\uam.exe`, dans le paquet Windows, est le compilateur de shaders hors ligne de deko3d. devkitPro ne le
+fournit que pour Linux ; `tools/uam/build.sh` le compile pour Windows (MinGW-w64, uam v1.1.0). Avec Python 3, il
+fait sous Windows le `shaders.dksh` d'un paquet Switch : `python switch-tools\make_dksh_pack.py shaders.pack
+shaders.dksh --uam switch-tools\uam.exe`. Comme celui de devkitPro, son code peut varier d'une exécution à l'autre
+(il dépend des adresses du tas), et Windows n'a pas de `setarch -R` pour le figer.
 
 ### Release sur GitHub
 

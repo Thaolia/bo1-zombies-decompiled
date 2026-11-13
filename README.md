@@ -109,7 +109,7 @@ folders and archives in `build/dist`, one per platform:
 
 | Package | Holds | Archive |
 |---|---|---|
-| `BO1Zombies_windows/` | the 64-bit client and dedicated server, `Play.bat` (`Play.bat net <address[:port]> [name]` joins a server), `Server.bat [map] [port]`, `zmclient.exe`, `zmadmin.exe`, `ffconv.exe`, the 64-bit runtime DLLs | `.zip` |
+| `BO1Zombies_windows/` | the 64-bit client and dedicated server, `Play.bat` (`Play.bat net <address[:port]> [name]` joins a server), `Server.bat [map] [port]`, `zmclient.exe`, `zmadmin.exe`, `ffconv.exe`, the 64-bit runtime DLLs, `switch-tools\uam.exe` (below) | `.zip` |
 | `BO1Zombies_linux/` | the Linux client and dedicated server, `play.sh` (`./play.sh net ...`), `server.sh [map] [port]`, `zmclient`, `zmadmin`, `ffconv.exe`, `shaders.pack` | `.tar.gz` |
 | `BO1Zombies_switch/` | an SD card tree, `switch/bo1zm/` with the `.nro`, `shaders.pack` and `shaders.dksh` | `.zip` |
 
@@ -129,6 +129,12 @@ the converter's sources (`ffconv --verify`, then `check_shader_pack.py`; the old
 pass), and `shaders.dksh` when its `shaders.pack` changed (it fails if uam rejects a shader). Other options:
 `--out`, `--game`, `--zones`, `--dxsdk`, `--archive auto|zip|tar|none`, `--jobs`; `--help` lists them. The packages
 hold your own game files: keep them for your own devices, never publish them (the `_nodata` ones hold none).
+
+`switch-tools\uam.exe` in the Windows package is deko3d's offline shader compiler, which devkitPro ships for Linux
+only, built for Windows by `tools/uam/build.sh` (MinGW-w64, uam v1.1.0). With Python 3 it makes a Switch package's
+`shaders.dksh` on Windows: `python switch-tools\make_dksh_pack.py shaders.pack shaders.dksh --uam
+switch-tools\uam.exe`. Like devkitPro's uam, its code can differ from run to run (it depends on heap addresses) and
+there is no `setarch -R` on Windows to pin it.
 
 `--bo2 DIR` also puts your own Black Ops II map extraction (`docs/BO2_MAPS.md`, "Running it") into the windows and linux
 packages. It takes `DIR/mods/mapkit/layouts/bo2_*.json` and `DIR/mods/mapkit/imports/`, and ZmClient's Solo view then
