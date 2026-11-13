@@ -187,8 +187,9 @@ jobs:
           # mingw-w64: the layout check parses the engine for the win32 and win64 references (layouts.py)
           apt-get install -y -q python3 cmake ninja-build rsync mingw-w64
           tools/ci/install_llvm.sh 21
-          dkp-pacman -Syu --noconfirm
-          dkp-pacman -S --noconfirm --needed switch-sdl2 deko3d
+          # The image already holds switch-dev and the portlibs, and pkg.devkitpro.org refuses CI runners (403):
+          # synchronise only when a package is missing.
+          dkp-pacman -Q switch-sdl2 deko3d || { dkp-pacman -Sy --noconfirm && dkp-pacman -S --noconfirm --needed switch-sdl2 deko3d; }
       - uses: actions/download-artifact@v5
         with:
           name: dxsdk
