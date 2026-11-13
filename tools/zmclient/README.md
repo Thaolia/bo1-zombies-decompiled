@@ -10,6 +10,9 @@ A curses program (Python 3, standard library only; `windows-curses` on Windows),
 - **Local server + join it**: starts the folder's dedicated server as ZmAdmin does (same state file and rcon password,
   so ZmAdmin administers it), then the game, which joins it once its map is loaded.
 
+In the two network modes it can also start a **split screen**: two windows of the game for two players on this PC
+(see below).
+
 It also edits the player's `players/config.cfg`, adds free dvars to the command line, and installs the game files
 from the player's own Black Ops (as `setup.ps1` does for the development tree). The texts it shows are in French, the
 players' language.
@@ -17,7 +20,7 @@ players' language.
     python3 tools/zmclient/main.py --dist build/dist/BO1Zombies_linux   # the interface, from the sources
     ./zmclient                                                          # the binary, in a package folder
     ./zmclient --print-cmd        # the command line of the saved profile
-    ./zmclient --play             # start the game with the saved profile (solo or join), then exit
+    ./zmclient --play             # start the game with the saved profile (solo or join; both windows of a split screen)
     ./zmclient --setup [DIR]      # install the game files from DIR (default: the saved or detected install)
 
 `--dist DIR` the package folder (default: its own folder, then the current one), `--config DIR` its settings folder
@@ -31,7 +34,7 @@ the local server's rcon password lives), `--no-mouse` keyboard only.
 | F1 | Jouer | the mode, a summary, Launch / Stop the game / Stop the local server, the state of the game files, and the exact command line |
 | F2 | Serveurs | favourites and LAN servers with their live status (name, map, players, ping); add, edit, remove, join |
 | F3 | Solo | map (base maps, Dead Ops Arcade, the package's mapkit layouts, Black Ops II's Nuketown and TranZit when `make_dist.sh --bo2` packaged them, and the native Nuketown when its zone and BSP are there (`bo1_mod_zones zombie_bo2nuked`, `bo1_bspworld`); TranZit also loads Ascension's zone for Stamin-Up), god mode, zinfo, noperks, quick restart, start points, power and perks (mods/admin's `zm_startpoints` / `zm_startpower` / `zm_startperks`, stacked on the line's `fs_mods`), Black Ops II's weapons (mods/bo2weapons, when `mods/bo2weapons/mod.ff` is there: in the box with the map's, alone plus the map's special weapons, or alone; `bo2weapons` stacked on `fs_mods`, `bo2weapons_box`), horde settings, difficulty; rows a map does not use are greyed with the reason |
-| F4 | Lancement | player name, window mode and size, the port's FPS counter, the models drawn per frame (1024, 2048 or 4096: `r_mod_sceneModels` with a model lighting pool to match, for maps imported by MapKit), gamepad aim assist (each "game setting" / on / off), the local server's map, port, Black Ops II weapons and rcon password |
+| F4 | Lancement | player name, window mode and size, the split screen (mode, layout, player 2's name and sound), the port's FPS counter, the models drawn per frame (1024, 2048 or 4096: `r_mod_sceneModels` with a model lighting pool to match, for maps imported by MapKit), gamepad aim assist (each "game setting" / on / off), the local server's map, port, Black Ops II weapons and rcon password |
 | F5 | Config du jeu | a form of `players/config.cfg`: mouse, gamepad, FOV, resolution, vsync, FPS cap, gamma, MSAA, anisotropy, texture quality, shadows, depth of field, blood, subtitles; any other dvar; key binds |
 | F6 | Dvars libres | free command lines, each one a `+line` before the map or the connection, enabled one by one |
 | F7 | Installation | the Black Ops install (found in Steam's libraries, picked in a folder browser, or typed), the state of each part, Install, progress |
@@ -54,6 +57,26 @@ Two engine limits are checked before a launch: `Com_ParseCommandLine` cuts the l
 may contain one, the folder's path included) and keeps 64 pieces, the text before the first `+` being one: ZmClient
 refuses a line of more than 63 commands, counting those of a `launch.cfg` next to the program, which the engine puts
 first.
+
+## Split screen
+
+"Écran partagé (2 joueurs)" (Jouer and Lancement views) starts two windows of the game, each a client of the same
+server, in the modes "Serveur local + le rejoindre" and "Rejoindre" (not Solo: its listen server takes one player):
+
+- **clavier/souris + manette**: player 1 on the keyboard and mouse, player 2 on the first controller;
+- **deux manettes**: player 1 on the first controller, player 2 on the second.
+
+"Disposition" puts the windows side by side (each half of the primary monitor's width) or one above the other. Each
+window is frameless on its half (`r_borderless 1`, `r_borderlessRect`, `vid_xpos`/`vid_ypos` 0: the primary monitor)
+and gets its input with `bo1_splitInput` (`kbm`, `pad0`, `pad1`): a controller's window reads its controller even
+when it does not have the focus and ignores the keyboard and mouse; the keyboard window never reads a controller. The
+window and size settings of the Lancement view do not apply then.
+
+Player 2 runs with `fs_h` = `split2/` in the game folder (its own `players/config.cfg`, profile and log), the name
+"Nom du joueur 2" (default `Joueur2`), and the sound off unless "Son du joueur 2" is on (both windows play the same
+game: every sound twice). Its process is followed through `main/zmclient_client2.json`. ZmClient starts player 2
+first, so that the keyboard window, started last, has the focus; Stop closes both. Engine side: `docs/SERVER.md`,
+"Split screen".
 
 ## config.cfg
 

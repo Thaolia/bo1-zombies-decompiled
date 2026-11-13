@@ -10,14 +10,14 @@ from zmadmin.launcher import EXE_NAME, IS_WINDOWS, Dist, program_dir
 
 from . import __version__, gamesetup
 from .client import Client
-from .profile import Profile, build_command, fs_game, quote_command
+from .profile import Profile, build_command, fs_game, quote_command, split_on
 
 DESCRIPTION = """ZmClient: launcher for the BO1 zombies client, next to BO1Zombies (a make_dist.sh folder).
 
   zmclient                     the interface: play solo, join a server, or start a local server and join it;
                                the solo mods, config.cfg, free dvars, and the game files' installation
-  zmclient --print-cmd         print the command line the saved profile gives, and exit
-  zmclient --play              start the game with the saved profile, and exit
+  zmclient --print-cmd         print the command line the saved profile gives (two with a split screen), and exit
+  zmclient --play              start the game with the saved profile (both windows of a split screen), and exit
   zmclient --setup [DIR]       copy the game files from the Black Ops install DIR (found in Steam when left out)
                                and convert the zones, in text mode"""
 
@@ -105,25 +105,30 @@ def main(argv=None):
                 launch_cfg = f.read()
         except OSError:
             launch_cfg = ""
+        players = (1, 2) if split_on(profile) else (1,)
         try:
-            command = build_command(profile, dist.exe, dist.root, launch_cfg)
+            commands = [build_command(profile, dist.exe, dist.root, launch_cfg, player) for player in players]
         except ValueError as e:
             print(f"zmclient: {e}", file=sys.stderr)
             return 1
         if args.print_cmd:
-            print(quote_command(command))
+            for command in commands:
+                print(quote_command(command))
             return 0
         missing = gamesetup.ready(dist.root)
         if missing:
             print(f"zmclient: {missing} (zmclient --setup)", file=sys.stderr)
             return 1
-        client = Client(dist)
-        try:
-            client.start(command, fs_game(profile, dist.root))
-        except (OSError, RuntimeError) as e:
-            print(f"zmclient: {e}", file=sys.stderr)
-            return 1
-        print(f"started, PID {client.pid}; log: {client.log_path()}")
+        # player 2 first: the window started last takes the focus, which the keyboard and mouse player needs
+        for player in reversed(players):
+            client = Client(dist, player)
+            try:
+                client.start(commands[player - 1], fs_game(profile, dist.root))
+            except (OSError, RuntimeError) as e:
+                print(f"zmclient: {e}", file=sys.stderr)
+                return 1
+            print(f"player {player} started, PID {client.pid}; log: {client.log_path()}" if len(players) > 1
+                  else f"started, PID {client.pid}; log: {client.log_path()}")
         return 0
 
     locale.setlocale(locale.LC_ALL, "")

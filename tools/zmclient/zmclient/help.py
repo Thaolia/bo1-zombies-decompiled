@@ -14,6 +14,17 @@ MODE_HELP = {
 }
 WINDOW_LABELS = {"borderless": "Sans bordure (plein écran fenêtré)", "window": "Fenêtre", "fullscreen": "Plein écran"}
 TRISTATE_LABELS = {"": "réglage du jeu", "1": "oui", "0": "non"}
+SPLIT_LABELS = {"off": "non", "kbm_pad": "clavier/souris + manette", "pad_pad": "deux manettes"}
+SPLIT_HELP = {
+    "off": "un seul joueur sur ce PC",
+    "kbm_pad": "joueur 1 au clavier et à la souris, joueur 2 à la première manette",
+    "pad_pad": "joueur 1 à la première manette, joueur 2 à la deuxième",
+}
+SPLIT_LAYOUT_LABELS = {"side": "côte à côte", "stack": "l'un au-dessus de l'autre"}
+SPLIT_LAYOUT_HELP = {
+    "side": "joueur 1 à gauche, joueur 2 à droite : chacun une moitié de l'écran, en hauteur",
+    "stack": "joueur 1 en haut, joueur 2 en bas : chacun une moitié de l'écran, en largeur",
+}
 DIFFICULTY_LABELS = {0: "Normal", 1: "Nightmare", 2: "Hell"}
 
 ROW_HELP = {
@@ -75,6 +86,15 @@ ROW_HELP = {
                  "les dans le pare-feu pour des joueurs d'autres machines.",
     "host_password": "Le mot de passe rcon du serveur local, partagé avec ZmAdmin (son fichier servers.json) : "
                      "ZmAdmin administre le serveur que ZmClient a lancé.",
+    "split": "Deux joueurs sur ce PC : deux fenêtres du jeu se partagent l'écran principal et rejoignent le même "
+             "serveur (mode Serveur local, ou Rejoindre). Pas en Solo : choisir « Serveur local + le rejoindre ». "
+             "La fenêtre de la manette lit sa manette même quand l'autre a le focus, ignore clavier et souris, et ne "
+             "prend jamais le focus : le clavier reste à l'autre fenêtre (après un Alt+Tab, un clic dessus le rend).",
+    "split_layout": "Comment les deux fenêtres se partagent l'écran principal.",
+    "split_sound2": "Le son de la fenêtre du joueur 2. Les deux fenêtres jouent la même partie : avec les deux, chaque "
+                    "son est entendu deux fois (non par défaut).",
+    "name2": "Le nom du joueur 2 (1 à 15 lettres, chiffres, « _ », « - », « . »). Vide : Joueur2. Sa config, son "
+             "profil et son journal sont dans le dossier split2/ du jeu.",
 }
 
 BO2_WEAPON_HELP = {
@@ -89,8 +109,8 @@ VIEW_HELP = {
     "play": [
         "Jouer : choisir comment jouer, puis lancer.",
         "Haut/Bas    choisir une ligne ; Entrée, Espace ou double-clic : la modifier",
-        "L           lancer le jeu (et le serveur local en mode Serveur local)",
-        "S           arrêter le jeu lancé par ZmClient",
+        "L           lancer le jeu (et le serveur local en mode Serveur local ; les deux fenêtres en écran partagé)",
+        "S           arrêter le jeu lancé par ZmClient (les deux fenêtres en écran partagé)",
         "K           arrêter le serveur local",
         "La ligne de commande exacte est affichée en bas. Les réglages sont gardés dans profile.json (dossier de "
         "configuration de ZmClient).",

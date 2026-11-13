@@ -1,5 +1,6 @@
 #include "r_init.h"
 #include <win32/win_main.h>
+#include <win32/win_gamepad.h>
 #include <qcommon/common.h>
 
 #if defined(_MSC_VER)
@@ -668,11 +669,43 @@ static void R_BorderlessSyncMode(int width, int height)
     Com_Printf(8, "borderless: r_mode %s kept: the adapter lists no %s mode\n", Dvar_EnumToString(r_mode), modeText);
 }
 
+// split screen: the controller player's window (bo1_splitInput padN) is never activated, so the keyboard and mouse
+// player's window keeps the keyboard whichever window comes up last or gets a click
+static bool R_SplitPadWindow()
+{
+    return GPad_SplitPadDevice() >= 0;
+}
+
+// split screen: r_borderlessRect 'x,y,w,h' (fractions of the monitor; commas, as a blank would split the command line's
+// +set) as a pixel rect inside it; false when empty or unusable, and the window then takes the whole monitor
+static bool R_BorderlessSubRect(const RECT &monitor, RECT *out)
+{
+    float fx, fy, fw, fh;
+    const int width = monitor.right - monitor.left;
+    const int height = monitor.bottom - monitor.top;
+
+    if ( !r_borderlessRect || !r_borderlessRect->current.string[0] )
+        return false;
+    if ( sscanf(r_borderlessRect->current.string, "%f ,%f ,%f ,%f", &fx, &fy, &fw, &fh) != 4 || fx < 0.0f || fy < 0.0f
+        || fw <= 0.0f || fh <= 0.0f || fx + fw > 1.0f || fy + fh > 1.0f )
+    {
+        Com_Printf(8, "borderless: r_borderlessRect '%s' ignored (want 'x,y,w,h', fractions of the monitor)\n",
+            r_borderlessRect->current.string);
+        return false;
+    }
+    out->left = monitor.left + (int)(fx * (float)width + 0.5f);
+    out->top = monitor.top + (int)(fy * (float)height + 0.5f);
+    out->right = monitor.left + (int)((fx + fw) * (float)width + 0.5f);
+    out->bottom = monitor.top + (int)((fy + fh) * (float)height + 0.5f);
+    return out->right > out->left && out->bottom > out->top;
+}
+
 // borderless: the window parms - the monitor at (vid_xpos, vid_ypos), else the primary; its full rect, no frame
 static void R_BorderlessSetWndParms(GfxWindowParms *wndParms)
 {
     POINT pt;
     MONITORINFO mi;
+    RECT part;
 
     pt.x = Dvar_GetInt("vid_xpos");
     pt.y = Dvar_GetInt("vid_ypos");
@@ -683,6 +716,20 @@ static void R_BorderlessSetWndParms(GfxWindowParms *wndParms)
         mi.rcMonitor.top = 0;
         mi.rcMonitor.right = GetSystemMetrics(SM_CXSCREEN);
         mi.rcMonitor.bottom = GetSystemMetrics(SM_CYSCREEN);
+    }
+    if ( R_BorderlessSubRect(mi.rcMonitor, &part) )
+    {
+        // r_mode left alone: the archived mode stays the one of the player's own full-screen launches
+        wndParms->displayWidth = part.right - part.left;
+        wndParms->displayHeight = part.bottom - part.top;
+        wndParms->sceneWidth = wndParms->displayWidth;
+        wndParms->sceneHeight = wndParms->displayHeight;
+        wndParms->hz = 60;
+        wndParms->x = part.left;
+        wndParms->y = part.top;
+        wndParms->hwnd = 0;
+        wndParms->aaSamples = r_aaSamples->current.integer;
+        return;
     }
     wndParms->displayWidth = mi.rcMonitor.right - mi.rcMonitor.left;
     wndParms->displayHeight = mi.rcMonitor.bottom - mi.rcMonitor.top;
@@ -792,7 +839,7 @@ void __cdecl R_ResizeWindow()
     if (wndParms.borderless)
     {
         // borderless: WS_POPUP, no frame, not topmost (HWND_NOTOPMOST below, as the window)
-        exStyle = 0;
+        exStyle = R_SplitPadWindow() ? WS_EX_NOACTIVATE : 0;
         style = WS_POPUP;
     }
     else if (wndParms.fullscreen)
@@ -818,7 +865,7 @@ void __cdecl R_ResizeWindow()
         wndParms.y,
         rc.right - rc.left,
         rc.bottom - rc.top,
-        0x60u);
+        R_SplitPadWindow() ? 0x60u | SWP_NOACTIVATE : 0x60u);
     s_borderlessWindow = wndParms.borderless; // borderless
     if (wndParms.borderless)
     {
@@ -1578,7 +1625,7 @@ char __cdecl R_CreateGameWindow(GfxWindowParms *wndParms)
         return 0;
 
     dx.targetWindowIndex = 0;
-    ShowWindow(wndParms->hwnd, 5);
+    ShowWindow(wndParms->hwnd, R_SplitPadWindow() ? SW_SHOWNA : 5);
     R_BorderlessLogWindow("created"); // borderless
     return 1;
 }
@@ -1784,7 +1831,7 @@ char __cdecl R_CreateWindow(GfxWindowParms *wndParms)
             wndParms->displayHeight,
             wndParms->x,
             wndParms->y);
-        exStyle = 0;
+        exStyle = R_SplitPadWindow() ? WS_EX_NOACTIVATE : 0;
         style = WS_POPUP | WS_VISIBLE;
     }
     else if (wndParms->fullscreen)
@@ -1826,8 +1873,8 @@ char __cdecl R_CreateWindow(GfxWindowParms *wndParms)
     {
         if (!wndParms->fullscreen)
         {
-            SetWindowPos(wndParms->hwnd, (HWND)0xFFFFFFFE, 0, 0, 0, 0, 3u);
-            if ( !Sys_IsHeadlessClient() ) // zombies: a headless client never changes focus
+            SetWindowPos(wndParms->hwnd, (HWND)0xFFFFFFFE, 0, 0, 0, 0, R_SplitPadWindow() ? 3u | SWP_NOACTIVATE : 3u);
+            if ( !Sys_IsHeadlessClient() && !R_SplitPadWindow() ) // zombies: a headless client never changes focus
                 SetFocus(wndParms->hwnd);
         }
         s_borderlessWindow = wndParms->borderless; // borderless

@@ -5,6 +5,7 @@
 #include <universal/assertive.h>
 #include <cmath>
 #include <universal/com_math.h>
+#include <universal/q_shared.h>
 
 const dvar_t *gpad_debug;
 const dvar_t *gpad_button_lstick_deflect_max;
@@ -21,6 +22,10 @@ const dvar_t *gpad_buttonsConfig;
 const dvar_t *gpad_sticksConfig;
 const dvar_t *gpad_enabled;
 const dvar_t *gpad_present;
+#if !defined(__SWITCH__)
+const dvar_t *bo1_splitInput; // split screen: see GPad_SplitPadDevice
+static const char *s_splitInputNames[] = {"off", "kbm", "pad0", "pad1", "pad2", "pad3", nullptr};
+#endif
 
 GamePad s_gamePads[1];
 int inputCounter;
@@ -28,6 +33,53 @@ bool hasInput[1];
 _XINPUT_STATE delayedInputState[1];
 void(__cdecl *s_removedCB)(int);
 void(__cdecl *s_insertedCB)(int);
+
+// Split screen on one PC (ZmClient starts two game windows), bo1_splitInput:
+// - padN: this window is the player of controller N. Its engine port 0 reads XInput device N, it polls the controller
+//   while another window has the focus, and it never takes the mouse or the keyboard (IN_Frame, IN_SplitDropsEvent);
+// - kbm: the keyboard and mouse player, who never reads a controller (its config may have gpad_enabled 1);
+// - off, the default: the retail behaviour.
+#if !defined(__SWITCH__)
+static int GPad_SplitInputIndex()
+{
+    if ( bo1_splitInput )
+        return bo1_splitInput->current.integer;
+    // The startup configs (Com_ExecStartupConfigs) run before GPad_InitAll registers the dvar: read the command line's
+    // +set, a string dvar until then.
+    const char *value = Dvar_GetString("bo1_splitInput");
+    for ( int index = 0; s_splitInputNames[index]; ++index )
+    {
+        if ( !I_stricmp(value, s_splitInputNames[index]) )
+            return index;
+    }
+    return 0;
+}
+#endif
+
+int __cdecl GPad_SplitPadDevice()
+{
+#if defined(__SWITCH__)
+    return -1;
+#else
+    const int index = GPad_SplitInputIndex();
+    return index >= 2 ? index - 2 : -1;
+#endif
+}
+
+bool __cdecl GPad_SplitKeyboardOnly()
+{
+#if defined(__SWITCH__)
+    return false;
+#else
+    return GPad_SplitInputIndex() == 1;
+#endif
+}
+
+static DWORD GPad_DeviceIndex(int portIndex)
+{
+    const int device = GPad_SplitPadDevice();
+    return device >= 0 ? (DWORD)device : (DWORD)portIndex;
+}
 
 void GPad_InitAll()
 {
@@ -115,13 +167,18 @@ void GPad_InitAll()
     gpad_enabled = _Dvar_RegisterBool("gpad_enabled", 0, 1u, "Game pad enabled");
 #endif
     gpad_present = _Dvar_RegisterBool("gpad_present", 0, 0x40u, "Game pad present");
+#if !defined(__SWITCH__)
+    bo1_splitInput = _Dvar_RegisterEnum(
+        "bo1_splitInput", s_splitInputNames, 0, 0,
+        "split screen: off, kbm (keyboard and mouse, no controller) or padN (controller N only, focused or not)");
+#endif
     for ( portIndex = 0; portIndex < 1; ++portIndex )
     {
         gPad = &s_gamePads[portIndex];
         gPad->feedback.Rumble.wLeftMotorSpeed = 0;
         gPad->feedback.Rumble.wRightMotorSpeed = 0;
         if ( !Sys_IsHeadless() ) // zombies: headless never writes to the user's game pad (rumble)
-            XInputSetState(portIndex, &gPad->feedback.Rumble);
+            XInputSetState(GPad_DeviceIndex(portIndex), &gPad->feedback.Rumble);
     }
 }
 
@@ -135,7 +192,7 @@ void __cdecl GPad_UpdateAll()
         GPad_RefreshAll();
         for ( portIndex = 0; portIndex < 1; ++portIndex )
         {
-            if ( !XInputGetState(portIndex, &inputState) )
+            if ( !XInputGetState(GPad_DeviceIndex(portIndex), &inputState) )
             {
                 GPad_UpdateSticks(portIndex, &inputState.Gamepad);
                 GPad_UpdateDigitals(portIndex, &inputState.Gamepad);
@@ -162,7 +219,7 @@ void __cdecl GPad_UpdateAll()
         {
             GPad_RefreshAll();
             for ( portIndex = 0; portIndex < 1; ++portIndex )
-                hasInput[portIndex] = XInputGetState(portIndex, &delayedInputState[portIndex]) == 0;
+                hasInput[portIndex] = XInputGetState(GPad_DeviceIndex(portIndex), &delayedInputState[portIndex]) == 0;
             inputCounter = 0;
         }
     }
@@ -198,7 +255,7 @@ void __cdecl GPad_Check(int portIndex)
     }
     gPad = &s_gamePads[portIndex];
     wasEnabled = gPad->enabled;
-    if ( XInputGetCapabilities(portIndex, 1u, &gPad->caps) )
+    if ( XInputGetCapabilities(GPad_DeviceIndex(portIndex), 1u, &gPad->caps) )
         gPad->enabled = 0;
     else
         gPad->enabled = 1;

@@ -8,6 +8,7 @@
 #include "win_syscon.h"
 #include <live/live_steam.h>
 #include "win_input.h"
+#include "win_gamepad.h"
 #include <client/cl_keys.h>
 #include <ui/ui_main.h>
 #include <client/client.h>
@@ -2623,7 +2624,7 @@ int __stdcall WinMain(HINSTANCE__ *hInstance, HINSTANCE__ *hPrevInstance, char *
                     Dvar_GetString("net_ip"), Dvar_GetInt("net_port"));
             else if ( s_headless )
                 Com_Printf(16, "bo1_headless: dedicated, no windows, logfile 2, net_ip 127.0.0.1\n");
-            else
+            else if ( GPad_SplitPadDevice() < 0 ) // split screen: the controller's window leaves the focus to the other
                 SetFocus(g_wv.hWnd);
             s_autoquitStartMs = Sys_Milliseconds();
             if ( com_script_debugger_smoke_test->current.enabled )

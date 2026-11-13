@@ -139,7 +139,9 @@ et atouts de départ, courant dès le départ, donnés par le mod admin),
 Lancement (nom, fenêtre, aide à la visée, serveur local), Config du jeu (`players/config.cfg` : souris, manette, FOV,
 résolution, graphismes, touches), Dvars libres, Installation et Journal. Trois façons de jouer : en solo, en
 rejoignant un serveur, ou en lançant le serveur du dossier puis en le rejoignant (ZmAdmin l'administre ensuite avec
-le même mot de passe rcon). La vue Installation fait ce que fait `setup.ps1` : depuis votre Black Ops (Steam), elle
+le même mot de passe rcon). Dans ces deux derniers modes, l'écran partagé (vue Lancement) ouvre deux fenêtres du jeu
+pour deux joueurs sur le même PC : clavier/souris + manette, ou deux manettes ; côte à côte ou l'une au-dessus de
+l'autre. La vue Installation fait ce que fait `setup.ps1` : depuis votre Black Ops (Steam), elle
 copie `localization.txt`, les `.iwd` et les vidéos, puis convertit les zones avec le `ffconv.exe` du paquet (wine
 sous Linux). Détails : `tools/zmclient/README.md`.
 

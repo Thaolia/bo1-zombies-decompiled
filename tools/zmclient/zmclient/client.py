@@ -2,7 +2,8 @@
 
 The client's PID is kept in main/zmclient_client.json, so a later ZmClient finds a game it started (the PID's program
 is checked to be this folder's, as ZmAdmin does for its server). The client and a local server run the same program
-from the same folder: they differ by PID and by fs_h (the server's is server/).
+from the same folder: they differ by PID and by fs_h (the server's is server/). A split screen's second window is a
+second Client (player 2): its own state file, and its fs_h is split2/ (profile.SPLIT2_HOME).
 """
 import json
 import os
@@ -11,16 +12,20 @@ import time
 
 from zmadmin.launcher import IS_WINDOWS, _pid_exe, _same_file
 
-STATE_NAME = "zmclient_client.json"
-OUTPUT_NAME = "zmclient_client_output.log"
+from .profile import split_home
+
+STATE_NAMES = {1: "zmclient_client.json", 2: "zmclient_client2.json"}
+OUTPUT_NAMES = {1: "zmclient_client_output.log", 2: "zmclient_client2_output.log"}
 
 
 class Client:
-    def __init__(self, dist):
+    def __init__(self, dist, player=1):
         self.dist = dist
+        self.player = player
+        self.home = split_home(dist.root) if player == 2 else dist.root
         self.main = os.path.join(dist.root, "main")
-        self.state_path = os.path.join(self.main, STATE_NAME)
-        self.output = os.path.join(self.main, OUTPUT_NAME)
+        self.state_path = os.path.join(self.main, STATE_NAMES[player])
+        self.output = os.path.join(self.main, OUTPUT_NAMES[player])
         self.pid = None
         self.started = None
         self.fs_game = ""
@@ -49,6 +54,7 @@ class Client:
         if self.running():
             raise RuntimeError(f"le jeu tourne déjà (PID {self.pid})")
         os.makedirs(self.main, exist_ok=True)
+        os.makedirs(self.home, exist_ok=True)
         kwargs = {}
         if IS_WINDOWS:
             kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
@@ -81,7 +87,7 @@ class Client:
         game = self.fs_game if fs_game is None else fs_game
         folders = [game.replace("/", os.sep)] if game else []
         folders += ["main", ""]
-        return [os.path.join(self.dist.root, f, "console_mp.log") for f in folders]
+        return [os.path.join(self.home, f, "console_mp.log") for f in folders]
 
     def log_path(self, fs_game=None):
         """The most recently written of the candidates since the game started (a file an earlier run left in

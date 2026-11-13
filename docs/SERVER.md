@@ -147,6 +147,39 @@ undone by the menu's own load), and again whenever the client is back at the men
 timeout (`cl_timeout`, 40 s by default), kick. It waits 2 s the first time, then 5 s, doubled after each attempt that
 did not reach the game, up to 60 s. `set cl_autoConnect ""` in the console stops it.
 
+## Split screen: two players on one PC
+
+ZmClient's split screen (`tools/zmclient/README.md`) starts **two game windows** on the primary monitor, each a client
+of the same server: the local one (mode "Serveur local + le rejoindre") or a remote one (mode "Rejoindre"). It is not
+a split screen inside one engine: the PC build was compiled for one local player (`MAX_LOCAL_CLIENTS 1`) and the
+decompiler froze that constant into ~50 loops and many `[1]` arrays (`docs/PORTING.md`, decisions, 2026-11-12). Two
+processes cost two renders of the map, which a PC carries; the Switch, with one process and one window, cannot do it
+this way.
+
+Each window takes, by hand:
+
+    +set r_fullscreen 0 +set r_borderless 1 +set r_borderlessRect 0,0,0.5,1 +set vid_xpos 0 +set vid_ypos 0
+    +set bo1_splitInput kbm
+
+- `r_borderlessRect x,y,w,h` (not archived): with `r_borderless 1`, the part of the monitor the frameless window takes,
+  in fractions of the monitor (`0,0,0.5,1` the left half, `0.5,0,0.5,1` the right one, `0,0,1,0.5` the top, `0,0.5,1,0.5`
+  the bottom). Commas, as a blank would split the command line's `+set`. Empty (the default): the whole monitor. The
+  archived `r_mode` is left alone. A bad value is ignored with a `borderless: r_borderlessRect '...' ignored` line.
+- `bo1_splitInput` (not archived): `off` (default, the retail behaviour), `kbm` (keyboard and mouse; this window never
+  reads a controller, whatever its config's `gpad_enabled`), or `pad0` to `pad3`: this window is the player of that
+  controller (XInput device N on Windows, the N-th SDL game controller on Linux). It reads it while the other window has
+  the focus, never takes the mouse, drops the keyboard and mouse buttons (the console key `` ` `` and an open console
+  excepted), and enables the pad at startup with its stick and button configs, as the Switch build does. On Windows its
+  window is never activated (`WS_EX_NOACTIVATE`, shown with `SW_SHOWNA`, no `SetFocus`): whichever window comes up last,
+  and even after a click on it, the keyboard stays with the other window.
+
+The second window has its own `fs_h` (ZmClient uses `split2/` under the game folder): its own `players/config.cfg`,
+profile and `console_mp.log`. ZmClient starts it first, so the keyboard and mouse window, started last, gets the
+focus. If the keyboard player gives the focus to another program (Alt+Tab), a click on their window takes it back.
+ZmClient
+mutes the second window (`snd_menu_master 0`) unless asked: both windows play the same game, so every sound would be
+heard twice.
+
 ## Joining from a Switch
 
 In the start menu, **Serveur** (A) opens the server screen:

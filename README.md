@@ -80,7 +80,8 @@ that folder's server with an rcon password. See `docs/SERVER.md` and `tools/zmad
 
 `tools/zmclient` is the same kind of program for players (`zmclient` / `zmclient.exe` in the packages): it plays solo
 with the solo mods of `tools/mod-launcher.hta` (horde, nightmare, mapkit, noperks, zinfo), joins a server (favourites
-and LAN servers with their live status), or starts the folder's server and joins it; it also edits
+and LAN servers with their live status), or starts the folder's server and joins it, alone or in a split screen of two windows (keyboard and mouse plus a
+controller, or two controllers); it also edits
 `players/config.cfg`, adds free dvars, and installs the game files from the player's own Black Ops (copy, then zone
 conversion with the shipped `ffconv.exe`). See `tools/zmclient/README.md`.
 

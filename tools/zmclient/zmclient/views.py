@@ -14,8 +14,8 @@ from .dirbrowser import FolderDialog, start_folder
 from .gamecfg import BY_NAME, SETTINGS, valid_bind_key, validate
 from .profile import (BO2_WEAPON_CHOICES, DEFAULT_PORT, MAP_LABELS, START_PERKS, bo2_weapons_available,
                       bo2_weapons_installed, START_POINT_CHOICES, check_extra, map_installed, map_label, nightmare_available,
-                      parse_size, quote_command, resolve_map, solo_maps, specials_available, valid_host, valid_name,
-                      valid_password)
+                      parse_size, quote_command, resolve_map, solo_maps, specials_available, split_on, valid_host,
+                      valid_name, valid_password)
 
 
 class Row:
@@ -232,11 +232,12 @@ class PlayView(RowsView):
             rows.append(bo2_row(self, "host_bo2_weapons", app.root, local_running=app.local.running()))
         rows.append(Row("name", "Nom du joueur", p["name"] or "(celui de config.cfg)",
                         self.ask("name", "Nom du joueur", "Nom", "vide : celui de config.cfg", _name)))
+        rows.append(split_row(self))
         return rows
 
     def buttons(self):
         out = [("Lancer", "L")]
-        if self.app.client and self.app.client.running():
+        if self.app.client and self.app.clients_running():
             out.append(("Arrêter le jeu", "S"))
         if self.app.local and self.app.local.running():
             out.append(("Arrêter le serveur local", "K"))
@@ -257,6 +258,8 @@ class PlayView(RowsView):
                 lines.append((f"● Jeu en cours (PID {app.client.pid})", C_OK))
             else:
                 lines.append(("○ Jeu arrêté", 0))
+            if app.client2.running():
+                lines.append((f"● Fenêtre du joueur 2 en cours (PID {app.client2.pid})", C_OK))
             if app.local.running():
                 lines.append((f"● Serveur local en marche : PID {app.local.pid}, port {app.local.port}, "
                               f"{MAP_LABELS.get(app.local.map, app.local.map)}", C_OK))
@@ -270,13 +273,21 @@ class PlayView(RowsView):
             y += 1
         if y + 2 >= bottom:
             return
-        put(scr, y + 1, 3, "Ligne de commande :", curses.A_BOLD)
-        argv, err = app.command()
-        text = err or quote_command([os.path.basename(argv[0])] + argv[1:])
-        for i, line in enumerate(wrap(text, width - 6)):
-            if y + 2 + i >= bottom:
-                break
-            put(scr, y + 2 + i, 3, line, color(C_ERR if err else C_DIM), width=width - 4)
+        players = (1, 2) if split_on(self.p) else (1,)
+        y += 1
+        for player in players:
+            if y + 1 >= bottom:
+                return
+            put(scr, y, 3, "Ligne de commande :" if len(players) == 1 else f"Ligne de commande du joueur {player} :",
+                curses.A_BOLD)
+            y += 1
+            argv, err = app.command(player)
+            text = err or quote_command([os.path.basename(argv[0])] + argv[1:])
+            for line in wrap(text, width - 6):
+                if y >= bottom:
+                    return
+                put(scr, y, 3, line, color(C_ERR if err else C_DIM), width=width - 4)
+                y += 1
 
     def key(self, k):
         if k in ("L", "l"):
@@ -545,6 +556,13 @@ def bo2_row(view, key, root, bsp=None, local_running=False):
                disabled=why, help_text=H.ROW_HELP["bo2_weapons"])
 
 
+def split_row(view):
+    p = view.p
+    return Row("split", "Écran partagé (2 joueurs)", H.SPLIT_LABELS[p["split"]],
+               view.choose("split", "Écran partagé", [(k, v, H.SPLIT_HELP[k]) for k, v in H.SPLIT_LABELS.items()]),
+               disabled="pas en Solo : choisir le mode Serveur local (vue Jouer, F1)" if p["mode"] == "solo" else None)
+
+
 # ------------------------------------------------------------------------------------------------------------ Launch
 class LaunchView(RowsView):
     name, title = "launch", "Lancement"
@@ -557,21 +575,36 @@ class LaunchView(RowsView):
     def rows(self):
         p, app = self.p, self.app
         aim_off = "l'aide à la visée est désactivée" if p["aim_assist"] == "0" else None
+        split_off = "l'écran partagé place lui-même les deux fenêtres" if split_on(p) else None
+        no_split = None if split_on(p) else ("pas en Solo" if p["mode"] == "solo" and p["split"] != "off"
+                                             else "écran partagé désactivé")
         password = app.local_password()
         rows = [
             Row("name", "Nom du joueur", p["name"] or "(celui de config.cfg)",
                 self.ask("name", "Nom du joueur", "Nom", "vide : celui de config.cfg", _name)),
             Row("window", "Affichage", H.WINDOW_LABELS[p["window"]],
-                self.choose("window", "Affichage", [(k, v, H.ROW_HELP["window"]) for k, v in H.WINDOW_LABELS.items()])),
+                self.choose("window", "Affichage", [(k, v, H.ROW_HELP["window"]) for k, v in H.WINDOW_LABELS.items()]),
+                disabled=split_off),
             Row("window_size", "Taille de la fenêtre", p["window_size"],
                 self.ask("window_size", "Taille de la fenêtre", "Taille", "LARGEURxHAUTEUR, ex. 1600x900",
-                         self._size), disabled=None if p["window"] == "window" else "seulement en mode Fenêtre"),
+                         self._size),
+                disabled=split_off or (None if p["window"] == "window" else "seulement en mode Fenêtre")),
             Row("fps_counter", "Compteur FPS du portage", _yes(p["fps_counter"]), self.toggle("fps_counter")),
             Row("scene_models", "Modèles affichés par image", str(p["scene_models"]),
                 self.choose("scene_models", "Modèles affichés par image", [
                     (1024, "1024", "le jeu d'origine"),
                     (2048, "2048", "maps importées (Nuketown) : plus de décor au loin"),
                     (4096, "4096", "maps importées : tout le décor ; un peu plus lourd")])),
+            section("Écran partagé : 2 joueurs sur ce PC"),
+            split_row(self),
+            Row("split_layout", "Disposition", H.SPLIT_LAYOUT_LABELS[p["split_layout"]],
+                self.choose("split_layout", "Disposition des deux fenêtres",
+                            [(k, v, H.SPLIT_LAYOUT_HELP[k]) for k, v in H.SPLIT_LAYOUT_LABELS.items()]),
+                disabled=no_split),
+            Row("name2", "Nom du joueur 2", p["name2"] or "(Joueur2)",
+                self.ask("name2", "Nom du joueur 2", "Nom", "vide : Joueur2", _name), disabled=no_split),
+            Row("split_sound2", "Son du joueur 2", _yes(p["split_sound2"]), self.toggle("split_sound2"),
+                disabled=no_split),
             section("Manette : aide à la visée"),
             Row("aim_assist", "Aide à la visée", H.TRISTATE_LABELS[p["aim_assist"]],
                 self.tristate("aim_assist", "Aide à la visée")),

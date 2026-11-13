@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Windows.h>
+#include "win_local.h"
 
 struct __declspec(align(4)) WinMouseVars_t // sizeof=0x10
 {                                       // XREF: .data:s_wmv/r
@@ -32,5 +33,8 @@ void __cdecl IN_Init();
 void __cdecl IN_Activate(int active);
 void __cdecl IN_Frame();
 void IN_GamepadsMove();
+#if !defined(__SWITCH__)
+bool __cdecl IN_SplitDropsEvent(sysEventType_t type, int value);
+#endif
 void IN_MouseMove();
 void __cdecl IN_ClampMouseMove(tagPOINT *curPos);

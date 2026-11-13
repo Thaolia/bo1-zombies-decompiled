@@ -31,6 +31,8 @@ struct GamePad // sizeof=0x7C
 };
 
 void GPad_InitAll();
+int __cdecl GPad_SplitPadDevice();
+bool __cdecl GPad_SplitKeyboardOnly();
 void __cdecl GPad_UpdateAll();
 int GPad_RefreshAll();
 void __cdecl GPad_Check(int portIndex);
