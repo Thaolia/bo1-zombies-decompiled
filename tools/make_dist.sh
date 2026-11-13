@@ -343,6 +343,27 @@ bo2_data() { # <dest>
     fi
 }
 
+# The Switch's share of the player's Black Ops II maps: the native ones only (the start menu offers those, not the
+# MapKit meshes): each <layout>_bsp.json with its zone, BSP and colour maps, and of its imports/<map>/ the node
+# links, the blockers' props and their images, without the MapKit mesh and collision it does not use.
+bo2_switch_data() { # <dest>
+    [ -n "$BO2" ] && [ $BO2_MAPS = 1 ] || return 0
+    [ -d "$BO2/usermaps" ] && ls "$BO2"/main/maps/*.d3dbsp > /dev/null 2>&1 || return 0
+    mkdir -p "$1/mods/mapkit/layouts" "$1/mods/mapkit/imports" "$1/usermaps" "$1/main/maps" "$1/main/images"
+    rsync -a --include='bo2_*_bsp.json' --exclude='*' "$BO2/mods/mapkit/layouts/" "$1/mods/mapkit/layouts/"
+    local layout map
+    for layout in "$BO2"/mods/mapkit/layouts/bo2_*_bsp.json; do
+        map="$(basename "$layout" _bsp.json)"
+        map="${map#bo2_}"
+        [ -d "$BO2/mods/mapkit/imports/$map" ] || continue
+        rsync -a --include='*.blockers.mesh.bin' --exclude='*.mesh.bin' --exclude='*.collision.bin' \
+            "$BO2/mods/mapkit/imports/$map/" "$1/mods/mapkit/imports/$map/"
+    done
+    rsync -a "$BO2/usermaps/" "$1/usermaps/"
+    rsync -a --include='*.d3dbsp' --exclude='*' "$BO2/main/maps/" "$1/main/maps/"
+    rsync -a --include='bo2_*.iwi' --exclude='*' "$BO2/main/images/" "$1/main/images/"
+}
+
 # The LISEZMOI.txt line of a package with the player's Black Ops II maps.
 bo2_note() {
     [ -n "$BO2" ] || return 0
@@ -607,6 +628,7 @@ package_switch() {
     # The start menu stacks mods/zinfo (Tab counter) and mods/admin (start points and perks): the engine reads mods
     # under its base folder, sdmc:/switch/bo1zm/mods (FS_Startup)
     rsync -a --delete "$ROOT/mods/" "$sd/mods/"
+    if [ "$GAME_DATA" = 1 ]; then bo2_switch_data "$sd"; fi
     cp "$ZONES/shaders.pack" "$WORK/dksh/shaders.dksh" "$sd/"
     # Bring-up switches (no menu, debug dumps, applet mode) never belong in a package.
     rm -f "$sd/skip_menu" "$sd/deko3d_debug" "$sd/allow_applet"
@@ -630,6 +652,8 @@ MENU DE DÉPART
   n'est donné que si la map a sa machine.
   + lance la partie. Le compteur de zombies (activé par défaut) affiche les zombies en vie et ceux qui restent
   dans la manche à côté du tableau des scores ; sur un serveur, c'est le serveur qui le décide.
+  « Nuketown (BO2, natif) » apparaît dans la liste des maps quand ce paquet contient votre propre extraction de
+  Black Ops II (make_dist.sh --bo2) : la Nuketown native, sur son propre monde BO1.
   « Serveur » ouvre l'écran de connexion : activez-la, entrez l'adresse IP et le port du PC qui fait tourner le
   serveur (Server.bat ou server.sh, port 3074 par défaut) et votre nom. La console doit être en Wi-Fi.
 

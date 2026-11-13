@@ -15,6 +15,7 @@
 #include "switch_net.h"
 
 #include <sys/iosupport.h>
+#include <sys/stat.h>
 
 #include <cstdarg>
 #include <cstdio>
@@ -60,6 +61,19 @@ std::string ReadText(const char *path, size_t maxBytes)
         std::fclose(f);
     }
     return text;
+}
+
+// A map is offered when the files it needs beside the game's own are on the SD card (Launcher_MapFile: the player's
+// own extraction of another game, which the Switch package holds only when make_dist.sh had one).
+bool MapAvailable(int map)
+{
+    for (int i = 0; i < Launcher_MapFileCount(map); ++i)
+    {
+        struct stat st;
+        if (stat(("sdmc:/switch/bo1zm/" + Launcher_MapFile(map, i)).c_str(), &st) != 0)
+            return false;
+    }
+    return true;
 }
 
 bool WriteText(const char *path, const std::string &text)
@@ -326,7 +340,9 @@ void Change(LauncherSettings *s, int item, int dir)
         s->join = !s->join;
         break;
     case ITEM_MAP:
-        s->map = (s->map + dir + kLauncherMapCount) % kLauncherMapCount;
+        do
+            s->map = (s->map + dir + kLauncherMapCount) % kLauncherMapCount;
+        while (!MapAvailable(s->map));
         break;
     case ITEM_AIMASSIST:
         s->aimAssist = !s->aimAssist;
@@ -740,7 +756,13 @@ std::string StartRefusal(const LauncherSettings &s, bool networkUp)
 LauncherResult Launcher_Run(const char *buildStamp, char *line, size_t lineSize, char *backend, size_t backendSize)
 {
     LauncherSettings s = Launcher_ParseSettings(ReadText(kMenuConfigPath, 4096));
-    Log("menu.cfg read: map %s, backend %s, server %s (%s)", kLauncherMaps[s.map].bsp, Launcher_BackendName(s.backend),
+    if (!MapAvailable(s.map))
+    {
+        Log("menu.cfg map %s: its files are not on the SD card, Kino instead", Launcher_MapKey(s.map).c_str());
+        s.map = 0;
+    }
+    Log("menu.cfg read: map %s, backend %s, server %s (%s)", Launcher_MapKey(s.map).c_str(),
+        Launcher_BackendName(s.backend),
         s.serverHost.empty() ? "-" : Launcher_ServerAddress(s).c_str(), s.join ? "join" : "solo");
     Screen screen;
     screen.buildStamp = buildStamp;
