@@ -139,8 +139,9 @@ for Stamin-Up). The extraction is game data, so `--bo2` cannot be combined with
 
 ### Release on GitHub
 
-`.github/workflows/release.yml` builds the three programs on GitHub's machines and publishes a release holding one
-archive with the three `_nodata` packages. It starts by hand only: Actions, "Release", "Run workflow", with the tag to
+`.github/workflows/release.yml` builds the three programs on GitHub's machines and publishes a release, "BO1 Zombies
+Enhanced edition version <tag>", holding one archive per platform (`BO1Zombies_<tag>_windows.zip`, `_linux`,
+`_switch`), each the `_nodata` package. It starts by hand only: Actions, "Release", "Run workflow", with the tag to
 create (e.g. `v0.1.0`). It downloads the June 2010 DirectX SDK from Microsoft, builds `win64-msvc` with ZmClient and
 ZmAdmin (Nuitka) on Windows, the Linux program, `ffconv.exe` and the Linux ZmClient and ZmAdmin on Ubuntu, the `.nro`
 in devkitPro's `devkita64` container, then packages them with `tools/make_dist.sh --no-build --no-game-data`, as on a
