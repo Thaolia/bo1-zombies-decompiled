@@ -996,6 +996,68 @@ void __cdecl Image_GenerateCube(
     }
 }
 
+// mod (bspworld): the BSP world loads on the main thread (CG_Init) while the render thread draws the loading screen
+// and presents. The zombies device is not D3DCREATE_MULTITHREADED (r_multithreaded_device 0), so two threads calling it
+// at once corrupted d3d9's state: Present then waited forever inside d3d9.dll, holding CRITSECT_DBHASH, and the main
+// thread waited for that lock (a freeze at "Loading nodes and leafs"). Like Image_LoadFromFileWithReader, these run
+// the texture creation and upload on the render thread and wait for it.
+struct ImageGenerateParams
+{
+    GfxImage *image;
+    unsigned __int8 *pixels2D;
+    const unsigned __int8 *(*pixelsCube)[15];
+    int width;
+    int height;
+    _D3DFORMAT imageFormat;
+    unsigned int mipCount;
+};
+
+static void __cdecl Image_Generate2D_Callback(void *data)
+{
+    const ImageGenerateParams *params = (const ImageGenerateParams *)data;
+    Image_Generate2D(params->image, params->pixels2D, params->width, params->height, params->imageFormat);
+}
+
+static void __cdecl Image_GenerateCube_Callback(void *data)
+{
+    const ImageGenerateParams *params = (const ImageGenerateParams *)data;
+    Image_GenerateCube(params->image, params->pixelsCube, params->width, params->imageFormat, params->mipCount);
+}
+
+void __cdecl Image_Generate2D_OnRenderThread(
+                GfxImage *image,
+                unsigned __int8 *pixels,
+                int width,
+                int height,
+                _D3DFORMAT imageFormat)
+{
+    if ( Sys_IsRenderThread() )
+    {
+        Image_Generate2D(image, pixels, width, height, imageFormat);
+        return;
+    }
+    ImageGenerateParams params = { image, pixels, NULL, width, height, imageFormat, 0 };
+    RB_Resource_CallbackParam(Image_Generate2D_Callback, &params);
+    RB_Resource_Flush();
+}
+
+void __cdecl Image_GenerateCube_OnRenderThread(
+                GfxImage *image,
+                const unsigned __int8 *(*pixels)[15],
+                int edgeLen,
+                _D3DFORMAT imageFormat,
+                unsigned int mipCount)
+{
+    if ( Sys_IsRenderThread() )
+    {
+        Image_GenerateCube(image, pixels, edgeLen, imageFormat, mipCount);
+        return;
+    }
+    ImageGenerateParams params = { image, NULL, pixels, edgeLen, edgeLen, imageFormat, mipCount };
+    RB_Resource_CallbackParam(Image_GenerateCube_Callback, &params);
+    RB_Resource_Flush();
+}
+
 void __cdecl Image_LoadWhite(GfxImage *image)
 {
     Image_LoadSolid(image, 0xFFu, 0xFFu, 0xFFu, 0xFFu);

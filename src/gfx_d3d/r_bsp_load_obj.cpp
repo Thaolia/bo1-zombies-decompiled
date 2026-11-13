@@ -17,6 +17,8 @@
 #include "r_staticmodelcache_load_obj.h"
 #include "r_image.h"
 #include "r_image_load_obj.h"
+#include "rb_resource.h"
+#include <qcommon/threads.h>
 
 #include <algorithm>
 #include <cgame_mp/cg_ents_mp.h>
@@ -123,9 +125,18 @@ void __cdecl R_CreateWorldVertexBuffer(IDirect3DVertexBuffer9 **vb, int *srcData
             srcData = &dummyData;
             sizeInBytes = 4;
         }
-        dstData = R_AllocStaticVertexBuffer(vb, sizeInBytes);
-        Com_Memcpy(dstData, srcData, sizeInBytes);
-        R_FinishStaticVertexBuffer(*vb);
+        if ( Sys_IsRenderThread() )
+        {
+            dstData = R_AllocStaticVertexBuffer(vb, sizeInBytes);
+            Com_Memcpy(dstData, srcData, sizeInBytes);
+            R_FinishStaticVertexBuffer(*vb);
+        }
+        else
+        {
+            // mod (bspworld): made on the render thread, see Image_Generate2D_OnRenderThread
+            RB_Resource_LoadVertexBuffer(vb, srcData, sizeInBytes);
+            RB_Resource_Flush();
+        }
     }
     else
     {
@@ -754,7 +765,7 @@ void __cdecl R_LoadLightmaps(GfxBspLoad *load)
             {
                 __debugbreak();
             }
-            Image_Generate2D(
+            Image_Generate2D_OnRenderThread(
                 s_world.draw.lightmaps[newLmapIndex].primary,
                 primaryImage,
                 groupInfo[newLmapIndex].wideCount << 10,
@@ -864,7 +875,7 @@ void __cdecl R_LoadLightmaps(GfxBspLoad *load)
                     v13 = 0xFFFF;
                 *dst32++ = v14 | (v13 << 16);
             }
-            Image_Generate2D(s_world.draw.lightmaps[newLmapIndex].secondaryB, lightmapLum, w, h, D3DFMT_G16R16);
+            Image_Generate2D_OnRenderThread(s_world.draw.lightmaps[newLmapIndex].secondaryB, lightmapLum, w, h, D3DFMT_G16R16);
             Hunk_FreeTempMemory((char *)lightmapLum);
             wa = width;
             ha = height;
@@ -905,7 +916,7 @@ void __cdecl R_LoadLightmaps(GfxBspLoad *load)
                 dst8[1] = (unsigned __int16)((32 * dir) | (loB << 11)) >> 8;
                 dst8 += 2;
             }
-            Image_Generate2D(s_world.draw.lightmaps[newLmapIndex].secondary, lightmapColor, wa, ha, D3DFMT_R5G6B5);
+            Image_Generate2D_OnRenderThread(s_world.draw.lightmaps[newLmapIndex].secondary, lightmapColor, wa, ha, D3DFMT_R5G6B5);
             Hunk_FreeTempMemory((char *)lightmapColor);
             oldLmapBaseIndex += groupCount;
             ++newLmapIndex;

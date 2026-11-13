@@ -33,8 +33,12 @@ The decompiled engine still has the whole BSP loader (`com_bsp_load_obj.cpp`, `c
 `r_bsp_load_obj.cpp`, `pathnode_load_obj.cpp`; lump ids in `com_bsp_load_obj.h`), used when `useFastFile` is 0. The
 `bspworld` branch reads a map's render world from a BSP with fastfiles on: `+set bo1_bspworld maps/<name>.d3dbsp`
 (`LoadWorld`, `cl_cgame_mp.cpp`) loads the BSP, its primary lights, water and burnable data into `comWorld`, builds the
-`GfxWorld` from it on the main thread (`g_bspWorldLoading` lets `Image_Create*_PC` create the lightmap and probe
-textures there) and unloads it. With `asset_viewer.d3dbsp` on Kino every load step passes (materials, lights,
+`GfxWorld` from it on the main thread and unloads it. Its lightmap and probe textures and its world vertex buffer
+are made on the render thread (`Image_Generate2D_OnRenderThread`, `Image_GenerateCube_OnRenderThread`,
+`RB_Resource_LoadVertexBuffer`, each followed by `RB_Resource_Flush`): the zombies device is not
+`D3DCREATE_MULTITHREADED` (`r_multithreaded_device 0`), and creating them from the main thread while the render
+thread presented the loading screen froze the game now and then at "Loading nodes and leafs" (2026-11-13: Present
+waited forever inside `d3d9.dll` holding `CRITSECT_DBHASH`, the main thread waited for that lock). With `asset_viewer.d3dbsp` on Kino every load step passes (materials, lights,
 lightmaps, light grid, surfaces, cull groups, AABB trees, cells, portals, nodes, entities, probes; version 43 probes
 are widened to the version 45 layout) and the game starts; it then stops on Kino's brush model `*8`, which the test
 BSP does not have.
