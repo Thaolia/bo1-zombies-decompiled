@@ -43,8 +43,16 @@ int main()
 {
     const LauncherSettings defaults;
     Check(std::string(kLauncherMaps[defaults.map].bsp) == "zombie_theater", "the default map is Kino");
-    Check(kLauncherMapCount == 11, "the ten zombies maps and Dead Ops Arcade are listed");
-    Check(std::string(kLauncherMaps[kLauncherMapCount - 1].bsp) == "zombietron", "Dead Ops Arcade is the last map");
+    Check(kLauncherMapCount == 12, "the ten zombies maps, Dead Ops Arcade and the native Nuketown are listed");
+    Check(std::string(kLauncherMaps[10].bsp) == "zombietron", "Dead Ops Arcade follows the ten zombies maps");
+    const int nuketown = kLauncherMapCount - 1;
+    Check(Launcher_MapKey(nuketown) == "mapkit:bo2_zm_nuked_bsp" && Launcher_MapKey(1) == "zombie_pentagon",
+          "the native Nuketown's menu.cfg key is not Five's, whose bsp it shares");
+    Check(Launcher_MapFileCount(0) == 0 && Launcher_MapFileCount(nuketown) == 3 &&
+              Launcher_MapFile(nuketown, 0) == "mods/mapkit/layouts/bo2_zm_nuked_bsp.json" &&
+              Launcher_MapFile(nuketown, 1) == "usermaps/zombie_bo2nuked/zombie_bo2nuked.ff" &&
+              Launcher_MapFile(nuketown, 2) == "main/maps/zombie_bo2nuked.d3dbsp",
+          "the native Nuketown needs its layout, zone and BSP on the SD card; Kino needs nothing");
     Check(SameSettings(Launcher_ParseSettings(""), defaults), "an empty menu.cfg gives the defaults");
 
     CheckLine(Launcher_BuildLaunchLine(defaults, ""),
@@ -105,6 +113,32 @@ int main()
         Check(line.size() > tail.size() && line.compare(line.size() - tail.size(), tail.size(), tail) == 0,
               "+devmap <map> ends every line");
     }
+
+    LauncherSettings nuke;
+    nuke.map = nuketown;
+    Check(Launcher_ParseSettings(Launcher_FormatSettings(nuke)).map == nuketown, "menu.cfg keeps the native Nuketown");
+    CheckLine(Launcher_BuildLaunchLine(nuke, ""),
+              "+set bo1_zombies 1 +set bo1_aimassist 1 +set aim_slowdown_enabled 1 +set aim_lockon_enabled 1"
+              " +set aim_autoaim_enabled 0 +set bo1_testclient_god 0 +set fs_game mods/mapkit"
+              " +set bo1_mod_mapkit bo2_zm_nuked_bsp +set fs_mods mapkit zinfo +set bo1_mod_zones zombie_bo2nuked"
+              " +set bo1_bspworld maps/zombie_bo2nuked.d3dbsp +set r_fullscreen 0 +set r_customMode 1280x720"
+              " +set com_maxfps 60 +set sm_enable 1 +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16"
+              " +set r_texFilterMipMode 0 +devmap zombie_pentagon",
+              "the native Nuketown: ZmClient's MapKit layout on Five, its zone and BSP world");
+    nuke.tabInfo = false;
+    nuke.startPoints = 5000;
+    const std::string nukeKit = Launcher_BuildLaunchLine(nuke, "");
+    Check(nukeKit.find(" +set fs_mods mapkit admin +set bo1_mod_zones") != std::string::npos &&
+              nukeKit.find(" +set zm_startpoints 5000") != std::string::npos,
+          "the start kit stacks mods/admin after mapkit");
+    nuke.tabInfo = false;
+    nuke.startPoints = 0;
+    Check(Launcher_BuildLaunchLine(nuke, "").find("fs_mods") == std::string::npos,
+          "without Tab info nor kit the native Nuketown sets fs_game only");
+    nuke.join = true;
+    nuke.serverHost = "192.168.1.10";
+    Check(Launcher_BuildLaunchLine(nuke, "").find("mapkit") == std::string::npos,
+          "a join ignores the native Nuketown's MapKit settings");
 
     LauncherSettings join;
     join.join = true;

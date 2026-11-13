@@ -10,12 +10,24 @@
 
 struct LauncherMap
 {
-    const char *bsp;   // the map name +devmap takes
-    const char *label; // what the menu shows
+    const char *bsp;    // the map name +devmap takes
+    const char *label;  // what the menu shows
+    const char *mapkit; // a MapKit layout (mods/mapkit/layouts/<it>.json) played on bsp, or null
+    const char *zone;   // the layout's world: usermaps/<zone>/<zone>.ff and main/maps/<zone>.d3dbsp (bo1_mod_zones,
+                        // bo1_bspworld), or null
 };
 
 extern const LauncherMap kLauncherMaps[];
 extern const int kLauncherMapCount;
+
+// menu.cfg's value for a map: its bsp, or "mapkit:<layout>" (ZmClient's spelling) for a layout, whose bsp is shared.
+std::string Launcher_MapKey(int map);
+
+// The files a map needs beside the game's own, relative to the game folder (sdmc:/switch/bo1zm/): the player's own
+// extraction of another game (docs/BO2_MAPS.md), which the menu offers only when it is on the SD card. Retail maps:
+// none.
+int Launcher_MapFileCount(int map);
+std::string Launcher_MapFile(int map, int i);
 
 // The start kit of a solo game, given by mods/admin when the player first spawns (zm_startpoints, zm_startperks; the
 // same choices as ZmClient's tools/zmclient/zmclient/profile.py). Points 0 keeps the game's own 500.

@@ -818,3 +818,11 @@ The native Nuketown goes with it when the `--bo2` folder also holds `usermaps/zo
 `mods/mapkit/imports/zm_nuked/zm_nuked.blockers.mesh.bin`). ZmClient offers
 "Mapkit : Nuketown native (Black Ops II, monde BSP)" only when the zone and the BSP are in the package, and adds
 `+set bo1_mod_zones zombie_bo2nuked +set bo1_bspworld maps/zombie_bo2nuked.d3dbsp` to the line.
+
+The Switch package carries the native map too (2026-11-13; `make_dist.sh`'s `bo2_switch_data`, about 220 MB): the
+`_bsp` layout, the zone, the BSP and the `bo2_*.iwi`, and of `imports/zm_nuked/` the links, the blockers' props and
+their images (not the MapKit mesh and collision, which the console does not offer). The start menu lists
+"Nuketown (BO2, natif)" when its layout, zone and BSP are on the SD card (`Launcher_MapFile`), with ZmClient's line:
+`+set fs_game mods/mapkit +set bo1_mod_mapkit bo2_zm_nuked_bsp`, `mapkit` first in a `fs_mods` stack, the zone and
+the BSP world, `+devmap zombie_pentagon`; `menu.cfg` keeps it as `map=mapkit:bo2_zm_nuked_bsp`. Checked by
+`launcher_config_test` and the NRO build; not yet run on the console.

@@ -6,19 +6,45 @@
 // The labels of tools/mod-launcher.hta's MAPS, Kino first: it is the default and the map every console test used.
 // Dead Ops Arcade is not in the .hta's list.
 const LauncherMap kLauncherMaps[] = {
-    {"zombie_theater", "Kino der Toten"},
-    {"zombie_pentagon", "Five"},
-    {"zombie_cosmodrome", "Ascension"},
-    {"zombie_coast", "Call of the Dead"},
-    {"zombie_temple", "Shangri-La"},
-    {"zombie_moon", "Moon"},
-    {"zombie_cod5_prototype", "Nacht der Untoten"},
-    {"zombie_cod5_asylum", "Verruckt"},
-    {"zombie_cod5_sumpf", "Shi No Numa"},
-    {"zombie_cod5_factory", "Der Riese"},
-    {"zombietron", "Dead Ops Arcade"},
+    {"zombie_theater", "Kino der Toten", nullptr, nullptr},
+    {"zombie_pentagon", "Five", nullptr, nullptr},
+    {"zombie_cosmodrome", "Ascension", nullptr, nullptr},
+    {"zombie_coast", "Call of the Dead", nullptr, nullptr},
+    {"zombie_temple", "Shangri-La", nullptr, nullptr},
+    {"zombie_moon", "Moon", nullptr, nullptr},
+    {"zombie_cod5_prototype", "Nacht der Untoten", nullptr, nullptr},
+    {"zombie_cod5_asylum", "Verruckt", nullptr, nullptr},
+    {"zombie_cod5_sumpf", "Shi No Numa", nullptr, nullptr},
+    {"zombie_cod5_factory", "Der Riese", nullptr, nullptr},
+    {"zombietron", "Dead Ops Arcade", nullptr, nullptr},
+    // ZmClient's "Mapkit : Nuketown native": MapKit's Nuketown on the world of its own BSP (tools/bo2/bo2_bsp.py)
+    {"zombie_pentagon", "Nuketown (BO2, natif)", "bo2_zm_nuked_bsp", "zombie_bo2nuked"},
 };
 const int kLauncherMapCount = int(sizeof(kLauncherMaps) / sizeof(kLauncherMaps[0]));
+
+std::string Launcher_MapKey(int map)
+{
+    const LauncherMap &m = kLauncherMaps[map];
+    return m.mapkit ? std::string("mapkit:") + m.mapkit : std::string(m.bsp);
+}
+
+int Launcher_MapFileCount(int map)
+{
+    const LauncherMap &m = kLauncherMaps[map];
+    return (m.mapkit ? 1 : 0) + (m.zone ? 2 : 0);
+}
+
+std::string Launcher_MapFile(int map, int i)
+{
+    const LauncherMap &m = kLauncherMaps[map];
+    if (m.mapkit && i-- == 0)
+        return std::string("mods/mapkit/layouts/") + m.mapkit + ".json";
+    if (m.zone && i == 0)
+        return std::string("usermaps/") + m.zone + "/" + m.zone + ".ff";
+    if (m.zone && i == 1)
+        return std::string("main/maps/") + m.zone + ".d3dbsp";
+    return "";
+}
 
 const int kLauncherStartPoints[] = {0, 1000, 2500, 5000, 10000, 25000, 50000, 100000};
 const int kLauncherStartPointCount = int(sizeof(kLauncherStartPoints) / sizeof(kLauncherStartPoints[0]));
@@ -131,7 +157,7 @@ void Apply(LauncherSettings *s, const std::string &key, const std::string &value
     else if (key == "map")
     {
         for (int i = 0; i < kLauncherMapCount; ++i)
-            if (value == kLauncherMaps[i].bsp)
+            if (value == Launcher_MapKey(i))
                 s->map = i;
     }
     else if (key == "aimassist")
@@ -236,7 +262,7 @@ std::string Launcher_FormatSettings(const LauncherSettings &s)
     out += "server=" + s.serverHost + "\n";
     out += "port=" + std::to_string(s.serverPort) + "\n";
     out += "name=" + s.playerName + "\n";
-    out += "map=" + std::string(kLauncherMaps[s.map].bsp) + "\n";
+    out += "map=" + Launcher_MapKey(s.map) + "\n";
     out += std::string("aimassist=") + (s.aimAssist ? "1" : "0") + "\n";
     out += std::string("aim_slowdown=") + (s.aimSlowdown ? "1" : "0") + "\n";
     out += std::string("aim_lockon=") + (s.aimLockon ? "1" : "0") + "\n";
@@ -275,8 +301,16 @@ std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::strin
     // The dedicated server stacks mods/zinfo for all its players itself (FS_ModStackNames), and decides its players'
     // start. Before the extra, so a launch_extra.cfg that sets its own fs_mods wins. mods/admin gives the start kit.
     const bool kit = !join && (s.startPoints > 0 || s.startPerks != 0 || s.startPower);
+    // A MapKit layout runs with fs_game mods/mapkit, which a fs_mods stack names first (ZmClient's solo_mod_flags).
+    const LauncherMap &map = kLauncherMaps[s.map];
+    const bool mapkit = !join && map.mapkit;
+    if (mapkit)
+        line += std::string(" +set fs_game mods/mapkit +set bo1_mod_mapkit ") + map.mapkit;
     if (!join && (s.tabInfo || kit))
-        line += std::string(" +set fs_mods") + (s.tabInfo ? " zinfo" : "") + (kit ? " admin" : "");
+        line += std::string(" +set fs_mods") + (mapkit ? " mapkit" : "") + (s.tabInfo ? " zinfo" : "") +
+                (kit ? " admin" : "");
+    if (mapkit && map.zone)
+        line += std::string(" +set bo1_mod_zones ") + map.zone + " +set bo1_bspworld maps/" + map.zone + ".d3dbsp";
     if (kit && s.startPower)
         line += " +set zm_startpower 1";
     if (kit && s.startPoints > 0)
