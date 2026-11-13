@@ -257,14 +257,28 @@ Pack-a-Punch. It now runs on the BSP world instead of its own mesh and collision
   (0.56, 0.73, 0.75), so sunlit ground and a model facing the sun match.
 - The lamps: BO2's 16 spots and cube-lit lamps (`<map>.d3dbsp.lights.csv`) are the BSP's primary lights 2 to 17
   (`bo2_bsp_light.add_lamps`, `d3dbsp.add_primary_light`: spots stay spots, the lamps become omni lights, colours
-  over the reference, no shadow map, `white_light` as Kino's spots, read from its zone). The lightmaps already hold
+  over the reference's luminance (see "Model light" below), no shadow map, `white_light` as Kino's spots, read from its zone). The lightmaps already hold
   their light; a light grid point takes the primary light of its floor in BO2 (the sun or a lamp) when that light
   reaches it, by majority over the floors around it: 1 255 points sit under a lamp, the houses' and the garage's.
   The BSP then has no light regions: with them (`hasLightRegions`), the engine replaces a grid entry's lamp by the
   caller's nearest light (`R_GetLightingAtPoint`).
 - The sky: BO2's sky model (`skybox_dlc0_zm_nuketown`) is the worldspawn's `skyboxmodel`, which BO1 draws around the
   viewer, its material a copy of `zombie_theater`'s `mtl_skybox_zombie_theater` (`mc_sky_cubemap_hdr`) with BO2's
-  cube map.
+  cube map, BO2's `skyBoxRotationSize` and a brightness (`cloudsHeights.z`) of 0.5 (2026-11-13). BO1's vertex
+  shader samples the cube map at the view direction turned by the constant's x, y, z, and through the origin when its
+  w (the size) is negative: Kino's sky is authored that way (w -8000), so with Kino's constant BO2's cube map hung
+  upside down, its grey, grainy ground overhead (the user's screenshots). BO2's constant (w 8000) keeps the sky up.
+  Kino's brightness, 4, then clipped 89 % of the sky to white (the engine's sky multiplier on a BSP world is far
+  above Five's, where the MapKit mesh shows the same cube map unclipped); 0.5 gives a blue sky with dark clouds and
+  no clipped pixel (mean grey 142 looking up from the street).
+- Model light (2026-11-13): props drew orange near the houses (a white door 104, 68, 49; the hedges brown). The light
+  grid's floor light without the sun is mostly light bounced off the orange ground, and over the reference (BO2's blue
+  sunlit ground) it came out 1.8 times more red than blue; the lamps, over the reference channel by channel too,
+  became up to 28 times more red than blue. The grid's colours are now grey at their luminance
+  (`AMBIENT_SATURATION` 0) and the lamps' colours go over the reference's luminance (they light the models only:
+  the lightmaps hold their light already), so a lamp keeps BO2's own colour. The same door: 80, 71, 60 (the warm
+  lamp beside it); the hedges keep their texture's red/green ratio (1.13, 1.11 on the MapKit mesh, which draws them
+  unlit).
 - The hunk is 96 MB with `bo1_bspworld`: 45.9 MB for the world with its props, plus 37.7 MB of temporary memory while
   the lightmaps load (one merged 2 048 x 2 048 group).
 
