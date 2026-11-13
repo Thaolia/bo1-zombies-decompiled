@@ -114,9 +114,10 @@ folders and archives in `build/dist`, one per platform:
 | `BO1Zombies_switch/` | an SD card tree, `switch/bo1zm/` with the `.nro`, `shaders.pack` and `shaders.dksh` | `.zip` |
 
 Each also holds the converted zones, the install's `main/*.iwd` and `localization.txt` (and `main/video` on PC), a
-`LISEZMOI.txt` and a `VERSION.txt` (commit, date, NRO link time). With `--no-game-data` the windows and linux packages
-go to `BO1Zombies_<platform>_nodata/` and hold no file of the game: the player installs them with ZmClient's
-Installation view, from their own Black Ops.
+`LISEZMOI.txt` and a `VERSION.txt` (commit, date, NRO link time). With `--no-game-data` the packages go to
+`BO1Zombies_<platform>_nodata/` and hold no file of the game: the player installs the windows and linux ones with
+ZmClient's Installation view, from their own Black Ops; the switch one holds the `.nro` and `mods/` only, to copy over
+a Switch package made with the game.
 
     tools/make_dist.sh                       # all three
     tools/make_dist.sh switch linux          # some
@@ -135,5 +136,14 @@ offers "Mapkit : Nuketown (Black Ops II)" and "Mapkit : TranZit (Black Ops II)" 
 for Stamin-Up). The extraction is game data, so `--bo2` cannot be combined with
 `--no-game-data`. Nuketown has over 2 000 props: ZmClient's Lancement view, "Modèles affichés par image" at 4096
 (`r_mod_sceneModels`), draws them all; 1024 (retail) drops the farthest.
+
+### Release on GitHub
+
+`.github/workflows/release.yml` builds the three programs on GitHub's machines and publishes a release holding one
+archive with the three `_nodata` packages. It starts by hand only: Actions, "Release", "Run workflow", with the tag to
+create (e.g. `v0.1.0`). It downloads the June 2010 DirectX SDK from Microsoft, builds `win64-msvc` with ZmClient and
+ZmAdmin (Nuitka) on Windows, the Linux program, `ffconv.exe` and the Linux ZmClient and ZmAdmin on Ubuntu, the `.nro`
+in devkitPro's `devkita64` container, then packages them with `tools/make_dist.sh --no-build --no-game-data`, as on a
+PC. The release holds no file of the game.
 
 French version: `README.fr.md`.

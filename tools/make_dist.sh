@@ -16,8 +16,9 @@
 #   --dxsdk DIR      June 2010 DirectX SDK root (Include/)           default: /mnt/c/SDKs/DXSDK_Jun10/DXSDK
 #   --archive KIND   auto | zip | tar | none     auto: zip for windows and switch, tar.gz for linux
 #   --no-build       package what is built; fail if anything is missing or out of date
-#   --no-game-data   windows and linux packages without any file of the game, in BO1Zombies_<platform>_nodata/:
-#                    the player installs them from their own Black Ops with ZmClient (Installation view)
+#   --no-game-data   packages without any file of the game, in BO1Zombies_<platform>_nodata/: on windows and
+#                    linux the player installs them from their own Black Ops with ZmClient (Installation view); the
+#                    switch one holds the .nro and mods/ only, the rest comes from a package made with the game
 #   --bo2 DIR        your own Black Ops II extraction: its maps (docs/BO2_MAPS.md, "Running it": DIR/mods/mapkit/
 #                    layouts/bo2_*.json and DIR/mods/mapkit/imports/; a native map also DIR/usermaps/<zone>/,
 #                    DIR/main/maps/<zone>.d3dbsp and DIR/main/images/bo2_*.iwi), its weapons (docs/BO2_WEAPONS.md:
@@ -83,7 +84,6 @@ wants() { local p; for p in "${PLATFORMS[@]}"; do [ "$p" = "$1" ] && return 0; d
 # A package without game data takes another folder: one that held the game files would keep them.
 SUFFIX=""
 if [ "$GAME_DATA" = 0 ]; then
-    wants switch && die "--no-game-data is for windows and linux: the Switch has no installer (ZmClient runs on a PC)"
     SUFFIX="_nodata"
 fi
 if [ -n "$BO2" ]; then
@@ -308,7 +308,8 @@ fi
 if wants switch; then
     [ "$BUILD" = 1 ] && build_switch
     need "$WORK/switch/Release/BO1Zombies.nro" "the Switch program"
-    build_dksh
+    # shaders.dksh is compiled from the game's shaders: none without the game data
+    if [ "$GAME_DATA" = 1 ]; then build_dksh; fi
 fi
 
 # ---------------------------------------------------------------- packages
@@ -426,6 +427,8 @@ copy_writable() { # <file> <dest dir>
 copy_windows_runtimes() { # <dest>: what a Windows without Visual C++ or the DirectX runtime lacks, 64-bit
     local sys=/mnt/c/Windows/System32 crt f missing=()
     crt="$(ls -d /mnt/c/Program\ Files*/Microsoft\ Visual\ Studio/*/*/VC/Redist/MSVC/*/x64/Microsoft.VC14*.CRT 2>/dev/null | sort | tail -1 || true)"
+    # WINDOWS_RUNTIMES: a folder holding the five DLLs, for a packaging without the Windows side (the CI's release job)
+    if [ -n "${WINDOWS_RUNTIMES:-}" ]; then crt="$WINDOWS_RUNTIMES"; sys="$WINDOWS_RUNTIMES"; fi
     for f in msvcp140.dll vcruntime140.dll vcruntime140_1.dll; do
         if [ -n "$crt" ] && [ -f "$crt/$f" ]; then copy_writable "$crt/$f" "$1"
         elif [ -f "$sys/$f" ]; then copy_writable "$sys/$f" "$1"
@@ -619,15 +622,35 @@ EOF
 }
 
 package_switch() {
-    local d="$OUT/BO1Zombies_switch" sd
+    local d="$OUT/BO1Zombies_switch$SUFFIX" sd
     sd="$d/switch/bo1zm"
     step "switch: $d"
     mkdir -p "$sd"
     cp "$WORK/switch/Release/BO1Zombies.nro" "$sd/"
-    game_data "$sd"
     # The start menu stacks mods/zinfo (Tab counter) and mods/admin (start points and perks): the engine reads mods
     # under its base folder, sdmc:/switch/bo1zm/mods (FS_Startup)
     rsync -a --delete "$ROOT/mods/" "$sd/mods/"
+    if [ "$GAME_DATA" = 0 ]; then
+        cat > "$d/LISEZMOI.txt" << 'EOF'
+BO1 Zombies, portage Nintendo Switch (homebrew, Atmosphère) : programme seul
+=============================================================================
+
+Ce dossier ne contient aucun fichier du jeu : BO1Zombies.nro et les mods (scripts) seulement. Il ne se lance pas
+seul. Il lui faut, dans /switch/bo1zm/ sur la carte SD, les fichiers tirés de VOTRE Call of Duty: Black Ops :
+  zone/ (les zones converties en 64 bits par ffconv), main/ (les .iwd), localization.txt,
+  shaders.pack (ffconv) et shaders.dksh (shaders.pack compilé par uam, l'outil deko3d de devkitPro).
+Ils viennent d'un paquet Switch fait sur votre PC avec votre jeu (tools/make_dist.sh switch, README.md,
+« Packages ») : copiez ce BO1Zombies.nro par-dessus celui du paquet, avec le dossier mods.
+Le .nro, shaders.pack et shaders.dksh doivent venir des mêmes sources : en cas de doute, refaites le paquet complet.
+
+LANCEMENT (mode application obligatoire)
+  Depuis l'accueil, MAINTENEZ R en lançant un jeu installé : le Homebrew Menu s'ouvre avec toute la mémoire.
+  Choisissez « BO1 Zombies ».
+EOF
+        write_version "$d" switch "nro build: $(cat "$WORK/switch/romfs/build.txt")"
+        return
+    fi
+    game_data "$sd"
     if [ "$GAME_DATA" = 1 ]; then bo2_switch_data "$sd"; fi
     cp "$ZONES/shaders.pack" "$WORK/dksh/shaders.dksh" "$sd/"
     # Bring-up switches (no menu, debug dumps, applet mode) never belong in a package.
@@ -687,7 +710,7 @@ make_archive() { # <package dir name> <default kind>
 check_space "$OUT"
 wants windows && { package_windows; make_archive "BO1Zombies_windows$SUFFIX" zip; }
 wants linux && { package_linux; make_archive "BO1Zombies_linux$SUFFIX" tar; }
-wants switch && { package_switch; make_archive BO1Zombies_switch zip; }
+wants switch && { package_switch; make_archive "BO1Zombies_switch$SUFFIX" zip; }
 
 step "done: $OUT"
 for p in "${PLATFORMS[@]}"; do du -sh "$OUT/BO1Zombies_$p$SUFFIX" | sed 's/\t/  /'; done

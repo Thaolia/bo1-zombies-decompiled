@@ -178,8 +178,9 @@ ZmClient la propose sous « Mapkit : Nuketown native (Black Ops II, monde BSP) �
 
 Chaque paquet contient aussi les zones converties, les `main/*.iwd` et le `localization.txt` de l'install (plus
 `main/video` sur PC), un `LISEZMOI.txt` et un `VERSION.txt` (commit, date, heure du lien du NRO). Avec
-`--no-game-data`, les paquets windows et linux vont dans `BO1Zombies_<plateforme>_nodata/` sans aucun fichier du jeu :
-le joueur les installe avec la vue Installation de ZmClient, depuis son propre Black Ops.
+`--no-game-data`, les paquets vont dans `BO1Zombies_<plateforme>_nodata/` sans aucun fichier du jeu : le joueur installe
+ceux de windows et linux avec la vue Installation de ZmClient, depuis son propre Black Ops ; celui de la Switch ne
+contient que le `.nro` et `mods/`, à copier par-dessus un paquet Switch fait avec le jeu.
 
     tools/make_dist.sh                       # les trois
     tools/make_dist.sh switch linux          # une partie
@@ -195,6 +196,15 @@ Sans `--no-build`, le script compile ce qu'il faut, en incrémental :
 
 Autres options : `--out`, `--game`, `--zones`, `--dxsdk`, `--archive auto|zip|tar|none`, `--jobs` ; `--help` les
 décrit. Les paquets contiennent vos propres fichiers de jeu : gardez-les pour vos appareils, ne les publiez pas.
+
+### Release sur GitHub
+
+`.github/workflows/release.yml` compile les trois programmes sur les machines de GitHub et publie une release avec une
+archive des trois paquets `_nodata`. Elle ne se lance qu'à la main : Actions, « Release », « Run workflow », avec le
+tag à créer (par exemple `v0.1.0`). Elle télécharge le SDK DirectX de juin 2010 chez Microsoft, compile `win64-msvc`,
+ZmClient et ZmAdmin (Nuitka) sous Windows, le programme Linux, `ffconv.exe` et ZmClient/ZmAdmin Linux sous Ubuntu, le
+`.nro` dans le conteneur `devkita64` de devkitPro, puis empaquette le tout avec
+`tools/make_dist.sh --no-build --no-game-data`, comme sur un PC. La release ne contient aucun fichier du jeu.
 
 `--bo2 DIR` ajoute aussi aux paquets windows et linux votre propre extraction d'une map de Black Ops II
 (`docs/BO2_MAPS.md`, « Running it »). Le script prend `DIR/mods/mapkit/layouts/bo2_*.json` et

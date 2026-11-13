@@ -1,0 +1,272 @@
+# Builds the Windows, Linux and Switch programs and publishes one release archive holding the three packages.
+#
+# Started by hand only (Actions > Release > Run workflow): nothing runs on a push.
+#
+# The packages hold NO file of the game (CLAUDE.md: never upload game data). They are tools/make_dist.sh's
+# --no-game-data packages, made by the same script as on a PC: Windows and Linux are installed from the player's own
+# Black Ops with ZmClient (Installation view); the Switch one is the .nro and mods/ only, to copy over a Switch package
+# made on a PC with the game (its LISEZMOI.txt says so).
+#
+# The June 2010 DirectX SDK is downloaded from Microsoft: every build reads its headers, the Windows one links
+# d3dx9.lib, and the Windows package ships the two redistributable DLLs of its Redist cabinets (d3dx9_43, xinput1_3).
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag of the release (e.g. v0.1.0); created on the commit the workflow runs on"
+        required: true
+      prerelease:
+        description: "Mark it as a pre-release"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  DXSDK_URL: https://download.microsoft.com/download/A/E/7/AE743F1F-632B-4809-87A9-AA1BB3458E31/DXSDK_Jun10.exe
+
+jobs:
+  dxsdk:
+    name: DirectX SDK (June 2010)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: dxsdk
+          key: dxsdk-jun10-v1
+      - name: Download and extract Include, Lib and Redist
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q p7zip-full
+          curl -fsSL -o DXSDK_Jun10.exe "$DXSDK_URL"
+          7z x -y -oraw DXSDK_Jun10.exe > /dev/null
+          # the root is the folder that holds Include/ (the installer's DXSDK/)
+          inc="$(find raw -maxdepth 3 -type d -name Include | head -1)"
+          [ -n "$inc" ] || { echo "no Include/ in the SDK"; exit 1; }
+          root="$(dirname "$inc")"
+          mkdir dxsdk
+          cp -r "$root/Include" "$root/Lib" "$root/Redist" dxsdk/
+          ls dxsdk dxsdk/Lib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dxsdk
+          path: dxsdk
+          retention-days: 1
+
+  windows:
+    name: Windows (win64-msvc, ZmClient, ZmAdmin)
+    needs: dxsdk
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: dxsdk
+          path: dxsdk
+      - name: Build BO1Zombies.exe
+        shell: pwsh
+        run: |
+          $sdk = (Resolve-Path dxsdk).Path -replace '\\', '/'
+          cmake --preset win64-msvc "-DDXSDK_DIR=$sdk"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build --preset win64-msvc-release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build zmadmin.exe and zmclient.exe (Nuitka, as tools/*/build.sh windows)
+        shell: pwsh
+        run: |
+          python -m pip install -q --upgrade nuitka windows-curses zstandard ordered-set
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $common = '--onefile', '--assume-yes-for-downloads', '--remove-output', '--python-flag=no_site',
+                    '--python-flag=no_docstrings', '--msvc=latest', '--include-module=_curses'
+          Push-Location tools/zmadmin
+          python -m nuitka @common --include-package=zmadmin --output-dir=../../build/zmadmin/out-win `
+              --output-filename=zmadmin.exe main.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Pop-Location
+          $env:PYTHONPATH = (Resolve-Path tools/zmadmin).Path
+          Push-Location tools/zmclient
+          python -m nuitka @common --include-package=zmclient --include-package=zmadmin `
+              --output-dir=../../build/zmclient/out-win --output-filename=zmclient.exe main.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Pop-Location
+          New-Item -ItemType Directory -Force out/zmadmin/windows, out/zmclient/windows, out/runtimes | Out-Null
+          Copy-Item build/zmadmin/out-win/zmadmin.exe out/zmadmin/windows/
+          Copy-Item build/zmclient/out-win/zmclient.exe out/zmclient/windows/
+          & out/zmadmin/windows/zmadmin.exe --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & out/zmclient/windows/zmclient.exe --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Collect the program and the Visual C++ runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out/win64-msvc/Release | Out-Null
+          Copy-Item build/win64-msvc/Release/BO1Zombies.exe out/win64-msvc/Release/
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $crt = Get-ChildItem "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC14*.CRT" -Directory | Sort-Object FullName | Select-Object -Last 1
+          if (-not $crt) { Write-Error "no Visual C++ runtime under $vs"; exit 1 }
+          Copy-Item "$($crt.FullName)\msvcp140.dll", "$($crt.FullName)\vcruntime140.dll", "$($crt.FullName)\vcruntime140_1.dll" out/runtimes/
+          Get-ChildItem -Recurse out | Select-Object FullName, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: out
+          retention-days: 1
+
+  linux:
+    name: Linux (clang, ffconv, ZmClient, ZmAdmin)
+    needs: dxsdk
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: dxsdk
+          path: dxsdk
+      - name: Packages
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q clang ninja-build cmake python3 python3-clang python3-venv libsdl2-dev \
+              libncurses-dev g++-mingw-w64-i686 gcc-mingw-w64-i686 rsync patchelf
+      - name: Build BO1Zombies (Linux)
+        run: |
+          cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang \
+              -DCMAKE_CXX_COMPILER=clang++ -DDXSDK_DIR="$PWD/dxsdk"
+          ninja -C build/linux BO1Zombies
+      - name: Build ffconv.exe (MinGW i686)
+        run: |
+          cd tools/ffconv
+          cmake --preset ffconv -DDXSDK_DIR="$GITHUB_WORKSPACE/dxsdk"
+          cmake --build --preset ffconv
+      - name: Build zmadmin and zmclient (Nuitka)
+        run: |
+          tools/zmadmin/build.sh linux
+          tools/zmclient/build.sh linux
+      - name: Collect
+        run: |
+          mkdir -p out/linux/Release out/ffconv out/zmadmin/linux out/zmclient/linux
+          cp build/linux/Release/BO1Zombies out/linux/Release/
+          cp build/ffconv/ffconv.exe out/ffconv/
+          cp build/zmadmin/linux/zmadmin out/zmadmin/linux/
+          cp build/zmclient/linux/zmclient out/zmclient/linux/
+          ls -lR out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: out
+          retention-days: 1
+
+  switch:
+    name: Switch (devkitA64, libnx, deko3d)
+    needs: dxsdk
+    runs-on: ubuntu-24.04
+    container: devkitpro/devkita64:latest
+    steps:
+      - name: Packages
+        run: |
+          apt-get update -q
+          apt-get install -y -q git python3 python3-clang clang cmake ninja-build rsync
+          dkp-pacman -Syu --noconfirm
+          dkp-pacman -S --noconfirm --needed switch-sdl2 deko3d
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: dxsdk
+          path: dxsdk
+      - name: Build BO1Zombies.nro
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          cmake -S . -B build/switch -G Ninja -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/Switch.cmake" -DDXSDK_DIR="$PWD/dxsdk"
+          ninja -C build/switch BO1Zombies
+      - name: Collect
+        run: |
+          mkdir -p out/switch/Release out/switch/romfs
+          cp build/switch/Release/BO1Zombies.nro out/switch/Release/
+          cp build/switch/romfs/build.txt out/switch/romfs/
+          ls -lR out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: switch
+          path: out
+          retention-days: 1
+
+  release:
+    name: Packages and release
+    needs: [windows, linux, switch]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Packages (tools/make_dist.sh --no-build --no-game-data)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q cabextract rsync zip
+          A=artifacts
+          # where make_dist.sh looks for each program
+          mkdir -p build/win64-msvc/Release build/zmadmin/windows build/zmclient/windows build/zmadmin/linux \
+              build/zmclient/linux build/ffconv work/linux/Release work/switch/Release work/switch/romfs runtimes
+          cp $A/windows/win64-msvc/Release/BO1Zombies.exe build/win64-msvc/Release/
+          cp $A/windows/zmadmin/windows/zmadmin.exe build/zmadmin/windows/
+          cp $A/windows/zmclient/windows/zmclient.exe build/zmclient/windows/
+          cp $A/windows/runtimes/*.dll runtimes/
+          cp $A/linux/linux/Release/BO1Zombies work/linux/Release/
+          cp $A/linux/ffconv/ffconv.exe build/ffconv/
+          cp $A/linux/zmadmin/linux/zmadmin build/zmadmin/linux/
+          cp $A/linux/zmclient/linux/zmclient build/zmclient/linux/
+          cp $A/switch/switch/Release/BO1Zombies.nro work/switch/Release/
+          cp $A/switch/switch/romfs/build.txt work/switch/romfs/
+          # the DirectX DLLs a fresh Windows lacks, from the SDK's redistributable cabinets
+          cabextract -q -d runtimes -F d3dx9_43.dll $A/dxsdk/Redist/Jun2010_d3dx9_43_x64.cab
+          cabextract -q -d runtimes -F xinput1_3.dll $A/dxsdk/Redist/APR2007_xinput_x64.cab
+          chmod +x work/linux/Release/BO1Zombies build/zmadmin/linux/zmadmin build/zmclient/linux/zmclient
+          # artifacts are newer than the checkout, so --no-build takes them as up to date
+          touch build/*/*/* build/ffconv/ffconv.exe
+          ls -l runtimes
+          WINDOWS_RUNTIMES="$PWD/runtimes" tools/make_dist.sh --no-build --no-game-data --archive none \
+              --work "$PWD/work" --out "$PWD/dist" windows linux switch
+      - name: One archive with the three packages
+        id: archive
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          case "$TAG" in *[!A-Za-z0-9._-]*|"") echo "tag: letters, digits, '.', '_' or '-' only"; exit 1 ;; esac
+          name="BO1Zombies_$TAG.zip"
+          cd dist
+          zip -q -r -y "$name" BO1Zombies_windows_nodata BO1Zombies_linux_nodata BO1Zombies_switch_nodata
+          ls -l "$name"
+          echo "file=dist/$name" >> "$GITHUB_OUTPUT"
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: BO1 Zombies ${{ inputs.tag }}
+          prerelease: ${{ inputs.prerelease }}
+          files: ${{ steps.archive.outputs.file }}
+          body: |
+            Windows, Linux and Switch builds of the port, from ${{ github.sha }}.
+
+            **No file of the game is included.** You need your own copy of Call of Duty: Black Ops.
+            - Windows and Linux: run `zmclient`, Installation view (F7): it copies the game files from your install
+              and converts the zones.
+            - Switch: the `.nro` and `mods/` only. Copy them over a Switch package made on a PC with your game
+              (`tools/make_dist.sh switch`); see `BO1Zombies_switch_nodata/LISEZMOI.txt`.
