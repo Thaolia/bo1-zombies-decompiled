@@ -114,6 +114,7 @@ DEFAULTS = {
     "window": "borderless",
     "window_size": "1280x720",
     "fps_counter": False,
+    "run_info": 1,                      # bo1_runinfo: 0 off, 1 on the loading screen, 2 also in a corner in game
     "scene_models": 1024,              # one of SCENE_MODEL_CHOICES
     # aim assist (gamepad): "" leaves the game's value, "1" / "0" sets it
     "aim_assist": "",
@@ -216,6 +217,8 @@ class Profile:
                 self.data[key] = 0
         if self.data["start_points"] not in START_POINT_CHOICES:
             self.data["start_points"] = DEFAULTS["start_points"]
+        if self.data["run_info"] not in (0, 1, 2):
+            self.data["run_info"] = DEFAULTS["run_info"]
         if self.data["far_respawn"] not in FAR_RESPAWN_CHOICES:
             self.data["far_respawn"] = DEFAULTS["far_respawn"]
         self.data["start_perks"] = [k for k, _ in START_PERKS if k in self.data["start_perks"]]
@@ -572,6 +575,7 @@ def build_command(p, exe, dist_root, launch_cfg="", player=1):
     add_scene_models(argv, p["scene_models"])
     if p["fps_counter"]:
         argv += ["+set", "bo1_fpscounter", "1"]
+    argv += ["+set", "bo1_runinfo", str(p["run_info"])]
     for key, dvar in AIM_DVARS:
         if p[key] in ("0", "1"):
             argv += ["+set", dvar, p[key]]

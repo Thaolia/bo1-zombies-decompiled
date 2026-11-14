@@ -122,6 +122,7 @@ enum Item
     ITEM_AIM_SLOWDOWN,
     ITEM_AIM_LOCKON,
     ITEM_AIM_AUTOAIM,
+    ITEM_RUNINFO,
     ITEM_GOD,
     ITEM_TABINFO,
     ITEM_KIT,
@@ -139,6 +140,7 @@ enum Item
     ITEM_NET_HOST,
     ITEM_NET_PORT,
     ITEM_NET_NAME,
+    ITEM_NET_BO2W,
     ITEM_NET_LANAUTO,
     ITEM_NET_SCAN,
     ITEM_NET_FOUND_FIRST,
@@ -186,11 +188,12 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_MAIN, 11, "  Ralentissement", "La visee ralentit quand le reticule passe sur un zombie."},
     {VIEW_MAIN, 12, "  Verrouillage", "La visee suit le zombie vise."},
     {VIEW_MAIN, 13, "  Visee auto", "En visant (ZL), le reticule saute sur le zombie le plus proche."},
+    {VIEW_MAIN, 14, "Infos speedrun", "Reglages et hash du programme et des zones: au chargement, ou aussi en jeu."},
     {VIEW_MAIN, 15, "God mode", "Les zombies ne peuvent pas tuer le joueur (partie solo)."},
     {VIEW_MAIN, 16, "Compteur zombies", "Zombies en vie et restants dans la manche, a cote du tableau des scores."},
     {VIEW_MAIN, 17, "Depart", "A: points et atouts donnes a l'arrivee sur la map (partie solo)."},
     {VIEW_MAIN, 19, "Rendu", "deko3d: le plus rapide. OpenGL: l'ancien chemin, plus lent."},
-    {VIEW_MAIN, 20, "Resolution", "480p: image moins nette mais plus de FPS. 720p: la resolution de l'ecran."},
+    {VIEW_MAIN, 20, "Resolution", "720p: celle de l'ecran. 540p, 480p: image moins nette, plus de FPS (en ligne)."},
     {VIEW_MAIN, 21, "Limite de FPS", "30: plus stable et plus econome en batterie. 60: plus fluide."},
     {VIEW_MAIN, 22, "Ombres", "Ombres dynamiques. Les couper fait gagner des FPS."},
     {VIEW_MAIN, 23, "Filtre de texture", "Nettete des textures au loin. 16x: le plus net. Bilineaire: le plus leger."},
@@ -202,6 +205,7 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_SERVER, 9, "Adresse IP", "A: l'adresse IP du PC qui fait tourner le serveur (Server.bat, Server.sh)."},
     {VIEW_SERVER, 10, "Port", "A: le port UDP du serveur, 3074 par defaut."},
     {VIEW_SERVER, 11, "Nom du joueur", "A: votre nom sur le serveur (lettres, chiffres, _ - .), vide: celui du jeu."},
+    {VIEW_SERVER, 14, "Armes BO2", "Oui: charge vos armes Black Ops II (mods/bo2weapons), pour un serveur qui les a."},
     {VIEW_SERVER, 12, "Recherche auto", "Oui: cherche les serveurs du reseau local a l'ouverture de cet ecran."},
     {VIEW_SERVER, 13, "Chercher maintenant", "A: cherche les serveurs du reseau local (une seconde)."},
 #define NET_FOUND(row) {VIEW_SERVER, row, nullptr, "A: rejoindre ce serveur (adresse et port remplis, connexion activee)."}
@@ -255,6 +259,8 @@ bool Selectable(const LauncherSettings &s, View view, int item)
         return !s.join;
     if (FoundItem(item))
         return size_t(item - ITEM_NET_FOUND_FIRST) < s_found.size();
+    if (item == ITEM_NET_BO2W)
+        return s.bo2WeaponsInstalled;
     return true;
 }
 
@@ -337,7 +343,7 @@ std::string ValueText(const LauncherSettings &s, int item)
     case ITEM_KIT_FAR:
         return s.farRespawn > 0 ? "Au-dela de " + std::to_string(s.farRespawn) : std::string("Non");
     case ITEM_RESOLUTION:
-        return s.height == 480 ? "480p" : "720p";
+        return s.height == 480 ? "480p" : s.height == 540 ? "540p" : "720p";
     case ITEM_MAXFPS:
         return std::to_string(s.maxFps);
     case ITEM_SHADOWS:
@@ -346,10 +352,14 @@ std::string ValueText(const LauncherSettings &s, int item)
         return Launcher_TexFilterLabel(s.texFilter);
     case ITEM_FPSCOUNTER:
         return YesNo(s.fpsCounter);
+    case ITEM_RUNINFO:
+        return s.runInfo == 0 ? "Non" : s.runInfo == 1 ? "Au chargement" : "Chargement + en jeu";
     case ITEM_NET_ENABLE:
         return s.join ? "Activee" : "Desactivee";
     case ITEM_NET_LANAUTO:
         return YesNo(s.lanAuto);
+    case ITEM_NET_BO2W:
+        return s.bo2WeaponsInstalled ? YesNo(s.joinBo2Weapons) : "absentes de la carte SD";
     case ITEM_NET_SCAN:
         if (!s_searched)
             return "pas encore lancee";
@@ -386,6 +396,9 @@ void Change(LauncherSettings *s, int item, int dir)
     case ITEM_NET_LANAUTO:
         s->lanAuto = !s->lanAuto;
         break;
+    case ITEM_NET_BO2W:
+        s->joinBo2Weapons = !s->joinBo2Weapons;
+        break;
     case ITEM_MAP:
         do
             s->map = (s->map + dir + kLauncherMapCount) % kLauncherMapCount;
@@ -419,8 +432,14 @@ void Change(LauncherSettings *s, int item, int dir)
         s->startPap = !s->startPap;
         break;
     case ITEM_RESOLUTION:
-        s->height = s->height == 720 ? 480 : 720;
+    {
+        static const int kHeights[] = {720, 540, 480};
+        int at = 0;
+        while (at < 2 && kHeights[at] != s->height)
+            ++at;
+        s->height = kHeights[(at + dir + 3) % 3];
         break;
+    }
     case ITEM_MAXFPS:
         s->maxFps = s->maxFps == 60 ? 30 : 60;
         break;
@@ -432,6 +451,9 @@ void Change(LauncherSettings *s, int item, int dir)
         break;
     case ITEM_FPSCOUNTER:
         s->fpsCounter = !s->fpsCounter;
+        break;
+    case ITEM_RUNINFO:
+        s->runInfo = (s->runInfo + dir + 3) % 3;
         break;
     case ITEM_KIT_FAR:
     {
@@ -834,9 +856,12 @@ LauncherResult Launcher_Run(const char *buildStamp, char *line, size_t lineSize,
         Log("menu.cfg map %s: its files are not on the SD card, Kino instead", Launcher_MapKey(s.map).c_str());
         s.map = 0;
     }
-    Log("menu.cfg read: map %s, backend %s, server %s (%s)", Launcher_MapKey(s.map).c_str(),
+    struct stat bo2weapons;
+    s.bo2WeaponsInstalled = stat("sdmc:/switch/bo1zm/mods/bo2weapons/mod.ff", &bo2weapons) == 0;
+    Log("menu.cfg read: map %s, backend %s, server %s (%s), BO2 weapons %s", Launcher_MapKey(s.map).c_str(),
         Launcher_BackendName(s.backend),
-        s.serverHost.empty() ? "-" : Launcher_ServerAddress(s).c_str(), s.join ? "join" : "solo");
+        s.serverHost.empty() ? "-" : Launcher_ServerAddress(s).c_str(), s.join ? "join" : "solo",
+        !s.bo2WeaponsInstalled ? "not on the SD card" : s.joinBo2Weapons ? "loaded to join" : "off");
     Screen screen;
     screen.buildStamp = buildStamp;
     // The first battery query logs through stdout (switch_main.cpp's BootLog), which the console would print over the

@@ -18,6 +18,7 @@
 #include <cgame/cg_camera.h>
 #include <cgame/cg_compass.h>
 #include <bgame/bg_misc.h>
+#include <qcommon/mod_runinfo.h>
 #include <ui_mp/ui_main_mp.h>
 #include <qcommon/threads.h>
 #include <win32/win_main.h>
@@ -121,6 +122,60 @@ static void CL_DrawModFpsCounter()
 #endif
 }
 
+// mod: bo1_runinfo (qcommon/mod_runinfo.h) - 1: while a level loads, the settings that change a run and the hash of
+// the program and its zones at the bottom of the screen; 2: also in a corner during play, for streams and speedruns.
+// Off by default in the 32-bit build, the reference that must look as the original.
+static void CL_DrawModRunInfo()
+{
+    static const dvar_t *bo1_runinfo;
+    static std::string loggedHash;
+    if (!bo1_runinfo)
+#if defined(_WIN64) || defined(__x86_64__) || defined(__aarch64__)
+        bo1_runinfo = _Dvar_RegisterInt("bo1_runinfo", 1, 0, 2, 1,
+#else
+        bo1_runinfo = _Dvar_RegisterInt("bo1_runinfo", 0, 0, 2, 1,
+#endif
+                                        "mod: 1 = settings and program/zone hash on the loading screen, 2 = also in game");
+    if (!cls.consoleFont)
+        return;
+    const int state = CL_GetLocalClientConnectionState(0);
+    int zones = 0;
+    if (state == CA_ACTIVE && bo1_runinfo->current.integer > 0)
+    {
+        // once per level, the final hash goes to the log, where a run can be checked afterwards
+        const std::string hash = RunInfo_Hash(&zones);
+        if (hash != loggedHash)
+        {
+            loggedHash = hash;
+            Com_Printf(0, "runinfo: %s | SHA-512 of the program and %d zones: %s\n", RunInfo_Options().c_str(), zones,
+                       hash.c_str());
+            const std::string program = RunInfo_ProgramHash();
+            Com_Printf(0, "runinfo: program SHA-512 (sha512sum of the executable): %s\n",
+                       program.empty() ? "could not read the executable" : program.c_str());
+        }
+    }
+    if (bo1_runinfo->current.integer <= 0 || state < CA_CONNECTING || (state == CA_ACTIVE && bo1_runinfo->current.integer < 2))
+        return;
+    static const float color[4] = { 1.0f, 1.0f, 1.0f, 0.85f };
+    const std::string hash = RunInfo_Hash(&zones);
+    const std::string options = RunInfo_Options();
+    const float h = (float)R_TextHeight(cls.consoleFont);
+    const float bottom = (float)cls.vidConfig.displayHeight - 6.0f;
+    if (state != CA_ACTIVE)
+    {
+        const std::string lines[3] = { "BO1 Zombies Enhanced  |  " + options,
+                                       "SHA-512 (program + " + std::to_string(zones) + " zones): " + hash.substr(0, 64),
+                                       hash.substr(64) };
+        for (int i = 0; i < 3; ++i)
+            R_AddCmdDrawText(const_cast<char *>(lines[i].c_str()), 0x7FFFFFFF, cls.consoleFont, 8.0f, bottom - (2 - i) * (h + 2.0f), 1.0f,
+                             1.0f, 0.0f, color, 3);
+        return;
+    }
+    const std::string corner = options + "  #" + hash.substr(0, 16);
+    const float x = (float)cls.vidConfig.displayWidth - (float)R_TextWidth(corner.c_str(), 0, cls.consoleFont) - 6.0f;
+    R_AddCmdDrawText(const_cast<char *>(corner.c_str()), 0x7FFFFFFF, cls.consoleFont, x, bottom, 1.0f, 1.0f, 0.0f, color, 3);
+}
+
 void __cdecl CL_DrawScreen(int localClientNum)
 {
     PROF_SCOPED("CL_DrawScreen");
@@ -142,6 +197,7 @@ void __cdecl CL_DrawScreen(int localClientNum)
         CG_DrawVersion();
     CG_DrawShaderWarming(); // zombies: SP 0x004075F9 (no-op in MP)
     CL_DrawModFpsCounter(); // mod
+    CL_DrawModRunInfo(); // mod
     Con_DrawConsole(localClientNum);
     DevGui_Draw(localClientNum);
 }

@@ -77,6 +77,9 @@ ROW_HELP = {
     "window": "Sans bordure : une fenêtre de la taille de l'écran (comme Play.bat). Fenêtre : la taille ci-dessous. "
               "Plein écran : à la résolution de config.cfg (vue Config du jeu, F5).",
     "window_size": "La taille de la fenêtre en mode Fenêtre, LARGEURxHAUTEUR.",
+    "run_info": "Les réglages qui changent une partie et un hash SHA-512 du programme et des zones chargées "
+                "(bo1_runinfo), en bas de l'écran de chargement, ou aussi dans un coin pendant la partie, pour un "
+                "stream ou un speedrun. Le hash complet est aussi écrit dans console_mp.log (ligne runinfo:).",
     "fps_counter": "Le petit compteur d'images par seconde du portage, en haut à gauche.",
     "scene_models": "Les modèles que le jeu dessine par image (r_mod_sceneModels ; 1024 dans le jeu d'origine). Une map "
                     "importée par Mapkit en a bien plus (Nuketown : 2 096 props) : à 1024 les plus lointains manquent "
@@ -185,3 +188,5 @@ GLOBAL_HELP = [
     "Souris      clic : choisir un onglet, une ligne ou un bouton ; double-clic : modifier ou exécuter la ligne ; "
     "molette : défiler. Pour sélectionner du texte dans le terminal, tenir Maj (ou lancer zmclient --no-mouse).",
 ]
+
+RUN_INFO_LABELS = {0: "non", 1: "au chargement", 2: "chargement + en jeu"}

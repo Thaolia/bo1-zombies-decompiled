@@ -14,6 +14,8 @@
 #include "db_ff64.h"
 #include "db_load.h"
 #include <tl/tl_system.h>
+#include <qcommon/mod_runinfo.h>
+#include <zlib/zlib.h>
 
 volatile int g_totalSize;
 volatile unsigned int g_loadedSize;
@@ -107,6 +109,12 @@ void __cdecl DB_CancelLoadXFile()
     }
 }
 
+// mod: the zone file's CRC32 for the run info (qcommon/mod_runinfo.h), over each 256 KB read as it completes. One read
+// is outstanding at a time (DB_ReadXFileStage asserts it), so the completed one is the next chunk of the file.
+static unsigned int s_runInfoCrc;
+static unsigned int s_runInfoOffset;
+static unsigned int s_runInfoSize;
+
 signed __int32 DB_WaitXFileStage()
 {
     signed __int32 result; // eax
@@ -131,6 +139,12 @@ signed __int32 DB_WaitXFileStage()
     waitStart = Sys_Milliseconds();
     SleepEx(0xFFFFFFFF, 1);
     g_totalWait += Sys_Milliseconds() - waitStart;
+    if ( s_runInfoOffset < s_runInfoSize )
+    {
+        const unsigned int chunk = s_runInfoSize - s_runInfoOffset < 0x40000u ? s_runInfoSize - s_runInfoOffset : 0x40000u;
+        s_runInfoCrc = crc32(s_runInfoCrc, &g_load.compressBufferStart[s_runInfoOffset % 0x80000], chunk);
+    }
+    s_runInfoOffset += 0x40000;
     result = _InterlockedExchangeAdd(&g_loadedSize, 1u);
     g_load.stream.avail_in += 0x40000;
     return result;
@@ -636,7 +650,11 @@ char __cdecl DB_LoadXFile(
     g_load.stream.next_in = buf;
     g_load.stream.avail_in = 0;
     g_load.deflateBufferPos = 0x8000;
+    s_runInfoCrc = crc32(0L, Z_NULL, 0);
+    s_runInfoOffset = 0;
+    s_runInfoSize = GetFileSize(g_load.f, 0);
     DB_LoadXFileInternal();
+    RunInfo_ZoneLoaded(filename, s_runInfoCrc, s_runInfoSize); // mod
     return 1;
 }
 

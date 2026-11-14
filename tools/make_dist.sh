@@ -385,11 +385,19 @@ bo2_data() { # <dest>
     fi
 }
 
-# The Switch's share of the player's Black Ops II maps: the native ones only (the start menu offers those, not the
-# MapKit meshes): each <layout>_bsp.json with its zone, BSP and colour maps, and of its imports/<map>/ the node
-# links, the blockers' props and their images, without the MapKit mesh and collision it does not use.
+# The Switch's share of the player's Black Ops II extraction: the weapons (mod.ff and images, as on PC), and of the maps
+# the native ones only (the start menu offers those, not the MapKit meshes): each <layout>_bsp.json with its zone, BSP
+# and colour maps, and of its imports/<map>/ the node links, the blockers' props and their images, without the MapKit
+# mesh and collision it does not use.
 bo2_switch_data() { # <dest>
-    [ -n "$BO2" ] && [ $BO2_MAPS = 1 ] || return 0
+    [ -n "$BO2" ] || return 0
+    # the weapons, for a join to a server that has them (the start menu loads them by default, "Armes BO2")
+    if [ $BO2_WEAPONS = 1 ]; then
+        mkdir -p "$1/mods/bo2weapons"
+        rsync -a "$BO2/mods/bo2weapons/mod.ff" "$1/mods/bo2weapons/"
+        rsync -a --delete "$BO2/mods/bo2weapons/images/" "$1/mods/bo2weapons/images/"
+    fi
+    [ $BO2_MAPS = 1 ] || return 0
     [ -d "$BO2/usermaps" ] && ls "$BO2"/main/maps/*.d3dbsp > /dev/null 2>&1 || return 0
     mkdir -p "$1/mods/mapkit/layouts" "$1/mods/mapkit/imports" "$1/usermaps" "$1/main/maps" "$1/main/images"
     rsync -a --include='bo2_*_bsp.json' --exclude='*' "$BO2/mods/mapkit/layouts/" "$1/mods/mapkit/layouts/"
@@ -558,6 +566,12 @@ TAB         en tenant Tab, les zombies en vie et ceux qui restent dans la manche
             (mod zinfo, actif par défaut en solo et sur le serveur ; « zinfo 0 » dans la console le cache).
 ZOMBIES     /zm_where dans la console : la position de chaque zombie vivant et sa distance, du plus proche au
             plus loin (un zombie qu'on entend sans le voir) ; aussi dans console_mp.log.
+SPEEDRUN    en bas de l'écran de chargement : les réglages qui changent la partie (mods, god mode, aim assist, kit
+            de départ...) et un hash SHA-512 du programme et des zones chargées ; « bo1_runinfo 2 » le garde aussi
+            dans un coin en jeu, 0 l'enlève (ZmClient : « Infos speedrun »). Le hash complet est dans
+            console_mp.log (lignes runinfo:), avec le SHA-512 du programme seul (celui de sha512sum). Il distingue
+            deux runs faites avec des fichiers différents ; il ne prouve rien : un programme modifié peut afficher
+            n'importe quel hash.
 ADMIN       zmadmin.exe                      console d'administration du serveur (joueurs, partie, réglages,
             log). Depuis ce dossier, elle lance aussi le serveur avec un mot de passe rcon qu'elle garde.
             zmadmin.exe 192.168.1.20 -p <rcon_password> pilote un serveur distant. ? : aide dans chaque vue.
@@ -661,6 +675,12 @@ TAB         en tenant Tab, les zombies en vie et ceux qui restent dans la manche
             (mod zinfo, actif par défaut en solo et sur le serveur ; « zinfo 0 » dans la console le cache).
 ZOMBIES     /zm_where dans la console : la position de chaque zombie vivant et sa distance, du plus proche au
             plus loin (un zombie qu'on entend sans le voir) ; aussi dans console_mp.log.
+SPEEDRUN    en bas de l'écran de chargement : les réglages qui changent la partie (mods, god mode, aim assist, kit
+            de départ...) et un hash SHA-512 du programme et des zones chargées ; « bo1_runinfo 2 » le garde aussi
+            dans un coin en jeu, 0 l'enlève (ZmClient : « Infos speedrun »). Le hash complet est dans
+            console_mp.log (lignes runinfo:), avec le SHA-512 du programme seul (celui de sha512sum). Il distingue
+            deux runs faites avec des fichiers différents ; il ne prouve rien : un programme modifié peut afficher
+            n'importe quel hash.
 ADMIN       ./zmadmin                     console d'administration du serveur (joueurs, partie, réglages, log).
             Depuis ce dossier, elle lance aussi le serveur avec un mot de passe rcon qu'elle garde.
             ./zmadmin 192.168.1.20 -p <rcon_password> pilote un serveur distant. ? : aide dans chaque vue.
@@ -749,6 +769,7 @@ LANCEMENT (mode application obligatoire)
 
 MENU DE DÉPART
   Map, aim assist, god mode, compteur de zombies, rendu, limite de FPS, ombres, filtre de texture, manettes.
+  « Resolution » : 720p, ou 540p / 480p pour plus de FPS ; en ligne, 540p tient mieux les 30 FPS que 720p.
   « Touches manette » : le bouton de la Switch de chaque action du jeu (tirer, viser, sauter...), au choix.
   « Départ » : les points (jusqu'à 100 000) et les atouts donnés à l'arrivée sur la map en solo ; un atout
   n'est donné que si la map a sa machine.
@@ -759,7 +780,10 @@ MENU DE DÉPART
   « Serveur » ouvre l'écran de connexion : activez-la, entrez l'adresse IP et le port du PC qui fait tourner le
   serveur (Server.bat ou server.sh, port 3074 par défaut) et votre nom. La console doit être en Wi-Fi.
   Les serveurs du réseau local s'y affichent tout seuls (« Recherche auto ») ou avec « Chercher maintenant » :
-  A sur l'un d'eux remplit son adresse et son port.
+  A sur l'un d'eux remplit son adresse et son port. « Armes BO2 » (Oui par défaut) charge vos armes Black Ops II pour
+  rejoindre un serveur qui les a ; sans elles, le jeu plante sur un tel serveur.
+  « Infos speedrun » : les réglages de la partie et un hash SHA-512 du programme et des zones chargées, en bas de
+  l'écran de chargement (par défaut), ou aussi dans un coin en jeu ; le hash complet est dans boot.log (runinfo:).
 
 JOURNAL
   /switch/bo1zm/boot.log : à renvoyer en cas de problème.

@@ -70,6 +70,11 @@ struct LauncherSettings
     int serverPort = 3074;  // the dedicated server's default net_port
     std::string playerName; // the name on the server, valid per Launcher_ValidPlayerName or empty (the game's own)
     bool lanAuto = true;    // the server view searches the local network for servers as it opens
+    // A join loads mods/bo2weapons (the player's own Black Ops II weapons, docs/BO2_WEAPONS.md): a client without them
+    // cannot play on a server that has them. Only when bo2WeaponsInstalled, which the menu sets from the SD card (not
+    // kept in menu.cfg).
+    bool joinBo2Weapons = true;
+    bool bo2WeaponsInstalled = false;
     int map = 0;            // index into kLauncherMaps
     bool aimAssist = true;
     bool aimSlowdown = true;
@@ -83,10 +88,11 @@ struct LauncherSettings
     bool startPap = false;         // mods/admin's zm_startpap: a Pack-a-Punch, always on, at the start points
     int farRespawn = 0;            // one of kLauncherFarRespawns: mods/admin's zm_farrespawn
     LauncherBackend backend = LAUNCHER_BACKEND_DEKO3D;
-    int height = 720; // 720 or 480: the game's frame (r_customMode), which the console scales to the screen
+    int height = 720; // 720, 540 or 480: the game's frame (r_customMode), which the console scales to the screen
     int maxFps = 60;  // 30 or 60
     bool shadows = true;
     bool fpsCounter = true;
+    int runInfo = 1; // bo1_runinfo: 0 off, 1 settings and hash on the loading screen, 2 also in a corner in game
     LauncherTexFilter texFilter = LAUNCHER_TEXFILTER_ANISO16;
     // Which physical button drives each game control (gamepad_remap.h); the identity is the game's own layout.
     Bo1PadRemap pad = {{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}};
