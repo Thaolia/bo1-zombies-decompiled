@@ -385,11 +385,19 @@ bo2_data() { # <dest>
     fi
 }
 
-# The Switch's share of the player's Black Ops II maps: the native ones only (the start menu offers those, not the
-# MapKit meshes): each <layout>_bsp.json with its zone, BSP and colour maps, and of its imports/<map>/ the node
-# links, the blockers' props and their images, without the MapKit mesh and collision it does not use.
+# The Switch's share of the player's Black Ops II extraction: the weapons (mod.ff and images, as on PC), and of the maps
+# the native ones only (the start menu offers those, not the MapKit meshes): each <layout>_bsp.json with its zone, BSP
+# and colour maps, and of its imports/<map>/ the node links, the blockers' props and their images, without the MapKit
+# mesh and collision it does not use.
 bo2_switch_data() { # <dest>
-    [ -n "$BO2" ] && [ $BO2_MAPS = 1 ] || return 0
+    [ -n "$BO2" ] || return 0
+    # the weapons, for a join to a server that has them (the start menu loads them by default, "Armes BO2")
+    if [ $BO2_WEAPONS = 1 ]; then
+        mkdir -p "$1/mods/bo2weapons"
+        rsync -a "$BO2/mods/bo2weapons/mod.ff" "$1/mods/bo2weapons/"
+        rsync -a --delete "$BO2/mods/bo2weapons/images/" "$1/mods/bo2weapons/images/"
+    fi
+    [ $BO2_MAPS = 1 ] || return 0
     [ -d "$BO2/usermaps" ] && ls "$BO2"/main/maps/*.d3dbsp > /dev/null 2>&1 || return 0
     mkdir -p "$1/mods/mapkit/layouts" "$1/mods/mapkit/imports" "$1/usermaps" "$1/main/maps" "$1/main/images"
     rsync -a --include='bo2_*_bsp.json' --exclude='*' "$BO2/mods/mapkit/layouts/" "$1/mods/mapkit/layouts/"
@@ -759,7 +767,8 @@ MENU DE DÉPART
   « Serveur » ouvre l'écran de connexion : activez-la, entrez l'adresse IP et le port du PC qui fait tourner le
   serveur (Server.bat ou server.sh, port 3074 par défaut) et votre nom. La console doit être en Wi-Fi.
   Les serveurs du réseau local s'y affichent tout seuls (« Recherche auto ») ou avec « Chercher maintenant » :
-  A sur l'un d'eux remplit son adresse et son port.
+  A sur l'un d'eux remplit son adresse et son port. « Armes BO2 » (Oui par défaut) charge vos armes Black Ops II pour
+  rejoindre un serveur qui les a ; sans elles, le jeu plante sur un tel serveur.
 
 JOURNAL
   /switch/bo1zm/boot.log : à renvoyer en cas de problème.

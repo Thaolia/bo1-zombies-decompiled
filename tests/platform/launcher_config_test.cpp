@@ -34,7 +34,7 @@ bool SameSettings(const LauncherSettings &a, const LauncherSettings &b)
            a.aimLockon == b.aimLockon && a.aimAutoaim == b.aimAutoaim && a.god == b.god && a.tabInfo == b.tabInfo && a.backend == b.backend &&
            a.maxFps == b.maxFps && a.shadows == b.shadows && a.fpsCounter == b.fpsCounter &&
            a.texFilter == b.texFilter && a.startPoints == b.startPoints && a.startPerks == b.startPerks &&
-           a.startPower == b.startPower && a.startPap == b.startPap && a.farRespawn == b.farRespawn && a.lanAuto == b.lanAuto && a.height == b.height &&
+           a.startPower == b.startPower && a.startPap == b.startPap && a.farRespawn == b.farRespawn && a.lanAuto == b.lanAuto && a.joinBo2Weapons == b.joinBo2Weapons && a.height == b.height &&
            std::memcmp(&a.pad, &b.pad, sizeof(a.pad)) == 0;
 }
 } // namespace
@@ -220,6 +220,22 @@ int main()
     Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(manual)), manual) &&
               Launcher_ParseSettings("").lanAuto,
           "menu.cfg round-trips the LAN search switch, on by default");
+    LauncherSettings joinBo2;
+    joinBo2.join = true;
+    joinBo2.serverHost = "192.168.1.20";
+    const bool noFiles = Launcher_BuildLaunchLine(joinBo2, "").find("bo2weapons") == std::string::npos;
+    joinBo2.bo2WeaponsInstalled = true;
+    const std::string joinLine = Launcher_BuildLaunchLine(joinBo2, "");
+    LauncherSettings soloWith;
+    soloWith.bo2WeaponsInstalled = true;
+    Check(noFiles && joinLine.find(" +set fs_mods bo2weapons ") != std::string::npos &&
+              joinLine.find(" +set fs_mods bo2weapons ") < joinLine.find("cl_autoConnect") &&
+              Launcher_BuildLaunchLine(soloWith, "").find("bo2weapons") == std::string::npos,
+          "a join loads the BO2 weapons when they are on the SD card, by default; a solo game does not");
+    joinBo2.joinBo2Weapons = false;
+    Check(Launcher_BuildLaunchLine(joinBo2, "").find("bo2weapons") == std::string::npos &&
+              SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(joinBo2)), joinBo2),
+          "the BO2 weapons can be left out of a join, and menu.cfg keeps that");
     const LauncherSettings kitParsed =
         Launcher_ParseSettings("start_points=1234\nstart_perks= mule , nope,jugg\n");
     Check(kitParsed.startPoints == 0 && kitParsed.startPerks == ((1u << 7) | 1u),

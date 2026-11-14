@@ -70,6 +70,11 @@ struct LauncherSettings
     int serverPort = 3074;  // the dedicated server's default net_port
     std::string playerName; // the name on the server, valid per Launcher_ValidPlayerName or empty (the game's own)
     bool lanAuto = true;    // the server view searches the local network for servers as it opens
+    // A join loads mods/bo2weapons (the player's own Black Ops II weapons, docs/BO2_WEAPONS.md): a client without them
+    // cannot play on a server that has them. Only when bo2WeaponsInstalled, which the menu sets from the SD card (not
+    // kept in menu.cfg).
+    bool joinBo2Weapons = true;
+    bool bo2WeaponsInstalled = false;
     int map = 0;            // index into kLauncherMaps
     bool aimAssist = true;
     bool aimSlowdown = true;

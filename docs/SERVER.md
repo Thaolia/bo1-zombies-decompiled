@@ -186,6 +186,9 @@ In the start menu, **Serveur** (A) opens the server screen:
 - **Connexion**: on to join a server, off for a solo game;
 - **Adresse IP** and **Port** (3074 by default): typed with the console's keyboard;
 - **Nom du joueur**: the name on the server; empty keeps the game's own;
+- **Armes BO2** (on by default, greyed out without them): the join loads `mods/bo2weapons` (`+set fs_mods bo2weapons`,
+  as ZmClient's join option), which a client needs on a server that has the BO2 weapons. The Switch package carries
+  them when `make_dist.sh --bo2` has them (`mod.ff` and its images, about 125 MB);
 - **Recherche auto** (on by default) and **Chercher maintenant**: a search of the local network, as ZmClient's browser
   does it (`src/platform/lan_browser.cpp`): a broadcast `getstatus` to 255.255.255.255 and to the console's subnet
   (`nifmGetCurrentIpConfigInfo`), on ports 3074-3083, then every `statusResponse` within one second. Up to six

@@ -139,6 +139,7 @@ enum Item
     ITEM_NET_HOST,
     ITEM_NET_PORT,
     ITEM_NET_NAME,
+    ITEM_NET_BO2W,
     ITEM_NET_LANAUTO,
     ITEM_NET_SCAN,
     ITEM_NET_FOUND_FIRST,
@@ -202,6 +203,7 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_SERVER, 9, "Adresse IP", "A: l'adresse IP du PC qui fait tourner le serveur (Server.bat, Server.sh)."},
     {VIEW_SERVER, 10, "Port", "A: le port UDP du serveur, 3074 par defaut."},
     {VIEW_SERVER, 11, "Nom du joueur", "A: votre nom sur le serveur (lettres, chiffres, _ - .), vide: celui du jeu."},
+    {VIEW_SERVER, 14, "Armes BO2", "Oui: charge vos armes Black Ops II (mods/bo2weapons), pour un serveur qui les a."},
     {VIEW_SERVER, 12, "Recherche auto", "Oui: cherche les serveurs du reseau local a l'ouverture de cet ecran."},
     {VIEW_SERVER, 13, "Chercher maintenant", "A: cherche les serveurs du reseau local (une seconde)."},
 #define NET_FOUND(row) {VIEW_SERVER, row, nullptr, "A: rejoindre ce serveur (adresse et port remplis, connexion activee)."}
@@ -255,6 +257,8 @@ bool Selectable(const LauncherSettings &s, View view, int item)
         return !s.join;
     if (FoundItem(item))
         return size_t(item - ITEM_NET_FOUND_FIRST) < s_found.size();
+    if (item == ITEM_NET_BO2W)
+        return s.bo2WeaponsInstalled;
     return true;
 }
 
@@ -350,6 +354,8 @@ std::string ValueText(const LauncherSettings &s, int item)
         return s.join ? "Activee" : "Desactivee";
     case ITEM_NET_LANAUTO:
         return YesNo(s.lanAuto);
+    case ITEM_NET_BO2W:
+        return s.bo2WeaponsInstalled ? YesNo(s.joinBo2Weapons) : "absentes de la carte SD";
     case ITEM_NET_SCAN:
         if (!s_searched)
             return "pas encore lancee";
@@ -385,6 +391,9 @@ void Change(LauncherSettings *s, int item, int dir)
         break;
     case ITEM_NET_LANAUTO:
         s->lanAuto = !s->lanAuto;
+        break;
+    case ITEM_NET_BO2W:
+        s->joinBo2Weapons = !s->joinBo2Weapons;
         break;
     case ITEM_MAP:
         do
@@ -834,9 +843,12 @@ LauncherResult Launcher_Run(const char *buildStamp, char *line, size_t lineSize,
         Log("menu.cfg map %s: its files are not on the SD card, Kino instead", Launcher_MapKey(s.map).c_str());
         s.map = 0;
     }
-    Log("menu.cfg read: map %s, backend %s, server %s (%s)", Launcher_MapKey(s.map).c_str(),
+    struct stat bo2weapons;
+    s.bo2WeaponsInstalled = stat("sdmc:/switch/bo1zm/mods/bo2weapons/mod.ff", &bo2weapons) == 0;
+    Log("menu.cfg read: map %s, backend %s, server %s (%s), BO2 weapons %s", Launcher_MapKey(s.map).c_str(),
         Launcher_BackendName(s.backend),
-        s.serverHost.empty() ? "-" : Launcher_ServerAddress(s).c_str(), s.join ? "join" : "solo");
+        s.serverHost.empty() ? "-" : Launcher_ServerAddress(s).c_str(), s.join ? "join" : "solo",
+        !s.bo2WeaponsInstalled ? "not on the SD card" : s.joinBo2Weapons ? "loaded to join" : "off");
     Screen screen;
     screen.buildStamp = buildStamp;
     // The first battery query logs through stdout (switch_main.cpp's BootLog), which the console would print over the
