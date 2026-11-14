@@ -14,5 +14,9 @@ void SwitchNet_Init();
 // (Wi-Fi off, airplane mode, no access point). Asked each time: the console may join or leave a network at any time.
 bool SwitchNet_Address(char *text, size_t size);
 
+// The console's address and subnet mask (network byte order, as in_addr's s_addr), for the start menu's LAN search;
+// false without a network.
+bool SwitchNet_AddressAndMask(unsigned int *address, unsigned int *mask);
+
 // For the engine (cl_main_pc_mp.cpp): 1 while the console has an IP address.
 extern "C" int Switch_NetworkAvailable();

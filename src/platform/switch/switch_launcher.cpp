@@ -11,6 +11,7 @@
 #include <switch.h>
 
 #include "launcher_config.h"
+#include "../lan_browser.h"
 #include "switch_launcher.h"
 #include "switch_net.h"
 
@@ -21,6 +22,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
 extern "C" void Switch_BootLogWrite(const char *text);
 extern "C" int Switch_BatteryPercent();
@@ -137,6 +139,10 @@ enum Item
     ITEM_NET_HOST,
     ITEM_NET_PORT,
     ITEM_NET_NAME,
+    ITEM_NET_LANAUTO,
+    ITEM_NET_SCAN,
+    ITEM_NET_FOUND_FIRST,
+    ITEM_NET_FOUND_LAST = ITEM_NET_FOUND_FIRST + 5,
     ITEM_NET_BACK,
     // Pad view: one line per game control (Bo1PadControl order), then reset and back.
     ITEM_PAD_FIRST,
@@ -196,7 +202,12 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_SERVER, 9, "Adresse IP", "A: l'adresse IP du PC qui fait tourner le serveur (Server.bat, Server.sh)."},
     {VIEW_SERVER, 10, "Port", "A: le port UDP du serveur, 3074 par defaut."},
     {VIEW_SERVER, 11, "Nom du joueur", "A: votre nom sur le serveur (lettres, chiffres, _ - .), vide: celui du jeu."},
-    {VIEW_SERVER, 14, "RETOUR", "Revient au menu (aussi: bouton B)."},
+    {VIEW_SERVER, 12, "Recherche auto", "Oui: cherche les serveurs du reseau local a l'ouverture de cet ecran."},
+    {VIEW_SERVER, 13, "Chercher maintenant", "A: cherche les serveurs du reseau local (une seconde)."},
+#define NET_FOUND(row) {VIEW_SERVER, row, nullptr, "A: rejoindre ce serveur (adresse et port remplis, connexion activee)."}
+    NET_FOUND(15), NET_FOUND(16), NET_FOUND(17), NET_FOUND(18), NET_FOUND(19), NET_FOUND(20),
+#undef NET_FOUND
+    {VIEW_SERVER, 22, "RETOUR", "Revient au menu (aussi: bouton B)."},
 #define PAD_LINE(row) {VIEW_PAD, row, nullptr, "Gauche/Droite: choisir le bouton. L'action qui l'avait prend l'ancien."}
     PAD_LINE(6),  PAD_LINE(7),  PAD_LINE(8),  PAD_LINE(9),  PAD_LINE(10), PAD_LINE(11), PAD_LINE(12), PAD_LINE(13),
     PAD_LINE(14), PAD_LINE(15), PAD_LINE(16), PAD_LINE(17), PAD_LINE(18), PAD_LINE(19), PAD_LINE(20), PAD_LINE(21),
@@ -218,11 +229,20 @@ const int kGraphicsHeaderRow = 18;
 const int kControllerFirstRow = 27;
 const int kControllerMaxRows = 8; // handheld + players 1-7: the rows up to DEMARRER
 const int kPadInfoRow = 28;
-const int kNetInfoRow = 17;
+const int kNetInfoRow = 24;
 const int kKitInfoRow = 20;
 const int kHelpRow = 37;
 const int kStatusRow = 38;
 const int kFooterRow = 40;
+
+// The last LAN search's servers (lan_browser.h), and whether one ran since the server view opened.
+std::vector<LanServer> s_found;
+bool s_searched;
+
+bool FoundItem(int item)
+{
+    return item >= ITEM_NET_FOUND_FIRST && item <= ITEM_NET_FOUND_LAST;
+}
 
 bool Selectable(const LauncherSettings &s, View view, int item)
 {
@@ -233,6 +253,8 @@ bool Selectable(const LauncherSettings &s, View view, int item)
     // A dedicated server picks the map and decides god mode, the zombie counter and its players' start.
     if (item == ITEM_MAP || item == ITEM_GOD || item == ITEM_TABINFO || item == ITEM_KIT)
         return !s.join;
+    if (FoundItem(item))
+        return size_t(item - ITEM_NET_FOUND_FIRST) < s_found.size();
     return true;
 }
 
@@ -246,11 +268,14 @@ bool TypedItem(int item)
 bool ActionItem(int item)
 {
     return item == ITEM_CONTROLLERS || item == ITEM_START || item == ITEM_NET_BACK || item == ITEM_PAD ||
-           item == ITEM_PAD_RESET || item == ITEM_PAD_BACK || item == ITEM_KIT || item == ITEM_KIT_BACK;
+           item == ITEM_PAD_RESET || item == ITEM_PAD_BACK || item == ITEM_KIT || item == ITEM_KIT_BACK ||
+           item == ITEM_NET_SCAN || FoundItem(item);
 }
 
 const char *ItemLabel(int item)
 {
+    if (FoundItem(item))
+        return "";
     if (KitPerkItem(item))
         return kLauncherPerks[item - ITEM_KIT_PERK_FIRST].label;
     return PadControlItem(item) ? Launcher_PadActionLabel(item - ITEM_PAD_FIRST) : kItems[item].label;
@@ -323,6 +348,13 @@ std::string ValueText(const LauncherSettings &s, int item)
         return YesNo(s.fpsCounter);
     case ITEM_NET_ENABLE:
         return s.join ? "Activee" : "Desactivee";
+    case ITEM_NET_LANAUTO:
+        return YesNo(s.lanAuto);
+    case ITEM_NET_SCAN:
+        if (!s_searched)
+            return "pas encore lancee";
+        return s_found.empty() ? "aucun serveur trouve"
+                               : std::to_string(s_found.size()) + (s_found.size() > 1 ? " serveurs trouves" : " serveur trouve");
     case ITEM_NET_HOST:
         return s.serverHost.empty() ? "(a saisir)" : s.serverHost;
     case ITEM_NET_PORT:
@@ -350,6 +382,9 @@ void Change(LauncherSettings *s, int item, int dir)
     case ITEM_SERVER:
     case ITEM_NET_ENABLE:
         s->join = !s->join;
+        break;
+    case ITEM_NET_LANAUTO:
+        s->lanAuto = !s->lanAuto;
         break;
     case ITEM_MAP:
         do
@@ -606,10 +641,24 @@ void DrawItem(const LauncherSettings &s, View view, int item, int selected)
         return;
     }
     const char *color = isSelected ? kColorSelected : (Selectable(s, view, item) ? kColorNormal : kColorDisabled);
+    if (FoundItem(item))
+    {
+        const size_t index = size_t(item - ITEM_NET_FOUND_FIRST);
+        if (index < s_found.size())
+        {
+            const LanServer &f = s_found[index];
+            std::string where = f.address + ":" + std::to_string(f.port);
+            std::string count = std::to_string(f.players) + (f.maxPlayers > 0 ? "/" + std::to_string(f.maxPlayers) : "");
+            std::printf("%s%s %-21s %-22.22s %-16.16s %s%s", color, isSelected ? ">" : " ", where.c_str(),
+                        f.hostname.c_str(), f.map.c_str(), count.c_str(), kColorNormal);
+        }
+        return;
+    }
     std::printf("%s%s %-24s", color, isSelected ? ">" : " ", ItemLabel(item));
     if (item == ITEM_CONTROLLERS)
         std::printf("[A] ecran des manettes%s", kColorNormal);
-    else if (item == ITEM_SERVER || item == ITEM_PAD || item == ITEM_PAD_RESET || item == ITEM_KIT || TypedItem(item))
+    else if (item == ITEM_SERVER || item == ITEM_PAD || item == ITEM_PAD_RESET || item == ITEM_KIT || TypedItem(item) ||
+             item == ITEM_NET_SCAN)
         std::printf("[A] %s%s", ValueText(s, item).c_str(), kColorNormal);
     else if (PadControlItem(item))
     {
@@ -809,6 +858,30 @@ LauncherResult Launcher_Run(const char *buildStamp, char *line, size_t lineSize,
     screen.networkUp = SwitchNet_Address(address, sizeof(address));
     screen.network = address;
     bool dirty = true;
+    // The server view's LAN search: about a second, so the screen first says it is searching. Ryujinx 1.1.1375 stops
+    // on the first UDP reply (recvfrom, switch-homebrew.md): judge it on the console.
+    auto searchLan = [&]() {
+        screen.status = "Recherche des serveurs du reseau local...";
+        Draw(s, view, selected, screen);
+        unsigned int ip = 0, mask = 0;
+        s_searched = true;
+        if (!SwitchNet_AddressAndMask(&ip, &mask))
+        {
+            s_found.clear();
+            screen.status = "Pas de reseau: activez le Wi-Fi (mode avion coupe).";
+            return;
+        }
+        s_found = LanBrowser_Scan(LanBrowser_Broadcasts(ip, mask), kLanFirstPort, kLanPortCount, 1000);
+        if (s_found.size() > size_t(ITEM_NET_FOUND_LAST - ITEM_NET_FOUND_FIRST + 1))
+            s_found.resize(size_t(ITEM_NET_FOUND_LAST - ITEM_NET_FOUND_FIRST + 1));
+        screen.status.clear();
+        Log("LAN search: %d servers", int(s_found.size()));
+        for (const LanServer &f : s_found)
+            Log("  %s:%d \"%s\" %s %d/%d players, %d ms", f.address.c_str(), f.port, f.hostname.c_str(), f.map.c_str(),
+                f.players, f.maxPlayers, f.pingMs);
+        if (FoundItem(selected) && !Selectable(s, view, selected))
+            selected = ITEM_NET_SCAN;
+    };
     u64 lastPoll = armGetSystemTick();
     Repeat vertical, horizontal;
     LauncherResult result = LAUNCHER_QUIT;
@@ -852,6 +925,19 @@ LauncherResult Launcher_Run(const char *buildStamp, char *line, size_t lineSize,
             {
                 view = VIEW_SERVER;
                 selected = s.join ? ITEM_NET_HOST : ITEM_NET_ENABLE;
+                if (s.lanAuto)
+                    searchLan();
+            }
+            else if (selected == ITEM_NET_SCAN)
+                searchLan();
+            else if (FoundItem(selected))
+            {
+                const LanServer &f = s_found[size_t(selected - ITEM_NET_FOUND_FIRST)];
+                s.serverHost = f.address;
+                s.serverPort = f.port;
+                s.join = true;
+                screen.status = "Serveur choisi: " + Launcher_ServerAddress(s) + " (+ pour rejoindre).";
+                Log("LAN search: %s chosen", Launcher_ServerAddress(s).c_str());
             }
             else if (selected == ITEM_NET_BACK)
             {

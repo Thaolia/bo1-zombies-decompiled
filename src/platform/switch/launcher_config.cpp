@@ -205,6 +205,8 @@ void Apply(LauncherSettings *s, const std::string &key, const std::string &value
     }
     else if (key == "start_power")
         ParseBool(value, &s->startPower);
+    else if (key == "lan_auto")
+        ParseBool(value, &s->lanAuto);
     else if (key == "start_pap")
         ParseBool(value, &s->startPap);
     else if (key == "far_respawn")
@@ -284,6 +286,7 @@ std::string Launcher_FormatSettings(const LauncherSettings &s)
     out += std::string("backend=") + kBackendNames[s.backend] + "\n";
     out += std::string("start_power=") + (s.startPower ? "1" : "0") + "\n";
     out += std::string("start_pap=") + (s.startPap ? "1" : "0") + "\n";
+    out += std::string("lan_auto=") + (s.lanAuto ? "1" : "0") + "\n";
     out += "far_respawn=" + std::to_string(s.farRespawn) + "\n";
     out += "resolution=" + std::to_string(s.height) + "\n";
     out += "maxfps=" + std::to_string(s.maxFps) + "\n";

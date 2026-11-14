@@ -14,8 +14,9 @@ zombies on the base maps. It is a work in progress: see `docs/PORTING.md` for th
 
 On the console the game starts in a text menu, where you choose:
 - a solo game, or a dedicated server to join: the **Serveur** line opens its own screen, with the connection on or
-  off, the server's IP address and port (typed with the console's keyboard), your player name, and the console's own
-  network address (`docs/SERVER.md`, "Joining from a Switch");
+  off, the server's IP address and port (typed with the console's keyboard), your player name, a search of the local
+  network that lists its servers (on as the screen opens, or on demand), and the console's own network address
+  (`docs/SERVER.md`, "Joining from a Switch");
 - the map (the ten zombies maps and Dead Ops Arcade);
 - the aim assist and its slowdown, lock-on and auto-aim;
 - god mode;

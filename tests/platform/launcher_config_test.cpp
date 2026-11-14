@@ -34,7 +34,7 @@ bool SameSettings(const LauncherSettings &a, const LauncherSettings &b)
            a.aimLockon == b.aimLockon && a.aimAutoaim == b.aimAutoaim && a.god == b.god && a.tabInfo == b.tabInfo && a.backend == b.backend &&
            a.maxFps == b.maxFps && a.shadows == b.shadows && a.fpsCounter == b.fpsCounter &&
            a.texFilter == b.texFilter && a.startPoints == b.startPoints && a.startPerks == b.startPerks &&
-           a.startPower == b.startPower && a.startPap == b.startPap && a.farRespawn == b.farRespawn && a.height == b.height &&
+           a.startPower == b.startPower && a.startPap == b.startPap && a.farRespawn == b.farRespawn && a.lanAuto == b.lanAuto && a.height == b.height &&
            std::memcmp(&a.pad, &b.pad, sizeof(a.pad)) == 0;
 }
 } // namespace
@@ -215,6 +215,11 @@ int main()
     Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(far)), far) &&
               Launcher_ParseSettings("far_respawn=1234\n").farRespawn == 0,
           "menu.cfg round-trips the far zombies' distance, and refuses one off the list");
+    LauncherSettings manual;
+    manual.lanAuto = false;
+    Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(manual)), manual) &&
+              Launcher_ParseSettings("").lanAuto,
+          "menu.cfg round-trips the LAN search switch, on by default");
     const LauncherSettings kitParsed =
         Launcher_ParseSettings("start_points=1234\nstart_perks= mule , nope,jugg\n");
     Check(kitParsed.startPoints == 0 && kitParsed.startPerks == ((1u << 7) | 1u),

@@ -186,6 +186,12 @@ In the start menu, **Serveur** (A) opens the server screen:
 - **Connexion**: on to join a server, off for a solo game;
 - **Adresse IP** and **Port** (3074 by default): typed with the console's keyboard;
 - **Nom du joueur**: the name on the server; empty keeps the game's own;
+- **Recherche auto** (on by default) and **Chercher maintenant**: a search of the local network, as ZmClient's browser
+  does it (`src/platform/lan_browser.cpp`): a broadcast `getstatus` to 255.255.255.255 and to the console's subnet
+  (`nifmGetCurrentIpConfigInfo`), on ports 3074-3083, then every `statusResponse` within one second. Up to six
+  servers are listed with their address, name, map and players; A on one fills in its address and port and turns the
+  connection on. With Recherche auto, the search runs as the screen opens. Ryujinx 1.1.1375 stops on the first UDP
+  reply it receives, so a search there only works with no server answering: the console is the test;
 - the console's own network address, or a warning when it has none (Wi-Fi off, airplane mode).
 
 Start then writes `+set name <name> +set cl_allowWanConnect 1 +set cl_autoConnect <address>:<port>` into

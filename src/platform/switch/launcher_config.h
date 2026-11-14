@@ -69,6 +69,7 @@ struct LauncherSettings
     std::string serverHost; // valid per Launcher_ValidServerHost, or empty
     int serverPort = 3074;  // the dedicated server's default net_port
     std::string playerName; // the name on the server, valid per Launcher_ValidPlayerName or empty (the game's own)
+    bool lanAuto = true;    // the server view searches the local network for servers as it opens
     int map = 0;            // index into kLauncherMaps
     bool aimAssist = true;
     bool aimSlowdown = true;

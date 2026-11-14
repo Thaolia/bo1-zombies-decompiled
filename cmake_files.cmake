@@ -2391,6 +2391,8 @@ set(SRC_PLATFORM_SWITCH
 	"${SRC_DIR}/platform/switch/switch_net.h"
 	"${SRC_DIR}/platform/switch/switch_libc_stubs.cpp"
 	"${SRC_DIR}/platform/switch/switch_main.cpp"
+	"${SRC_DIR}/platform/lan_browser.cpp"
+	"${SRC_DIR}/platform/lan_browser.h"
 )
 source_group("platform/switch" FILES ${SRC_PLATFORM_SWITCH})
 

@@ -92,6 +92,17 @@ bool SwitchNet_Address(char *text, size_t size)
     return true;
 }
 
+bool SwitchNet_AddressAndMask(unsigned int *address, unsigned int *mask)
+{
+    u32 ip = 0, subnet = 0, gateway = 0, dns1 = 0, dns2 = 0;
+    *address = *mask = 0;
+    if (!s_nifmUp || R_FAILED(nifmGetCurrentIpConfigInfo(&ip, &subnet, &gateway, &dns1, &dns2)) || ip == 0)
+        return false;
+    *address = ip;
+    *mask = subnet;
+    return true;
+}
+
 extern "C" int Switch_NetworkAvailable()
 {
     u32 ip;

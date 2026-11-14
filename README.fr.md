@@ -31,6 +31,8 @@ c'est-à-dire l'album, ne donne qu'environ 400 Mo de RAM.
 Au lancement, un menu texte s'ouvre avant le jeu. On y choisit :
 - une partie solo, ou un serveur dédié à rejoindre. La ligne **Serveur** ouvre son propre écran. On y active ou non
   la connexion, on y saisit l'adresse IP et le port du serveur avec le clavier de la console, et son nom de joueur.
+  Une recherche sur le réseau local liste les serveurs trouvés (à l'ouverture de l'écran, ou à la demande) : A sur
+  l'un d'eux remplit son adresse et son port.
   L'écran montre aussi l'adresse réseau de la console (`docs/SERVER.md`, « Joining from a Switch ») ;
 - la map, parmi les 10 maps zombies et Dead Ops Arcade ;
 - l'aim assist : activé ou non, avec ralentissement, verrouillage et visée auto ;
