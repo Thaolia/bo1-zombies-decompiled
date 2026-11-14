@@ -41,8 +41,13 @@ Au lancement, un menu texte s'ouvre avant le jeu. On y choisit :
 - le **départ** : un écran pour les points (de 1 000 à 100 000, au lieu des 500 du jeu), le courant mis dès le
   départ et les atouts donnés à l'arrivée sur la map en solo (mod admin). Un atout n'est donné que si la map a sa
   machine ;
-- le rendu (deko3d ou OpenGL), la résolution (720p, ou 480p pour plus de FPS : la console agrandit l'image à
+- le rendu (deko3d ou OpenGL), la résolution (720p, ou 540p / 480p pour plus de FPS, 540p conseillé en ligne : la console agrandit l'image à
   l'écran), la limite de FPS (30 ou 60), les ombres, le filtre de texture et le compteur FPS/batterie ;
+- les infos speedrun (`bo1_runinfo`, aussi dans la vue Lancement de ZmClient) : les réglages qui changent une partie
+  (mods, god mode, aim assist, kit de départ, timescale...) et un SHA-512 du programme et des zones chargées, en bas de
+  l'écran de chargement (par défaut), ou aussi dans un coin en jeu ; le hash complet va dans le journal (lignes
+  `runinfo:`), avec le SHA-512 du programme seul (celui de `sha512sum`). Il distingue des runs faites avec des fichiers différents ; il ne prouve rien, puisqu'un programme
+  modifié peut afficher n'importe quel hash ;
 - les **touches de la manette** : un écran liste chaque action du jeu (tirer, viser, sauter, recharger, grenade,
   couteau, sprint…) avec le bouton de la Switch qui la fait ; gauche/droite change le bouton, et l'action qui l'avait
   prend l'ancien, si bien qu'aucune action ne reste sans bouton. « Réinitialiser » remet les touches du jeu. Les

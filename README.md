@@ -25,8 +25,12 @@ On the console the game starts in a text menu, where you choose:
   a Pack-a-Punch always on at the start points, and the perks a solo player gets on arrival (mods/admin's
   `zm_startpoints` / `zm_startpower` / `zm_startpap` / `zm_startperks`; a perk only when the map has its machine), and
   the far zombies' replacement (`zm_farrespawn`);
-- the renderer (deko3d or OpenGL), the resolution (720p, or 480p for more frames: the console scales the image to the
+- the renderer (deko3d or OpenGL), the resolution (720p, or 540p / 480p for more frames, 540p advised online: the console scales the image to the
   screen), the frame-rate cap, shadows, texture filtering and the FPS/battery counter;
+- the speedrun info (`bo1_runinfo`, also a ZmClient launch setting): the settings that change a run (mods, god mode,
+  aim assist, start kit, timescale...) and a SHA-512 over the program and the zones it loaded, at the bottom of the
+  loading screen (default), or also in a corner in game; the full hash goes to the log (`runinfo:` lines), with the program's own SHA-512 (`sha512sum`'s). It tells
+  apart runs played with different files; it proves nothing, since a modified program can print any hash;
 - the pad's buttons: one screen lists each game action (fire, aim, jump, reload, grenade, knife, sprint...) with the
   Switch button that does it; left/right changes the button and the action that had it takes the old one, so no
   action is left without a button. The game's menus follow; the start menu itself always keeps the console's buttons,

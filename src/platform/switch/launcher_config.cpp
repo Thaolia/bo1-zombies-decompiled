@@ -219,7 +219,7 @@ void Apply(LauncherSettings *s, const std::string &key, const std::string &value
     }
     else if (key == "resolution")
     {
-        if (value == "480" || value == "720")
+        if (value == "480" || value == "540" || value == "720")
             s->height = std::atoi(value.c_str());
     }
     else if (key == "maxfps")
@@ -229,6 +229,11 @@ void Apply(LauncherSettings *s, const std::string &key, const std::string &value
     }
     else if (key == "shadows")
         ParseBool(value, &s->shadows);
+    else if (key == "runinfo")
+    {
+        if (value == "0" || value == "1" || value == "2")
+            s->runInfo = value[0] - '0';
+    }
     else if (key == "fpscounter")
         ParseBool(value, &s->fpsCounter);
     else if (key.compare(0, 4, "pad_") == 0)
@@ -295,6 +300,7 @@ std::string Launcher_FormatSettings(const LauncherSettings &s)
     out += "maxfps=" + std::to_string(s.maxFps) + "\n";
     out += std::string("shadows=") + (s.shadows ? "1" : "0") + "\n";
     out += std::string("fpscounter=") + (s.fpsCounter ? "1" : "0") + "\n";
+    out += "runinfo=" + std::to_string(s.runInfo) + "\n";
     out += std::string("texfilter=") + kTexFilters[s.texFilter].key + "\n";
     for (int i = 0; i < BO1_PAD_COUNT; ++i)
         out += std::string("pad_") + kPads[i].key + "=" + kPads[s.pad.source[i]].key + "\n";
@@ -342,10 +348,11 @@ std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::strin
         line += " +set zm_startperks " + Launcher_StartPerkList(s);
     // The game runs windowed on the console (r_fullscreen 0), so r_customMode sizes its back buffer; the swapchain
     // takes that size and the console's compositor scales the frame to the screen.
-    line += std::string(" +set r_fullscreen 0 +set r_customMode ") + (s.height == 480 ? "854x480" : "1280x720");
+    line += std::string(" +set r_fullscreen 0 +set r_customMode ") + (s.height == 480 ? "854x480" : s.height == 540 ? "960x540" : "1280x720");
     line += " +set com_maxfps " + std::to_string(s.maxFps);
     line += std::string(" +set sm_enable ") + (s.shadows ? "1" : "0");
     line += std::string(" +set bo1_fpscounter ") + (s.fpsCounter ? "1" : "0");
+    line += " +set bo1_runinfo " + std::to_string(s.runInfo);
     line += " +set r_texFilterAnisoMax " + std::to_string(filter.anisoMax);
     line += " +set r_texFilterMipMode " + std::to_string(filter.mipMode);
     if (join && Launcher_ValidPlayerName(s.playerName))

@@ -122,6 +122,7 @@ enum Item
     ITEM_AIM_SLOWDOWN,
     ITEM_AIM_LOCKON,
     ITEM_AIM_AUTOAIM,
+    ITEM_RUNINFO,
     ITEM_GOD,
     ITEM_TABINFO,
     ITEM_KIT,
@@ -187,11 +188,12 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_MAIN, 11, "  Ralentissement", "La visee ralentit quand le reticule passe sur un zombie."},
     {VIEW_MAIN, 12, "  Verrouillage", "La visee suit le zombie vise."},
     {VIEW_MAIN, 13, "  Visee auto", "En visant (ZL), le reticule saute sur le zombie le plus proche."},
+    {VIEW_MAIN, 14, "Infos speedrun", "Reglages et hash du programme et des zones: au chargement, ou aussi en jeu."},
     {VIEW_MAIN, 15, "God mode", "Les zombies ne peuvent pas tuer le joueur (partie solo)."},
     {VIEW_MAIN, 16, "Compteur zombies", "Zombies en vie et restants dans la manche, a cote du tableau des scores."},
     {VIEW_MAIN, 17, "Depart", "A: points et atouts donnes a l'arrivee sur la map (partie solo)."},
     {VIEW_MAIN, 19, "Rendu", "deko3d: le plus rapide. OpenGL: l'ancien chemin, plus lent."},
-    {VIEW_MAIN, 20, "Resolution", "480p: image moins nette mais plus de FPS. 720p: la resolution de l'ecran."},
+    {VIEW_MAIN, 20, "Resolution", "720p: celle de l'ecran. 540p, 480p: image moins nette, plus de FPS (en ligne)."},
     {VIEW_MAIN, 21, "Limite de FPS", "30: plus stable et plus econome en batterie. 60: plus fluide."},
     {VIEW_MAIN, 22, "Ombres", "Ombres dynamiques. Les couper fait gagner des FPS."},
     {VIEW_MAIN, 23, "Filtre de texture", "Nettete des textures au loin. 16x: le plus net. Bilineaire: le plus leger."},
@@ -341,7 +343,7 @@ std::string ValueText(const LauncherSettings &s, int item)
     case ITEM_KIT_FAR:
         return s.farRespawn > 0 ? "Au-dela de " + std::to_string(s.farRespawn) : std::string("Non");
     case ITEM_RESOLUTION:
-        return s.height == 480 ? "480p" : "720p";
+        return s.height == 480 ? "480p" : s.height == 540 ? "540p" : "720p";
     case ITEM_MAXFPS:
         return std::to_string(s.maxFps);
     case ITEM_SHADOWS:
@@ -350,6 +352,8 @@ std::string ValueText(const LauncherSettings &s, int item)
         return Launcher_TexFilterLabel(s.texFilter);
     case ITEM_FPSCOUNTER:
         return YesNo(s.fpsCounter);
+    case ITEM_RUNINFO:
+        return s.runInfo == 0 ? "Non" : s.runInfo == 1 ? "Au chargement" : "Chargement + en jeu";
     case ITEM_NET_ENABLE:
         return s.join ? "Activee" : "Desactivee";
     case ITEM_NET_LANAUTO:
@@ -428,8 +432,14 @@ void Change(LauncherSettings *s, int item, int dir)
         s->startPap = !s->startPap;
         break;
     case ITEM_RESOLUTION:
-        s->height = s->height == 720 ? 480 : 720;
+    {
+        static const int kHeights[] = {720, 540, 480};
+        int at = 0;
+        while (at < 2 && kHeights[at] != s->height)
+            ++at;
+        s->height = kHeights[(at + dir + 3) % 3];
         break;
+    }
     case ITEM_MAXFPS:
         s->maxFps = s->maxFps == 60 ? 30 : 60;
         break;
@@ -441,6 +451,9 @@ void Change(LauncherSettings *s, int item, int dir)
         break;
     case ITEM_FPSCOUNTER:
         s->fpsCounter = !s->fpsCounter;
+        break;
+    case ITEM_RUNINFO:
+        s->runInfo = (s->runInfo + dir + 3) % 3;
         break;
     case ITEM_KIT_FAR:
     {

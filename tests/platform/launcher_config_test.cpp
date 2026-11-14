@@ -34,7 +34,7 @@ bool SameSettings(const LauncherSettings &a, const LauncherSettings &b)
            a.aimLockon == b.aimLockon && a.aimAutoaim == b.aimAutoaim && a.god == b.god && a.tabInfo == b.tabInfo && a.backend == b.backend &&
            a.maxFps == b.maxFps && a.shadows == b.shadows && a.fpsCounter == b.fpsCounter &&
            a.texFilter == b.texFilter && a.startPoints == b.startPoints && a.startPerks == b.startPerks &&
-           a.startPower == b.startPower && a.startPap == b.startPap && a.farRespawn == b.farRespawn && a.lanAuto == b.lanAuto && a.joinBo2Weapons == b.joinBo2Weapons && a.height == b.height &&
+           a.startPower == b.startPower && a.startPap == b.startPap && a.farRespawn == b.farRespawn && a.lanAuto == b.lanAuto && a.joinBo2Weapons == b.joinBo2Weapons && a.runInfo == b.runInfo && a.height == b.height &&
            std::memcmp(&a.pad, &b.pad, sizeof(a.pad)) == 0;
 }
 } // namespace
@@ -59,7 +59,7 @@ int main()
               "+set bo1_zombies 1 +set bo1_aimassist 1 +set aim_slowdown_enabled 1 +set aim_lockon_enabled 1"
               " +set aim_autoaim_enabled 0 +set bo1_testclient_god 0 +set fs_mods zinfo +set r_fullscreen 0"
               " +set r_customMode 1280x720 +set com_maxfps 60"
-              " +set sm_enable 1 +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0"
+              " +set sm_enable 1 +set bo1_fpscounter 1 +set bo1_runinfo 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0"
               " +devmap zombie_theater",
               "the default line, with the Tab zombie counter");
 
@@ -79,7 +79,7 @@ int main()
               "+set bo1_zombies 1 +set bo1_aimassist 0 +set aim_slowdown_enabled 1 +set aim_lockon_enabled 1"
               " +set aim_autoaim_enabled 1 +set bo1_testclient_god 1 +set r_fullscreen 0"
               " +set r_customMode 854x480 +set com_maxfps 30 +set sm_enable 0"
-              " +set bo1_fpscounter 0 +set r_texFilterAnisoMax 1 +set r_texFilterMipMode 2 +set bo1_frameperf 200"
+              " +set bo1_fpscounter 0 +set bo1_runinfo 1 +set r_texFilterAnisoMax 1 +set r_texFilterMipMode 2 +set bo1_frameperf 200"
               " +devmap zombie_moon",
               "a custom line, with the extra arguments before +devmap");
     Check(std::string(Launcher_BackendName(custom.backend)) == "gl", "the GL backend's gfx.cfg value");
@@ -90,6 +90,12 @@ int main()
     const std::string triLine = Launcher_BuildLaunchLine(trilinear, "");
     Check(triLine.find(" +set r_texFilterAnisoMax 1 +set r_texFilterMipMode 1 ") != std::string::npos,
           "trilinear filtering is anisotropy 1 with forced trilinear mips");
+
+    LauncherSettings mid;
+    mid.height = 540;
+    Check(Launcher_BuildLaunchLine(mid, "").find(" +set r_customMode 960x540 ") != std::string::npos &&
+              SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(mid)), mid),
+          "540p is 960x540 and menu.cfg keeps it");
 
     Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(custom)), custom),
           "menu.cfg round-trips a custom setting");
@@ -122,7 +128,7 @@ int main()
               " +set aim_autoaim_enabled 0 +set bo1_testclient_god 0 +set fs_game mods/mapkit"
               " +set bo1_mod_mapkit bo2_zm_nuked_bsp +set fs_mods mapkit zinfo +set bo1_mod_zones zombie_bo2nuked"
               " +set bo1_bspworld maps/zombie_bo2nuked.d3dbsp +set r_fullscreen 0 +set r_customMode 1280x720"
-              " +set com_maxfps 60 +set sm_enable 1 +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16"
+              " +set com_maxfps 60 +set sm_enable 1 +set bo1_fpscounter 1 +set bo1_runinfo 1 +set r_texFilterAnisoMax 16"
               " +set r_texFilterMipMode 0 +devmap zombie_pentagon",
               "the native Nuketown: ZmClient's MapKit layout on Five, its zone and BSP world");
     nuke.tabInfo = false;
@@ -150,7 +156,7 @@ int main()
               "+set bo1_zombies 1 +set bo1_aimassist 1 +set aim_slowdown_enabled 1 +set aim_lockon_enabled 1"
               " +set aim_autoaim_enabled 0 +set bo1_testclient_god 0 +set r_fullscreen 0"
               " +set r_customMode 1280x720 +set com_maxfps 60 +set sm_enable 1"
-              " +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0 +set name Switch1"
+              " +set bo1_fpscounter 1 +set bo1_runinfo 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0 +set name Switch1"
               " +set bo1_frameperf 200 +set cl_allowWanConnect 1 +set cl_autoConnect 192.168.1.20:29070",
               "a join: the game's menu, then cl_autoConnect, no +devmap, no local god mode, no fs_mods (the server's)");
     Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(join)), join), "menu.cfg round-trips a join");
@@ -162,7 +168,7 @@ int main()
               "+set bo1_zombies 1 +set bo1_aimassist 1 +set aim_slowdown_enabled 1 +set aim_lockon_enabled 1"
               " +set aim_autoaim_enabled 0 +set bo1_testclient_god 1 +set fs_mods zinfo +set r_fullscreen 0"
               " +set r_customMode 1280x720 +set com_maxfps 60"
-              " +set sm_enable 1 +set bo1_fpscounter 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0"
+              " +set sm_enable 1 +set bo1_fpscounter 1 +set bo1_runinfo 1 +set r_texFilterAnisoMax 16 +set r_texFilterMipMode 0"
               " +devmap zombie_theater",
               "a join without a server address starts the solo game");
 
@@ -236,6 +242,13 @@ int main()
     Check(Launcher_BuildLaunchLine(joinBo2, "").find("bo2weapons") == std::string::npos &&
               SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(joinBo2)), joinBo2),
           "the BO2 weapons can be left out of a join, and menu.cfg keeps that");
+    LauncherSettings run;
+    run.runInfo = 2;
+    Check(Launcher_BuildLaunchLine(run, "").find(" +set bo1_runinfo 2") != std::string::npos &&
+              Launcher_BuildLaunchLine(defaults, "").find(" +set bo1_runinfo 1") != std::string::npos &&
+              SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(run)), run) &&
+              Launcher_ParseSettings("runinfo=7\n").runInfo == 1,
+          "the run info setting reaches bo1_runinfo (1 by default) and menu.cfg keeps it, 0 to 2 only");
     const LauncherSettings kitParsed =
         Launcher_ParseSettings("start_points=1234\nstart_perks= mule , nope,jugg\n");
     Check(kitParsed.startPoints == 0 && kitParsed.startPerks == ((1u << 7) | 1u),

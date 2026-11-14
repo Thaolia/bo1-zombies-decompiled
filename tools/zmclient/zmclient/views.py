@@ -598,6 +598,9 @@ class LaunchView(RowsView):
                          self._size),
                 disabled=split_off or (None if p["window"] == "window" else "seulement en mode Fenêtre")),
             Row("fps_counter", "Compteur FPS du portage", _yes(p["fps_counter"]), self.toggle("fps_counter")),
+            Row("run_info", "Infos speedrun", H.RUN_INFO_LABELS[p["run_info"]],
+                self.choose("run_info", "Infos speedrun",
+                            [(k, v, H.ROW_HELP["run_info"]) for k, v in H.RUN_INFO_LABELS.items()])),
             Row("scene_models", "Modèles affichés par image", str(p["scene_models"]),
                 self.choose("scene_models", "Modèles affichés par image", [
                     (1024, "1024", "le jeu d'origine"),
