@@ -33,6 +33,9 @@ std::string Launcher_MapFile(int map, int i);
 // same choices as ZmClient's tools/zmclient/zmclient/profile.py). Points 0 keeps the game's own 500.
 extern const int kLauncherStartPoints[];
 extern const int kLauncherStartPointCount;
+// mods/admin's zm_farrespawn choices (zm_where's units; 0 = off, 1500 = Moon's own), as ZmClient's FAR_RESPAWN_CHOICES.
+extern const int kLauncherFarRespawns[];
+extern const int kLauncherFarRespawnCount;
 struct LauncherPerk
 {
     const char *key;   // the name mods/admin's admin_perk_name takes, and menu.cfg's
@@ -66,6 +69,7 @@ struct LauncherSettings
     std::string serverHost; // valid per Launcher_ValidServerHost, or empty
     int serverPort = 3074;  // the dedicated server's default net_port
     std::string playerName; // the name on the server, valid per Launcher_ValidPlayerName or empty (the game's own)
+    bool lanAuto = true;    // the server view searches the local network for servers as it opens
     int map = 0;            // index into kLauncherMaps
     bool aimAssist = true;
     bool aimSlowdown = true;
@@ -76,6 +80,8 @@ struct LauncherSettings
     int startPoints = 0;           // one of kLauncherStartPoints
     unsigned startPerks = 0;       // bit i: kLauncherPerks[i]
     bool startPower = false;       // mods/admin's zm_startpower: the map's power switch used at the start
+    bool startPap = false;         // mods/admin's zm_startpap: a Pack-a-Punch, always on, at the start points
+    int farRespawn = 0;            // one of kLauncherFarRespawns: mods/admin's zm_farrespawn
     LauncherBackend backend = LAUNCHER_BACKEND_DEKO3D;
     int height = 720; // 720 or 480: the game's frame (r_customMode), which the console scales to the screen
     int maxFps = 60;  // 30 or 60

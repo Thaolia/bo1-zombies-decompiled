@@ -758,6 +758,8 @@ MENU DE DÉPART
   Black Ops II (make_dist.sh --bo2) : la Nuketown native, sur son propre monde BO1.
   « Serveur » ouvre l'écran de connexion : activez-la, entrez l'adresse IP et le port du PC qui fait tourner le
   serveur (Server.bat ou server.sh, port 3074 par défaut) et votre nom. La console doit être en Wi-Fi.
+  Les serveurs du réseau local s'y affichent tout seuls (« Recherche auto ») ou avec « Chercher maintenant » :
+  A sur l'un d'eux remplit son adresse et son port.
 
 JOURNAL
   /switch/bo1zm/boot.log : à renvoyer en cas de problème.

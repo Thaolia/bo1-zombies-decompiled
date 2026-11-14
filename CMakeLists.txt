@@ -405,6 +405,14 @@ else()
                        "${SRC_DIR}/platform/switch/launcher_config.cpp")
         target_include_directories(launcher_config_test PRIVATE "${SRC_DIR}")
         target_compile_options(launcher_config_test PRIVATE -Wall -Wextra)
+        # The Switch start menu's LAN server search (src/platform/lan_browser.cpp, BSD sockets): ./lan_browser_test
+        # scans 127.0.0.1, answered by a stand-in server on a thread.
+        add_executable(lan_browser_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/platform/lan_browser_test.cpp"
+                       "${SRC_DIR}/platform/lan_browser.cpp")
+        target_include_directories(lan_browser_test PRIVATE "${SRC_DIR}")
+        target_compile_options(lan_browser_test PRIVATE -Wall -Wextra)
+        find_package(Threads REQUIRED)
+        target_link_libraries(lan_browser_test PRIVATE Threads::Threads)
         # The MS-ADPCM decoder test (docs/PORTING.md, phase 4b): the pure decoder against ffmpeg's adpcm_ms. The build
         # step makes the vectors with ffmpeg; ./adpcm_test <adpcm.wav> <reference.s16le> in the build folder.
         add_executable(adpcm_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/platform/adpcm_test.cpp"

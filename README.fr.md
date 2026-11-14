@@ -31,6 +31,8 @@ c'est-à-dire l'album, ne donne qu'environ 400 Mo de RAM.
 Au lancement, un menu texte s'ouvre avant le jeu. On y choisit :
 - une partie solo, ou un serveur dédié à rejoindre. La ligne **Serveur** ouvre son propre écran. On y active ou non
   la connexion, on y saisit l'adresse IP et le port du serveur avec le clavier de la console, et son nom de joueur.
+  Une recherche sur le réseau local liste les serveurs trouvés (à l'ouverture de l'écran, ou à la demande) : A sur
+  l'un d'eux remplit son adresse et son port.
   L'écran montre aussi l'adresse réseau de la console (`docs/SERVER.md`, « Joining from a Switch ») ;
 - la map, parmi les 10 maps zombies et Dead Ops Arcade ;
 - l'aim assist : activé ou non, avec ralentissement, verrouillage et visée auto ;
@@ -105,7 +107,10 @@ Commandes admin, tapées dans la console du serveur (ou en rcon avec `tools/serv
 - `zm_round <n>`, `zm_reset` (relance la map), `zm_map <map>`, `zm_mods "<mods>"` (change `fs_mods` et relance) ;
 - `zm_admin` liste les joueurs et leur état ;
 - réglages `zm_startpoints <n>` et `zm_startperks "<perks>"` : points et perks de départ de chaque joueur ;
-  `zm_startpower 1` : le courant de la map est mis dès l'arrivée du premier joueur ;
+  `zm_startpower 1` : le courant de la map est mis dès l'arrivée du premier joueur ; `zm_startpap 1` : un
+  Pack-a-Punch toujours allumé est posé au point de départ des joueurs (au prochain chargement de la map) ;
+  `zm_farrespawn <distance>` : un zombie plus loin que ça de tous les joueurs et qu'aucun ne voit est remplacé par un
+  autre, près d'eux (0 : désactivé) ;
 - `zm_jip_mode immediate|nextround` : un joueur qui rejoint une partie en cours joue tout de suite (par défaut, près
   des autres joueurs, avec les points de départ), ou reste spectateur jusqu'à la fin du round.
 - `set sv_maxclients <n>` (dans `server.cfg`, avant la map ; 4 par défaut, 32 au plus) : plus de 4 joueurs. Le jeu n'a

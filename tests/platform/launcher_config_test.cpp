@@ -34,7 +34,7 @@ bool SameSettings(const LauncherSettings &a, const LauncherSettings &b)
            a.aimLockon == b.aimLockon && a.aimAutoaim == b.aimAutoaim && a.god == b.god && a.tabInfo == b.tabInfo && a.backend == b.backend &&
            a.maxFps == b.maxFps && a.shadows == b.shadows && a.fpsCounter == b.fpsCounter &&
            a.texFilter == b.texFilter && a.startPoints == b.startPoints && a.startPerks == b.startPerks &&
-           a.startPower == b.startPower && a.height == b.height &&
+           a.startPower == b.startPower && a.startPap == b.startPap && a.farRespawn == b.farRespawn && a.lanAuto == b.lanAuto && a.height == b.height &&
            std::memcmp(&a.pad, &b.pad, sizeof(a.pad)) == 0;
 }
 } // namespace
@@ -196,6 +196,30 @@ int main()
           "the start power alone stacks mods/admin and sets zm_startpower, off by default");
     Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(power)), power),
           "menu.cfg round-trips the start power");
+    LauncherSettings pap;
+    pap.tabInfo = false;
+    pap.startPap = true;
+    const std::string papLine = Launcher_BuildLaunchLine(pap, "");
+    Check(papLine.find(" +set fs_mods admin +set zm_startpap 1 +set r_fullscreen 0 ") != std::string::npos &&
+              Launcher_BuildLaunchLine(defaults, "").find("zm_startpap") == std::string::npos,
+          "the start Pack-a-Punch alone stacks mods/admin and sets zm_startpap, off by default");
+    Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(pap)), pap),
+          "menu.cfg round-trips the start Pack-a-Punch");
+    LauncherSettings far;
+    far.tabInfo = false;
+    far.farRespawn = 2500;
+    const std::string farLine = Launcher_BuildLaunchLine(far, "");
+    Check(farLine.find(" +set fs_mods admin +set zm_farrespawn 2500 +set r_fullscreen 0 ") != std::string::npos &&
+              Launcher_BuildLaunchLine(defaults, "").find("zm_farrespawn") == std::string::npos,
+          "the far zombies' distance alone stacks mods/admin and sets zm_farrespawn, off by default");
+    Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(far)), far) &&
+              Launcher_ParseSettings("far_respawn=1234\n").farRespawn == 0,
+          "menu.cfg round-trips the far zombies' distance, and refuses one off the list");
+    LauncherSettings manual;
+    manual.lanAuto = false;
+    Check(SameSettings(Launcher_ParseSettings(Launcher_FormatSettings(manual)), manual) &&
+              Launcher_ParseSettings("").lanAuto,
+          "menu.cfg round-trips the LAN search switch, on by default");
     const LauncherSettings kitParsed =
         Launcher_ParseSettings("start_points=1234\nstart_perks= mule , nope,jugg\n");
     Check(kitParsed.startPoints == 0 && kitParsed.startPerks == ((1u << 7) | 1u),

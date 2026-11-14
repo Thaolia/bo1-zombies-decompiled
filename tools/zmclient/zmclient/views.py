@@ -13,7 +13,7 @@ from . import help as H
 from .dirbrowser import FolderDialog, start_folder
 from .gamecfg import BY_NAME, SETTINGS, valid_bind_key, validate
 from .profile import (BO2_WEAPON_CHOICES, DEFAULT_PORT, MAP_LABELS, START_PERKS, bo2_weapons_available,
-                      bo2_weapons_installed, START_POINT_CHOICES, check_extra, map_installed, map_label, nightmare_available,
+                      bo2_weapons_installed, FAR_RESPAWN_CHOICES, START_POINT_CHOICES, check_extra, map_installed, map_label, nightmare_available,
                       parse_size, quote_command, resolve_map, solo_maps, specials_available, split_on, valid_host,
                       valid_name, valid_password)
 
@@ -187,6 +187,10 @@ def _yes(b):
 
 def _points(n):
     return f"{n:,}".replace(",", " ") if n else "ceux du jeu (500)"
+
+
+def _far(n):
+    return f"au-delà de {n:,}".replace(",", " ") if n else "non"
 
 
 def _name(text):
@@ -495,7 +499,11 @@ class SoloView(RowsView):
                 self.choose("start_points", "Points de départ",
                             [(n, _points(n), H.ROW_HELP["start_points"]) for n in START_POINT_CHOICES])),
         ]
-        rows += [Row("start_power", "Courant dès le départ", _yes(p["start_power"]), self.toggle("start_power"))]
+        rows += [Row("start_power", "Courant dès le départ", _yes(p["start_power"]), self.toggle("start_power")),
+                 Row("start_pap", "Pack-a-Punch au départ", _yes(p["start_pap"]), self.toggle("start_pap")),
+                 Row("far_respawn", "Zombies éloignés rapprochés", _far(p["far_respawn"]),
+                     self.choose("far_respawn", "Zombies éloignés rapprochés",
+                                 [(n, _far(n), H.ROW_HELP["far_respawn"]) for n in FAR_RESPAWN_CHOICES]))]
         no_machines = "sans machines à atouts (noperks) : rien à donner" if p["noperks"] else None
         rows += [Row("start_perk", f"Atout : {label}", _yes(key in p["start_perks"]), self.toggle_perk(key),
                      disabled=no_machines) for key, label in START_PERKS]
