@@ -8,7 +8,8 @@
 // starting with "admin: ", which the server also prints to its console.
 //
 // Dvars read here: zm_startpoints (points each player starts with, 0 = the game's own), zm_startperks (perks each
-// player starts with: names or "all"), zm_startpower (1: the power comes on as the first player spawns), zm_jip_mode
+// player starts with: names or "all"), zm_startpower (1: the power comes on as the first player spawns), zm_startpap
+// (1: a Pack-a-Punch, always on, at the centre of the players' start points), zm_jip_mode
 // (a player who joins a game in progress: "immediate" plays at once, "nextround" spectates until the round ends) and
 // zm_debug_revive (1: while a player is down, log why each other player can or cannot revive them).
 //
@@ -23,6 +24,7 @@
 
 main_start()
 {
+	admin_start_pap_precache();
 	// maps\_zombiemode::init_function_overrides sets the default only when the map has not set its own
 	level.admin_retail_Player_Spawn_func = level.Player_Spawn_func;
 	level.Player_Spawn_func = ::admin_player_spawn_placement;
@@ -39,6 +41,7 @@ main_end()
 	level thread admin_round_tracker();
 	level thread admin_connect_watch();
 	level thread admin_late_join_vars();
+	level thread admin_start_pap();
 	admin_log( "loaded on " + GetDvar( #"mapname" ) );
 }
 
@@ -999,4 +1002,148 @@ admin_goto_round( target_round )
 			zombies[i] DoDamage( zombies[i].health + 666, zombies[i].origin );
 		}
 	}
+}
+
+
+//-------------------------------------------------------------------------------
+// a Pack-a-Punch at the start (zm_startpap)
+//-------------------------------------------------------------------------------
+
+// zm_startpap 1: precaching is only open now (main_start runs before maps\_zombiemode::main). The _on model and the
+// knuckle crack are in common_zombie, so every zombies map has them; retail _zombiemode_perks::init precaches them only
+// on a map with perk machines (mods/mapkit does the same for its own Pack-a-Punch).
+admin_start_pap_precache()
+{
+	if ( GetDvarInt( #"zm_startpap" ) != 1 )
+	{
+		return;
+	}
+	PrecacheModel( "zombie_vending_packapunch_on" );
+	maps\_zombiemode_perks::default_vending_precaching();
+}
+
+
+// The retail Pack-a-Punch chain of maps\_zombiemode_perks (vending_weapon_upgrade: trigger zombie_vending_upgrade ->
+// its target, the machine), placed at the centre of the map's initial_spawn_points and on from the start: the
+// "Pack_A_Punch_on" notify that vending_weapon_upgrade waits for is sent at once. On a map whose power is still off,
+// that notify also lets the map's own Pack-a-Punch work. The maps without a machine of their own (Nacht der Untoten)
+// still have upgraded weapons; a map with none at all gets no machine, there would be nothing to upgrade.
+admin_start_pap()
+{
+	if ( GetDvarInt( #"zm_startpap" ) != 1 )
+	{
+		return;
+	}
+	flag_wait( "all_players_connected" );
+	upgrades = 0;
+	keys = GetArrayKeys( level.zombie_weapons );
+	for ( k = 0; k < keys.size; k++ )
+	{
+		if ( IsDefined( level.zombie_weapons[ keys[k] ].upgrade_name ) )
+		{
+			upgrades++;
+		}
+	}
+	if ( upgrades == 0 )
+	{
+		admin_log( "start pap: this map has no upgraded weapons, no Pack-a-Punch placed" );
+		return;
+	}
+	starts = getstructarray( "initial_spawn_points", "targetname" );
+	if ( starts.size == 0 )
+	{
+		admin_log( "start pap: no initial_spawn_points on this map, no Pack-a-Punch placed" );
+		return;
+	}
+	centre = ( 0, 0, 0 );
+	for ( i = 0; i < starts.size; i++ )
+	{
+		centre = centre + starts[i].origin;
+	}
+	centre = centre / starts.size;
+	spot = admin_start_pap_spot( centre, starts );
+	if ( !IsDefined( spot ) )
+	{
+		admin_log( "start pap: no free floor near " + centre + ", no Pack-a-Punch placed" );
+		return;
+	}
+	// the machine faces the start points' centre, its trigger in front of it, as mods/mapkit's machines
+	out = VectorNormalize( ( centre[0] - spot[0], centre[1] - spot[1], 0 ) );
+	if ( Length( out ) < 0.5 )
+	{
+		out = ( 1, 0, 0 );
+	}
+	yaw = VectorToAngles( out )[1];
+	machine = Spawn( "script_model", spot );
+	machine.angles = ( 0, yaw + 90, 0 );
+	machine SetModel( "zombie_vending_packapunch_on" );
+	machine.targetname = "admin_start_pap";
+	trig = Spawn( "trigger_radius_use", spot + out * 12 + ( 0, 0, 48 ), 0, 44, 70 );
+	trig SetIgnoreEntForTrigger( machine );
+	trig.targetname = "zombie_vending_upgrade";
+	trig.target = machine.targetname;
+	trig thread maps\_zombiemode_perks::vending_weapon_upgrade();
+	wait( 0.05 );
+	level notify( "Pack_A_Punch_on" );
+	admin_log( "start pap: placed at " + spot + " yaw " + yaw + ", centre of " + starts.size + " start points " + centre );
+}
+
+
+// The machine's spot: the centre, else points on rings of 96, 160 and 224 units around it (8 directions each), the
+// first with a clear line from the centre, floor within 128 units below, no start point within 64 units and no use
+// trigger within 96 (Kino's start points ring its teleporter pad: a machine there would hide the pad's trigger). The
+// floor comes from a player-sized trace down. Undefined when none fits.
+admin_start_pap_spot( centre, starts )
+{
+	uses = [];
+	classes = [];
+	classes[0] = "trigger_use";
+	classes[1] = "trigger_use_touch";
+	classes[2] = "trigger_radius_use";
+	for ( c = 0; c < classes.size; c++ )
+	{
+		uses = array_combine( uses, GetEntArray( classes[c], "classname" ) );
+	}
+	candidates = [];
+	candidates[0] = centre;
+	for ( r = 96; r <= 224; r += 64 )
+	{
+		for ( a = 0; a < 360; a += 45 )
+		{
+			candidates[ candidates.size ] = centre + ( Cos( a ) * r, Sin( a ) * r, 0 );
+		}
+	}
+	eye = centre + ( 0, 0, 40 );
+	for ( c = 0; c < candidates.size; c++ )
+	{
+		p = candidates[c];
+		if ( c > 0 && !BulletTracePassed( eye, p + ( 0, 0, 40 ), false, undefined ) )
+		{
+			continue;
+		}
+		floor = PlayerPhysicsTrace( p + ( 0, 0, 40 ), p + ( 0, 0, -88 ) );
+		if ( floor[2] <= p[2] - 87 )
+		{
+			continue;
+		}
+		if ( admin_any_within( starts, floor, 64 ) || admin_any_within( uses, floor, 96 ) )
+		{
+			continue;
+		}
+		return floor;
+	}
+	return undefined;
+}
+
+
+admin_any_within( things, point, radius )
+{
+	for ( i = 0; i < things.size; i++ )
+	{
+		if ( Distance2D( things[i].origin, point ) < radius )
+		{
+			return true;
+		}
+	}
+	return false;
 }

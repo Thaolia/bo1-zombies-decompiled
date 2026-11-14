@@ -203,6 +203,8 @@ void Apply(LauncherSettings *s, const std::string &key, const std::string &value
     }
     else if (key == "start_power")
         ParseBool(value, &s->startPower);
+    else if (key == "start_pap")
+        ParseBool(value, &s->startPap);
     else if (key == "resolution")
     {
         if (value == "480" || value == "720")
@@ -273,6 +275,7 @@ std::string Launcher_FormatSettings(const LauncherSettings &s)
     out += "start_perks=" + Launcher_StartPerkList(s) + "\n";
     out += std::string("backend=") + kBackendNames[s.backend] + "\n";
     out += std::string("start_power=") + (s.startPower ? "1" : "0") + "\n";
+    out += std::string("start_pap=") + (s.startPap ? "1" : "0") + "\n";
     out += "resolution=" + std::to_string(s.height) + "\n";
     out += "maxfps=" + std::to_string(s.maxFps) + "\n";
     out += std::string("shadows=") + (s.shadows ? "1" : "0") + "\n";
@@ -300,7 +303,7 @@ std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::strin
     line += std::string(" +set bo1_testclient_god ") + (s.god && !join ? "1" : "0");
     // The dedicated server stacks mods/zinfo for all its players itself (FS_ModStackNames), and decides its players'
     // start. Before the extra, so a launch_extra.cfg that sets its own fs_mods wins. mods/admin gives the start kit.
-    const bool kit = !join && (s.startPoints > 0 || s.startPerks != 0 || s.startPower);
+    const bool kit = !join && (s.startPoints > 0 || s.startPerks != 0 || s.startPower || s.startPap);
     // A MapKit layout runs with fs_game mods/mapkit, which a fs_mods stack names first (ZmClient's solo_mod_flags).
     const LauncherMap &map = kLauncherMaps[s.map];
     const bool mapkit = !join && map.mapkit;
@@ -313,6 +316,8 @@ std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::strin
         line += std::string(" +set bo1_mod_zones ") + map.zone + " +set bo1_bspworld maps/" + map.zone + ".d3dbsp";
     if (kit && s.startPower)
         line += " +set zm_startpower 1";
+    if (kit && s.startPap)
+        line += " +set zm_startpap 1";
     if (kit && s.startPoints > 0)
         line += " +set zm_startpoints " + std::to_string(s.startPoints);
     if (kit && s.startPerks != 0)

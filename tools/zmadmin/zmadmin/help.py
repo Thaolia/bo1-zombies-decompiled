@@ -85,6 +85,20 @@ SETTINGS_HELP = {
         "Valeurs : cocher les perks avec Espace. Aucun : le jeu normal.",
         "Effet : au premier spawn suivant, comme les points de départ.",
     ),
+    "zm_startpower": (
+        "Courant dès le départ",
+        "Oui : le courant de la map est mis à l'arrivée du premier joueur (machines, Pack-a-Punch, portes",
+        "électriques), avec l'interrupteur de la map. Sans effet sur une map sans courant.",
+        "Défaut : non.",
+        "Effet : au premier spawn d'une map ; zm_reset l'applique à la partie en cours.",
+    ),
+    "zm_startpap": (
+        "Pack-a-Punch au départ",
+        "Oui : un Pack-a-Punch toujours allumé est posé au centre des points de départ des joueurs. Il fait",
+        "aussi marcher celui de la map sans courant, et en donne un aux maps qui n'en ont pas (Nacht der Untoten).",
+        "Défaut : non.",
+        "Effet : au prochain chargement de la map (zm_reset).",
+    ),
     "zm_jip_mode": (
         "Arrivée en cours de partie",
         "immediate : il joue tout de suite, près des autres joueurs, avec les points de départ.",

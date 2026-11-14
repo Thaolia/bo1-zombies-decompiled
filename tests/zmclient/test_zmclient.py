@@ -338,7 +338,7 @@ class CommandLine(unittest.TestCase):
                         break
                     mods.append(a)
             kit = {argv[k + 1]: argv[k + 2] for k in range(len(argv) - 2) if argv[k] == "+set"
-                   and argv[k + 1] in ("zm_startpoints", "zm_startperks")}
+                   and argv[k + 1] in ("zm_startpoints", "zm_startperks", "zm_startpap")}
             return mods, kit
         p = P.Profile()
         self.assertEqual(mods_and_kit(p), (["zinfo"], {}))         # the default line is unchanged
@@ -348,6 +348,9 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(mods_and_kit(p)[1], {"zm_startpoints": "50000", "zm_startperks": "jugg,revive"})
         p["start_points"], p["zinfo"] = 0, False
         self.assertEqual(mods_and_kit(p), (["admin"], {"zm_startperks": "jugg,revive"}))
+        p["start_perks"], p["start_pap"] = [], True                # the start Pack-a-Punch alone stacks admin too
+        self.assertEqual(mods_and_kit(p), (["admin"], {"zm_startpap": "1"}))
+        p["start_perks"], p["start_pap"] = ["revive", "jugg"], False
         p["noperks"] = True
         self.assertEqual(mods_and_kit(p)[0], ["noperks", "admin"])
         p["noperks"], p["horde"] = False, True

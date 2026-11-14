@@ -20,9 +20,9 @@ On the console the game starts in a text menu, where you choose:
 - the aim assist and its slowdown, lock-on and auto-aim;
 - god mode;
 - the zombie counter beside the scoreboard (mods/zinfo: zombies alive and left this round), on by default;
-- the start kit: one screen for the points (1 000 to 100 000 instead of the game's 500), the power on from the start
-  and the perks a solo player gets on arrival (mods/admin's `zm_startpoints` / `zm_startpower` / `zm_startperks`; a
-  perk only when the map has its machine);
+- the start kit: one screen for the points (1 000 to 100 000 instead of the game's 500), the power on from the start,
+  a Pack-a-Punch always on at the start points, and the perks a solo player gets on arrival (mods/admin's
+  `zm_startpoints` / `zm_startpower` / `zm_startpap` / `zm_startperks`; a perk only when the map has its machine);
 - the renderer (deko3d or OpenGL), the resolution (720p, or 480p for more frames: the console scales the image to the
   screen), the frame-rate cap, shadows, texture filtering and the FPS/battery counter;
 - the pad's buttons: one screen lists each game action (fire, aim, jump, reload, grenade, knife, sprint...) with the
@@ -70,7 +70,7 @@ on Windows or Linux: no window, listening on UDP on every interface, `server.cfg
 <address>:<port>` in a `launch.cfg` next to the program, and `tools/server_status.py <address>` shows the map and
 players. Admin commands typed in its console (or over rcon, `tools/server_rcon.py`): `zm_god`, `zm_points`, `zm_perk`,
 `zm_revive`, `zm_kill`, `zm_respawn`, `zm_round`, `zm_reset`, `zm_map`, `zm_mods`, and `zm_startpoints` /
-`zm_startperks` / `zm_startpower` for the start of a game. Any player, solo too, can type `zm_where` in their own
+`zm_startperks` / `zm_startpower` / `zm_startpap` for the start of a game. Any player, solo too, can type `zm_where` in their own
 console: every living zombie's position and distance, nearest first. Players can join a game in progress (`zm_jip_mode immediate` or
 `nextround`), and `sv_maxclients` lets more than 4 play (up to 32; characters repeat past 4). Each client's
 console log is sent to the server (UDP game port + 1) and

@@ -146,6 +146,7 @@ enum Item
     // Start kit view: the points, one line per perk (kLauncherPerks order), back.
     ITEM_KIT_POINTS,
     ITEM_KIT_POWER,
+    ITEM_KIT_PAP,
     ITEM_KIT_PERK_FIRST,
     ITEM_KIT_PERK_LAST = ITEM_KIT_PERK_FIRST + 7,
     ITEM_KIT_BACK,
@@ -203,6 +204,7 @@ const ItemInfo kItems[ITEM_COUNT] = {
     {VIEW_PAD, 25, "RETOUR", "Revient au menu (aussi: bouton B)."},
     {VIEW_KIT, 6, "Points de depart", "Gauche/Droite: les points a l'arrivee sur la map, au lieu des 500 du jeu."},
     {VIEW_KIT, 7, "Courant", "Oui: le courant de la map est mis des l'arrivee (portes, atouts, Pack-a-Punch)."},
+    {VIEW_KIT, 8, "Pack-a-Punch", "Oui: un Pack-a-Punch toujours allume au point de depart des joueurs."},
 #define KIT_PERK(row) {VIEW_KIT, row, nullptr, "Gauche/Droite ou A: atout gratuit a l'arrivee, si la map a sa machine."}
     KIT_PERK(9), KIT_PERK(10), KIT_PERK(11), KIT_PERK(12), KIT_PERK(13), KIT_PERK(14), KIT_PERK(15), KIT_PERK(16),
 #undef KIT_PERK
@@ -284,13 +286,15 @@ std::string ValueText(const LauncherSettings &s, int item)
         int perks = 0;
         for (int i = 0; i < kLauncherPerkCount; ++i)
             perks += (s.startPerks >> i) & 1;
-        if (!s.startPoints && !perks && !s.startPower)
+        if (!s.startPoints && !perks && !s.startPower && !s.startPap)
             return "Celui du jeu";
         std::string text = s.startPoints ? std::to_string(s.startPoints) + " points" : "500 points";
         if (perks)
             text += ", " + std::to_string(perks) + (perks > 1 ? " atouts" : " atout");
         if (s.startPower)
             text += ", courant";
+        if (s.startPap)
+            text += ", Pack-a-Punch";
         return text;
     }
     case ITEM_KIT_POINTS:
@@ -299,6 +303,8 @@ std::string ValueText(const LauncherSettings &s, int item)
         return s.backend == LAUNCHER_BACKEND_DEKO3D ? "deko3d" : "OpenGL";
     case ITEM_KIT_POWER:
         return YesNo(s.startPower);
+    case ITEM_KIT_PAP:
+        return YesNo(s.startPap);
     case ITEM_RESOLUTION:
         return s.height == 480 ? "480p" : "720p";
     case ITEM_MAXFPS:
@@ -367,6 +373,9 @@ void Change(LauncherSettings *s, int item, int dir)
         break;
     case ITEM_KIT_POWER:
         s->startPower = !s->startPower;
+        break;
+    case ITEM_KIT_PAP:
+        s->startPap = !s->startPap;
         break;
     case ITEM_RESOLUTION:
         s->height = s->height == 720 ? 480 : 720;

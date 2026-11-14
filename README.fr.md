@@ -105,7 +105,8 @@ Commandes admin, tapées dans la console du serveur (ou en rcon avec `tools/serv
 - `zm_round <n>`, `zm_reset` (relance la map), `zm_map <map>`, `zm_mods "<mods>"` (change `fs_mods` et relance) ;
 - `zm_admin` liste les joueurs et leur état ;
 - réglages `zm_startpoints <n>` et `zm_startperks "<perks>"` : points et perks de départ de chaque joueur ;
-  `zm_startpower 1` : le courant de la map est mis dès l'arrivée du premier joueur ;
+  `zm_startpower 1` : le courant de la map est mis dès l'arrivée du premier joueur ; `zm_startpap 1` : un
+  Pack-a-Punch toujours allumé est posé au point de départ des joueurs (au prochain chargement de la map) ;
 - `zm_jip_mode immediate|nextround` : un joueur qui rejoint une partie en cours joue tout de suite (par défaut, près
   des autres joueurs, avec les points de départ), ou reste spectateur jusqu'à la fin du round.
 - `set sv_maxclients <n>` (dans `server.cfg`, avant la map ; 4 par défaut, 32 au plus) : plus de 4 joueurs. Le jeu n'a

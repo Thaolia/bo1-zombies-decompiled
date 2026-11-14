@@ -137,6 +137,8 @@ class App:
             parts.append(f"{len(p['start_perks'])} atout" + ("s" if len(p["start_perks"]) > 1 else ""))
         if p["start_power"]:
             parts.append("courant")
+        if p["start_pap"]:
+            parts.append("Pack-a-Punch")
         if p["bo2_weapons"]:
             parts.append("armes BO2" + ("" if p["bo2_weapons"] == 1 else " seules"))
         return ", ".join(parts) or "aucun"

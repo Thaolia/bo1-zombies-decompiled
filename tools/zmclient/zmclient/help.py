@@ -43,6 +43,9 @@ ROW_HELP = {
                     "zm_startpoints). Solo seulement : un serveur décide pour ses joueurs.",
     "start_power": "Le courant est mis à l'arrivée du premier joueur (mod admin, zm_startpower) : les machines, le "
                    "Pack-a-Punch et les portes électriques marchent tout de suite. Sans effet sur une map sans courant.",
+    "start_pap": "Un Pack-a-Punch toujours allumé, posé au centre des points de départ des joueurs (mod admin, "
+                 "zm_startpap). Il fait aussi marcher celui de la map sans courant, et en donne un aux maps qui n'en ont "
+                 "pas (Nacht der Untoten).",
     "start_perk": "Un atout donné gratuitement à l'arrivée sur la map (mod admin, zm_startperks). Seulement s'il a "
                   "sa machine sur cette map : Kino et Five n'ont que Juggernog, Quick Revive, Speed Cola et Double "
                   "Tap.",

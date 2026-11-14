@@ -70,6 +70,11 @@ The game is made for 4; past that `_admin.gsc` gives a player what the first 4 g
   (`use_elec_switch`, `use_master_switch` on Verruckt, `use_power_switch` on Der Riese, and a MapKit layout's
   switch), so everything the map does when the power comes on runs; a map without one but with a `power_on` flag
   gets the flag set.
+- `zm_startpap 1`: a Pack-a-Punch, always on, at the centre of the map's `initial_spawn_points` (or on a ring of up to
+  224 units around it, away from the start points and from any use trigger: Kino's centre is its teleporter pad),
+  read at the map's load. It is retail's `vending_weapon_upgrade` on a new trigger, and the `Pack_A_Punch_on` notify
+  it waits for is sent at once, which also lets the map's own machine work before the power. Nacht der Untoten,
+  which has no machine, gets one too.
 - `zm_jip_mode immediate|nextround`: a player who joins a game in progress plays at once (the default) or spectates
   until the round ends.
 - `zm_debug_revive 1`: while a player is down, logs each test of `maps\_laststand::can_revive` / `is_reviving` for
