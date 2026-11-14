@@ -18,7 +18,8 @@
 #   --no-build       package what is built; fail if anything is missing or out of date
 #   --no-game-data   packages without any file of the game, in BO1Zombies_<platform>_nodata/: on windows and
 #                    linux the player installs them from their own Black Ops with ZmClient (Installation view); the
-#                    switch one holds the .nro and mods/ only, the rest comes from a package made with the game
+#                    switch one holds the .nro, mods/ and the tools that complete it from the player's own Black Ops
+#                    (Setup-Switch.bat on Windows, setup_switch.sh on Linux: ffconv, uam, make_dksh_pack)
 #   --bo2 DIR        your own Black Ops II extraction: its maps (docs/BO2_MAPS.md, "Running it": DIR/mods/mapkit/
 #                    layouts/bo2_*.json and DIR/mods/mapkit/imports/; a native map also DIR/usermaps/<zone>/,
 #                    DIR/main/maps/<zone>.d3dbsp and DIR/main/images/bo2_*.iwi), its weapons (docs/BO2_WEAPONS.md:
@@ -294,22 +295,38 @@ build_zmclient() { # <linux|windows> <binary>
     tail -1 "$LOGS/zmclient-$1.log"
 }
 
-# uam.exe (tools/uam/build.sh) is built again when its build script is newer than the binary.
+# uam (tools/uam/build.sh) is built again when its build script is newer than the binary.
 UAM_EXE="$ROOT/build/uam/windows/uam.exe"
-build_uam() {
-    if [ -f "$UAM_EXE" ] && [ ! "$ROOT/tools/uam/build.sh" -nt "$UAM_EXE" ]; then
-        echo "uam.exe up to date"
+UAM_LINUX="$ROOT/build/uam/linux/uam"
+build_uam() { # <windows|linux> <binary>
+    if [ -f "$2" ] && [ ! "$ROOT/tools/uam/build.sh" -nt "$2" ]; then
+        echo "uam ($1) up to date"
         return
     fi
-    [ "$BUILD" = 1 ] || die "uam.exe is missing or older than tools/uam/build.sh: $UAM_EXE (run without --no-build)"
-    step "windows: building uam.exe (MinGW-w64)"
-    run_logged uam-windows env UAM_WORK="$WORK/uam" "$ROOT/tools/uam/build.sh"
-    tail -1 "$LOGS/uam-windows.log"
+    [ "$BUILD" = 1 ] || die "uam for $1 is missing or older than tools/uam/build.sh: $2 (run without --no-build)"
+    step "$1: building uam"
+    run_logged "uam-$1" env UAM_WORK="$WORK/uam" "$ROOT/tools/uam/build.sh" "$1"
+    tail -1 "$LOGS/uam-$1.log"
+}
+
+# make_dksh_pack.exe (tools/switch_setup/build.sh, Nuitka) is built again when its source or build script is newer.
+DKSH_TOOL_EXE="$ROOT/build/switch_setup/windows/make_dksh_pack.exe"
+build_dksh_tool() {
+    if [ -f "$DKSH_TOOL_EXE" ] && [ ! "$ROOT/tools/ffconv/gen/make_dksh_pack.py" -nt "$DKSH_TOOL_EXE" ] \
+        && [ ! "$ROOT/tools/switch_setup/build.sh" -nt "$DKSH_TOOL_EXE" ]; then
+        echo "make_dksh_pack.exe up to date"
+        return
+    fi
+    [ "$BUILD" = 1 ] || die "make_dksh_pack.exe is missing or out of date: $DKSH_TOOL_EXE (run without --no-build)"
+    have_wsl || die "make_dksh_pack.exe builds with the Windows Python and Visual Studio and needs WSL"
+    step "switch: building make_dksh_pack.exe with Nuitka"
+    run_logged dksh-tool "$ROOT/tools/switch_setup/build.sh"
+    tail -1 "$LOGS/dksh-tool.log"
 }
 
 if wants windows; then
     [ "$BUILD" = 1 ] && build_windows
-    build_uam
+    build_uam windows "$UAM_EXE"
     need "$ROOT/build/win64-msvc/Release/BO1Zombies.exe" "the win64 program"
     build_zmadmin windows "$ROOT/build/zmadmin/windows/zmadmin.exe"
     build_zmclient windows "$ROOT/build/zmclient/windows/zmclient.exe"
@@ -323,8 +340,17 @@ fi
 if wants switch; then
     [ "$BUILD" = 1 ] && build_switch
     need "$WORK/switch/Release/BO1Zombies.nro" "the Switch program"
-    # shaders.dksh is compiled from the game's shaders: none without the game data
-    if [ "$GAME_DATA" = 1 ]; then build_dksh; fi
+    # shaders.dksh is compiled from the game's shaders: none without the game data, whose package carries the tools
+    # that compile it on the player's PC instead
+    if [ "$GAME_DATA" = 1 ]; then
+        build_dksh
+    else
+        [ "$BUILD" = 1 ] && build_ffconv
+        [ -f "$FFCONV_EXE" ] || die "ffconv not found: $FFCONV_EXE (run without --no-build to build it)"
+        build_uam windows "$UAM_EXE"
+        build_uam linux "$UAM_LINUX"
+        build_dksh_tool
+    fi
 fi
 
 # ---------------------------------------------------------------- packages
@@ -655,21 +681,46 @@ package_switch() {
     # under its base folder, sdmc:/switch/bo1zm/mods (FS_Startup)
     rsync -a --delete "$ROOT/mods/" "$sd/mods/"
     if [ "$GAME_DATA" = 0 ]; then
+        # The tools that complete it from the player's own Black Ops (tools/switch_setup): ffconv for the zones and
+        # shaders.pack, uam and make_dksh_pack for shaders.dksh, built from the same sources as this .nro.
+        mkdir -p "$d/tools/windows" "$d/tools/linux"
+        cp "$ROOT/tools/switch_setup/setup_switch.ps1" "$ROOT/tools/switch_setup/Setup-Switch.bat" \
+            "$ROOT/tools/switch_setup/setup_switch.sh" "$d/"
+        sed -i 's/\r*$/\r/' "$d/Setup-Switch.bat"
+        chmod +x "$d/setup_switch.sh"
+        cp "$FFCONV_EXE" "$UAM_EXE" "$DKSH_TOOL_EXE" "$d/tools/windows/"
+        cp "$UAM_LINUX" "$ROOT/tools/ffconv/gen/make_dksh_pack.py" "$d/tools/linux/"
+        cp "$ROOT/build/uam/windows/uam-LICENSE.txt" "$d/tools/"
+        chmod +x "$d/tools/linux/uam"
         cat > "$d/LISEZMOI.txt" << 'EOF'
-BO1 Zombies, portage Nintendo Switch (homebrew, Atmosphère) : programme seul
-=============================================================================
+BO1 Zombies, portage Nintendo Switch (homebrew, Atmosphère) : à compléter avec votre jeu
+=======================================================================================
 
-Ce dossier ne contient aucun fichier du jeu : BO1Zombies.nro et les mods (scripts) seulement. Il ne se lance pas
-seul. Il lui faut, dans /switch/bo1zm/ sur la carte SD, les fichiers tirés de VOTRE Call of Duty: Black Ops :
-  zone/ (les zones converties en 64 bits par ffconv), main/ (les .iwd), localization.txt,
-  shaders.pack (ffconv) et shaders.dksh (shaders.pack compilé par uam, l'outil deko3d de devkitPro).
-Ils viennent d'un paquet Switch fait sur votre PC avec votre jeu (tools/make_dist.sh switch, README.md,
-« Packages ») : copiez ce BO1Zombies.nro par-dessus celui du paquet, avec le dossier mods.
-Le .nro, shaders.pack et shaders.dksh doivent venir des mêmes sources : en cas de doute, refaites le paquet complet.
+Ce dossier ne contient aucun fichier du jeu : BO1Zombies.nro, les mods (scripts) et les outils qui ajoutent, depuis
+VOTRE Call of Duty: Black Ops (PC, Steam), ce qu'il lui faut dans switch/bo1zm/ :
+  localization.txt et main/*.iwd (copiés), zone/ et shaders.pack (zones converties en 64 bits par ffconv),
+  shaders.dksh (shaders.pack compilé par uam, le compilateur de shaders de deko3d).
+Votre installation n'est que lue. Comptez environ 8 Go sur le disque et 10 à 15 minutes.
+
+WINDOWS     double-cliquez Setup-Switch.bat (installation Steam à son emplacement par défaut), ou en ligne de
+            commande : Setup-Switch.bat "D:\Jeux\Call of Duty Black Ops"  (le dossier de BlackOps.exe).
+LINUX       ./setup_switch.sh "/chemin/vers/Call of Duty Black Ops"
+            ffconv est un programme Windows : il passe par wine (wine et winepath), ou tourne directement sous
+            WSL. shaders.dksh demande python3.
+JOURNAL     setup_switch.log, à côté du script.
+
+Ensuite, copiez le dossier « switch » de ce répertoire à la RACINE de la carte SD (il se fusionne avec /switch) :
+/switch/bo1zm/BO1Zombies.nro, avec zone/, main/, mods/, shaders.pack, shaders.dksh et localization.txt.
+BO1Zombies.nro, shaders.pack et shaders.dksh vont ensemble : après une nouvelle version, relancez le script.
 
 LANCEMENT (mode application obligatoire)
   Depuis l'accueil, MAINTENEZ R en lançant un jeu installé : le Homebrew Menu s'ouvre avec toute la mémoire.
   Choisissez « BO1 Zombies ».
+
+JOURNAL DU JEU
+  /switch/bo1zm/boot.log : à renvoyer en cas de problème.
+
+Une fois complété, ce dossier contient vos propres fichiers de jeu : gardez-le pour vos appareils, ne le publiez pas.
 EOF
         write_version "$d" switch "nro build: $(cat "$WORK/switch/romfs/build.txt")"
         return
@@ -741,5 +792,5 @@ for p in "${PLATFORMS[@]}"; do du -sh "$OUT/BO1Zombies_$p$SUFFIX" | sed 's/\t/  
 if [ "$GAME_DATA" = 1 ]; then
     echo "These packages hold your own game files: keep them for your own devices, never publish them."
 else
-    echo "These packages hold no game file: the player installs them from their own Black Ops with zmclient."
+    echo "These packages hold no game file: the player installs them from their own Black Ops (zmclient; Switch: Setup-Switch.bat, setup_switch.sh)."
 fi

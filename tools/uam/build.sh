@@ -1,22 +1,25 @@
 #!/bin/bash
-# Builds uam, deko3d's offline shader compiler (https://github.com/devkitPro/uam), for Windows: devkitPro ships it
-# for Linux only (/opt/devkitpro/tools/bin/uam), so a Windows PC could not compile shaders.dksh, the Switch package's
-# shaders (tools/ffconv/gen/make_dksh_pack.py --uam uam.exe).
+# Builds uam, deko3d's offline shader compiler (https://github.com/devkitPro/uam), which compiles a Switch package's
+# shaders.dksh (tools/ffconv/gen/make_dksh_pack.py --uam): for Windows, where devkitPro ships none, and for Linux
+# without devkitPro (the Switch package's setup_switch.sh).
 #
-#   tools/uam/build.sh
+#   tools/uam/build.sh [windows] [linux]       default: both
 #
-# Output: build/uam/windows/uam.exe, statically linked (only KERNEL32 and msvcrt). The sources are uam's v1.1.0 tag,
-# the version devkitPro's binary reports, fetched into $UAM_WORK (default ~/.cache/uam) and cross-compiled there with
-# MinGW-w64. Needs git, meson, ninja, bison, flex, python3-mako and the x86_64 MinGW-w64 toolchain (mingw-w64).
+# Output: build/uam/windows/uam.exe (MinGW-w64, only KERNEL32 and msvcrt) and build/uam/linux/uam (statically
+# linked), with uam-LICENSE.txt beside each. The sources are uam's v1.1.0 tag, the version devkitPro's binary
+# reports, fetched into $UAM_WORK (default ~/.cache/uam) and built there. Needs git, meson, ninja, bison, flex,
+# python3-mako, gcc/g++ and, for windows, the x86_64 MinGW-w64 toolchain (mingw-w64).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-OUT="$ROOT/build/uam/windows"
+OUT="$ROOT/build/uam"
 WORK="${UAM_WORK:-${XDG_CACHE_HOME:-$HOME/.cache}/uam}"
 REPO=https://github.com/devkitPro/uam
 COMMIT=5a5afc2bae8b55409ab36ba45be63fcb73f68993 # v1.1.0
 
-for tool in git meson ninja bison flex x86_64-w64-mingw32-g++; do
+targets=("$@")
+[ ${#targets[@]} -gt 0 ] || targets=(windows linux)
+for tool in git meson ninja bison flex; do
     command -v "$tool" > /dev/null || { echo "uam: $tool not found" >&2; exit 1; }
 done
 python3 -c 'import mako' 2> /dev/null || { echo "uam: python3's mako module not found (python3-mako)" >&2; exit 1; }
@@ -48,11 +51,29 @@ cpu_family = 'x86_64'
 cpu = 'x86_64'
 endian = 'little'
 INI
-rm -rf "$WORK/build-windows"
-meson setup --cross-file "$WORK/mingw64.ini" "$WORK/build-windows" "$WORK/src" > "$WORK/setup-windows.log" \
-    || { tail -20 "$WORK/setup-windows.log" >&2; exit 1; }
-ninja -C "$WORK/build-windows" > "$WORK/build-windows.log" || { tail -20 "$WORK/build-windows.log" >&2; exit 1; }
-mkdir -p "$OUT"
-cp "$WORK/build-windows/uam.exe" "$OUT/uam.exe"
-cp "$WORK/src/LICENSE" "$OUT/uam-LICENSE.txt"
-echo "uam: $OUT/uam.exe ($(stat -c %s "$OUT/uam.exe") bytes)"
+
+build() { # <target> <meson setup options...>
+    local target="$1"
+    shift
+    rm -rf "$WORK/build-$target"
+    meson setup "$@" "$WORK/build-$target" "$WORK/src" > "$WORK/setup-$target.log" \
+        || { tail -20 "$WORK/setup-$target.log" >&2; exit 1; }
+    ninja -C "$WORK/build-$target" > "$WORK/build-$target.log" || { tail -20 "$WORK/build-$target.log" >&2; exit 1; }
+}
+
+for t in "${targets[@]}"; do
+    case "$t" in
+    windows)
+        command -v x86_64-w64-mingw32-g++ > /dev/null || { echo "uam: x86_64-w64-mingw32-g++ not found" >&2; exit 1; }
+        build windows --cross-file "$WORK/mingw64.ini"
+        bin=uam.exe ;;
+    linux)
+        build linux -Dc_link_args=-static -Dcpp_link_args=-static
+        bin=uam ;;
+    *) echo "uam: unknown target '$t' (windows, linux)" >&2; exit 2 ;;
+    esac
+    mkdir -p "$OUT/$t"
+    cp "$WORK/build-$t/$bin" "$OUT/$t/$bin"
+    cp "$WORK/src/LICENSE" "$OUT/$t/uam-LICENSE.txt"
+    echo "uam: $OUT/$t/$bin ($(stat -c %s "$OUT/$t/$bin") bytes)"
+done

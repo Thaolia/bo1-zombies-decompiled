@@ -116,8 +116,11 @@ folders and archives in `build/dist`, one per platform:
 Each also holds the converted zones, the install's `main/*.iwd` and `localization.txt` (and `main/video` on PC), a
 `LISEZMOI.txt` and a `VERSION.txt` (commit, date, NRO link time). With `--no-game-data` the packages go to
 `BO1Zombies_<platform>_nodata/` and hold no file of the game: the player installs the windows and linux ones with
-ZmClient's Installation view, from their own Black Ops; the switch one holds the `.nro` and `mods/` only, to copy over
-a Switch package made with the game.
+ZmClient's Installation view, from their own Black Ops. The switch one holds the `.nro`, `mods/` and the tools that
+complete its SD card folder from the player's own install (`tools/switch_setup`): `Setup-Switch.bat ["<install>"]` on
+Windows, `./setup_switch.sh <install>` on Linux. They copy `localization.txt` and `main/*.iwd`, convert the zones with
+`ffconv` (through wine or WSL on Linux), and compile `shaders.dksh` with `uam` and `make_dksh_pack` (a Nuitka `.exe`
+on Windows, `python3` on Linux; `tools/uam/build.sh` builds both uams, `tools/switch_setup/build.sh` the `.exe`).
 
     tools/make_dist.sh                       # all three
     tools/make_dist.sh switch linux          # some
