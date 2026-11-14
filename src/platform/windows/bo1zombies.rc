@@ -1,0 +1,3 @@
+// The program's icon (images/logo.png). Resource 1 is the one the window classes load: LoadIconA(hInstance,
+// (LPCSTR)1) in win32/win_main.cpp and win32/win_syscon.cpp; Explorer and the taskbar take the first icon too.
+1 ICON "bo1zombies.ico"
