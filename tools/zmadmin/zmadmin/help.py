@@ -99,6 +99,14 @@ SETTINGS_HELP = {
         "Défaut : non.",
         "Effet : au prochain chargement de la map (zm_reset).",
     ),
+    "zm_farrespawn": (
+        "Zombies éloignés",
+        "Un zombie plus loin que cette distance de tous les joueurs (unités de zm_where), et qu'aucun ne voit, est",
+        "retiré et remis dans la manche : le jeu en fait apparaître un autre à un point actif, près des joueurs.",
+        "Comme le jeu le fait sur Moon (1500). Pas les chiens ni les boss, ni un zombie blessé ou qui sort de terre.",
+        "Valeurs : 0 (désactivé) ou une distance, par exemple 2500. Défaut : 0.",
+        "Effet : au prochain passage, toutes les 5 secondes.",
+    ),
     "zm_jip_mode": (
         "Arrivée en cours de partie",
         "immediate : il joue tout de suite, près des autres joueurs, avec les points de départ.",

@@ -149,6 +149,7 @@ enum Item
     ITEM_KIT_PAP,
     ITEM_KIT_PERK_FIRST,
     ITEM_KIT_PERK_LAST = ITEM_KIT_PERK_FIRST + 7,
+    ITEM_KIT_FAR,
     ITEM_KIT_BACK,
     ITEM_COUNT
 };
@@ -208,6 +209,7 @@ const ItemInfo kItems[ITEM_COUNT] = {
 #define KIT_PERK(row) {VIEW_KIT, row, nullptr, "Gauche/Droite ou A: atout gratuit a l'arrivee, si la map a sa machine."}
     KIT_PERK(9), KIT_PERK(10), KIT_PERK(11), KIT_PERK(12), KIT_PERK(13), KIT_PERK(14), KIT_PERK(15), KIT_PERK(16),
 #undef KIT_PERK
+    {VIEW_KIT, 17, "Zombies eloignes", "Gauche/Droite: un zombie plus loin que ca de tous et non vu est remplace."},
     {VIEW_KIT, 18, "RETOUR", "Revient au menu (aussi: bouton B)."},
 };
 static_assert(ITEM_KIT_PERK_LAST - ITEM_KIT_PERK_FIRST + 1 == 8, "one kit line per kLauncherPerks entry");
@@ -286,7 +288,7 @@ std::string ValueText(const LauncherSettings &s, int item)
         int perks = 0;
         for (int i = 0; i < kLauncherPerkCount; ++i)
             perks += (s.startPerks >> i) & 1;
-        if (!s.startPoints && !perks && !s.startPower && !s.startPap)
+        if (!s.startPoints && !perks && !s.startPower && !s.startPap && !s.farRespawn)
             return "Celui du jeu";
         std::string text = s.startPoints ? std::to_string(s.startPoints) + " points" : "500 points";
         if (perks)
@@ -295,6 +297,8 @@ std::string ValueText(const LauncherSettings &s, int item)
             text += ", courant";
         if (s.startPap)
             text += ", Pack-a-Punch";
+        if (s.farRespawn > 0)
+            text += ", rapproches";
         return text;
     }
     case ITEM_KIT_POINTS:
@@ -305,6 +309,8 @@ std::string ValueText(const LauncherSettings &s, int item)
         return YesNo(s.startPower);
     case ITEM_KIT_PAP:
         return YesNo(s.startPap);
+    case ITEM_KIT_FAR:
+        return s.farRespawn > 0 ? "Au-dela de " + std::to_string(s.farRespawn) : std::string("Non");
     case ITEM_RESOLUTION:
         return s.height == 480 ? "480p" : "720p";
     case ITEM_MAXFPS:
@@ -392,6 +398,15 @@ void Change(LauncherSettings *s, int item, int dir)
     case ITEM_FPSCOUNTER:
         s->fpsCounter = !s->fpsCounter;
         break;
+    case ITEM_KIT_FAR:
+    {
+        int at = 0;
+        while (at < kLauncherFarRespawnCount && kLauncherFarRespawns[at] != s->farRespawn)
+            ++at;
+        at = (at % kLauncherFarRespawnCount + dir + kLauncherFarRespawnCount) % kLauncherFarRespawnCount;
+        s->farRespawn = kLauncherFarRespawns[at];
+        break;
+    }
     case ITEM_KIT_POINTS:
     {
         int at = 0;

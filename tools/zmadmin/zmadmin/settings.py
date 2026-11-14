@@ -25,6 +25,7 @@ SETTINGS = [
     Setting("zm_startperks", "perks", choices=[p for p, _ in PERKS]),
     Setting("zm_startpower", "bool"),
     Setting("zm_startpap", "bool", reload=True),
+    Setting("zm_farrespawn", "int", minimum=0, maximum=100000),
     Setting("zm_jip_mode", "choice", choices=["immediate", "nextround"]),
     Setting("zm_debug_revive", "bool"),
     Setting("g_inactivity", "int", minimum=0),

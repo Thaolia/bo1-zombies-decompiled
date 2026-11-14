@@ -262,7 +262,8 @@ Typed in the server's console, run from `server.cfg`, or sent over rcon once the
 Settings, in `server.cfg` or on the command line: `zm_startpoints <n>` (every player's points once they first spawn on
 a map; 0 keeps the game's own), `zm_startperks "<perks>"` (perks every player gets then, e.g. `"jugg revive"`), `zm_startpower 1` (the map's power
 switch used as the first player spawns), `zm_startpap 1` (a Pack-a-Punch, always on, at the players' start points, from
-the next map load),
+the next map load), `zm_farrespawn <units>` (a zombie farther than that from every player and seen by none is replaced
+closer; 0 is off),
 `zm_jip_mode immediate|nextround` (a player who joins a game in progress, below) and `zm_debug_revive 1` (while a player is down, logs `admin: revive debug: ...` lines with each test of the game's
 revive for every other player: distance, alive, down, touching the revive trigger, facing, sight and bullet traces,
 use button, the result).

@@ -73,6 +73,7 @@ MODEL_LIGHTING_ENTRIES_MAX = 5120   # r_mod_modelLightingEntries' cap (r_model_l
 # points keeps the game's own 500. The perk names are those _admin.gsc admin_perk_name takes, in its order; a perk
 # without a machine on the map is not given.
 START_POINT_CHOICES = (0, 1000, 2500, 5000, 10000, 25000, 50000, 100000)
+FAR_RESPAWN_CHOICES = (0, 1500, 2500, 4000)    # mods/admin's zm_farrespawn, in zm_where's units (1500: Moon's own)
 # mods/bo2weapons (docs/BO2_WEAPONS.md): the player's own Black Ops II weapons, in mods/bo2weapons/mod.ff, which the
 # engine loads when fs_mods names the mod (DB_FindModZone). Choice 0 is off; 1 to 3 are the script's bo2weapons_box 0
 # to 2. A client joining a server that has them loads the same mod.ff (join_bo2_weapons), or the weapons' indices do not
@@ -94,6 +95,7 @@ DEFAULTS = {
     "start_perks": [],                  # names of START_PERKS
     "start_power": False,               # mods/admin's zm_startpower: the power switch used at the start
     "start_pap": False,                 # mods/admin's zm_startpap: a Pack-a-Punch, always on, at the start points
+    "far_respawn": 0,                   # one of FAR_RESPAWN_CHOICES: mods/admin's zm_farrespawn
     "horde": False,
     "horde_max": 128,
     "horde_round": 1,
@@ -214,6 +216,8 @@ class Profile:
                 self.data[key] = 0
         if self.data["start_points"] not in START_POINT_CHOICES:
             self.data["start_points"] = DEFAULTS["start_points"]
+        if self.data["far_respawn"] not in FAR_RESPAWN_CHOICES:
+            self.data["far_respawn"] = DEFAULTS["far_respawn"]
         self.data["start_perks"] = [k for k, _ in START_PERKS if k in self.data["start_perks"]]
         self.data["extra"] = [e for e in self.data["extra"] if isinstance(e, dict) and isinstance(e.get("text"), str)]
         self.data["favorites"] = [f for f in self.data["favorites"] if isinstance(f, dict) and f.get("host")]
@@ -394,8 +398,10 @@ def solo_mod_flags(p, dist_root=None):
     if p["quickrestart"]:
         a += " +set bo1_mod_quickrestart 1"
     argv = a.split()
-    if p["start_points"] or p["start_perks"] or p["start_power"] or p["start_pap"]:
+    if p["start_points"] or p["start_perks"] or p["start_power"] or p["start_pap"] or p["far_respawn"]:
         add_admin_mod(argv, bool(layout) and not p["horde"])
+        if p["far_respawn"]:
+            argv += ["+set", "zm_farrespawn", str(p["far_respawn"])]
         if p["start_power"]:
             argv += ["+set", "zm_startpower", "1"]
         if p["start_pap"]:

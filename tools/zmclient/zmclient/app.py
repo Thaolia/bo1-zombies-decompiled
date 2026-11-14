@@ -139,6 +139,8 @@ class App:
             parts.append("courant")
         if p["start_pap"]:
             parts.append("Pack-a-Punch")
+        if p["far_respawn"]:
+            parts.append(f"zombies rapprochés > {p['far_respawn']}")
         if p["bo2_weapons"]:
             parts.append("armes BO2" + ("" if p["bo2_weapons"] == 1 else " seules"))
         return ", ".join(parts) or "aucun"

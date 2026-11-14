@@ -48,6 +48,8 @@ std::string Launcher_MapFile(int map, int i)
 
 const int kLauncherStartPoints[] = {0, 1000, 2500, 5000, 10000, 25000, 50000, 100000};
 const int kLauncherStartPointCount = int(sizeof(kLauncherStartPoints) / sizeof(kLauncherStartPoints[0]));
+const int kLauncherFarRespawns[] = {0, 1500, 2500, 4000};
+const int kLauncherFarRespawnCount = int(sizeof(kLauncherFarRespawns) / sizeof(kLauncherFarRespawns[0]));
 const LauncherPerk kLauncherPerks[] = {
     {"jugg", "Juggernog"},   {"revive", "Quick Revive"}, {"speed", "Speed Cola"},       {"doubletap", "Double Tap"},
     {"staminup", "Stamin-Up"}, {"phd", "PhD Flopper"},   {"deadshot", "Deadshot Daiquiri"}, {"mule", "Mule Kick"},
@@ -205,6 +207,12 @@ void Apply(LauncherSettings *s, const std::string &key, const std::string &value
         ParseBool(value, &s->startPower);
     else if (key == "start_pap")
         ParseBool(value, &s->startPap);
+    else if (key == "far_respawn")
+    {
+        for (int i = 0; i < kLauncherFarRespawnCount; ++i)
+            if (value == std::to_string(kLauncherFarRespawns[i]))
+                s->farRespawn = kLauncherFarRespawns[i];
+    }
     else if (key == "resolution")
     {
         if (value == "480" || value == "720")
@@ -276,6 +284,7 @@ std::string Launcher_FormatSettings(const LauncherSettings &s)
     out += std::string("backend=") + kBackendNames[s.backend] + "\n";
     out += std::string("start_power=") + (s.startPower ? "1" : "0") + "\n";
     out += std::string("start_pap=") + (s.startPap ? "1" : "0") + "\n";
+    out += "far_respawn=" + std::to_string(s.farRespawn) + "\n";
     out += "resolution=" + std::to_string(s.height) + "\n";
     out += "maxfps=" + std::to_string(s.maxFps) + "\n";
     out += std::string("shadows=") + (s.shadows ? "1" : "0") + "\n";
@@ -303,7 +312,8 @@ std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::strin
     line += std::string(" +set bo1_testclient_god ") + (s.god && !join ? "1" : "0");
     // The dedicated server stacks mods/zinfo for all its players itself (FS_ModStackNames), and decides its players'
     // start. Before the extra, so a launch_extra.cfg that sets its own fs_mods wins. mods/admin gives the start kit.
-    const bool kit = !join && (s.startPoints > 0 || s.startPerks != 0 || s.startPower || s.startPap);
+    const bool kit = !join && (s.startPoints > 0 || s.startPerks != 0 || s.startPower || s.startPap ||
+                                s.farRespawn > 0);
     // A MapKit layout runs with fs_game mods/mapkit, which a fs_mods stack names first (ZmClient's solo_mod_flags).
     const LauncherMap &map = kLauncherMaps[s.map];
     const bool mapkit = !join && map.mapkit;
@@ -318,6 +328,8 @@ std::string Launcher_BuildLaunchLine(const LauncherSettings &s, const std::strin
         line += " +set zm_startpower 1";
     if (kit && s.startPap)
         line += " +set zm_startpap 1";
+    if (kit && s.farRespawn > 0)
+        line += " +set zm_farrespawn " + std::to_string(s.farRespawn);
     if (kit && s.startPoints > 0)
         line += " +set zm_startpoints " + std::to_string(s.startPoints);
     if (kit && s.startPerks != 0)

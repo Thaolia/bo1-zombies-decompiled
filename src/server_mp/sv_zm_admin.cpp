@@ -430,6 +430,9 @@ void SV_ZmAdmin_AddCommands()
                       "zm_admin: 1 = the map's power comes on as the first player spawns (mods/admin)");
     _Dvar_RegisterInt("zm_startpap", 0, 0, 1, 0,
                       "zm_admin: 1 = a Pack-a-Punch, always on, at the centre of the players' start points (mods/admin)");
+    _Dvar_RegisterInt("zm_farrespawn", 0, 0, 100000, 0,
+                      "zm_admin: a zombie farther than this from every player and seen by none is replaced closer "
+                      "(mods/admin); 0 = off");
     _Dvar_RegisterString("zm_jip_mode", "immediate", 0,
                          "zm_admin: a player who joins a game in progress (mods/admin): \"immediate\" plays at once, "
                          "\"nextround\" spectates until the round ends");

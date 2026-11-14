@@ -9,7 +9,8 @@
 //
 // Dvars read here: zm_startpoints (points each player starts with, 0 = the game's own), zm_startperks (perks each
 // player starts with: names or "all"), zm_startpower (1: the power comes on as the first player spawns), zm_startpap
-// (1: a Pack-a-Punch, always on, at the centre of the players' start points), zm_jip_mode
+// (1: a Pack-a-Punch, always on, at the centre of the players' start points), zm_farrespawn (a zombie farther than this
+// from every player and seen by none is replaced closer; 0 = off), zm_jip_mode
 // (a player who joins a game in progress: "immediate" plays at once, "nextround" spectates until the round ends) and
 // zm_debug_revive (1: while a player is down, log why each other player can or cannot revive them).
 //
@@ -42,6 +43,7 @@ main_end()
 	level thread admin_connect_watch();
 	level thread admin_late_join_vars();
 	level thread admin_start_pap();
+	level thread admin_far_respawn();
 	admin_log( "loaded on " + GetDvar( #"mapname" ) );
 }
 
@@ -1146,4 +1148,92 @@ admin_any_within( things, point, radius )
 		}
 	}
 	return false;
+}
+
+
+//-------------------------------------------------------------------------------
+// far zombies (zm_farrespawn)
+//-------------------------------------------------------------------------------
+
+// zm_farrespawn <units>: retail Moon's distance tracking (maps\zombie_moon_distance_tracking, 1500 units, every 10 s)
+// on every map, with the distance from the dvar (read each pass, 0 = off): a zombie farther than that from every
+// playing player and in no one's view is deleted and counted back into the round (level.zombie_total), so the game
+// spawns a replacement at one of the active spawns, in the zones the players are in. Kept as retail keeps them:
+// zombies only (not dogs or bosses), not electrified, not hurt, not still rising out of the ground.
+admin_far_respawn()
+{
+	flag_wait( "all_players_connected" );
+	while ( true )
+	{
+		wait( 5 );
+		how_far = GetDvarInt( #"zm_farrespawn" );
+		if ( how_far <= 0 )
+		{
+			continue;
+		}
+		zombies = GetAIArray( "axis" );
+		replaced = 0;
+		for ( i = 0; i < zombies.size; i++ )
+		{
+			if ( IsDefined( zombies[i] ) && zombies[i] admin_far_and_unseen( how_far ) )
+			{
+				level.zombie_total++;
+				zombies[i] maps\_zombiemode_spawner::reset_attack_spot();
+				zombies[i] notify( "zombie_delete" );
+				zombies[i] Delete();
+				replaced++;
+			}
+		}
+		if ( replaced > 0 )
+		{
+			admin_log( "far respawn: " + replaced + " zombies farther than " + how_far + " replaced" );
+		}
+	}
+}
+
+
+admin_far_and_unseen( how_far )
+{
+	if ( !IsAlive( self ) || !IsDefined( self.animname ) || self.animname != "zombie" )
+	{
+		return false;
+	}
+	if ( is_true( self.electrified ) || is_true( self.in_the_ground ) || is_true( self.ignore_distance_tracking ) )
+	{
+		return false;
+	}
+	if ( self.health != level.zombie_health )
+	{
+		return false;
+	}
+	players = get_players();
+	playing = 0;
+	for ( i = 0; i < players.size; i++ )
+	{
+		if ( players[i].sessionstate == "spectator" )
+		{
+			continue;
+		}
+		playing++;
+		if ( Distance( self.origin, players[i].origin ) <= how_far || self admin_seen_by( players[i] ) )
+		{
+			return false;
+		}
+	}
+	return playing > 0;
+}
+
+
+// retail Moon's player_can_see_me: within the player's field of view (cg_fov less g_banzai_player_fov_buffer)
+admin_seen_by( player )
+{
+	forward = VectorNormalize( AnglesToForward( player GetPlayerAngles() ) );
+	to_me = VectorNormalize( self.origin - player GetOrigin() );
+	angle = ACos( VectorDot( forward, to_me ) );
+	buffer = GetDvarFloat( #"g_banzai_player_fov_buffer" );
+	if ( buffer <= 0 )
+	{
+		buffer = 0.2;
+	}
+	return angle <= GetDvarFloat( #"cg_fov" ) * 0.5 * ( 1 - buffer );
 }
