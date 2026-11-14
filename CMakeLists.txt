@@ -107,6 +107,8 @@ if(BO1_PLATFORM STREQUAL "win32")
     if(NOT BO1_ARCH_64)
         set(CMAKE_GENERATOR_PLATFORM "WIN32")
     endif()
+    # the exe's icon: Explorer, the taskbar and the window classes' LoadIconA(hInstance, 1)
+    target_sources(BO1Zombies PRIVATE "${SRC_DIR}/platform/windows/bo1zombies.rc")
 
     target_compile_definitions(BO1Zombies PUBLIC
         WIN32
@@ -347,7 +349,7 @@ else()
                     "import datetime, sys; open(sys.argv[1], 'w').write(datetime.datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S %z') + '\\n')"
                     "${CMAKE_BINARY_DIR}/romfs/build.txt"
             COMMAND "${BO1_ELF2NRO}" "$<TARGET_FILE:BO1Zombies>" "${CMAKE_BINARY_DIR}/$<CONFIG>/BO1Zombies.nro"
-                    "--icon=$ENV{DEVKITPRO}/libnx/default_icon.jpg" "--nacp=${CMAKE_BINARY_DIR}/BO1Zombies.nacp"
+                    "--icon=${SRC_DIR}/platform/switch/icon.jpg" "--nacp=${CMAKE_BINARY_DIR}/BO1Zombies.nacp"
                     "--romfsdir=${CMAKE_BINARY_DIR}/romfs"
             COMMENT "Patching libgcc GCS/SME for Ryujinx, then packaging BO1Zombies.nro (data stays on the SD card)"
             VERBATIM)
