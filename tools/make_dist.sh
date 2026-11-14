@@ -537,6 +537,8 @@ SWITCH      switch-tools\uam.exe             le compilateur de shaders de deko3d
             shaders.dksh d'un paquet Switch à partir de votre shaders.pack (Python 3 nécessaire) :
             python switch-tools\make_dksh_pack.py shaders.pack shaders.dksh --uam switch-tools\uam.exe
             Copiez ensuite shaders.dksh dans switch\bo1zm\ sur la carte SD, à côté de shaders.pack.
+WINE        si le jeu plante ou reste sur un écran noir au démarrage sous wine (son xaudio2 de wine), écrivez
+            nosnd dans un fichier launch.cfg à côté de BO1Zombies.exe : le jeu démarre alors sans son.
 
 Un fichier launch.cfg posé à côté de BO1Zombies.exe est ajouté à la ligne de commande, par exemple :
     +set cl_autoConnect 192.168.1.20:3074
