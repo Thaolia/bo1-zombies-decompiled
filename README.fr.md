@@ -179,8 +179,12 @@ ZmClient la propose sous « Mapkit : Nuketown native (Black Ops II, monde BSP) �
 Chaque paquet contient aussi les zones converties, les `main/*.iwd` et le `localization.txt` de l'install (plus
 `main/video` sur PC), un `LISEZMOI.txt` et un `VERSION.txt` (commit, date, heure du lien du NRO). Avec
 `--no-game-data`, les paquets vont dans `BO1Zombies_<plateforme>_nodata/` sans aucun fichier du jeu : le joueur installe
-ceux de windows et linux avec la vue Installation de ZmClient, depuis son propre Black Ops ; celui de la Switch ne
-contient que le `.nro` et `mods/`, à copier par-dessus un paquet Switch fait avec le jeu.
+ceux de windows et linux avec la vue Installation de ZmClient, depuis son propre Black Ops. Celui de la Switch contient
+le `.nro`, `mods/` et les outils qui complètent son dossier de carte SD depuis l'installation du joueur
+(`tools/switch_setup`) : `Setup-Switch.bat ["<installation>"]` sous Windows, `./setup_switch.sh <installation>` sous
+Linux. Ils copient `localization.txt` et `main/*.iwd`, convertissent les zones avec `ffconv` (par wine ou WSL sous
+Linux) et compilent `shaders.dksh` avec `uam` et `make_dksh_pack` (un `.exe` Nuitka sous Windows, `python3` sous
+Linux ; `tools/uam/build.sh` construit les deux uam, `tools/switch_setup/build.sh` le `.exe`).
 
     tools/make_dist.sh                       # les trois
     tools/make_dist.sh switch linux          # une partie

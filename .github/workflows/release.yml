@@ -1,11 +1,11 @@
-# Builds the Windows, Linux and Switch programs and publishes one release archive holding the three packages.
+# Builds the Windows, Linux and Switch programs and publishes a release with one archive per platform.
 #
 # Started by hand only (Actions > Release > Run workflow): nothing runs on a push.
 #
 # The packages hold NO file of the game (CLAUDE.md: never upload game data). They are tools/make_dist.sh's
 # --no-game-data packages, made by the same script as on a PC: Windows and Linux are installed from the player's own
-# Black Ops with ZmClient (Installation view); the Switch one is the .nro and mods/ only, to copy over a Switch package
-# made on a PC with the game (its LISEZMOI.txt says so).
+# Black Ops with ZmClient (Installation view); the Switch one is the .nro and mods/ with the tools that complete it from
+# the player's own Black Ops (Setup-Switch.bat / setup_switch.sh: ffconv, uam, make_dksh_pack; its LISEZMOI.txt).
 #
 # The June 2010 DirectX SDK is downloaded from Microsoft: every build reads its headers, the Windows one links
 # d3dx9.lib, and the Windows package ships the two redistributable DLLs of its Redist cabinets (d3dx9_43, xinput1_3).
@@ -99,6 +99,13 @@ jobs:
               --output-dir=../../build/zmclient/out-win --output-filename=zmclient.exe main.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Pop-Location
+          # the Switch package's shaders.dksh tool, as tools/switch_setup/build.sh
+          python -m nuitka --onefile --assume-yes-for-downloads --remove-output --python-flag=no_site `
+              --python-flag=no_docstrings --msvc=latest --output-dir=build/switch_setup/out-win `
+              --output-filename=make_dksh_pack.exe tools/ffconv/gen/make_dksh_pack.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force out/switch_setup/windows | Out-Null
+          Copy-Item build/switch_setup/out-win/make_dksh_pack.exe out/switch_setup/windows/
           New-Item -ItemType Directory -Force out/zmadmin/windows, out/zmclient/windows, out/runtimes | Out-Null
           Copy-Item build/zmadmin/out-win/zmadmin.exe out/zmadmin/windows/
           Copy-Item build/zmclient/out-win/zmclient.exe out/zmclient/windows/
@@ -156,12 +163,13 @@ jobs:
         run: |
           tools/zmadmin/build.sh linux
           tools/zmclient/build.sh linux
-      - name: Build uam.exe (MinGW-w64)
-        run: tools/uam/build.sh
+      - name: Build uam (uam.exe with MinGW-w64, and a static Linux uam)
+        run: tools/uam/build.sh windows linux
       - name: Collect
         run: |
-          mkdir -p out/linux/Release out/ffconv out/zmadmin/linux out/zmclient/linux out/uam/windows
+          mkdir -p out/linux/Release out/ffconv out/zmadmin/linux out/zmclient/linux out/uam/windows out/uam/linux
           cp build/uam/windows/uam.exe build/uam/windows/uam-LICENSE.txt out/uam/windows/
+          cp build/uam/linux/uam build/uam/linux/uam-LICENSE.txt out/uam/linux/
           cp build/linux/Release/BO1Zombies out/linux/Release/
           cp build/ffconv/ffconv.exe out/ffconv/
           cp build/zmadmin/linux/zmadmin out/zmadmin/linux/
@@ -235,9 +243,11 @@ jobs:
           A=artifacts
           # where make_dist.sh looks for each program
           mkdir -p build/win64-msvc/Release build/zmadmin/windows build/zmclient/windows build/zmadmin/linux \
-              build/zmclient/linux build/ffconv build/uam/windows work/linux/Release work/switch/Release \
-              work/switch/romfs runtimes
+              build/zmclient/linux build/ffconv build/uam/windows build/uam/linux build/switch_setup/windows \
+              work/linux/Release work/switch/Release work/switch/romfs runtimes
           cp $A/linux/uam/windows/* build/uam/windows/
+          cp $A/linux/uam/linux/* build/uam/linux/
+          cp $A/windows/switch_setup/windows/make_dksh_pack.exe build/switch_setup/windows/
           cp $A/windows/win64-msvc/Release/BO1Zombies.exe build/win64-msvc/Release/
           cp $A/windows/zmadmin/windows/zmadmin.exe build/zmadmin/windows/
           cp $A/windows/zmclient/windows/zmclient.exe build/zmclient/windows/
@@ -251,7 +261,8 @@ jobs:
           # the DirectX DLLs a fresh Windows lacks, from the SDK's redistributable cabinets
           cabextract -q -d runtimes -F d3dx9_43.dll $A/dxsdk/Redist/Jun2010_d3dx9_43_x64.cab
           cabextract -q -d runtimes -F xinput1_3.dll $A/dxsdk/Redist/APR2007_xinput_x64.cab
-          chmod +x work/linux/Release/BO1Zombies build/zmadmin/linux/zmadmin build/zmclient/linux/zmclient
+          chmod +x work/linux/Release/BO1Zombies build/zmadmin/linux/zmadmin build/zmclient/linux/zmclient \
+              build/uam/linux/uam
           # artifacts are newer than the checkout, so --no-build takes them as up to date
           touch build/*/*/* build/ffconv/ffconv.exe
           ls -l runtimes
@@ -284,5 +295,6 @@ jobs:
             **No file of the game is included.** You need your own copy of Call of Duty: Black Ops.
             - Windows and Linux: run `zmclient`, Installation view (F7): it copies the game files from your install
               and converts the zones.
-            - Switch: the `.nro` and `mods/` only. Copy them over a Switch package made on a PC with your game
-              (`tools/make_dist.sh switch`); see `BO1Zombies_switch_nodata/LISEZMOI.txt`.
+            - Switch: the `.nro`, `mods/` and the tools that complete the SD card folder from your install:
+              `Setup-Switch.bat` on Windows, `./setup_switch.sh <install>` on Linux (wine for ffconv, python3);
+              then copy `switch/` to the SD card's root. See `BO1Zombies_switch_nodata/LISEZMOI.txt`.
