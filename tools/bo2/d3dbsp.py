@@ -271,9 +271,9 @@ class Bsp:
         nodes, leaf_items = _build_tree(boxes, mins, maxs, plane)
         nbrush = len(self.brushes)
         # A leaf's terrain: one AABB tree root per collision material (a leaf's first index is 16-bit, so the roots
-        # come first), each with the leaf's partitions of that material as children (a hit takes its root's
+        # come first), each over the leaf's partitions of that material (_collision_aabb_tree; a hit takes its root's
         # material's flags).
-        leafs, leafbrushes, roots, children = [], [], [], []
+        leafs, leafbrushes, roots = [], [], []
         for items in leaf_items:
             brush_ids = [i for i in items if i < nbrush]
             by_material = {}
@@ -292,15 +292,7 @@ class Bsp:
             half = [(hi[k] - lo[k]) / 2.0 + 1.0 for k in range(3)]
             return struct.pack("<3f3fHHI", *origin, *half, material, count, index)
 
-        aabbs = []
-        first_child = len(roots)
-        for material, part_ids in roots:
-            lo = [min(partitions[p][0][k] for p in part_ids) for k in range(3)]
-            hi = [max(partitions[p][1][k] for p in part_ids) for k in range(3)]
-            aabbs.append(box(lo, hi, material, len(part_ids), first_child + len(children)))
-            children.extend(part_ids)
-        for pi in children:
-            aabbs.append(box(partitions[pi][0], partitions[pi][1], partitions[pi][2], 0, pi))
+        aabbs = [box(*node) for node in _collision_aabb_tree(roots, partitions)]
         tri_bytes, uinds, part_bytes = [], [], []
         for pi, (lo, hi, material, tri_list) in enumerate(partitions):
             first = len(tri_bytes)
@@ -530,6 +522,44 @@ def _build_tree(boxes, mins, maxs, plane):
         empty = leaf([])
         nodes.append((plane((0.0, 0.0, 1.0), top), empty, root, *map(int, lo), *map(int, hi)))
     return nodes, leafs
+
+
+# CM_TraceThroughAabbTree (cm_mesh.cpp) walks a root's subtree with a stack of 128 nodes, pushing every child the
+# trace touches: a root whose partitions were all its direct children (607 in one of Nuketown's leaves) overflowed it
+# under a wide trace (an assert, then a crash). Nodes split in two down to AABB_TREE_FANOUT partitions, so the stack
+# holds at most about the tree's depth plus that.
+AABB_TREE_FANOUT = 4
+
+
+def _collision_aabb_tree(roots, partitions):
+    """A leaf's collision AABB trees, roots first in the order given (a leaf's first index is 16-bit). roots is
+    [(material, [partition index])]; partitions [(mins, maxs, material, triangles)]. Each node's children are
+    contiguous, as the engine reads them (firstChildIndex, childCount); a node without children names its partition.
+    Returns [(mins, maxs, material, child count, first child or partition index)]."""
+    nodes = [None] * len(roots)
+    queue = [(index, material, ids, True) for index, (material, ids) in enumerate(roots)]
+    at = 0
+    while at < len(queue):
+        index, material, ids, is_root = queue[at]
+        at += 1
+        lo = [min(partitions[p][0][k] for p in ids) for k in range(3)]
+        hi = [max(partitions[p][1][k] for p in ids) for k in range(3)]
+        if len(ids) == 1 and not is_root:
+            nodes[index] = (lo, hi, partitions[ids[0]][2], 0, ids[0])
+            continue
+        if len(ids) <= AABB_TREE_FANOUT:
+            groups = [[p] for p in ids]
+        else:
+            centre = {p: [(partitions[p][0][k] + partitions[p][1][k]) / 2.0 for k in range(3)] for p in ids}
+            axis = max(range(3), key=lambda k: max(centre[p][k] for p in ids) - min(centre[p][k] for p in ids))
+            ordered = sorted(ids, key=lambda p: centre[p][axis])
+            half = len(ordered) // 2
+            groups = [ordered[:half], ordered[half:]]
+        first = len(nodes)
+        nodes.extend([None] * len(groups))
+        nodes[index] = (lo, hi, material, len(groups), first)
+        queue.extend((first + k, material, group, False) for k, group in enumerate(groups))
+    return nodes
 
 
 # The physics that moves players and actors (gjk_partition_t, phys_colgeom.cpp) collides with a partition as the

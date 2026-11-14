@@ -49,6 +49,7 @@ build_windows() {
         \$env:PYTHONPATH = (Resolve-Path tools\\zmadmin).Path
         Set-Location tools\\zmclient
         & ..\\..\\build\\zmclient\\venv-win\\Scripts\\python.exe -m nuitka ${NUITKA_ARGS[*]} --msvc=latest \`
+            --windows-icon-from-ico=..\\..\\src\\platform\\windows\\bo1zombies.ico \`
             --include-module=_curses --output-dir=..\\..\\build\\zmclient\\out-win --output-filename=zmclient.exe main.py
         if (\$LASTEXITCODE) { exit \$LASTEXITCODE }
         Copy-Item ..\\..\\build\\zmclient\\out-win\\zmclient.exe ..\\..\\build\\zmclient\\windows\\zmclient.exe -Force
