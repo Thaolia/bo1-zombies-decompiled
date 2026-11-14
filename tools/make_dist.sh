@@ -556,6 +556,8 @@ SERVEUR     Server.bat [map] [port]          par défaut : zombie_theater 3074
             Ouvrez le port UDP dans le pare-feu de Windows pour les joueurs d'autres machines.
 TAB         en tenant Tab, les zombies en vie et ceux qui restent dans la manche s'affichent à gauche
             (mod zinfo, actif par défaut en solo et sur le serveur ; « zinfo 0 » dans la console le cache).
+ZOMBIES     /zm_where dans la console : la position de chaque zombie vivant et sa distance, du plus proche au
+            plus loin (un zombie qu'on entend sans le voir) ; aussi dans console_mp.log.
 ADMIN       zmadmin.exe                      console d'administration du serveur (joueurs, partie, réglages,
             log). Depuis ce dossier, elle lance aussi le serveur avec un mot de passe rcon qu'elle garde.
             zmadmin.exe 192.168.1.20 -p <rcon_password> pilote un serveur distant. ? : aide dans chaque vue.
@@ -657,6 +659,8 @@ SERVEUR     ./server.sh [map] [port]      par défaut : zombie_theater 3074
             server/main/console_mp.log.
 TAB         en tenant Tab, les zombies en vie et ceux qui restent dans la manche s'affichent à gauche
             (mod zinfo, actif par défaut en solo et sur le serveur ; « zinfo 0 » dans la console le cache).
+ZOMBIES     /zm_where dans la console : la position de chaque zombie vivant et sa distance, du plus proche au
+            plus loin (un zombie qu'on entend sans le voir) ; aussi dans console_mp.log.
 ADMIN       ./zmadmin                     console d'administration du serveur (joueurs, partie, réglages, log).
             Depuis ce dossier, elle lance aussi le serveur avec un mot de passe rcon qu'elle garde.
             ./zmadmin 192.168.1.20 -p <rcon_password> pilote un serveur distant. ? : aide dans chaque vue.

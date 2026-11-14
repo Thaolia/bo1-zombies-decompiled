@@ -58,5 +58,6 @@ bool G_SP_ZombietronOff();
 void G_SP_SetSoundNotify(gentity_s *ent, unsigned int alias, unsigned int notify);
 void G_SP_UpdateSoundNotify(gentity_s *ent);
 void G_SP_Cmd_SoundLength_f(); // ClientCommand "sl" (SP 0x0053B6B0)
+void G_SP_Cmd_ZmWhere_f(gentity_s *ent); // ClientCommand "zm_where" (mod): where the living zombies are
 // zombies: lane x3 - SP G_FreeEntity 0x00438bca turret release (g_scr_sp_ai_cmds.cpp).
 void Actor_SP_ReleaseFreedTurret(gentity_s *turret);

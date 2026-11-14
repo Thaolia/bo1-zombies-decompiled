@@ -70,7 +70,8 @@ on Windows or Linux: no window, listening on UDP on every interface, `server.cfg
 <address>:<port>` in a `launch.cfg` next to the program, and `tools/server_status.py <address>` shows the map and
 players. Admin commands typed in its console (or over rcon, `tools/server_rcon.py`): `zm_god`, `zm_points`, `zm_perk`,
 `zm_revive`, `zm_kill`, `zm_respawn`, `zm_round`, `zm_reset`, `zm_map`, `zm_mods`, and `zm_startpoints` /
-`zm_startperks` / `zm_startpower` for the start of a game. Players can join a game in progress (`zm_jip_mode immediate` or
+`zm_startperks` / `zm_startpower` for the start of a game. Any player, solo too, can type `zm_where` in their own
+console: every living zombie's position and distance, nearest first. Players can join a game in progress (`zm_jip_mode immediate` or
 `nextround`), and `sv_maxclients` lets more than 4 play (up to 32; characters repeat past 4). Each client's
 console log is sent to the server (UDP game port + 1) and
 written to its `logs/` folder; Tab in the server's console shows the selected player's. `tools/zmadmin` is an

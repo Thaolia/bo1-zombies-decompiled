@@ -95,6 +95,8 @@ du programme, et `tools/server_status.py <adresse>` affiche la map et les joueur
 Commandes admin, tapées dans la console du serveur (ou en rcon avec `tools/server_rcon.py <adresse> <mot de passe>
 <commande>`, quand `rcon_password` est défini) ; `<joueur>` est un numéro, un pseudo ou `all` :
 - `zm_god <joueur> [0|1]` (invincible), `zm_demigod`, `zm_notarget`, `zm_noclip` ;
+- `zm_where`, tapée par n'importe quel joueur dans sa propre console, en solo aussi : la position et la distance de
+  chaque zombie vivant, du plus proche au plus loin ;
 - `zm_points <joueur> <montant>` (négatif pour retirer), `zm_setpoints <joueur> <montant>` ;
 - `zm_perk <joueur> <perk ...|all>` : `jugg`, `revive`, `speed`, `doubletap`, `staminup`, `phd`, `deadshot`, `mulekick` ;
 - `zm_revive <joueur>` (relève un joueur à terre ; un joueur mort est spectateur, c'est `zm_respawn`), `zm_down <joueur>`

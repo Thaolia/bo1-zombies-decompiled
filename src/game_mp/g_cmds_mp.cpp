@@ -1258,6 +1258,12 @@ void __cdecl ClientCommand(int clientNum)
             G_SP_Cmd_SoundLength_f();
             return;
         }
+        // mod: the living zombies' positions in the player's console and the log (a zombie heard but not seen)
+        if ( Com_IsSPLevel() && !I_stricmp(cmd, "zm_where") )
+        {
+            G_SP_Cmd_ZmWhere_f(ent);
+            return;
+        }
         if ( I_stricmp(cmd, "say") )
         {
             if ( I_stricmp(cmd, "say_team") )

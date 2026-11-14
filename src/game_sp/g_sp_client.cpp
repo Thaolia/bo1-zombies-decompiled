@@ -8,6 +8,7 @@
 #include <cstring>
 #include <client_mp/sv_client_mp.h>
 #include <server_mp/sv_main_mp.h>
+#include <server/sv_game.h>
 #include <win32/win_main.h>
 #include <universal/dvar.h>
 #include <qcommon/common.h>
@@ -1466,3 +1467,63 @@ void SV_RunClientConnectCallbacks()
     }
 }
 
+
+// mod: "zm_where" from a player's console: every living actor's position, sorted by distance to that player, with its
+// health and animation state, printed in the player's console and the server's log. Read only.
+void G_SP_Cmd_ZmWhere_f(gentity_s *ent)
+{
+    struct Found
+    {
+        float distance;
+        int number;
+        int health;
+        int state;
+        float origin[3];
+    };
+    static Found found[MAX_ACTORS_CAP];
+    int count = 0;
+    for (int i = 0; level.actors && i < MAX_ACTORS; ++i)
+    {
+        const actor_s *actor = &level.actors[i];
+        if (!actor->inuse || !actor->ent || actor->ent->health <= 0)
+            continue;
+        const gentity_s *zombie = actor->ent;
+        Found &f = found[count++];
+        float distanceSq = 0;
+        for (int k = 0; k < 3; ++k)
+        {
+            f.origin[k] = zombie->r.currentOrigin[k];
+            const float delta = f.origin[k] - ent->r.currentOrigin[k];
+            distanceSq += delta * delta;
+        }
+        f.distance = sqrtf(distanceSq);
+        f.number = zombie->s.number;
+        f.health = zombie->health;
+        f.state = actor->eState[actor->stateLevel];
+    }
+    for (int i = 1; i < count; ++i) // by distance, nearest first
+        for (int j = i; j > 0 && found[j].distance < found[j - 1].distance; --j)
+        {
+            const Found t = found[j];
+            found[j] = found[j - 1];
+            found[j - 1] = t;
+        }
+    const int clientNum = ent - g_entities;
+    char line[256];
+    _snprintf(line, sizeof(line) - 1, "zm_where: %d zombies alive, you are at (%.0f %.0f %.0f)", count,
+              ent->r.currentOrigin[0], ent->r.currentOrigin[1], ent->r.currentOrigin[2]);
+    line[sizeof(line) - 1] = 0;
+    for (int i = -1; i < count; ++i)
+    {
+        if (i >= 0)
+        {
+            const Found &f = found[i];
+            _snprintf(line, sizeof(line) - 1,
+                      "zm_where: entity %d at (%.0f %.0f %.0f), %.0f units away, health %d, state %d", f.number,
+                      f.origin[0], f.origin[1], f.origin[2], f.distance, f.health, f.state);
+            line[sizeof(line) - 1] = 0;
+        }
+        Com_Printf(0, "%s\n", line);
+        SV_GameSendServerCommand(clientNum, SV_CMD_CAN_IGNORE, va("%c \"%s\"", 'e', line));
+    }
+}
