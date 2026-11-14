@@ -35,5 +35,47 @@ class TreeTest(unittest.TestCase):
         self.assertEqual(len(reached), len(boxes))
 
 
+class AabbTreeTest(unittest.TestCase):
+    """The leaf's collision AABB trees, walked as CM_TraceThroughAabbTree does: a stack of 128 nodes, every child
+    the trace touches pushed (here a trace touching everything, the worst case)."""
+
+    @staticmethod
+    def partitions(count, material):
+        return [([x * 10.0, 0.0, -64.0], [x * 10.0 + 12.0, 12.0, -64.0], material, [x]) for x in range(count)]
+
+    def walk(self, nodes, root):
+        stack, deepest, reached = [root], 1, []
+        while stack:
+            lo, hi, material, count, index = nodes[stack.pop()]
+            if count:
+                stack.extend(range(index, index + count))
+                deepest = max(deepest, len(stack))
+            else:
+                reached.append(index)
+        return deepest, reached
+
+    def test_every_partition_reached_and_the_stack_bounded(self):
+        parts = self.partitions(607, 3) + self.partitions(5, 7)
+        roots = [(3, list(range(607))), (7, list(range(607, 612))), (3, [0])]
+        nodes = d3dbsp._collision_aabb_tree(roots, parts)
+        for r, (material, ids) in enumerate(roots):
+            deepest, reached = self.walk(nodes, r)
+            self.assertEqual(sorted(reached), sorted(ids))
+            self.assertLess(deepest, 128)
+            self.assertGreater(nodes[r][3], 0, "a root always has children")
+        for lo, hi, material, count, index in nodes:
+            if count:
+                self.assertLessEqual(count, d3dbsp.AABB_TREE_FANOUT)
+
+    def test_a_node_covers_its_children(self):
+        parts = self.partitions(100, 1)
+        nodes = d3dbsp._collision_aabb_tree([(1, list(range(100)))], parts)
+        for lo, hi, material, count, index in nodes:
+            for c in range(index, index + count):
+                for k in range(3):
+                    self.assertLessEqual(lo[k], nodes[c][0][k])
+                    self.assertGreaterEqual(hi[k], nodes[c][1][k])
+
+
 if __name__ == "__main__":
     unittest.main()
