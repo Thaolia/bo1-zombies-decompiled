@@ -136,6 +136,10 @@ only, built for Windows by `tools/uam/build.sh` (MinGW-w64, uam v1.1.0). With Py
 switch-tools\uam.exe`. Like devkitPro's uam, its code can differ from run to run (it depends on heap addresses) and
 there is no `setarch -R` on Windows to pin it.
 
+Under wine, a crash or a black screen at start-up inside wine's `xaudio2_7.dll` (seen with OpenBSD's experimental
+wine) is avoided by a `launch.cfg` next to `BO1Zombies.exe` holding `nosnd`, the game's own switch: it starts without
+any sound driver, as on a PC without a sound device.
+
 `--bo2 DIR` also puts your own Black Ops II map extraction (`docs/BO2_MAPS.md`, "Running it") into the windows and linux
 packages. It takes `DIR/mods/mapkit/layouts/bo2_*.json` and `DIR/mods/mapkit/imports/`, and ZmClient's Solo view then
 offers "Mapkit : Nuketown (Black Ops II)" and "Mapkit : TranZit (Black Ops II)" (which also loads Ascension's zone

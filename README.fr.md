@@ -202,6 +202,10 @@ fait sous Windows le `shaders.dksh` d'un paquet Switch : `python switch-tools\ma
 shaders.dksh --uam switch-tools\uam.exe`. Comme celui de devkitPro, son code peut varier d'une exécution à l'autre
 (il dépend des adresses du tas), et Windows n'a pas de `setarch -R` pour le figer.
 
+Sous wine, si le jeu plante ou reste sur un écran noir au démarrage dans le `xaudio2_7.dll` de wine (vu avec le wine
+expérimental d'OpenBSD), un `launch.cfg` à côté de `BO1Zombies.exe` contenant `nosnd` l'évite : cet interrupteur
+d'origine du jeu le fait démarrer sans aucun pilote son, comme un PC sans carte son.
+
 ### Release sur GitHub
 
 `.github/workflows/release.yml` compile les trois programmes sur les machines de GitHub et publie une release, « BO1 Zombies
