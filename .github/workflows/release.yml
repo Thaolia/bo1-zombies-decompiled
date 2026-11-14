@@ -87,7 +87,8 @@ jobs:
           python -m pip install -q --upgrade nuitka windows-curses zstandard ordered-set
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $common = '--onefile', '--assume-yes-for-downloads', '--remove-output', '--python-flag=no_site',
-                    '--python-flag=no_docstrings', '--msvc=latest', '--include-module=_curses'
+                    '--python-flag=no_docstrings', '--msvc=latest', '--include-module=_curses',
+                    "--windows-icon-from-ico=$((Resolve-Path src/platform/windows/bo1zombies.ico).Path)"
           Push-Location tools/zmadmin
           python -m nuitka @common --include-package=zmadmin --output-dir=../../build/zmadmin/out-win `
               --output-filename=zmadmin.exe main.py
